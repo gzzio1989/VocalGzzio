@@ -1,0 +1,54 @@
+name: build
+
+# VocalGzzio CI: builds Windows (VST3/Standalone) and macOS (AU/VST3/Standalone)
+# on GitHub-hosted runners. Public repos get these runners for free, so Mac
+# binaries can be produced without owning a Mac. macOS artifacts are UNSIGNED:
+# users must right-click-open the app once, or clear quarantine for plugins:
+#   xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/VocalGzzio.vst3
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Collect artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item -Recurse "build/VocalGzzio_artefacts/Release/VST3/VocalGzzio.vst3" dist/
+          Copy-Item "build/VocalGzzio_artefacts/Release/Standalone/VocalGzzio.exe" dist/
+
+      - name: Collect artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist
+          cp -R "build/VocalGzzio_artefacts/Release/VST3/VocalGzzio.vst3" dist/
+          cp -R "build/VocalGzzio_artefacts/Release/AU/VocalGzzio.component" dist/
+          cp -R "build/VocalGzzio_artefacts/Release/Standalone/VocalGzzio.app" dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VocalGzzio-${{ matrix.name }}
+          path: dist/

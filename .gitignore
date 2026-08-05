@@ -1,0 +1,12 @@
+build/
+installer_output/
+.vs/
+*.user
+
+# tools/ の検証プログラムは **ソースだけ** 置く。
+# ビルド結果(実行ファイル)はOSごとに中身が違うので入れない。
+tools/dsp_*
+!tools/dsp_*.cpp
+
+# 作業用の置き場（GitHubには上げない）
+_to_delete/
