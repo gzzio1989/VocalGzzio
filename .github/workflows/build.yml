@@ -114,7 +114,8 @@ jobs:
   encrypted-mac-product:
     name: Mac製品版（暗号化して受け渡し）
     needs: validate
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.edition == 'product' && !github.event.repository.private
+    # mainの更新でも販売用Mac版を準備する。公開されるのは暗号化したZIPだけ。
+    if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.edition == 'product')) && !github.event.repository.private
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
