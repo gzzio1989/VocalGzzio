@@ -73,7 +73,9 @@ int main()
     collectCards (*ed, cards);
     std::printf ("とおり道のカード: %d 枚\n\n", (int) cards.size());
 
-    juce::Image img (juce::Image::ARGB, ed->getWidth(), ed->getHeight(), true);
+    // オフスクリーンのCPU描画を測る。既定のGPU画像では、リモートCIの
+    // GPU転送待ちまで毎回の小さな再描画コストとして数えてしまう。
+    juce::Image img (juce::Image::ARGB, ed->getWidth(), ed->getHeight(), true, juce::SoftwareImageType());
 
     // ---------------------------------------------------------------- [1]
     std::printf ("[1] 画面ぜんぶを1回描く\n");
@@ -94,7 +96,7 @@ int main()
         std::printf ("\n[2] カード1枚をぜんぶ描く（名前・ひとことの折り返し計測を含む）\n");
         auto* c0 = cards[0];
         juce::Image ci (juce::Image::ARGB, juce::jmax (1, c0->getWidth()),
-                        juce::jmax (1, c0->getHeight()), true);
+                        juce::jmax (1, c0->getHeight()), true, juce::SoftwareImageType());
         for (int i = 0; i < 5; ++i) { juce::Graphics g (ci); c0->paintEntireComponent (g, false); }
         {
             const auto t0 = Clock::now();
@@ -136,7 +138,7 @@ int main()
                 CHECK (bar->isOpaque(),
                        "メーターの帯は不透明（＝JUCEは親を描き直さない）");
                 juce::Image bi (juce::Image::ARGB, juce::jmax (1, bar->getWidth()),
-                                juce::jmax (1, bar->getHeight()), true);
+                                juce::jmax (1, bar->getHeight()), true, juce::SoftwareImageType());
                 for (int i = 0; i < 10; ++i)
                 { juce::Graphics g (bi); bar->paintEntireComponent (g, false); }
                 const auto t0 = Clock::now();

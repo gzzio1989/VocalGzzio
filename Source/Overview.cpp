@@ -303,7 +303,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     for (int i = 0; i < 4; ++i) g.fillRoundedRectangle (33.0f + i * 6.0f, 43.0f - bars[i] * 0.5f, 3.0f, bars[i], 1.5f);
     text ("VocalGzzio", { 76, 18, 270, 42 }, 31, Palette::ink, true);
     const auto latencyMs = 1000.0 * processor.addedLatencySamples() / juce::jmax (1.0, processor.getTunerSampleRate());
+   #if VOCALGZZIO_TRIAL
+    text ("4.2 / " + tip::T ("体験版 / 遅延 ", "TRIAL / Latency ") + juce::String (latencyMs, 1) + " ms", latBadgeArea, 19, Palette::yellow, true);
+   #else
     text ("4.2  /  " + tip::T ("追加遅延 ", "Latency ") + juce::String (latencyMs, 1) + " ms", latBadgeArea, 21, Palette::inkSoft);
+   #endif
     g.setColour (Palette::panelLn);
     g.drawHorizontalLine (80, 24.0f, (float) getWidth() - 24.0f);
     text (tip::T ("仕上がり", "FINISH"), { 28, 100, 90, 40 }, 19, Palette::ink, true);
@@ -339,7 +343,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         g.fillRoundedRectangle (r.withWidth (juce::roundToInt (r.getWidth() * juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f))).toFloat(), 3.0f);
     }
     g.setColour (Palette::panel2); g.fillRoundedRectangle (overviewHelp.toFloat(), 12.0f);
-    const auto hint = overviewHint.isNotEmpty() ? overviewHint : tip::T ("仕上がりを選び、原音と比べながら調整。つまみにカーソルを合わせると、変化と使いどころをここに表示します。", "Choose a finish, compare it with the original, then adjust. Hover over a control to see what it changes and when to use it.");
+   #if VOCALGZZIO_TRIAL
+    const auto defaultHint = tip::T ("体験版：60秒ごとに0.6秒だけ音量が下がります。設定の保存・読込は利用できません。つまみにカーソルを合わせると、効果と使いどころを表示します。", "Trial: the sound dips for 0.6 seconds every 60 seconds. Settings cannot be saved or loaded. Hover over a control to see its effect and when to use it.");
+   #else
+    const auto defaultHint = tip::T ("仕上がりを選び、原音と比べながら調整。つまみにカーソルを合わせると、変化と使いどころをここに表示します。", "Choose a finish, compare it with the original, then adjust. Hover over a control to see what it changes and when to use it.");
+   #endif
+    const auto hint = overviewHint.isNotEmpty() ? overviewHint : defaultHint;
     g.setColour (Palette::ink);
     g.setFont (GzzioLnF::uiFont (21.0f * juce::jlimit (1.0f, 1.3f, fontScale / 1.5f), false));
     g.drawFittedText (hint, overviewHelp.reduced (18, 8), juce::Justification::centredLeft, 2, 1.0f);

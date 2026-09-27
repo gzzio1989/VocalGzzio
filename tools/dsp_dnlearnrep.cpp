@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 
 static int gFail = 0;
 #define CHECK(cond, ...) do { \
@@ -166,7 +167,7 @@ static double report (const char* title, const std::vector<Sample>& v)
 {
     std::printf ("\n%s\n", title);
     if (v.empty()) { std::printf ("  (取れませんでした)\n"); return 0.0; }
-    for (size_t i = 0; i < v.size(); i += juce::jmax<size_t> (1, v.size() / 10))
+    for (size_t i = 0; i < v.size(); i += std::max<size_t> (1, v.size() / 10))
         std::printf ("    %5.1f分  Learn %2d回  だまりの削れ %6.2f dB  喋りはじめの削れ %6.2f dB  床3 %.3e\n",
                      v[i].min, v[i].learns, v[i].quietAttenDb, v[i].onsetAttenDb, v[i].floor3);
     // ★最初の1分（まだ Learn を押していない立ち上がり）は数に入れない。
