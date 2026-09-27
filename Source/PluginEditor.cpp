@@ -3958,7 +3958,7 @@ void VocalGzzioContent::applyKnobVisibility()
     revTypeBox.setVisible (advancedMode);
     reverbPower.setVisible (true);
     overviewReturn.setVisible (! isOverview());
-    if (isOverview()) refreshOverviewText();
+    refreshOverviewText();
 
     if (! advancedMode) currentTab = 0;
     updateTabVisibility();          // ← この中の最後で applyUseModeMask() が走る
@@ -6466,6 +6466,7 @@ void VocalGzzioContent::refreshLanguage()
     atSpeedSlider .setTooltip (tip::at_speed_tip());
     ornSlider     .setTooltip (tip::orn_tip());        // v2.7.0
 
+    refreshOverviewText();
     resized();
     repaint();
 }

@@ -189,14 +189,32 @@ void VocalGzzioContent::refreshOverviewText()
     for (auto& b : overviewMore) b.setButtonText (tip::T ("詳しく調整", "More"));
     auto label = [] (Knob& k, const char* jp, const char* en)
     { k.label.setText (tip::T (jp, en), juce::dontSendNotification); };
-    label (inGainK, "入力音量", "Input"); label (makeupK, "出力音量", "Output");
-    label (denoiseK, "ノイズ除去", "Noise reduction"); label (gate, "無音時のカット", "Noise gate");
-    label (lowCut, "低音カット", "Low cut"); label (mudK, "こもり", "Low mids");
-    label (comp2K, "音量そろえ", "Leveling"); label (deessK, "サ行おさえ", "De-essing");
-    label (presenceK, "声の明るさ", "Presence"); label (airK, "きらめき", "Air");
-    label (warmthK, "厚み・歪み", "Warmth"); label (resK, "耳ざわり", "Resonance");
-    label (revMixK, "残響の量", "Reverb mix"); label (revSizeK, "残響の長さ", "Reverb size");
-    label (delayK, "やまびこの量", "Delay mix"); label (widthK, "左右の広がり", "Stereo width");
+    if (isOverview())
+    {
+        label (inGainK, "入力音量", "Input"); label (makeupK, "出力音量", "Output");
+        label (denoiseK, "ノイズ除去", "Noise reduction"); label (gate, "無音時のカット", "Noise gate");
+        label (lowCut, "低音カット", "Low cut"); label (mudK, "こもり", "Low mids");
+        label (comp2K, "音量そろえ", "Leveling"); label (deessK, "サ行おさえ", "De-essing");
+        label (presenceK, "声の明るさ", "Presence"); label (airK, "きらめき", "Air");
+        label (warmthK, "厚み・歪み", "Warmth"); label (resK, "耳ざわり", "Resonance");
+        label (revMixK, "残響の量", "Reverb mix"); label (revSizeK, "残響の長さ", "Reverb size");
+        label (delayK, "やまびこの量", "Delay mix"); label (widthK, "左右の広がり", "Stereo width");
+    }
+    else
+    {
+        // 同じノブ部品を再利用するため、総合画面の長いラベルを詳細へ持ち越さない。
+        // テーマ変更時もモード変更時も、その画面で使う長さへ戻す。
+        label (inGainK, "入力音量", "Input"); label (makeupK, "出力音量", "Output");
+        label (denoiseK, "ノイズ除去", "DENOISE"); label (gate, "ゲート", "GATE");
+        label (lowCut, "ローカット", "LOW CUT"); label (mudK, "こもり", "MUD");
+        label (comp2K, advancedMode ? "ならし圧縮" : "音量をそろえる", "LEVELER");
+        label (deessK, "サ行おさえ", "DE-ESS");
+        label (presenceK, advancedMode ? "ヌケ感" : "声の明るさ", "PRESENCE");
+        label (airK, "キラキラ", "AIR"); label (warmthK, "あたたかみ", "WARMTH");
+        resK.label.setText (tip::res_label(), juce::dontSendNotification);
+        label (revMixK, "ひびき", "REVERB"); label (revSizeK, "部屋の広さ", "ROOM SIZE");
+        label (delayK, "やまびこ", "ECHO"); label (widthK, "ひろがり", "WIDTH");
+    }
     auto explain = [] (Knob& k, const char* jp, const char* en)
     { k.slider.setTooltip (tip::T (jp, en)); k.label.setTooltip (tip::T (jp, en)); };
     explain (denoiseK, "一定のサー音を小さくします。まず黙った状態で「ノイズを測る」を押し、量を少しずつ上げます。声が薄くなったら下げてください。", "Reduces steady hiss. Measure the noise while silent, then raise the amount gradually. Back off if the voice becomes thin.");

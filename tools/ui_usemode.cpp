@@ -180,9 +180,10 @@ int main()
 
     const char* KOTOBA = "\xe3\x81\x93\xe3\x81\xa8\xe3\x81\xb0";                 // ことば
     const char* TSUYA  = "\xe8\x89\xb6";                                        // 艶
-    const char* HIBIKI = "残響の量";                // ひびき
-    const char* YAMABI = "やまびこの量";    // やまびこ
-    const char* HEYA = "残響の長さ"; // 部屋の広さ
+    // この検査は詳細画面を開くため、詳細用の短い名称で確認する。
+    const char* HIBIKI = "ひびき";
+    const char* YAMABI = "やまびこ";
+    const char* HEYA = "部屋の広さ";
     const char* PICK   = "\xe3\x83\x94\xe3\x83\x83\xe3\x82\xaf\xe3\x81\x8a\xe3\x81\x95\xe3\x81\x88";       // ピックおさえ
     static const char* PITCH  = "\xe3\x83\x94\xe3\x83\x83\xe3\x83\x81";   // ピッチ（ボイス変換）
     static const char* UNISON = "\xe3\x83\xa6\xe3\x83\x8b\xe3\x82\xbe\xe3\x83\xb3";   // ユニゾン（ハモリ量）
