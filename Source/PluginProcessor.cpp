@@ -1,6 +1,25 @@
-﻿#include <cmath>
+#include <cmath>
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+
+//==============================================================================
+// v4.0.0 版(エディション)の目印
+// ------------------------------------------------------------------
+// 製品版(2,500円)と体験版(無料)を取り違えて配ると売上が消える。
+// 人の目や zip の名前に頼らず、**出来上がったバイナリそのもの**から
+// 機械で判別できるように、合い言葉を埋めておく。
+// tools/pack_booth.py がこの文字列を読んで、袋詰めの直前に検査する。
+extern "C" const char VocalGzzioEditionMarker[] =
+   #if VOCALGZZIO_TRIAL
+    "VOCALGZZIO-EDITION:TRIAL";
+   #elif VOCALGZZIO_LITE
+    "VOCALGZZIO-EDITION:LITE";
+   #else
+    "VOCALGZZIO-EDITION:PRODUCT";
+   #endif
+
+// リンカの未使用データ削除(/OPT:REF)に消されないよう、volatile 経由で握っておく。
+static const char* volatile gVocalGzzioEditionKeep = VocalGzzioEditionMarker;
 
 //==============================================================================
 VocalGzzioProcessor::VocalGzzioProcessor()
@@ -11,12 +30,15 @@ VocalGzzioProcessor::VocalGzzioProcessor()
     // v1.5.0 autosave: restore the last-used settings even when the host never
     // hands us a saved project state (fresh insert, unsaved project, standalone).
     // A host-provided setStateInformation later simply overwrites this.
+   #if ! VOCALGZZIO_TRIAL   // 体験版は前回の設定を覚えない（保存しないので読む物も作らない）
     if (auto f = autosaveFile(); f.existsAsFile())
         if (auto xml = juce::XmlDocument::parse (f))
             applyStateXml (*xml);
+   #endif
 
     apvts.state.addListener (this);
     stateDirty.store (false);
+    usageLog.load();    // v2.10.0 使われ方（手元に貯めるだけ・送信しない）
     startTimer (500);   // autosave poll: writes ~1.2 s after the last change
 }
 
@@ -24,8 +46,11 @@ VocalGzzioProcessor::~VocalGzzioProcessor()
 {
     stopTimer();
     cancelPendingUpdate();          // v2.1.0: 実行待ちのMIDI切替を破棄
+   #if ! VOCALGZZIO_TRIAL          // 体験版は閉じるときも autosave を書かない
     if (stateDirty.load())
         flushAutosaveNow();
+   #endif
+    usageLog.save();                // v2.10.0 使われ方を手元へ（送信はしない）
     apvts.state.removeListener (this);
 }
 
@@ -64,11 +89,18 @@ VocalGzzioProcessor::createParameterLayout()
     layout.add (std::make_unique<P>(pid ("pop_amt"),  "De-Plosive", R (0.0f, 100.0f, 1.0f),     0.0f, unit ("%")));
     layout.add (std::make_unique<P>(pid ("lip_amt"),  "De-Click",   R (0.0f, 100.0f, 1.0f),     0.0f, unit ("%")));
     layout.add (std::make_unique<P>(pid ("res_amt"),  "Smooth (De-Resonance)", R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%"))); // v2.4.0 なめらか
+    // v3.1「ピックおさえ」(アコギだけ・設計書§3の追加ノブ)。
+    //  既定 0 = 何もしない。既存のアコギの曲もビット単位で同じ音のまま開く。
+    layout.add (std::make_unique<P>(pid ("pick_amt"), "Pick Tamer", R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
     layout.add (std::make_unique<P>(pid ("in_gain"),  "Mic Volume", R (-24.0f, 24.0f, 0.1f),    0.0f, unit ("dB"))); // v2.4.0 マイク音量(入力トリム)
     layout.add (std::make_unique<P>(pid ("ride_amt"), "Volume Keep (Rider)", R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%"))); // v2.4.0 音量キープ
     // v2.6.0 ジー音(電源ハム)の自動除去 / ことば(子音エンハンサー)。初期値0% = 従来と同じ音
     layout.add (std::make_unique<P>(pid ("hum_amt"),  "Hum Removal",  R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
     layout.add (std::make_unique<P>(pid ("cons_amt"), "Consonant",    R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
+    // v2.10.0 距離ならし（近接効果の自動補正）。初期値0% = 従来と完全に同じ音。
+    // 「その人のいつもの距離」を40秒かけて覚え、そこからのずれだけを打ち消す。
+    // 入力のいちばん手前に置く＝マイク音量の直後、原音コピーより前。
+    layout.add (std::make_unique<P>(pid ("prox_amt"), "Proximity Evener", R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
     // v2.7.0 こぶし(しゃくり・こぶし保護)。初期値0% = 従来と完全に同じ挙動
     layout.add (std::make_unique<P>(pid ("orn_amt"),  "Ornament Guard", R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
     // Tone
@@ -135,6 +167,24 @@ VocalGzzioProcessor::createParameterLayout()
 
     // Smart Dynamic EQ (zero-latency IIR; auto resonance suppression + manual bands)
     layout.add (std::make_unique<juce::AudioParameterBool>(pid ("seq_on"), "Smart EQ On", false));
+    // ---- v2.10.0 #77/#78 音源モード ----
+    //  プリセットではない。**同じツマミが見る場所を持ち替える**。
+    //  「こもり」「かたさ」「ぬけ」「きらめき」の中心も、ディエッサーが探す帯域も、
+    //  なめらかが見張る範囲も、音源ごとに正しい場所が違う。歌の場所のまま
+    //  アコギに使っても、ツマミは効いているのに狙いが外れる。
+    //  ★うた(0)は既定。うたの数値は今までと1つも変えていないので、
+    //    既存のプロジェクトは音が変わらない（dsp_srcmode でビット比較して確認）。
+    //  ★v3.1「使いかた4種」: 弾き語りを**末尾に足した**。番号は 0=うた 1=アコギだけ
+    //    2=しゃべり 3=弾き語り。**並べ替えていない**のがここの肝で、APVTS は選択肢を
+    //    番号(非正規化値)で保存するため、末尾に足すぶんには古いプロジェクトが
+    //    そのまま開く。1 の表示名だけ「アコギ」→「アコギだけ」に変えたが、
+    //    保存されるのは番号なので、これも古い曲に影響しない。
+    layout.add (std::make_unique<juce::AudioParameterChoice>(pid ("src_mode"), "Source Mode",
+                    juce::StringArray { juce::String::fromUTF8 ("\xe3\x81\x86\xe3\x81\x9f"),                    // うた
+                                        juce::String::fromUTF8 ("\xe3\x82\xa2\xe3\x82\xb3\xe3\x82\xae\xe3\x81\xa0\xe3\x81\x91"),  // アコギだけ
+                                        juce::String::fromUTF8 ("\xe3\x81\x97\xe3\x82\x83\xe3\x81\xb9\xe3\x82\x8a"),              // しゃべり
+                                        juce::String::fromUTF8 ("\xe5\xa3\xb0\xe3\x81\xa8\xe3\x82\xae\xe3\x82\xbf\xe3\x83\xbc") }, 0));   // 声とギター(弾き語り用)
+
     layout.add (std::make_unique<juce::AudioParameterChoice>(pid ("seq_mode"), "Smart EQ Mode",
                     juce::StringArray { juce::String::fromUTF8 ("\xe8\x87\xaa\xe5\x8b\x95"),      // 自動
                                         juce::String::fromUTF8 ("\xe6\x89\x8b\xe5\x8b\x95") }, 0)); // 手動
@@ -157,6 +207,16 @@ VocalGzzioProcessor::createParameterLayout()
     // red-lamp module bypass (default ON keeps old projects sounding identical)
     layout.add (std::make_unique<B>(pid ("gate_on"), "Gate On",     true));
     layout.add (std::make_unique<B>(pid ("dn_on"),   "De-Noise On", true));
+    // v3.0 自動学びなおし。しゃべっていない間に部屋のノイズを測り直す。
+    //  既定 OFF（既存プロジェクトの音は変わらない）。トーク自動が ON にする。
+    // v4.0.0 ★既定を ON にした（2026-08-31 の実測にもとづく）。
+    //  tools/dsp_dnslow で 30分ぶんを実際に流して比べた:
+    //   ・部屋が静かなまま  … ON -96.28 / OFF -96.22 dBFS ＝ ちがいなし
+    //   ・部屋が30分で+10dB … ON +9.6dB(部屋どおり) / OFF +18.2dB(効かなくなる)
+    //  OFF のままだと、学習した床が凍っているので、PCのファンやエアコンで
+    //  部屋が上がるとゲートが閉じきれず、喋りはじめにサーッと出る。
+    //  静かな部屋では音が変わらないので、入れない理由が無い。
+    layout.add (std::make_unique<B>(pid ("dn_relearn"), "De-Noise Auto Relearn", true));
     layout.add (std::make_unique<B>(pid ("ds_on"),   "De-Esser On", true));
     layout.add (std::make_unique<B>(pid ("dbl_on"),  "Doubler On",  true));
     layout.add (std::make_unique<B>(pid ("dly_on"),  "Delay On",    true));
@@ -173,7 +233,15 @@ VocalGzzioProcessor::createParameterLayout()
                             juce::String::fromUTF8 ("\xe3\x83\x9b\xe3\x83\xbc\xe3\x83\xab"),
                             juce::String::fromUTF8 ("\xe3\x83\x81\xe3\x83\xa3\xe3\x83\xbc\xe3\x83\x81"),
                             juce::String::fromUTF8 ("\xe3\x82\xb9\xe3\x83\x97\xe3\x83\xaa\xe3\x83\xb3\xe3\x82\xb0"),
-                            juce::String::fromUTF8 ("\xe3\x82\xb7\xe3\x83\x9e\xe3\x83\xbc") }, 0));
+                            juce::String::fromUTF8 ("\xe3\x82\xb7\xe3\x83\x9e\xe3\x83\xbc"),
+                            // v4.0.0 へや: ここから先は物理で作った本物の部屋の畳み込み。
+                            // 7 以上 = heya::Convolver を通す（従来の番号は動かさない）。
+                            juce::String::fromUTF8 ("\xe3\x81\xb8\xe3\x82\x84\xef\xbc\x9a\xe3\x81\x8a\xe3\x81\xb5\xe3\x82\x8d"),
+                            juce::String::fromUTF8 ("\xe3\x81\xb8\xe3\x82\x84\xef\xbc\x9a\xe3\x82\xab\xe3\x83\xa9\xe3\x82\xaa\xe3\x82\xb1\xe7\xae\xb1"),
+                            juce::String::fromUTF8 ("\xe3\x81\xb8\xe3\x82\x84\xef\xbc\x9a\xe9\x8c\xb2\xe9\x9f\xb3\xe3\x82\xb9\xe3\x82\xbf\xe3\x82\xb8\xe3\x82\xaa"),
+                            juce::String::fromUTF8 ("\xe3\x81\xb8\xe3\x82\x84\xef\xbc\x9a\xe3\x83\xa9\xe3\x82\xa4\xe3\x83\x96\xe3\x83\x8f\xe3\x82\xa6\xe3\x82\xb9"),
+                            juce::String::fromUTF8 ("\xe3\x81\xb8\xe3\x82\x84\xef\xbc\x9a\xe3\x82\xb3\xe3\x83\xb3\xe3\x82\xb5\xe3\x83\xbc\xe3\x83\x88\xe3\x83\x9b\xe3\x83\xbc\xe3\x83\xab"),
+                            juce::String::fromUTF8 ("\xe3\x81\xb8\xe3\x82\x84\xef\xbc\x9a\xe3\x83\x97\xe3\x83\xac\xe3\x83\xbc\xe3\x83\x88") }, 0));
 
     // delay: tempo sync + time + feedback + feedback highcut + manual BPM (host BPM wins)
     layout.add (std::make_unique<C>(pid ("dly_sync"), "Delay Sync",
@@ -211,18 +279,474 @@ VocalGzzioProcessor::createParameterLayout()
     layout.add (std::make_unique<P>(pid ("seq_q2"), "SEQ Q 2", R (0.5f, 8.0f, 0.1f), 2.5f, A()));
     layout.add (std::make_unique<P>(pid ("seq_q3"), "SEQ Q 3", R (0.5f, 8.0f, 0.1f), 2.5f, A()));
 
+    // ---- v3.0「つぶさない」（音量が上がっても潰れないモード）------------------
+    // 既定は OFF。ONにしたときだけ音が変わる（上げただけでは今までどおり）。
+    layout.add (std::make_unique<juce::AudioParameterBool>(
+        pid ("crush_on"), "Crush Guard", false));
+
+    // ---- v3.0 モジュールのON/OFF（8個）----------------------------------------
+    // 「De-noiseだけ使いたいのに他がかかる」への答え。**既定はすべてON**なので、
+    // 上げただけでは音は一切変わらない。切ったところだけ素通しになる。
+    // 自動化にも載る（ホストのオートメーションで曲中に切り替えられる）。
+    for (int m = 0; m < gz::ModuleChain::Count; ++m)
+        layout.add (std::make_unique<juce::AudioParameterBool>(
+            pid (gz::ModuleChain::paramId (m)), gz::ModuleChain::paramName (m), true));
+
+    // ---- v3.0-c 順番の分岐（案C）------------------------------------------------
+    // 「起動順を選べるように」への答え。ただし8つを自由に並べ替えるのではなく、
+    // **実際に要望が出る分岐だけ**を用意する。
+    //
+    //  なぜ自由な並べ替えにしないか:
+    //   8つのうち3つ（おそうじ・音量そろえ・音色づくり）は、いまのコードで
+    //   1か所にまとまっていない。しかもそれぞれ理由があって分かれている
+    //   （例: 音量キープがサ行おさえの後にあるのは、サ行を削った後の音量で
+    //    合わせないと「サ行のせいで音量が下がる」動きになるから）。
+    //   1か所にまとめた瞬間、**いま保存してある設定の音が全部変わる**。
+    //   それは受け入れられないので、分岐だけを足す形にした。
+    //
+    //  ★どれも既定は false ＝ いままでと**1サンプルも変わらない**。
+    //    選んだ人だけ順番が変わる。（dsp_order がそれを毎回確かめている）
+    layout.add (std::make_unique<juce::AudioParameterBool>(
+        pid ("ord_deess"), "Order: De-Ess Before Comp", false));
+    layout.add (std::make_unique<juce::AudioParameterBool>(
+        pid ("ord_eq"),    "Order: Shape After Comp",   false));
+    layout.add (std::make_unique<juce::AudioParameterBool>(
+        pid ("ord_space"), "Order: Space Before Character", false));
+
+    // v3.0-c 互換スイッチ。
+    //  ON にすると、サビリフト/エモの検出を**キャラ声がONのときだけ**行う
+    //  v2.12.0 以前の動きに戻る。既定は OFF（＝直った動き）だが、
+    //  古いプロジェクトを開いたときは自動で ON になる（setStateInformation）。
+    layout.add (std::make_unique<juce::AudioParameterBool>(
+        pid ("lift_legacy"), "Legacy: Lift Needs Character", false));
+
     return layout;
 }
 
 //==============================================================================
+// v3.0-c 分岐3「ひろがりを キャラ声の前へ」用に、キャラ声を関数へ出した。
+//
+//  ここは他の2つ（ととのえ／サ行おさえ）と事情が違う。
+//  キャラ声は **2つの仕事**を持っている:
+//    ・音を変える  … ロボ声・メガホン
+//    ・音を測る    … エモ（ロングトーン）・サビリフト（サビ検出）
+//  そして**ひろがりは「測った結果」だけを使う**（残響と広がりの送り量に掛ける）。
+//
+//  だから順番を入れ替えるときは、丸ごと後ろに回すのではなく
+//  「測る所だけ先に済ませ、音を変える所を後ろに回す」のが正しい。
+//  そうしないと、ひろがりが 0 を読んでサビリフトが効かなくなる。
+//
+//  doFx / doDetect の両方が true のときは、切り出す前と**1行も変わらない**。
+//  （dsp_order [1] が既定の bit 一致を毎回確かめている）
+//==============================================================================
+void VocalGzzioProcessor::applyChara (juce::AudioBuffer<float>& buffer, bool doFx, bool doDetect)
+{
+    const int numCh      = buffer.getNumChannels();
+    const int numSamples = buffer.getNumSamples();
+
+    // ===== モジュール7「キャラ声」（ロボ声・メガホン・エモ・サビリフト）=====
+    // v3.0-b ひろがりと同じ。OFF なら丸ごと飛ばす。
+    const bool charaRun = ! mods.isOff (gz::ModuleChain::Chara);
+    if (doFx && charaRun) mods.save (gz::ModuleChain::Chara, buffer);
+
+    // ---- v1.4.0 character FX: robot voice (ring mod) then megaphone ----
+    if (doFx && charaRun)
+    {
+        const bool  roboOn = apvts.getRawParameterValue ("robo_on")->load() > 0.5f;
+        const float roboM  = roboOn ? apvts.getRawParameterValue ("robo_mix")->load() * 0.01f : 0.0f;
+        if (roboM > 0.001f)
+        {
+            const float f   = apvts.getRawParameterValue ("robo_freq")->load();
+            const float inc = juce::MathConstants<float>::twoPi * f / (float) currentSampleRate;
+            for (int n = 0; n < numSamples; ++n)
+            {
+                const float s = std::sin (roboPhase);
+                roboPhase += inc;
+                if (roboPhase > juce::MathConstants<float>::twoPi)
+                    roboPhase -= juce::MathConstants<float>::twoPi;
+                for (int ch = 0; ch < numCh; ++ch)
+                {
+                    const float x = buffer.getSample (ch, n);
+                    buffer.setSample (ch, n, x * (1.0f - roboM) + x * s * roboM);
+                }
+            }
+        }
+
+        const bool  megaOn = apvts.getRawParameterValue ("mega_on")->load() > 0.5f;
+        const float megaA  = megaOn ? apvts.getRawParameterValue ("mega_amt")->load() * 0.01f : 0.0f;
+        if (megaA > 0.001f)
+        {
+            const int type = (int) apvts.getRawParameterValue ("mega_type")->load();
+            scratch.makeCopyOf (buffer, true);
+            juce::dsp::AudioBlock<float> mb (scratch);
+            juce::dsp::ProcessContextReplacing<float> mc (mb);
+            megaHP.process (mc);
+            megaPeak.process (mc);
+            megaLP.process (mc);
+
+            const float mk   = 1.0f + megaA * (type == 1 ? 6.0f : 11.0f);   // radio drives softer
+            const float qLev = type == 2 ? std::pow (2.0f, 9.0f - megaA * 6.0f) : 0.0f;   // lo-fi crush
+
+            for (int ch = 0; ch < numCh; ++ch)
+            {
+                auto* w = buffer.getWritePointer (ch);
+                auto* m = scratch.getReadPointer (juce::jmin (ch, scratch.getNumChannels() - 1));
+                for (int n = 0; n < numSamples; ++n)
+                {
+                    float y = std::tanh (m[n] * mk) * 0.7f;
+                    if (qLev > 0.0f)
+                        y = std::round (y * qLev) / qLev;
+                    w[n] = w[n] * (1.0f - megaA) + y * megaA;
+                }
+            }
+        }
+    }
+
+    // ---- v2.0.0 エモ(ロングトーン検出) & サビリフト(サビ自動検出) ----
+    // どちらも「検出だけ」をここで行い、後段の空間系(ひろがり・かさね・やまびこ・
+    // ひびき)の送り量に係数として掛ける。音の経路そのものは一切変えないので、
+    // 0%なら従来と完全に同じ音。遅延も増えない。
+    // v3.0-c ★ここは `if (charaRun)` の中にあった。つまり
+    //  **「キャラ声」を切ると、サビリフトが残響に効かなくなっていた。**
+    //  サビリフトは「サビを見つけて残響を少し増やす」機能で、ロボ声やメガホンとは
+    //  何の関係もない。キャラ声を使わない人ほど、切ったまま気づかない。
+    //
+    //  直したが、直した時点で**キャラ声を切っている人の音は変わる**（サビで残響が
+    //  増えるようになる）。そこで、
+    //   ・新しく置いたときは **直った動き**（既定）
+    //   ・**v2.12.0 以前に保存されたプロジェクトを開いたときは、昔の動きのまま**
+    //     （setStateInformation が ver<3 を見て lift_legacy を立てる）
+    //   ・手で戻すスイッチも用意する（lift_legacy）
+    //  としてある。「更新したら昔の曲の音が変わった」は起こさない。
+    //
+    //  ★検出を呼ぶ位置は1行も動かしていない（キャラ声の処理のあと・渡しの前）。
+    //   ここを動かすと charaRun が true のときの音まで変わってしまう。
+    const bool liftLegacy = apvts.getRawParameterValue ("lift_legacy")->load() > 0.5f;
+    float& emoBloomNow = emoBloomNowV;   // v3.0-c 受け渡し用のメンバー（中身は同じ）
+    float& liftNow     = liftNowV;
+    if (doDetect) { emoBloomNow = 0.0f; liftNow = 0.0f; }
+    if (doDetect && (charaRun || ! liftLegacy))
+    {
+        const float emoAmt  = apvts.getRawParameterValue ("emo_amt")->load()  * 0.01f;
+        const float liftAmt = apvts.getRawParameterValue ("lift_amt")->load() * 0.01f;
+        const float blockSec = (float) numSamples / (float) currentSampleRate;
+
+        // ブロックRMS (処理後の歌声。空間系に入る直前のレベル)
+        float sumSq = 0.0f;
+        {
+            const float* q = buffer.getReadPointer (0);
+            for (int n = 0; n < numSamples; ++n) sumSq += q[n] * q[n];
+        }
+        const float rmsDb = 10.0f * std::log10 (juce::jmax (sumSq / (float) juce::jmax (1, numSamples), 1.0e-12f));
+
+        if (emoAmt > 0.001f)
+        {
+            // 歌が -35dB より強いまま続いた時間を数える。0.35秒を超えたあたりから
+            // 「ロングトーン」とみなして開き始め、1.2秒で全開。途切れたら素早く閉じる。
+            if (rmsDb > -35.0f) emoHoldSec += blockSec;
+            else                emoHoldSec  = 0.0f;
+            const float t = juce::jlimit (0.0f, 1.0f, (emoHoldSec - 0.35f) / 0.85f);
+            const float target = t * t * (3.0f - 2.0f * t) * emoAmt;        // smoothstep
+            const float a = 1.0f - std::exp (-blockSec / (target > emoBloom ? 0.45f : 0.18f));
+            emoBloom += (target - emoBloom) * a;
+        }
+        else { emoBloom = 0.0f; emoHoldSec = 0.0f; }
+        emoBloomNow = emoBloom;
+
+        if (liftAmt > 0.001f)
+        {
+            // 速い平均(1.2s)が遅い平均(8s)を約2.5dB上回る=サビ。ゆっくり持ち上げ、
+            // Aメロに戻ったら少し早めに戻す。閾値付近のばたつきはsmoothstepで吸収。
+            const float aF = 1.0f - std::exp (-blockSec / 1.2f);
+            const float aS = 1.0f - std::exp (-blockSec / 8.0f);
+            if (rmsDb > -55.0f)   // 無音は学習しない(曲間で基準が下がり切るのを防ぐ)
+            {
+                liftFastDb += (rmsDb - liftFastDb) * aF;
+                liftSlowDb += (rmsDb - liftSlowDb) * aS;
+            }
+            const float over = liftFastDb - liftSlowDb - 1.0f;               // dB
+            const float t = juce::jlimit (0.0f, 1.0f, over / 3.0f);
+            const float target = t * t * (3.0f - 2.0f * t) * liftAmt;
+            const float a = 1.0f - std::exp (-blockSec / (target > liftVal ? 1.5f : 0.6f));
+            liftVal += (target - liftVal) * a;
+        }
+        else { liftVal = 0.0f; liftFastDb = liftSlowDb = -60.0f; }
+        liftNow = liftVal;
+        liftUI.store (liftNow);
+    }
+
+    if (doFx && charaRun) mods.restore (gz::ModuleChain::Chara, buffer);
+    // ===== モジュール7「キャラ声」ここまで =====
+}
+
+//==============================================================================
+// v3.0-c 順番の分岐（案C）用に、2つのモジュールを関数へ出した。
+//
+//  ここに出したのは「呼ぶ場所を2択にしたい」からで、中身は**1行も変えていない**。
+//  切り出しても既定の音が変わらないことは dsp_order が毎回確かめる。
+//
+//  出せた理由: どちらの区間も、使っているものがすべてプロセッサの持ち物で、
+//  processBlock の途中で作られた一時変数に依存していなかった。
+//  （「ひろがり」は liftNow / emoBloomNow というキャラ声の中で計算される値に
+//    依存しているので、そのままでは前に出せなかった。v3.0-c 第8歩で、
+//    キャラ声を「測る所」と「音を変える所」に分けて解いた。上の applyChara 参照）
+//==============================================================================
+void VocalGzzioProcessor::applyTotonoe (juce::AudioBuffer<float>& buffer)
+{
+    const int numCh      = buffer.getNumChannels();
+    const int numSamples = buffer.getNumSamples();
+    juce::dsp::AudioBlock<float> block (buffer);
+    juce::dsp::ProcessContextReplacing<float> ctx (block);
+    juce::ignoreUnused (numCh);
+
+    // ---- subtractive EQ ----
+    hpf.process (ctx);
+    mud.process (ctx);
+    if (mud2On) mud2.process (ctx);   // v3.1 弾き語りだけ。胴鳴り 220Hz の2点目
+    harsh.process (ctx);
+
+    // ---- v2.4.0 なめらか(動的レゾナンス抑制) ----
+    // 「こもり」「キンキン」(固定EQ)のあと・コンプの前。コンプより前に刺さりを
+    // 削っておかないと、コンプが刺さりごと持ち上げてしまうため。ゼロ遅延。
+    const float resAmt = apvts.getRawParameterValue ("res_amt")->load() * 0.01f;
+    resTamer.setAmount (resAmt);
+    if (resAmt > 0.001f)
+    {
+        resTamer.process (buffer.getWritePointer (0),
+                          numCh > 1 ? buffer.getWritePointer (1) : nullptr,
+                          numSamples);
+        meterRes.store (resTamer.lastMaxCutDb());
+    }
+    else if (meterRes.load() != 0.0f)
+        meterRes.store (0.0f);
+
+    // ---- v3.1「ピックおさえ」(アコギだけ) ----
+    //  置き場所は なめらか の直後・コンプの前。なめらか と同じ理由で、
+    //  頭を先に整えておかないとコンプが頭ごと持ち上げて余計に暴れる。
+    //
+    //  作り: 速い包絡(0.5ms) ÷ 遅い包絡(30ms) の比を見る。
+    //   ・比が 1.4倍(約+3dB)を超えたら「いつもより飛び出した頭」
+    //   ・2.8倍(約+9dB)で下げ量いっぱい
+    //   ・下げるのは 1ms、戻すのは 60ms（下げ遅れは頭を素通しさせるので速く、
+    //     戻しは音がしゃくり上がって聞こえないようゆっくり）
+    //  ★先読みはしない。だから頭のいちばん先の数百usはすり抜ける。
+    //   そこは意図どおりで、全部潰すと「弾いた感じ」が消える。
+    //  ★dB へ直す log は使わない。1サンプルに2回 log10 を呼ぶと
+    //   ここだけで無視できない負荷になるので、比のまま線で扱う。
+    const float pickAmt = srcPickOk
+                        ? apvts.getRawParameterValue ("pick_amt")->load() * 0.01f : 0.0f;
+    if (pickAmt > 0.001f)
+    {
+        const float minG = juce::Decibels::decibelsToGain (-9.0f * pickAmt);  // ブロックに1回
+        float* L = buffer.getWritePointer (0);
+        float* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+        float peak = 0.0f;
+        for (int n = 0; n < numSamples; ++n)
+        {
+            const float x = juce::jmax (std::abs (L[n]), R != nullptr ? std::abs (R[n]) : 0.0f);
+            pickFast += (x > pickFast ? pickFastAtk : pickFastRel) * (x - pickFast);
+            pickSlow += (x > pickSlow ? pickSlowAtk : pickSlowRel) * (x - pickSlow);
+
+            //  (a)「いま頭か」… 速い包絡が遅い包絡の 1.41倍(+3dB)〜2.82倍(+9dB)
+            const float ratio = pickFast / (pickSlow + 1.0e-9f);
+            const float t = juce::jlimit (0.0f, 1.0f, (ratio - 1.41f) / (2.82f - 1.41f));
+
+            //  (b)「その頭はいつもより大きいか」… ゆっくりした基準からの飛び出し。
+            //   ★これが「そろえ」の本体。(a) だけだと強い頭も弱い頭も同じだけ下がる。
+            //   基準は最近の頭の大きさ。無音で 0 へ落ちないよう、音があるときだけ動かす。
+            if (pickFast > 1.0e-4f)                        // 約 -80dBFS 以上
+            {
+                if (! pickRefPrimed) { pickRef = pickFast; pickRefPrimed = true; }
+                else pickRef += (pickFast > pickRef ? pickRefUp : pickRefDn) * (pickFast - pickRef);
+            }
+            const float over = pickFast / (pickRef + 1.0e-9f);
+            //  基準どおり(1.0)で 0.4、2倍(+6dB)で 1.0。弱い頭は浅く、強い頭は深く。
+            const float lvl = juce::jlimit (0.0f, 1.0f, (over - 1.0f));
+            const float depth = t * (0.40f + 0.60f * lvl);
+
+            const float target = 1.0f - depth * (1.0f - minG);
+            const float c = (target < pickGain) ? pickDownCoef : pickUpCoef;
+            pickGain += c * (target - pickGain);
+
+            L[n] *= pickGain;
+            if (R != nullptr) R[n] *= pickGain;
+            peak = juce::jmax (peak, 1.0f - pickGain);
+        }
+        pickMeter.store (juce::jlimit (0.0f, 1.0f, peak * 2.5f));
+    }
+    else
+    {
+        //  0% のときは1サンプルも触らない。包絡だけ静かに戻しておく
+        //  （次に上げた瞬間に古い値で暴れないように）。
+        pickGain = 1.0f;
+        pickFast *= 0.5f; pickSlow *= 0.5f;
+        if (pickMeter.load() != 0.0f) pickMeter.store (0.0f);
+    }
+}
+
+void VocalGzzioProcessor::applyDeEsser (juce::AudioBuffer<float>& buffer)
+{
+    const int numCh      = buffer.getNumChannels();
+    const int numSamples = buffer.getNumSamples();
+
+    // ---- de-esser (split-band style: detect >5.2k, duck a 6.5k high shelf) ----
+    const float amount = apvts.getRawParameterValue ("deess")->load() * 0.01f;
+    const bool  dsOn   = apvts.getRawParameterValue ("ds_on")->load() > 0.5f;
+    if (amount > 0.001f && dsOn)
+    {
+        scratch.makeCopyOf (buffer, true);
+        juce::dsp::AudioBlock<float> sblock (scratch);
+        juce::dsp::ProcessContextReplacing<float> sctx (sblock);
+        deessDetectHP.process (sctx);   // detector band
+
+        // envelope of sibilant band (block-wise per sample)
+        const float thr = juce::Decibels::decibelsToGain (-30.0f + (1.0f - amount) * 12.0f);
+        const float maxCutDb = 12.0f * amount + 4.0f;   // up to ~16 dB
+
+        auto* sL = scratch.getReadPointer (0);
+        auto* sR = scratch.getReadPointer (juce::jmin (1, scratch.getNumChannels() - 1));
+        auto* bL = buffer.getWritePointer (0);
+        auto* bR = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+
+        for (int n = 0; n < numSamples; ++n)
+        {
+            const float det = juce::jmax (std::abs (sL[n]), std::abs (sR[n]));
+            dsEnv += (det > dsEnv ? dsEnvAtk : dsEnvRel) * (det - dsEnv);
+
+            // v2.12.0 張り保護(§6-2): しきい値を声全体の音量に追従させる。
+            // 今までは絶対値(-30〜-18dBFS)だったので、張って歌う=全帯域が
+            // 大きくなるだけで「サ行が出た」と誤認して高域を削っていた。
+            // 全体包絡の30%(約-10dB)を下回らないしきい値にすると、判定が
+            // 「サ行の割合」になり、声量では動かなくなる。小さい声のときは
+            // 絶対値side が勝つので、今までの動きと同じ。
+            const float bb = juce::jmax (std::abs (bL[n]),
+                                         bR != nullptr ? std::abs (bR[n]) : 0.0f);
+            dsBroadEnv += (bb > dsBroadEnv ? dsBbAtk : dsBbRel) * (bb - dsBroadEnv);
+            const float thrEff = juce::jmax (thr, dsBroadEnv * 0.30f);
+
+            // desired shelf cut in dB when sibilance exceeds threshold
+            float wantDb = 0.0f;
+            if (dsEnv > thrEff)
+                wantDb = juce::jlimit (0.0f, maxCutDb,
+                                       20.0f * std::log10 (dsEnv / thrEff) * 1.5f);
+            dsCurrentReduction += 0.02f * (wantDb - dsCurrentReduction);
+
+            // update shelf every 32 samples (cheap enough, smooth enough)
+            if ((n & 31) == 0)
+            {
+                // v2.8.0: 32サンプルごとに new していた。確保なしの形へ。
+                // v2.10.0 棚の位置も音源モードで持ち替える(アコギは 4kHz)。
+                const auto co = ACoefs::makeHighShelf (currentSampleRate, dsShelfHzNow, 0.8f,
+                                    juce::Decibels::decibelsToGain (-dsCurrentReduction));
+                *dsShelfL.coefficients = co;
+                *dsShelfR.coefficients = co;
+            }
+            bL[n] = dsShelfL.processSample (bL[n]);
+            if (bR) bR[n] = dsShelfR.processSample (bR[n]);
+        }
+        meterDS.store (juce::jlimit (0.0f, 1.0f, dsCurrentReduction / 16.0f));
+    }
+    else
+    {
+        dsCurrentReduction *= 0.9f;
+        meterDS.store (juce::jlimit (0.0f, 1.0f, dsCurrentReduction / 16.0f));
+    }
+
+    // ---- v3.1 2点目のサ行おさえ（弾き語りのフレット/ピックの音）----
+    //  dsDetect2Hz == 0 の使いかた（うた・しゃべり・アコギだけ）では
+    //  この中へ一度も入らない ＝ 今までと1サンプルも変わらない。
+    if (dsDetect2Hz > 1.0f && amount > 0.001f && dsOn)
+    {
+        scratch2.makeCopyOf (buffer, true);
+        juce::dsp::AudioBlock<float> s2block (scratch2);
+        juce::dsp::ProcessContextReplacing<float> s2ctx (s2block);
+        deessDetectBP2.process (s2ctx);      // 3kHz 前後だけを取り出す
+
+        //  しきい値は1点目と同じ考え方（絶対値と、全体包絡の割合の大きい方）。
+        //  下げ量は1点目の半分まで。フレットの音はサ行ほど耳につかないので、
+        //  同じだけ下げると今度は「ギターが引っ込んだ」と聞こえる。
+        const float thr      = juce::Decibels::decibelsToGain (-30.0f + (1.0f - amount) * 12.0f);
+        const float maxCutDb = (12.0f * amount + 4.0f) * 0.5f;
+
+        auto* sL = scratch2.getReadPointer (0);
+        auto* sR = scratch2.getReadPointer (juce::jmin (1, scratch2.getNumChannels() - 1));
+        auto* bL = buffer.getWritePointer (0);
+        auto* bR = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+
+        for (int n = 0; n < numSamples; ++n)
+        {
+            const float det = juce::jmax (std::abs (sL[n]), std::abs (sR[n]));
+            dsEnv2 += (det > dsEnv2 ? dsEnvAtk : dsEnvRel) * (det - dsEnv2);
+
+            //  全体包絡(dsBroadEnv)は1点目が同じブロックで更新済み。ここでは
+            //  読むだけにして二重に進めない（進めると時定数が実質2倍速になる）。
+            const float thrEff = juce::jmax (thr, dsBroadEnv * 0.30f);
+
+            float wantDb = 0.0f;
+            if (dsEnv2 > thrEff)
+                wantDb = juce::jlimit (0.0f, maxCutDb,
+                                       20.0f * std::log10 (dsEnv2 / thrEff) * 1.5f);
+            dsCurrentReduction2 += 0.02f * (wantDb - dsCurrentReduction2);
+
+            if ((n & 31) == 0)
+            {
+                const auto co = ACoefs::makePeakFilter (currentSampleRate, dsDipHzNow, dsDipQNow,
+                                    juce::Decibels::decibelsToGain (-dsCurrentReduction2));
+                *dsDipL.coefficients = co;
+                *dsDipR.coefficients = co;
+            }
+            bL[n] = dsDipL.processSample (bL[n]);
+            if (bR) bR[n] = dsDipR.processSample (bR[n]);
+        }
+        //  画面のメーターは1点目と2点目の大きい方（「いまサ行を抑えている」の表示）
+        meterDS.store (juce::jlimit (0.0f, 1.0f,
+                        juce::jmax (dsCurrentReduction, dsCurrentReduction2 * 2.0f) / 16.0f));
+    }
+    else
+        dsCurrentReduction2 *= 0.9f;
+}
+
+//==============================================================================
+void VocalGzzioProcessor::resetReverbState() noexcept
+{
+    reverb.reset();
+    if (heyaReady.load()) heyaRev.reset();
+    revHPF.reset(); revLPF.reset();
+    for (auto* ring : { &preBufL, &preBufR, &springBufL, &springBufR, &shimBufL, &shimBufR })
+        std::fill (ring->begin(), ring->end(), 0.0f);
+    preWrite = springW = shimW = 0;
+    springLpL = springLpR = shimPhase = 0.0f;
+    shimLpL = shimLpR = shimHpL = shimHpR = 0.0f;
+    shimFb.clear();
+    revBypassGain = 0.0f;
+    revWasRunning = false;
+}
+
 void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
 
+    // v4.0.0 へや: **いつも用意する**（約9MB・約180ms）。
+    // ------------------------------------------------------------------
+    // もとは「初めて選ばれたときだけ用意する」倹約版だった。
+    // が、用意はメッセージスレッド(handleAsyncUpdate)まかせで、
+    // それが走らなければ heyaReady は false のまま。
+    // その間は従来のタンク式が鳴るので、**部屋を選んでも音が変わらない**
+    // ように見える（＝機能が丸ごと死んでいるのと同じ）。
+    // 起動時に180ms払うほうが、静かに効かないより百倍まし。
+    heyaRev.prepare (sampleRate, samplesPerBlock);
+    heyaReady.store (true);
+
     // ---- v1.8.0 voice changer + unison ----
     for (auto& s : vcSh) s.prepare (sampleRate);
     for (auto& s : unSh) s.prepare (sampleRate);
+    // v2.12.0 無声ガード(§6-3): 本人の声(ボイス変換・ピッチ補正)は子音を素通し、
+    // ユニゾン/ハモリの分身は子音を黙らせる(4人分の「サッ」が重ならないように)。
+    for (auto& s : vcSh) s.setUnvoicedGuard (1);
+    for (auto& s : unSh) s.setUnvoicedGuard (2);
     pitchDet.prepare (sampleRate);            // v1.9.0 auto-tune F0 detector
+    pitchCorrection.reset();
+    pitchWasTracking = false;
     atCorrection = 0.0f;
     atWetMix = 0.0f;
     vcWasActive = jnWasActive = false;
@@ -250,6 +774,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     spec.numChannels      = 2;
 
     hpf.prepare (spec); mud.prepare (spec); harsh.prepare (spec);
+    mud2.prepare (spec);                                // v3.1 弾き語りの2点目
+    *mud2.state = ACoefs::makePeakFilter (sampleRate, 220.0f, 1.3f, 1.0f);
     presence.prepare (spec); air.prepare (spec);
     ringL.prepare (spec); ringR.prepare (spec);          // v1.9.5 艶
     ringDet.prepare (spec); sibDet.prepare (spec);
@@ -258,9 +784,16 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     ringL.coefficients = ringR.coefficients = Coefficients::makePeakFilter (sampleRate, 3000.0, 1.4f, 1.0f);
     ringEnv = sibEnv = 0.0f; ringGainDb = 0.0f; ringApplied = -99.0f;
     deessDetectHP.prepare (spec);
+    deessDetectBP2.prepare (spec);                      // v3.1 2点目の側鎖
+    *deessDetectBP2.state = ACoefs::makeBandPass (sampleRate, 3000.0f, 1.1f);
 
     juce::dsp::ProcessSpec mono = spec; mono.numChannels = 1;
     dsShelfL.prepare (mono); dsShelfR.prepare (mono);
+    dsDipL.prepare (mono);   dsDipR.prepare (mono);     // v3.1 2点目で下げる山
+    //  ここで先に2次の係数を入れておく理由は dsShelf と同じ（音声側で確保しない）。
+    dsDipL.coefficients = Coefficients::makePeakFilter (sampleRate, 3500.0, 1.2f, 1.0f);
+    dsDipR.coefficients = Coefficients::makePeakFilter (sampleRate, 3500.0, 1.2f, 1.0f);
+    dsEnv2 = 0.0f; dsCurrentReduction2 = 0.0f;
     // v2.8.0: ここで2次の係数を入れておく。入れておかないと、最初に音が来た
     // ときに次数が 1→2 に変わって Filter::reset() が1回だけメモリを確保する
     // (＝音声スレッドでの確保)。準備段階で済ませておけばゼロになる。
@@ -279,6 +812,9 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
     dryBuffer.setSize (2, samplesPerBlock, false, false, true);
     scratch.setSize   (2, samplesPerBlock, false, false, true);
+    scratch2.setSize  (2, samplesPerBlock, false, false, true);   // v3.1 2点目の側鎖
+    // v3.0 モジュールの退避先。音声コールバックでは一切確保しないので、ここで取る。
+    mods.prepare (sampleRate, samplesPerBlock, 2);
 
     // gate constants
     gateEnvAtk    = 1.0f - std::exp (-1.0f / (0.004f * (float) sampleRate));
@@ -299,12 +835,73 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     lrLP1.setCutoffFrequency (250.0f);  lrHP1.setCutoffFrequency (250.0f);
     lrLP2.setCutoffFrequency (1200.0f); lrHP2.setCutoffFrequency (1200.0f);
     lrLP3.setCutoffFrequency (5000.0f); lrHP3.setCutoffFrequency (5000.0f);
+    for (auto* f : { &dnPhaseLow2, &dnPhaseLow3, &dnPhaseMid3 })
+    {
+        f->prepare (spec);
+        f->setType (juce::dsp::LinkwitzRileyFilterType::allpass);
+    }
+    dnPhaseLow2.setCutoffFrequency (1200.0f);
+    dnPhaseLow3.setCutoffFrequency (5000.0f);
+    dnPhaseMid3.setCutoffFrequency (5000.0f);
+    for (auto* f : { &dnDryPhase1, &dnDryPhase2, &dnDryPhase3 })
+    {
+        f->prepare (spec);
+        f->setType (juce::dsp::LinkwitzRileyFilterType::allpass);
+    }
+    dnDryPhase1.setCutoffFrequency (250.0f);
+    dnDryPhase2.setCutoffFrequency (1200.0f);
+    dnDryPhase3.setCutoffFrequency (5000.0f);
+    dnDryPhaseBuffer.setSize (2, samplesPerBlock, false, false, true);
     for (auto& b : bandBuf) b.setSize (2, samplesPerBlock, false, false, true);
     dnEnvAtk    = 1.0f - std::exp (-1.0f / (0.002f * (float) sampleRate));
     dnEnvRel    = 1.0f - std::exp (-1.0f / (0.060f * (float) sampleRate));
     dnOpenCoef  = 1.0f - std::exp (-1.0f / (0.003f * (float) sampleRate));
     dnCloseCoef = 1.0f - std::exp (-1.0f / (0.045f * (float) sampleRate));
+    // v2.12.0 サフサフ対策(§6-1)
+    dnFastOpen    = 1.0f - std::exp (-1.0f / (0.001f * (float) sampleRate));
+    dnHoldSamples = (int) (0.080 * sampleRate);
+    dnVoiceHold   = 0;
+    dnHfVoiceHold = 0;
+    // v2.12.0 張り保護(§6-2)
+    beltFastDb = -60.0f; beltSlowDb = -60.0f; beltNow = 0.0f; beltPrimed = false;
+    // v3.0「つぶさない」の自動ヘッドルーム: 下げ20ms / 戻し1.5秒（ブロック単位）
+    crushGuard = 0.0f; crushHeadDb = 0.0f; crushMeterDb.store (0.0f);
+    crushHeadAtk = 1.0f - std::exp (-(float) samplesPerBlock / (0.020f * (float) sampleRate));
+    crushHeadRel = 1.0f - std::exp (-(float) samplesPerBlock / (1.500f * (float) sampleRate));
+    dsBroadEnv = 0.0f;
+    dsBbAtk = 1.0f - std::exp (-1.0f / (0.010f * (float) sampleRate));
+    dsBbRel = 1.0f - std::exp (-1.0f / (0.200f * (float) sampleRate));
     dnFloorRise = std::pow (10.0f, 3.0f / 20.0f / (float) sampleRate);   // +3 dB/s adaptive drift
+    // v3.0 自動学びなおし
+    dnRelearnCoef = 1.0f - std::exp (-1.0f / (2.0f * (float) sampleRate));   // τ≈2秒
+    dnQuietNeed   = (int) (0.400 * sampleRate);
+    dnQuietHold   = 0;
+    dnOpenRunMax  = (int) (20.0 * sampleRate);
+    dnOpenRun     = 0;
+    dnFallMax     = (int) (0.030 * sampleRate);
+    for (auto& r : dnFallRun) r = 0;
+    dnEnvSlowCoef = 1.0f - std::exp (-1.0f / (0.15f * (float) sampleRate));   // v3.1 さ行の頭
+    dnEnvSlow3    = 0.0f;
+    dnSoftOpen    = 1.0f - std::exp (-1.0f / (0.25f * (float) sampleRate));   // v3.1 そっと開ける(0.25秒)
+    dnHfDuckCoef  = 1.0f - std::exp (-1.0f / (0.08f * (float) sampleRate));   // v3.1 高域抑えを下げる向き(0.08秒)
+
+    // v3.1「ピックおさえ」の時定数
+    pickFastAtk  = 1.0f - std::exp (-1.0f / (0.0005f * (float) sampleRate));  // 0.5ms
+    pickFastRel  = 1.0f - std::exp (-1.0f / (0.020f  * (float) sampleRate));  // 20ms
+    pickSlowAtk  = 1.0f - std::exp (-1.0f / (0.030f  * (float) sampleRate));  // 30ms
+    pickSlowRel  = 1.0f - std::exp (-1.0f / (0.150f  * (float) sampleRate));  // 150ms
+    pickDownCoef = 1.0f - std::exp (-1.0f / (0.001f  * (float) sampleRate));  // 下げる 1ms
+    pickUpCoef   = 1.0f - std::exp (-1.0f / (0.060f  * (float) sampleRate));  // 戻す 60ms
+    pickRefUp    = 1.0f - std::exp (-1.0f / (0.80f   * (float) sampleRate));  // 基準の上がり 0.8秒
+    pickRefDn    = 1.0f - std::exp (-1.0f / (4.00f   * (float) sampleRate));  // 基準の下がり 4秒
+    pickFast = pickSlow = 0.0f; pickGain = 1.0f; pickMeter.store (0.0f);
+    pickRef = 0.0f; pickRefPrimed = false;
+   #if VOCALGZZIO_TRIAL
+    // 体験版のディップは「挿した瞬間」ではなく60秒後から。
+    //  カウンタ0開始だと最初の0.6秒がいきなりディップになり、
+    //  第一印象が「音が引っ込む壊れたプラグイン」になってしまう。
+    trialCounter = (int) (sampleRate * 0.60);
+   #endif
     for (int b = 0; b < 4; ++b) { dnEnv[b] = 0; dnGain[b] = 1; }
     // v1.5.0: a learned noise profile is part of the user's settings now, so it
     // survives prepareToPlay (levels are sample-rate independent). Only the
@@ -312,6 +909,7 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     if (! dnLearned)
         for (int b = 0; b < 4; ++b) dnFloor[b] = 1e-5f;
     learnCountdown.store (0);
+    dnLearnCommand.store (0);
 
     // ---- sustain constants ----
     susEnvAtk = 1.0f - std::exp (-1.0f / (0.005f * (float) sampleRate));
@@ -349,6 +947,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         popDet.prepare (m1); lipDet.prepare (m1);
         popMidDet.prepare (m1); lipBodyDet.prepare (m1);
         resTamer.prepare (sampleRate);   // v2.4.0 なめらか
+        resModeNow = -1;                 // v2.10.0 音源モードに合わせて組み直させる
+        proxEvener.prepare (sampleRate); // v2.10.0 距離ならし
         popDet     .coefficients = Coefficients::makeLowPass  (sampleRate, 120.0, 0.707f); // 破裂音の帯域
         popMidDet  .coefficients = Coefficients::makeHighPass (sampleRate, 170.0, 0.707f); // 歌なら必ず出る倍音側
         lipDet     .coefficients = Coefficients::makeBandPass (sampleRate, 3500.0, 0.7f);  // 粘着音の帯域
@@ -423,6 +1023,9 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     preBufR.assign (preBufL.size(), 0.0f);
     preWrite = 0;
     revHPF.prepare (spec); revLPF.prepare (spec);
+    revBypassGain = 0.0f;
+    revBypassStep = (float) (1.0 / (0.012 * sampleRate));
+    revWasRunning = false;
 
     // v1.6.0 spring / shimmer state
     springBufL.assign ((size_t) ((int) (0.033 * sampleRate) + 8), 0.0f);
@@ -442,9 +1045,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // v2.8.0: Mixで混ぜ戻す原音を、加工側と同じだけ遅らせるためのリング。
     // 最大でシフターの申告遅延ぶん＋1ブロック＋余白があれば足りる。
     {
-        // シフターの最大遅延は N-hop = 1024-256 = 768。窓の設定はこの下で行うので
-        // latencySamples() をここで呼ぶと古い値になる。余裕をみて 1024 で確保する。
-        const int maxLat = 1024;
+        // ピッチ窓はサンプルレートに追従する。実際の遅延を原音側にも確保する。
+        const int maxLat = vcSh[0].latencySamples();
         dryRing.setSize (2, maxLat + juce::jmax (samplesPerBlock * 2, 8192) + 8,
                          false, false, true);
         dryRing.clear();
@@ -482,7 +1084,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     keyCaptureReady.store (false);
     keyAnalyzed = false;
 
-    std::fill (std::begin (tunerBuf), std::end (tunerBuf), 0.0f);
+    for (auto& sample : tunerBuf) sample.store (0.0f, std::memory_order_relaxed);
+    tunerSequence.store (0);
     tunerPos.store (0);
     std::fill (std::begin (analyzerBuf), std::end (analyzerBuf), 0.0f);
     analyzerPos.store (0);
@@ -496,15 +1099,28 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // ここで伝えるぶんには何も壊れない(実行中に伝えると Cubase が固まる)。
     // プロジェクトを開いた時点でボイス変換やハモリがONなら、その遅延を申告する。
     {
-        // v2.9.0: 窓はつねに 1024 点(遅延768サンプル)。低遅延モードは廃止した。
-        {
-            for (auto& sh : vcSh) sh.setWindow (10);
-            for (auto& sh : unSh) sh.setWindow (10);
-        }
+        // 窓はprepare()がサンプルレートに合わせて選ぶ。
+        // 96kHzでも低音の周期数を保ち、原音側の遅延と同じ値を申告する。
         // v2.9.0 セッションモード: ONの間は遅延をふやす3機能を素通しにする。
         const bool sessionOn = apvts.getRawParameterValue ("session")->load() > 0.5f;
-        const bool vcOn = apvts.getRawParameterValue ("vc_on")->load() > 0.5f && ! sessionOn;
-        const bool atOn = apvts.getRawParameterValue ("at_on")->load() > 0.5f && ! sessionOn;
+        // v2.10.0 音源モードがアコギなら、ピッチ系はそもそも通さない。
+        //  ここは updateParameters() より前に走るので、プロファイルを直接読む。
+        // v3.1 ★voiceOnly ではなく pitchOk を見るようにした。
+        //  「弾き語り」は声があるので ことば・艶 は要る(voiceOnly=true)が、
+        //  和音が同時に鳴っているので単音前提のピッチ検出は誤動作する
+        //  (pitchOk=false)。ここを voiceOnly のままにすると、申告する遅延と
+        //  processBlock が実際に通す顔ぶれが食い違い、DAW がトラックを
+        //  17.4ms 前へ引っ張って**歌だけ走る**。下の processBlock 側と必ず同じ条件にする。
+        const bool voiceSrc = sourceProfile ((int) apvts.getRawParameterValue ("src_mode")->load()).pitchOk;
+        // v3.0 ★モジュール「へんしん」も申告に効かせる。
+        //  ここを忘れると、へんしんOFF＝実際は素通しなのに 768 サンプル(17.4ms)
+        //  遅れると申告し続け、DAW がその嘘を信じてトラックを 17.4ms 前へ引っ張る
+        //  ＝**歌だけ走る**。v2.9.0 のハモリで一度やった失敗と同じ形なので、
+        //  processBlock 側の条件と必ず同じ顔ぶれにしておく。
+        const bool henshinOn = apvts.getRawParameterValue (
+                                   gz::ModuleChain::paramId (gz::ModuleChain::Henshin))->load() > 0.5f;
+        const bool vcOn = apvts.getRawParameterValue ("vc_on")->load() > 0.5f && henshinOn && ! sessionOn && voiceSrc;
+        const bool atOn = apvts.getRawParameterValue ("at_on")->load() > 0.5f && henshinOn && ! sessionOn && voiceSrc;
         // v2.9.0 ★ハモリ(jn_on)を申告から外した。
         //   ハモリは主メロの**横に**声を足す並列処理で、主メロ自体は遅れない。
         //   実測: ハモリだけONにすると申告768サンプルなのにピークは0サンプル
@@ -539,24 +1155,69 @@ void VocalGzzioProcessor::updateParameters()
 
     // v2.8.0: ここは processBlock から毎ブロック呼ばれる。makeXxx (ヒープ確保)
     // ではなく ArrayCoefficients (確保なし) を使う。→ PluginProcessor.h の ACoefs 参照
+    // v2.10.0 #77/#78 音源モードで中心を持ち替える（うたは今までと同じ数値）
+    const int  srcMode = (int) apvts.getRawParameterValue ("src_mode")->load();
+    const auto prof    = sourceProfile (srcMode);
+
     *hpf.state      = ACoefs::makeHighPass   (sr, p ("lowcut"), 0.707f);
-    *mud.state      = ACoefs::makePeakFilter (sr, 300.0f, 1.0f,  toGain (p ("mud")));
-    *harsh.state    = ACoefs::makePeakFilter (sr, 3200.0f, 1.2f, toGain (p ("harsh")));
-    *presence.state = ACoefs::makePeakFilter (sr, 4200.0f, 0.9f, toGain (p ("presence")));
-    *air.state      = ACoefs::makeHighShelf  (sr, 11000.0f, 0.707f, toGain (p ("air")));
-    *deessDetectHP.state = ACoefs::makeHighPass (sr, 5200.0f, 0.9f);
+    *mud.state      = ACoefs::makePeakFilter (sr, prof.mudHz,   prof.mudQ,   toGain (p ("mud")));
+    *harsh.state    = ACoefs::makePeakFilter (sr, prof.harshHz, prof.harshQ, toGain (p ("harsh")));
+    *presence.state = ACoefs::makePeakFilter (sr, prof.presHz,  prof.presQ,  toGain (p ("presence")));
+    *air.state      = ACoefs::makeHighShelf  (sr, prof.airHz,   0.707f,      toGain (p ("air")));
+    *deessDetectHP.state = ACoefs::makeHighPass (sr, prof.dsDetectHz, 0.9f);
+
+    // v3.1 2点目のこもり（弾き語りだけ）。使わない使いかたでは1回も通さない。
+    mud2On = prof.mudHz2 > 1.0f;
+    if (mud2On)
+        *mud2.state = ACoefs::makePeakFilter (sr, prof.mudHz2, prof.mudQ2, toGain (p ("mud")));
+
+    // v3.1 2点目のサ行おさえ（弾き語りだけ）。検出は帯域通過、下げるのは山。
+    dsDetect2Hz = prof.dsDetectHz2;
+    if (dsDetect2Hz > 1.0f)
+    {
+        *deessDetectBP2.state = ACoefs::makeBandPass (sr, dsDetect2Hz, 1.1f);
+        dsDipHzNow = prof.dsDipHz2;
+        dsDipQNow  = prof.dsDipQ2;
+    }
+
+    // なめらか(Resonance)の見張る範囲。モードが変わったときだけ組み直す。
+    // Tamer::prepare は固定長配列に係数を書くだけで確保は起きないので、
+    // 音声コールバックの中から呼んでも安全（dsp_noalloc で確認している）。
+    if (srcMode != resModeNow)
+    {
+        resModeNow = srcMode;
+        resTamer.prepare (sr, prof.resLoHz, prof.resHiHz);
+    }
+    // ディエッサーの棚と、歌かどうかの判定を音声側へ渡す
+    dsShelfHzNow  = prof.dsShelfHz;
+    srcVoiceOnly  = prof.voiceOnly;
+    srcBreathOk   = prof.breathOk;
+    srcSpaceOk    = prof.spaceOk;
+    srcPitchOk    = prof.pitchOk;      // v3.1 ピッチ系だけ別扱い
+    srcPickOk     = prof.pickOk;       // v3.1 ピックおさえ（アコギだけ）
+    srcDnScale    = prof.dnScale;      // v3.1 使いかたごとのノイズ除去の効き
+
+    // ---- v3.0「つぶさない」がONのときだけ効く量（0=いつもの声量、1=張っている）
+    // なぜ「しきい値を上げる」のか:
+    //   圧縮は「しきい値を超えたぶんを 1/比率 に縮める」。声を張る＝入力が上がる
+    //   ＝超える量が増える＝**縮められる量も増える**。だから張るほど詰まる。
+    //   張っている間だけしきい値を持ち上げれば、いつもの声量での効き（まとまり）は
+    //   そのままに、張ったところだけ縮められずに抜ける。
+    //   比率も少し寝かせる（4.0→2.8 / 2.5→1.6）。しきい値だけだと、超えた瞬間に
+    //   同じ急さで潰れるので「壁に当たった」感じが残るため。
+    const float cg = (apvts.getRawParameterValue ("crush_on")->load() > 0.5f) ? crushGuard : 0.0f;
 
     // comp1: fast peak catcher; amount maps threshold -8..-30 dB, ratio 4:1
     const float c1 = p ("comp1") * 0.01f;
-    comp1.setThreshold (juce::jmap (c1, -8.0f, -30.0f));
-    comp1.setRatio (4.0f);
+    comp1.setThreshold (juce::jmap (c1, -8.0f, -30.0f) + 6.0f * cg);
+    comp1.setRatio (4.0f - 1.2f * cg);
     comp1.setAttack  (juce::jmax (1.0f, p ("attack") * 0.5f));
     comp1.setRelease (p ("release") * 0.6f);
 
     // comp2: slow leveller; amount maps threshold -10..-35 dB, ratio 2.5:1
     const float c2 = p ("comp2") * 0.01f;
-    comp2.setThreshold (juce::jmap (c2, -10.0f, -35.0f));
-    comp2.setRatio (2.5f);
+    comp2.setThreshold (juce::jmap (c2, -10.0f, -35.0f) + 6.0f * cg);
+    comp2.setRatio (2.5f - 0.9f * cg);
 
     makeup.setGainDecibels (p ("makeup"));
 
@@ -579,14 +1240,25 @@ void VocalGzzioProcessor::updateParameters()
             { 0.26f, 0.55f, 0.38f, 0.6f,   220.0f,  4500.0f },   // spring (narrow band)
             { 0.72f, 1.00f, 0.22f, 1.0f,   300.0f,  9000.0f }    // shimmer (open top)
         };
-        const RevDef& d = defs[juce::jlimit (0, 6, type)];
+        // v4.0.0: 7以上は「へや」。従来の tank は通さないので defs は使わないが、
+        // 出口の HPF/LPF は共通なので 0 番（素通しに近い）の値を当てておく。
+        const RevDef& d = defs[type >= kHeyaFirst ? 0 : juce::jlimit (0, 6, type)];
+        if (type >= kHeyaFirst)
+        {
+            if (heyaReady.load())
+            {
+                // どちらも確保しない・例外を投げない。音声スレッドから呼んでよい。
+                heyaRev.setRoom (type - kHeyaFirst);
+                heyaRev.setSize (s);
+            }
+        }
 
         juce::dsp::Reverb::Parameters rp;
         rp.roomSize = juce::jmap (s, d.roomLo, d.roomHi);
         rp.damping  = d.damp;
         rp.width    = d.width;
-        const bool revOn = apvts.getRawParameterValue ("revon")->load() > 0.5f;
-        rp.wetLevel = revOn ? juce::jlimit (0.0f, 1.0f, p ("revmix") * 0.01f) : 0.0f;
+        // ON/OFFは共通の出口で12msフェード。ここで即座にゼロへ飛ばさない。
+        rp.wetLevel = juce::jlimit (0.0f, 1.0f, p ("revmix") * 0.01f);
         rp.dryLevel = 0.0f;   // dry stays in the main buffer; reverb runs on a wet-only copy
         reverb.setParameters (rp);
 
@@ -647,6 +1319,29 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     const int numCh = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
+    // ---- v3.0 モジュールのON/OFF ----
+    // ここでこのブロックぶんの「渡し具合」を決めてしまう。以降の save/restore は
+    // その値を読むだけなので、同じモジュールが離れた2か所にあっても足並みが揃う。
+    // v3.0-c「くらべる」: 押している**間だけ**8つとも素通しにする。
+    //  ★パラメータは1つも書き換えない。書き換えると、押した瞬間にホストの
+    //   オートメーションが動き、離す前に保存やプリセット切替が起きると
+    //   「全部OFFのまま保存された」事故になる。専用のフラグで切るのが安全。
+    //   渡しは ModuleChain の 10ms クロスフェードに乗るので、プチッと言わない。
+    const bool cmp = compareBypass.load (std::memory_order_relaxed);
+    // v3.1「1つずつ」画面の くらべる は、その1枚だけを渡しにする。
+    const int  cmpOne = compareOne.load (std::memory_order_relaxed);
+    for (int m = 0; m < gz::ModuleChain::Count; ++m)
+        mods.setOn (m, ! cmp && m != cmpOne
+                       && apvts.getRawParameterValue (gz::ModuleChain::paramId (m))->load() > 0.5f);
+    mods.beginBlock (numSamples);
+
+    // ---- v3.0「つぶさない」----
+    // 「音量が上がったときに音が潰れないようにするモード」。
+    // crushGuard は前のブロックで測った張り具合(0..1)。OFF のときは 0 なので、
+    // 掛かる場所すべてが今までと**同じ式**になる（＝1サンプルも変わらない）。
+    const bool  crushOn = apvts.getRawParameterValue ("crush_on")->load() > 0.5f;
+    const float crushCg = crushOn ? crushGuard : 0.0f;
+
     // ---- v2.6.0 入力の防火壁 ----
     // ホストや他のプラグインから NaN/Inf が一度でも流れ込むと、内部の再帰状態
     // (フィルタ・コンプの包絡・ピッチシフタの位相メモリ)が汚染されて自然には
@@ -703,6 +1398,48 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         dnLearned = dnLearnedShared.load();
     }
 
+    // 学習の開始・やり直し・解除をブロック境界で反映する。
+    // 操作側から集計配列を消すと、音声側の加算と競合して不定な床ができていた。
+    const int dnCommand = dnLearnCommand.exchange (0, std::memory_order_acq_rel);
+    if (dnCommand != 0)
+    {
+        for (auto& f : dnFloorLearn) f = 1e-6f;
+        for (auto& row : dnHist) for (auto& count : row) count = 0;
+        dnHistCount = 0;
+        dnHistDecim = 0;
+        dnLearnResult.store (0);
+        learnCountdown.store (dnCommand == 1 ? (int) (1.5 * currentSampleRate) : 0);
+        if (dnCommand == -1)
+        {
+            dnLearned = false;
+            dnLearnedShared.store (false);
+            for (int b = 0; b < 4; ++b)
+            {
+                dnFloor[b] = 1e-5f;
+                dnFloorShared[b].store (dnFloor[b]);
+            }
+        }
+    }
+
+    // ---- v2.10.0 #73 ゼロ遅延の自己証明（入口） ----
+    // 「測る」を押している約1秒だけ、入力を**こちらで作った信号に差し替える**。
+    // 中身は無音＋インパルス1発だけ。チェーンをそのまま通し、出口で出てきた
+    // 位置を見れば、その人の環境での実測遅延が分かる。
+    // ※測っている間の出力は出口側で消すので、耳には何も届かない。
+    if (selfTestRunning.load (std::memory_order_relaxed))
+    {
+        const int pos   = selfTestPos.load (std::memory_order_relaxed);
+        const int impAt = (int) (currentSampleRate * 0.25);   // 落ち着かせてから入れる
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            auto* d = buffer.getWritePointer (ch);
+            juce::FloatVectorOperations::clear (d, numSamples);
+            const int local = impAt - pos;
+            if (local >= 0 && local < numSamples) d[local] = 1.0f;
+        }
+        selfTestImpactAt = impAt;
+    }
+
     // ---- v2.4.0 マイク音量(入力トリム) ----
     // v2.8.0 ★位置を直した: 説明文には「ぜんぶの処理のいちばん手前で掛ける」と
     // 書いてあったのに、実際はゲート・ノイズ除去・ボイス変換のあと、しかも
@@ -727,6 +1464,55 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 if (R) R[n] *= inGainNow;
             }
         }
+    }
+
+    // ---- v2.10.0 距離ならし（近接効果の自動補正） ----
+    // マイク音量の直後・原音コピーより前。ここが v2.8.0 で確定した「いちばん手前」。
+    // 原音側にも掛かるので、Mix で混ぜ戻したときに太さが食い違わない。
+    // 声が出ているときだけ学習する（無音でノイズの比を「いつも」と覚えないため）。
+    {
+        const float pa = apvts.getRawParameterValue ("prox_amt")->load() * 0.01f;
+        proxEvener.setAmount (pa);
+        if (pa > 0.0f)
+        {
+            const float rms = buffer.getRMSLevel (0, 0, numSamples);
+            proxEvener.process (buffer.getWritePointer (0),
+                                numCh > 1 ? buffer.getWritePointer (1) : nullptr,
+                                numSamples, rms > 0.0006f);   // ざっくり -64dBFS 以上を「声」とみなす
+        }
+        proxCorrDb.store (proxEvener.currentCorrectionDb(), std::memory_order_relaxed);
+    }
+
+    // ---- v2.12.0 張り保護(§6-2): 「いつもの声量」に対して今どれだけ張っているか ----
+    // 速い包絡(約60ms)と遅い基準(約4秒・そこそこ鳴っているときだけ動く)の差が
+    // +6dB を超えたら「張っている」。0..1 にして「なめらか」へ渡す(2〜4kHzの
+    // 削りを最大50%緩める)。張りっぱなしなら基準が追いつき、保護は自然に解ける。
+    {
+        float pk = 0.0f;
+        for (int ch = 0; ch < juce::jmin (numCh, 2); ++ch)
+            pk = juce::jmax (pk, buffer.getMagnitude (ch, 0, numSamples));
+        const float pkDb = juce::Decibels::gainToDecibels (pk, -80.0f);
+        const float aF = 1.0f - std::exp (-(float) numSamples / (0.060f * (float) currentSampleRate));
+        const float aS = 1.0f - std::exp (-(float) numSamples / (4.0f   * (float) currentSampleRate));
+        beltFastDb += aF * (pkDb - beltFastDb);
+        // v3.0 ★最初の1回だけ、基準を「いま出ている声量」に合わせる。
+        //  これが無いと、基準は起動時の -60 dB から4秒の時定数で登るので、
+        //  **歌い始めの5〜8秒はずっと「張っている」と誤判定**する。
+        //  v2.12.0 のなめらか保護でも同じことが起きていた（気づいていなかった）。
+        //  「つぶさない」の表示を作って、いつもの声量でも 6.00 dB と出続けたので
+        //  発覚した。数字を画面に出す作りにしていなければ、見つからなかった。
+        if (beltFastDb > -45.0f)
+        {
+            if (! beltPrimed) { beltSlowDb = beltFastDb; beltPrimed = true; }
+            else              beltSlowDb += aS * (beltFastDb - beltSlowDb);
+        }
+        beltNow = juce::jlimit (0.0f, 1.0f, (beltFastDb - beltSlowDb - 6.0f) / 6.0f);
+        resTamer.setBeltProtect (beltNow);
+
+        // v3.0「つぶさない」用に少しなめらかにする。beltNow はブロックごとに
+        // ぱたぱた動くので、そのまま圧縮のしきい値に入れると音量が揺れて聞こえる。
+        // 上がるのは速く(守りは遅れさせない)、下がるのはゆっくり(戻りで段差を作らない)。
+        crushGuard += (beltNow > crushGuard ? 0.25f : 0.03f) * (beltNow - crushGuard);
     }
 
     dryBuffer.makeCopyOf (buffer, true);
@@ -802,13 +1588,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     {
         const float* dl = dryBuffer.getReadPointer (0);
         const float* dr = dryBuffer.getReadPointer (juce::jmin (1, dryBuffer.getNumChannels() - 1));
+        tunerSequence.fetch_add (1, std::memory_order_acq_rel);
         int pos = tunerPos.load (std::memory_order_relaxed);
         for (int n = 0; n < numSamples; ++n)
         {
-            tunerBuf[pos] = 0.5f * (dl[n] + dr[n]);
+            tunerBuf[pos].store (0.5f * (dl[n] + dr[n]), std::memory_order_relaxed);
             pos = (pos + 1) % tunerSize;
         }
         tunerPos.store (pos, std::memory_order_release);
+        tunerSequence.fetch_add (1, std::memory_order_release);
     }
 
     // input meter
@@ -823,8 +1611,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         meterIn.store (pk > cur ? pk : cur * 0.985f);
     }
 
+    // ===== モジュール1「おそうじ」ここから（ゲート・ノイズ除去）=====
+    // v3.0-b OFF なら丸ごと飛ばす（区間は2か所に分かれるが、フラグは1つ）
+    const bool soujiRun = ! mods.isOff (gz::ModuleChain::Souji);
+    // 「De-noiseだけ使いたいのに他がかかる」への答え。OFF なら、この区間を
+    // 通る前と後で波形が1サンプルも変わらない（tools/dsp_modules で一致確認）。
+    if (soujiRun) mods.save (gz::ModuleChain::Souji, buffer);
+
     // ---- gate ----
-    if (apvts.getRawParameterValue ("gate_on")->load() > 0.5f)
+    if (soujiRun && apvts.getRawParameterValue ("gate_on")->load() > 0.5f)
     {
         const float thr = juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("gate")->load());
         for (int n = 0; n < numSamples; ++n)
@@ -844,12 +1639,18 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     // ---- de-noise (4-band adaptive downward expander, RX-style Learn) ----
     {
         const bool  dnOn   = apvts.getRawParameterValue ("dn_on")->load() > 0.5f;
-        const float amount = apvts.getRawParameterValue ("denoise")->load() * 0.01f;
+        const bool  dnRelearn = apvts.getRawParameterValue ("dn_relearn")->load() > 0.5f;
+        // v3.1 使いかたごとに効きを変える（設計書§3）。ツマミの数字はそのまま、
+        //  同じ 50% でも しゃべり=強め(×1.25) / アコギだけ・弾き語り=ひかえめ(×0.7)。
+        //  うたは ×1.0 = 今までと同じ。上限は 1.0（ツマミ100%より強くはしない）。
+        const float amount = juce::jlimit (0.0f, 1.0f,
+                                apvts.getRawParameterValue ("denoise")->load() * 0.01f * srcDnScale);
         int learn = learnCountdown.load();
 
-        if ((amount > 0.001f && dnOn) || learn > 0)
+        // 切替中にも分割フィルターの履歴を更新する。再び入れた瞬間に
+        // 前回の古い音が漏れたり、原音側の位相補償と食い違ったりしない。
         {
-            // split into 4 bands (LR4 crossovers sum flat)
+            // 直列分割では、下位帯域にも後段の位相回転を補わないと平坦に戻らない。
             bandBuf[0].makeCopyOf (buffer, true);
             bandBuf[1].makeCopyOf (buffer, true);
             {
@@ -878,12 +1679,82 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 juce::dsp::ProcessContextReplacing<float> c3x (b3);
                 lrHP3.process (c3x);                                 // band3 = HP5000
             }
+            {
+                juce::dsp::AudioBlock<float> b0 (bandBuf[0]);
+                juce::dsp::ProcessContextReplacing<float> c0 (b0);
+                dnPhaseLow2.process (c0);
+                dnPhaseLow3.process (c0);
+                juce::dsp::AudioBlock<float> b1 (bandBuf[1]);
+                juce::dsp::ProcessContextReplacing<float> c1x (b1);
+                dnPhaseMid3.process (c1x);
+            }
+        }
+
+        // おそうじを切っていても、明示的に始めた学習は最後まで測る。
+        // 音を変えるかどうかと測定を分けないと、学習中表示が戻らなくなる。
+        if ((soujiRun && amount > 0.001f && dnOn) || learn > 0)
+        {
 
             const float maxAttenDb = dnOn ? 24.0f * amount : 0.0f;
             float attenSum = 0.0f;
 
             for (int n = 0; n < numSamples; ++n)
             {
+                // 高域の子音は高域自身の立ち上がりで保護する。
+                // 母音が出たことだけを理由に高域の部屋ノイズを開放しない。
+                const bool hfOnset = dnEnv[3] > 2.2e-3f
+                                  && dnEnv[3] > dnEnvSlow3 * 1.25f;
+                if (hfOnset) dnHfVoiceHold = dnHoldSamples;
+                else if (dnHfVoiceHold > 0) --dnHfVoiceHold;
+                // ---- v2.12.0 サフサフ対策(§6-1) ----
+                // 声の中心帯域(250-1200 / 1200-5000)が床から+12dB(×4)を超えたら
+                // 「声が出ている」。その間+80msは**全帯域を一斉に開く**。
+                // 今までは帯域ごとに独立して開いていたので、喋りはじめの弱い
+                // 子音・息(床に近い)が高域だけ「まだノイズ」と判定されて削られ、
+                // サ行・ハ行の頭がサフサフになっていた。判定は1サンプル前の
+                // 包絡を見るが、保持が80msあるので問題にならない。
+                // ★条件は「2帯域そろって+12dB」または「片帯域が+20dB」。
+                //  片帯域+12dBだけにすると、部屋ノイズの包絡の揺れ(床は最小値
+                //  追従なので、揺れの上側は床の4倍を超えることがある)で誤発火し、
+                //  声のない区間まで開きっぱなしになる(dsp_dnonset[2]で実測)。
+                //  さらに絶対レベルの下限(-52dBFS相当)を重ねる。床は最小値追従
+                //  なので、静かな部屋ノイズでも包絡の揺れの上側が床の4倍を超えて
+                //  「声」と誤認し、開きっぱなしになる(dsp_dnonset[2]で実測)。
+                //  声・ささやきは-45dBFSより上に来るので、この下限では切れない。
+                // v3.1 ★「喋りはじめのさ行」も声として扱う。
+                //  さ・し・す…のエネルギーは5kHzより上（帯域3）に集まるが、
+                //  この判定は帯域1・2しか見ていなかった。フレーズの頭が子音だと
+                //  母音が来るまで発火せず、その間の子音がエキスパンダーに揉まれて
+                //  シャフシャフしていた（文中の子音は80ms保持に守られるので無事＝
+                //  「喋りはじめだけ」症状が出る、という報告どおり）。
+                //  レベルだけでは騒がしい部屋の床と子音を区別できないので、
+                //  **立ち上がりの速さ**で見る: 帯域3の包絡が「ゆっくり平均(0.15s)」を
+                //  一気に上回るのは子音の頭だけ。しきい値は実測から決めた:
+                //   ・さ行の頭のジャンプ = ×1.38（-48dBの部屋で-45dB相当の弱い子音）
+                //   ・定常ノイズの包絡の揺れ = ×1.05〜1.08（release 60msが均すため）
+                //  → 中間の ×1.25（+2dB）。絶対の下限(-53dBFS相当)も重ねて、
+                //  無音の空騒ぎを弾く（dsp_dnonset[2]が誤発火を毎回見張る）。
+                //  ★「床より上」の条件は置かない。学習した床は med×1.4、つまり
+                //  包絡の中央値より**上**にあるので、床と比べると弱い子音
+                //  （床×1.06 とか）を自分で弾いてしまう（実測でそれが起きた）。
+                if (((dnEnv[1] + dnEnv[2] > 2.5e-3f)
+                     && ((dnEnv[1] > dnFloor[1] * 4.0f && dnEnv[2] > dnFloor[2] * 4.0f)
+                          || dnEnv[1] > dnFloor[1] * 10.0f
+                          || dnEnv[2] > dnFloor[2] * 10.0f))
+                    || hfOnset)
+                    dnVoiceHold = dnHoldSamples;
+                else if (dnVoiceHold > 0) --dnVoiceHold;
+                const bool voiceOpen = dnVoiceHold > 0;
+               #ifdef GZ_DNDEBUG
+                { static int dbg = 0; if ((dbg++ & 511) == 0)
+                    std::printf ("DBG env3=%.5f slow3=%.5f floor3=%.5f open=%d\n",
+                                 dnEnv[3], dnEnvSlow3, dnFloor[3], (int) voiceOpen); }
+               #endif
+
+                // v3.0 静けさの時計と、声判定の詰まり検出（下の床の更新が読む）
+                if (voiceOpen) { dnQuietHold = 0; if (dnOpenRun < dnOpenRunMax) ++dnOpenRun; }
+                else           { dnOpenRun = 0;   if (dnQuietHold <= dnQuietNeed) ++dnQuietHold; }
+
                 for (int b = 0; b < 4; ++b)
                 {
                     float pk = 0.0f;
@@ -892,11 +1763,37 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
                     dnEnv[b] += (pk > dnEnv[b] ? dnEnvAtk : dnEnvRel) * (pk - dnEnv[b]);
 
+                    // v3.0 包絡が「自由落下」しているかどうか。
+                    //  部屋鳴りなら波形の山が数ms毎に包絡へ届く（カウンタは即リセット）。
+                    //  ミュート・入力切替の直後は、山が来ないまま包絡だけが release で
+                    //  落ち続ける。それを30ms見たら「落下中」＝学びなおしを止める。
+                    //  （落下中の包絡を学ぶと、床がミュートのたびに少しずつ沈む）
+                    if (pk < dnEnv[b] * 0.7f) { if (dnFallRun[b] <= dnFallMax) ++dnFallRun[b]; }
+                    else                        dnFallRun[b] = 0;
+
+                    // v3.1 帯域3のゆっくり平均（喋りはじめのさ行検出の基準線）
+                    if (b == 3)
+                        dnEnvSlow3 += dnEnvSlowCoef * (dnEnv[3] - dnEnvSlow3);
+
                     if (learn > 0)
                     {
                         dnFloorLearn[b] = juce::jmax (dnFloorLearn[b], dnEnv[b]);
+                        // v2.10.0 中央値を取るための度数分布。16サンプルに1回で足りる
+                        // (包絡は 2ms/60ms で均してあるので、それより速くは動かない)。
+                        if (dnHistDecim == 0)
+                        {
+                            const float db = juce::Decibels::gainToDecibels (dnEnv[b], -120.0f);
+                            int idx = (int) std::lround (db) + 120;
+                            dnHist[b][juce::jlimit (0, dnHistBins - 1, idx)] += 1;
+                            if (b == 3) ++dnHistCount;      // 最後の帯域で1回だけ数える
+                        }
                     }
-                    else if (! dnLearned && gateGain > 0.99f)
+                    // v2.10.0 ★ここは else ではない。
+                    //   以前は学習中の1.5秒だけ自動追従が止まっていた。採用しなかった
+                    //   ときに「押しただけで音が変わる」ことになり（実測 低域 +3.9dB）、
+                    //   拒否が無害にならない。学習中も追従は回し続ける。
+                    //   採用したときは、下でどうせ床を上書きするので影響しない。
+                    if (! dnLearned && gateGain > 0.99f)
                     {
                         // adaptive minimum tracking: fast down, slow drift up
                         // v2.8.0 ★ゲートが閉じている間は学習しない。
@@ -905,21 +1802,62 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                         // openThr = 床×2.5 が本物のノイズより下がってしまい、
                         // 「ゲートONだとノイズ除去がまったく効かない」状態になっていた。
                         // 戻りは +3dB/秒なので、一度落ちると20秒近く効かない。
-                        if (dnEnv[b] < dnFloor[b]) dnFloor[b] = dnEnv[b];
-                        else                       dnFloor[b] = juce::jmin (dnFloor[b] * dnFloorRise, 0.5f);
+                        // v3.0 ★上向きのドリフトは「声が出ていない間」だけにした。
+                        //  以前は声の間も +3dB/秒で床が声を追いかけていた。ふつうの
+                        //  話し方なら息つぎで包絡が床を割って即座に戻るが、切れ目なく
+                        //  歌い続けると床が上がり、30秒で約1dB声が削れていた
+                        //  （tools/dsp_dnfade [2] で実測）。声の間は凍らせる。
+                        //  例外: 床が実際よりずっと低くて「声判定」が20秒詰まりっ
+                        //  ぱなしのとき（うるさい部屋で初めて挿した場合）だけは、
+                        //  昔どおり上向きを許して自力で抜ける。人の声で、包絡が
+                        //  20秒間一度も床×4を割らないことは無い。
+                        if (dnEnv[b] < dnFloor[b])
+                            dnFloor[b] = dnEnv[b];
+                        else if (! voiceOpen || dnOpenRun >= dnOpenRunMax)
+                            dnFloor[b] = juce::jmin (dnFloor[b] * dnFloorRise, 0.5f);
                         dnFloor[b] = juce::jmax (dnFloor[b], 1e-6f);
+                    }
+                    else if (dnLearned && dnRelearn && gateGain > 0.99f
+                             && dnQuietHold > dnQuietNeed && dnEnv[b] > 1.0e-5f
+                             && dnFallRun[b] <= dnFallMax)
+                    {
+                        // v3.0 自動学びなおし（しゃべっていない間だけ、部屋を測り直す）
+                        //  報告:「ノイズ除去が、最初は良いのに時間が経つとサフサフしてくる」。
+                        //  LEARN した床は固定なので、配信の途中で PC のファンが速くなる・
+                        //  エアコンが入るなど部屋が変わると、ノイズが判定線の上に出て、
+                        //  エキスパンダーが判定線の際でばたつく（＝サフサフ）。
+                        //  静かな間だけ、ゆっくり床を現実に合わせ直す。
+                        //   ・声が消えて 400ms 待ってから（息の尻尾を部屋と間違えない）
+                        //   ・τ≈2秒（イスのきしみ1回では動かない）
+                        //   ・完全な無音（ミュート・入力切替）では動かさない（1e-5未満）
+                        //   ・ゲートが閉じている間も動かさない（v2.8.0 と同じ理由）
+                        // ★2026-08-31 直し: ×1.4 の余裕をここでも掛ける。
+                        //  LEARN が作る床は「包絡の中央値 ×1.4(+3dB)」。
+                        //  なのに学びなおしは包絡そのものへ寄っていくので、
+                        //  静かな時間がたまるほど床が +3dB ぶん下がっていく。
+                        //  実測(tools/dsp_dnslow): 学習直後 4.427e-3 → 3.216e-3
+                        //  ＝ -2.78dB。だまっている間の残りノイズが 1.6dB 大きくなる。
+                        //  「学習したのに、しばらくすると効きが浅くなる」の正体。
+                        dnFloor[b] += dnRelearnCoef * (dnEnv[b] * 1.4f - dnFloor[b]);
+                        dnFloor[b] = juce::jlimit (1.0e-6f, 0.5f, dnFloor[b]);
                     }
 
                     const float openThr = dnFloor[b] * 2.5f;   // ~+8 dB above floor
-                    float targetGain = 1.0f;
-                    if (dnEnv[b] < openThr)
-                    {
-                        const float below = juce::jlimit (0.0f, 1.0f,
-                                              (openThr - dnEnv[b]) / juce::jmax (openThr, 1e-9f));
-                        targetGain = juce::Decibels::decibelsToGain (-maxAttenDb * below);
-                    }
-                    dnGain[b] += (targetGain > dnGain[b] ? dnOpenCoef : dnCloseCoef)
-                                     * (targetGain - dnGain[b]);
+
+                    // 高域は声の有無で二択に切り替えず、床からの余裕で連続的に減衰。
+                    // 以前は母音中に -6dB まで必ず開いていたため、黙っている間に
+                    // 抑えたノイズが声と一緒に戻っていた。子音の立ち上がりだけ保持する。
+                    const bool protectBand = b == 3 ? dnHfVoiceHold > 0 : voiceOpen;
+                    const float below = juce::jlimit (0.0f, 1.0f,
+                                          (openThr - dnEnv[b]) / juce::jmax (openThr, 1e-9f));
+                    const float targetGain = protectBand ? 1.0f
+                        : juce::Decibels::decibelsToGain (-maxAttenDb * below);
+                    const bool bandHasSignal = dnEnv[b] > dnFloor[b] * 1.3f;
+                    const float upCoef = protectBand ? dnFastOpen
+                                       : (bandHasSignal ? dnOpenCoef : dnSoftOpen);
+                    const float coef = targetGain > dnGain[b] ? upCoef
+                                     : (b == 3 ? dnHfDuckCoef : dnCloseCoef);
+                    dnGain[b] += coef * (targetGain - dnGain[b]);
                     attenSum += 1.0f - dnGain[b];
 
                     for (int ch = 0; ch < numCh; ++ch)
@@ -927,26 +1865,76 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                             bandBuf[b].getSample (juce::jmin (ch, 1), n) * dnGain[b]);
                 }
 
-                if (learn > 0) --learn;
+                // 帯域ごとに間引くと1024の倍数が帯域0に偏り、残り3帯域が保存されない。
+                if (dnLearned && dnRelearn && (++dnShareDecim & 0x3FF) == 0)
+                    for (int b = 0; b < 4; ++b) dnFloorShared[b].store (dnFloor[b]);
+
+                if (learn > 0) { if (++dnHistDecim >= 16) dnHistDecim = 0; --learn; }
             }
 
             if (learnCountdown.load() > 0)
             {
                 learnCountdown.store (learn);
-                if (learn <= 0)   // learning just finished: commit profile with margin
+                if (learn <= 0)   // learning just finished: 中身を見てから決める
                 {
+                    // ---- v2.10.0 ★採用してよい学習かどうかを判定する ----
+                    //  中央値 = 部屋のノイズの代表値。一瞬の物音では動かない。
+                    //  山と谷の開き = その1.5秒がどれだけ静かだったか。
+                    //  部屋のノイズは定常なので開きは小さい。声・息・イスが入ると開く。
+                    float medDb[4] = { -120.0f, -120.0f, -120.0f, -120.0f };
+                    float p95Db[4] = { -120.0f, -120.0f, -120.0f, -120.0f };
+                    const int half = juce::jmax (1, dnHistCount / 2);
+                    const int p95  = juce::jmax (1, (dnHistCount * 95) / 100);
                     for (int b = 0; b < 4; ++b)
                     {
-                        dnFloor[b] = juce::jmax (dnFloorLearn[b] * 1.4f, 1e-6f);
-                        dnFloorShared[b].store (dnFloor[b]);   // expose for state save
+                        int acc = 0; bool haveMed = false;
+                        for (int i = 0; i < dnHistBins; ++i)
+                        {
+                            acc += dnHist[b][i];
+                            if (! haveMed && acc >= half) { medDb[b] = (float) (i - 120); haveMed = true; }
+                            if (acc >= p95) { p95Db[b] = (float) (i - 120); break; }
+                        }
                     }
-                    dnLearned = true;
-                    dnLearnedShared.store (true);
-                    markStateDirty();                          // autosave the new profile
+                    // 帯域をまたいだ代表値（いちばん大きい帯域で見る＝いちばん危ない側）
+                    float loudestMed = -120.0f, widestSpread = 0.0f;
+                    for (int b = 0; b < 4; ++b)
+                    {
+                        loudestMed   = juce::jmax (loudestMed,   medDb[b]);
+                        widestSpread = juce::jmax (widestSpread, p95Db[b] - medDb[b]);
+                    }
+                    dnLearnLevelDb .store (loudestMed);
+                    dnLearnSpreadDb.store (widestSpread);
+
+                    //  -45dBFS を超える「ノイズ床」は、もう部屋の音ではない。
+                    //  開きが12dBを超えたら、その1.5秒は静かではなかった。
+                    const bool tooLoud  = loudestMed   > -45.0f;
+                    const bool notSteady= widestSpread >  12.0f;
+
+                    if (tooLoud || notSteady)
+                    {
+                        dnLearnResult.store (tooLoud ? 2 : 3);     // 採用しない
+                        // ★床には触らない。前の状態のまま（自動追従なら自動追従のまま）。
+                    }
+                    else
+                    {
+                        for (int b = 0; b < 4; ++b)
+                        {
+                            // 中央値 +3dB を床にする（従来は最大値×1.4＝+3dB相当）
+                            // ★第2引数は「これ未満のdBは0とみなす」境界。gainではない。
+                            const float med = juce::Decibels::decibelsToGain (medDb[b], -200.0f);
+                            dnFloor[b] = juce::jmax (med * 1.4f, 1e-6f);
+                            dnFloorShared[b].store (dnFloor[b]);   // expose for state save
+                        }
+                        dnLearned = true;
+                        dnLearnedShared.store (true);
+                        dnLearnResult.store (1);
+                        markStateDirty();                          // autosave the new profile
+                    }
                 }
             }
 
             // recombine bands
+            if (soujiRun && dnOn && amount > 0.001f)
             for (int ch = 0; ch < numCh; ++ch)
             {
                 auto* out = buffer.getWritePointer (ch);
@@ -955,37 +1943,54 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                            + bandBuf[2].getSample (ch, n) + bandBuf[3].getSample (ch, n);
             }
 
-            meterDN.store (juce::jlimit (0.0f, 1.0f,
-                               attenSum / (4.0f * (float) juce::jmax (1, numSamples))));
+            meterDN.store (soujiRun && dnOn ? juce::jlimit (0.0f, 1.0f,
+                               attenSum / (4.0f * (float) juce::jmax (1, numSamples))) : 0.0f);
         }
         else
             meterDN.store (meterDN.load() * 0.9f);
     }
 
+    if (soujiRun) mods.restore (gz::ModuleChain::Souji, buffer);
+    // ===== モジュール1「おそうじ」前半ここまで（ポップ・リップは後半にある）=====
+
     juce::dsp::AudioBlock<float> block (buffer);
     juce::dsp::ProcessContextReplacing<float> ctx (block);
 
     // ---- v1.8.0 voice changer (formant-preserving) + 5-voice unison ----
+    // ===== モジュール2「へんしん」=====
+    // ★ここだけ save/restore を使わない。この3機能（ボイス変換・ハモリ・ピッチ補正）
+    //  だけが遅延(約16ms)を持つので、波形を後から差し替えると
+    //  「申告した遅延」と「実際の遅延」がずれ、DAWの遅延補正でトラックが
+    //  16ms早くなってしまう。だから**スイッチ側で切る**。切れば遅延も0に戻る。
+    //  セッションモードが同じやり方で既に動いていて、実績がある。
+    //  v3.0-c: 音には触らない「測るだけ」の対だけ足す（カードのミニメーター用）。
+    mods.probeOnlyBegin (gz::ModuleChain::Henshin, buffer);
     {
         // v2.9.0 セッションモード: ONの間、遅延をふやす3機能はここで素通しにする。
         // スイッチ自体は触らない(セッションを抜けたら元どおり鳴る)。
         const bool sessionOn = apvts.getRawParameterValue ("session")->load() > 0.5f;
         sessionActive.store (sessionOn);
 
+        // v2.10.0 ★アコギではピッチ補正・ハモリ・ボイス変換を通さない。
+        //  どれも「声のピッチ」を前提にした処理で、和音が鳴るギターに掛けると
+        //  検出が別の弦に飛び移って音程がふらつく。切れば遅延も 0 のままになる。
+        // v3.0 モジュール「へんしん」。OFF のあいだは3つとも切れる＝遅延も0のまま。
+        const bool henshinOn = mods.displayGain (gz::ModuleChain::Henshin) > 0.5f;
+
         const bool vcOn = (apvts.getRawParameterValue ("vc_on")->load() > 0.5f)
-                            && ! sessionOn
+                            && henshinOn && ! sessionOn && srcPitchOk
                           #if VOCALGZZIO_LITE
                             && false   // Lite版は非搭載
                           #endif
                             ;
         const bool jnOn = (apvts.getRawParameterValue ("jn_on")->load() > 0.5f)
-                            && ! sessionOn
+                            && henshinOn && ! sessionOn && srcPitchOk
                           #if VOCALGZZIO_LITE
                             && false   // Lite版は非搭載
                           #endif
                             ;
         const bool atOn = (apvts.getRawParameterValue ("at_on")->load() > 0.5f)
-                            && ! sessionOn
+                            && henshinOn && ! sessionOn && srcPitchOk
                           #if VOCALGZZIO_LITE
                             && false   // Lite版は非搭載
                           #endif
@@ -1038,6 +2043,12 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         float atCorr = 0.0f;
         if (atOn || jnOn)
         {
+            if (! pitchWasTracking)
+            {
+                pitchDet.reset();
+                pitchCorrection.reset();
+            }
+            pitchWasTracking = true;
             const int n = juce::jmin (numSamples, (int) vcMono.size());
             const float* Lin = buffer.getReadPointer (0);
             const float* Rin = numCh > 1 ? buffer.getReadPointer (1) : Lin;
@@ -1052,30 +2063,11 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
             const float blockSec = (float) numSamples / (float) currentSampleRate;
 
-            // v1.9.3: 補正の基準を「速さ」で切り替える。
-            //   速い側(ケロケロ) … 今この瞬間の音高を丸める。しゃくりも揺れも
-            //                      すべて音符に吸着し、音程が階段状に動く。
-            //   遅い側(自然)     … 約180msで追う「音の中心」だけを丸め、その差を
-            //                      一定量として足す。歌手のビブラートは触らずに残る。
-            float target = 0.0f;   // desired correction (semitones); 0 when unvoiced
-            if (hz > 0.0f)
-            {
-                const float p = 69.0f + 12.0f * std::log2 (hz / refA);
-                if (atPitchCenter <= 0.0f) atPitchCenter = p;          // 歌い出し
-                const float aC = 1.0f - std::exp (-blockSec / 0.180f); // 180 ms
-                atPitchCenter += (p - atPitchCenter) * aC;
-
-                const float snapNow = gz::scale::snap (p, key, scId);
-                const float snapCtr = gz::scale::snap (atPitchCenter, key, scId);
-                const float corrHard    = juce::jlimit (-6.0f, 6.0f, snapNow - p);
-                const float corrNatural = juce::jlimit (-6.0f, 6.0f, snapCtr - atPitchCenter);
-
-                // speed 20%を境に、0%で完全に瞬時・70%以上で完全に中心基準へ
-                const float centerW = juce::jlimit (0.0f, 1.0f, (speed - 20.0f) / 50.0f);
-                const float corr = corrHard * (1.0f - centerW) + corrNatural * centerW;
-                target = corr * amount;
-            }
-            else atPitchCenter = 0.0f;   // 無声区間でリセットし、次の歌い出しに備える
+            // 音符ごとに中心を持ち、新しい音へ古い補正を持ち越さない。
+            // 境界には小さな余裕を設け、検出の揺れで隣の音を行き来するのを抑える。
+            const float midi = hz > 0.0f ? 69.0f + 12.0f * std::log2 (hz / refA) : 0.0f;
+            float target = atOn ? pitchCorrection.target (midi, blockSec, key, scId, speed, amount) : 0.0f;
+            if (! atOn) pitchCorrection.reset();
             atDetectedHz.store (hz);
 
             // ---- v2.7.0 こぶし(しゃくり・こぶし保護) ----
@@ -1098,11 +2090,13 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             }
 
             // ケロケロ判定: 速さがほぼ0で、補正量も強い設定のとき
-            const bool hard = (speed <= 8.0f) && (amount >= 0.90f);
+            const bool hard = atOn && (speed <= 8.0f) && (amount >= 0.90f);
 
             // retune-speed glide: tau grows with 'speed' (0 => instant snap,
             // 100 => ~180 ms smooth). Time constant is block-size independent.
-            if (hard)
+            if (! atOn)
+                atCorrection = 0.0f;  // ハモリ用の検出だけで補正を有効にしない
+            else if (hard)
             {
                 atCorrection = target;          // 平滑化なし = 音程が階段状に飛ぶ
             }
@@ -1131,7 +2125,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 atWetMix += (want - atWetMix) * aMix;
             }
         }
-        else { atCorrection = 0.0f; atWetMix = 0.0f; atPitchCenter = 0.0f; atDetectedHz.store (0.0f); atCurrentCorrection.store (0.0f);
+        else { atCorrection = 0.0f; atWetMix = 0.0f; pitchWasTracking = false; pitchCorrection.reset(); atDetectedHz.store (0.0f); atCurrentCorrection.store (0.0f);
                if (meterOrn.load() != 0.0f) { meterOrn.store (0.0f); meterOrnKind.store (0); } }
 
         if (pitchActive || jnOn)
@@ -1300,8 +2294,17 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         }
     }
 
+    mods.probeOnlyEnd (gz::ModuleChain::Henshin, buffer);
+    // ===== モジュール2「へんしん」ここまで =====
+
+    // ===== モジュール1「おそうじ」後半（ポップ・リップ）=====
+    // コードの並び上、へんしんを挟んで2か所に分かれている。フラグは同じなので、
+    // ひとつのスイッチで前半・後半とも切れる（渡し具合もブロック単位でそろう）。
+    if (soujiRun) mods.save (gz::ModuleChain::Souji, buffer);
+
     // ---- v2.3.0 ポップ(破裂音) / リップ(口の粘着音) 除去 ----
     // ローカットの手前で処理する。検出側は加工前の低域を見たほうが確実なため。
+    if (soujiRun)
     {
         const float popAmt = apvts.getRawParameterValue ("pop_amt")->load() * 0.01f;
         const float lipAmt = apvts.getRawParameterValue ("lip_amt")->load() * 0.01f;
@@ -1397,29 +2400,44 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         }
     }
 
-    // ---- subtractive EQ ----
-    hpf.process (ctx);
-    mud.process (ctx);
-    harsh.process (ctx);
+    if (soujiRun) mods.restore (gz::ModuleChain::Souji, buffer);
+    // ===== モジュール1「おそうじ」ここまで =====
 
-    // ---- v2.4.0 なめらか(動的レゾナンス抑制) ----
-    // 「こもり」「キンキン」(固定EQ)のあと・コンプの前。コンプより前に刺さりを
-    // 削っておかないと、コンプが刺さりごと持ち上げてしまうため。ゼロ遅延。
+    // ===== モジュール3「ととのえ」（ローカット・こもり・キンキン・なめらか）=====
+    // v3.0-c 順番の分岐: 既定は**圧縮の前**（いままでどおり）。
+    //  「ととのえを圧縮の後へ」を選ぶと、ここは飛ばして音量そろえの後で呼ぶ。
+    const bool totonoeRun = ! mods.isOff (gz::ModuleChain::Totonoe);   // v3.0-b OFFなら飛ばす
+    const bool eqLate     = apvts.getRawParameterValue ("ord_eq")->load() > 0.5f;
+    if (totonoeRun && ! eqLate)
     {
-        const float resAmt = apvts.getRawParameterValue ("res_amt")->load() * 0.01f;
-        resTamer.setAmount (resAmt);
-        if (resAmt > 0.001f)
-        {
-            resTamer.process (buffer.getWritePointer (0),
-                              numCh > 1 ? buffer.getWritePointer (1) : nullptr,
-                              numSamples);
-            meterRes.store (resTamer.lastMaxCutDb());
-        }
-        else if (meterRes.load() != 0.0f)
-            meterRes.store (0.0f);
+        mods.save (gz::ModuleChain::Totonoe, buffer);
+        applyTotonoe (buffer);
+        mods.restore (gz::ModuleChain::Totonoe, buffer);
+    }
+    // ===== モジュール3「ととのえ」ここまで（既定の場所）=====
+
+    // ===== モジュール5「サ行おさえ」（分岐: 圧縮の前）=====
+    //  「サ行おさえを圧縮の前へ」を選んだときだけ、ここで先に削る。
+    //  圧縮がサ行に反応して音が波打つのを防ぎたい人向け。
+    const bool sagyoRun   = ! mods.isOff (gz::ModuleChain::Sagyo);
+    const bool deessEarly = apvts.getRawParameterValue ("ord_deess")->load() > 0.5f;
+    if (sagyoRun && deessEarly)
+    {
+        mods.save (gz::ModuleChain::Sagyo, buffer);
+        applyDeEsser (buffer);
+        mods.restore (gz::ModuleChain::Sagyo, buffer);
     }
 
+
+    // ===== モジュール4「音量そろえ」前半（圧縮1・2・SmartEQ）=====
+    // v3.0-b OFF なら飛ばす。GRメーターも一緒に止めるので、切ったのに
+    //  メーターだけ動いている、という嘘の表示にならない。
+    const bool soroeRun = ! mods.isOff (gz::ModuleChain::Soroe);
+    if (soroeRun) mods.save (gz::ModuleChain::Soroe, buffer);
+
     // ---- 2-stage compression with GR metering ----
+    if (soroeRun)
+    {
     float prePk = 0.0f;
     for (int ch = 0; ch < numCh; ++ch)
     {
@@ -1445,65 +2463,30 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // ---- Smart Dynamic EQ (after compression, per best practice) ----
     processSmartEQ (buffer);
+    }   // ← soroeRun（圧縮＋SmartEQ）
 
-    // ---- de-esser (split-band style: detect >5.2k, duck a 6.5k high shelf) ----
+    if (soroeRun) mods.restore (gz::ModuleChain::Soroe, buffer);
+    // ===== モジュール4 前半ここまで（音量キープはサ行おさえの後にある）=====
+
+    // ===== モジュール5「サ行おさえ」（既定の場所: 圧縮の後）=====
+    if (sagyoRun && ! deessEarly)
     {
-        const float amount = apvts.getRawParameterValue ("deess")->load() * 0.01f;
-        const bool  dsOn   = apvts.getRawParameterValue ("ds_on")->load() > 0.5f;
-        if (amount > 0.001f && dsOn)
-        {
-            scratch.makeCopyOf (buffer, true);
-            juce::dsp::AudioBlock<float> sblock (scratch);
-            juce::dsp::ProcessContextReplacing<float> sctx (sblock);
-            deessDetectHP.process (sctx);   // detector band
-
-            // envelope of sibilant band (block-wise per sample)
-            const float thr = juce::Decibels::decibelsToGain (-30.0f + (1.0f - amount) * 12.0f);
-            const float maxCutDb = 12.0f * amount + 4.0f;   // up to ~16 dB
-
-            auto* sL = scratch.getReadPointer (0);
-            auto* sR = scratch.getReadPointer (juce::jmin (1, scratch.getNumChannels() - 1));
-            auto* bL = buffer.getWritePointer (0);
-            auto* bR = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
-
-            for (int n = 0; n < numSamples; ++n)
-            {
-                const float det = juce::jmax (std::abs (sL[n]), std::abs (sR[n]));
-                dsEnv += (det > dsEnv ? dsEnvAtk : dsEnvRel) * (det - dsEnv);
-
-                // desired shelf cut in dB when sibilance exceeds threshold
-                float wantDb = 0.0f;
-                if (dsEnv > thr)
-                    wantDb = juce::jlimit (0.0f, maxCutDb,
-                                           20.0f * std::log10 (dsEnv / thr) * 1.5f);
-                dsCurrentReduction += 0.02f * (wantDb - dsCurrentReduction);
-
-                // update shelf every 32 samples (cheap enough, smooth enough)
-                if ((n & 31) == 0)
-                {
-                    // v2.8.0: 32サンプルごとに new していた。確保なしの形へ。
-                    const auto co = ACoefs::makeHighShelf (currentSampleRate, 6500.0f, 0.8f,
-                                        juce::Decibels::decibelsToGain (-dsCurrentReduction));
-                    *dsShelfL.coefficients = co;
-                    *dsShelfR.coefficients = co;
-                }
-                bL[n] = dsShelfL.processSample (bL[n]);
-                if (bR) bR[n] = dsShelfR.processSample (bR[n]);
-            }
-            meterDS.store (juce::jlimit (0.0f, 1.0f, dsCurrentReduction / 16.0f));
-        }
-        else
-        {
-            dsCurrentReduction *= 0.9f;
-            meterDS.store (juce::jlimit (0.0f, 1.0f, dsCurrentReduction / 16.0f));
-        }
+        mods.save (gz::ModuleChain::Sagyo, buffer);
+        applyDeEsser (buffer);
+        mods.restore (gz::ModuleChain::Sagyo, buffer);
     }
+    // ===== モジュール5「サ行おさえ」ここまで =====
+
+
+    // ===== モジュール4「音量そろえ」後半（音量キープ）=====
+    if (soroeRun) mods.save (gz::ModuleChain::Soroe, buffer);
 
     // ---- v2.4.0 音量キープ(自動ゲインライド / Vocal Rider 相当) ----
     // ならし圧縮(コンプ=速い波)とは別系統。300msのラウドネスを見て、目標
     // (-18dBFS RMS)へ±9dBの範囲でゆっくりフェーダーを動かす。無音や息つぎ
     // (-45dBFS未満)ではゲインを凍結するので、ノイズ床を持ち上げない。
     // ただの掛け算なのでゼロ遅延のまま。コンプとディエッサーの後に置く。
+    if (soroeRun)
     {
         const float amt = apvts.getRawParameterValue ("ride_amt")->load() * 0.01f;
         if (amt > 0.001f)
@@ -1511,6 +2494,11 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             auto* L = buffer.getWritePointer (0);
             auto* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
             const float maxDb = 9.0f;
+            // v3.0「つぶさない」: 音量キープは大きいところを**下げる**方向にも動く。
+            //  張った1音はその曲の山であることが多いので、そこを下げると
+            //  「盛り上がらない」＝これも潰れ。**下げる側だけ**上限を絞る。
+            //  持ち上げる側（小さい声を聞こえるように）は触らない。
+            const float downMax = maxDb * (1.0f - 0.75f * crushCg);
             for (int n = 0; n < numSamples; ++n)
             {
                 const float x = (R != nullptr) ? 0.5f * (L[n] + R[n]) : L[n];
@@ -1518,7 +2506,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 const float rmsDb = 10.0f * std::log10 (rideEnv2 + 1.0e-12f);
                 if (rmsDb > -45.0f)   // 歌って/話しているときだけ動く
                 {
-                    const float want = juce::jlimit (-maxDb, maxDb, -18.0f - rmsDb) * amt;
+                    const float want = juce::jlimit (-downMax, maxDb, -18.0f - rmsDb) * amt;
                     rideGDb += rideSlewA * (want - rideGDb);
                 }
                 const float g = juce::Decibels::decibelsToGain (rideGDb);
@@ -1530,12 +2518,33 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         else if (meterRide.load() != 0.0f) { meterRide.store (0.0f); rideGDb = 0.0f; }
     }
 
+    if (soroeRun) mods.restore (gz::ModuleChain::Soroe, buffer);
+    // ===== モジュール4「音量そろえ」ここまで =====
+
+    // ===== モジュール3「ととのえ」（分岐: 圧縮の後）=====
+    //  「削った帯で圧縮を動かしたくない」人向け。既定では通らない。
+    if (totonoeRun && eqLate)
+    {
+        mods.save (gz::ModuleChain::Totonoe, buffer);
+        applyTotonoe (buffer);
+        mods.restore (gz::ModuleChain::Totonoe, buffer);
+    }
+
+
+    // ===== モジュール6「音色づくり」前半（ことば・ヌケ感・キラキラ・息・艶）=====
+    // v3.0-b OFF なら飛ばす（区間は「仕上げ音量」をまたいで2か所に分かれる）
+    const bool neiroRun = ! mods.isOff (gz::ModuleChain::Neiro);
+    if (neiroRun) mods.save (gz::ModuleChain::Neiro, buffer);
+
     // ---- v2.6.0 ことば(子音エンハンサー) ----
     // コンプ・ディエッサーの「あと」に置く。コンプは母音を持ち上げて子音を
     // 相対的に埋めてしまうので、埋まった状態を見てから起こしたほうが正確。
     // ディエッサーより後なので、サ行を持ち上げ直してしまう心配もない。
+    if (neiroRun)
     {
-        const float consAmt = apvts.getRawParameterValue ("cons_amt")->load() * 0.01f;
+        // v2.10.0 ことばは「子音」を探す処理。アコギには子音が無いので切る。
+        const float consAmt = srcVoiceOnly
+                            ? apvts.getRawParameterValue ("cons_amt")->load() * 0.01f : 0.0f;
         consEnh.setAmount (consAmt);
         if (consAmt > 0.001f)
         {
@@ -1549,14 +2558,20 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     }
 
     // ---- additive EQ ----
-    presence.process (ctx);
-    air.process (ctx);
+    if (neiroRun)
+    {
+        presence.process (ctx);
+        air.process (ctx);
+    }
 
     // ---- v2.0.0 息(Breath): 小声のときだけ息の帯域を持ち上げる ----
     // バラードの「ささやき」を近くに感じさせる定番処理。大声では何もしないので
     // 歯擦音がきつくならない(ディエッサーの逆向きの動き)。
+    if (neiroRun)
     {
-        const float brAmt = apvts.getRawParameterValue ("br_amt")->load() * 0.01f;
+        // v2.10.0 息はささやき声のための処理。アコギ/しゃべりでは使わない。
+        const float brAmt = srcBreathOk
+                          ? apvts.getRawParameterValue ("br_amt")->load() * 0.01f : 0.0f;
         if (brAmt > 0.001f)
         {
             const float* q = buffer.getReadPointer (0);
@@ -1594,8 +2609,11 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     }
 
     // ---- v1.9.5 艶 (Ring): 母音のときだけ 3kHz を持ち上げる ----
+    if (neiroRun)
     {
-        const float ringAmt = apvts.getRawParameterValue ("ring")->load() * 0.01f;   // 0..1
+        // v2.10.0 艶は「母音のとき」を見て掛ける処理。アコギでは意味が無い。
+        const float ringAmt = srcVoiceOnly
+                            ? apvts.getRawParameterValue ("ring")->load() * 0.01f : 0.0f;   // 0..1
         if (ringAmt > 0.001f)
         {
             const float sr    = (float) currentSampleRate;
@@ -1640,6 +2658,9 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         else if (ringGainDb != 0.0f) { ringGainDb = 0.0f; ringApplied = -99.0f; ringL.reset(); ringR.reset(); }
     }
 
+    if (neiroRun) mods.restore (gz::ModuleChain::Neiro, buffer);
+    // ===== モジュール6 前半ここまで（あたたかみ・のびは仕上げ音量の後）=====
+
     makeup.process (ctx);
 
     // ---- Warmth + Sustain (のび) + dry/wet ----
@@ -1649,9 +2670,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                        && apvts.getRawParameterValue ("jn_on")->load()   > 0.5f;
     const float wet = hamoDake ? 1.0f : apvts.getRawParameterValue ("mix")->load() * 0.01f;
     const float dry = 1.0f - wet;
-    const float driveAmt = apvts.getRawParameterValue ("drive")->load() * 0.01f;
+    // v3.0「つぶさない」: あたたかみ(drive)と のび(sustain) は tanh の飽和なので、
+    //  入力が大きいほど**波形の頭が丸くなる**＝これも「潰れ」の正体のひとつ。
+    //  張っている間だけ量を引く（あたたかみは強く、のびは控えめに）。
+    //  0%に落とさないのは、音色が張った瞬間だけ変わってしまうと不自然だから。
+    const float driveAmt = apvts.getRawParameterValue ("drive")->load() * 0.01f
+                             * (1.0f - 0.70f * crushCg);
     const float k = 1.0f + driveAmt * 5.0f;
-    const float susAmt = apvts.getRawParameterValue ("sustain")->load() * 0.01f;
+    const float susAmt = apvts.getRawParameterValue ("sustain")->load() * 0.01f
+                             * (1.0f - 0.50f * crushCg);
 
     // v2.8.0 ★Mixで混ぜ戻す原音を、加工側と同じだけ遅らせる。
     // ボイス変換/ピッチ補正/ハモリのどれかがONだと加工側は voiceLatency(約16ms)
@@ -1659,7 +2686,23 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     // 62.5Hz おきに音が消える＝Mixを中間にしたときだけ「スカスカ」になっていた。
     // 原音は常にリングへ書き込み、必要なぶんだけ遅らせて読み出す。
     // (voiceLatency は prepareToPlay でしか変わらないので、ここは読むだけで安全)
-    const juce::AudioBuffer<float>* dryMixSrc = &dryBuffer;
+    // 分割フィルターを足し戻した音は振幅が平坦でも位相が回っている。
+    // 元の波形と混ぜると250/1200/5000Hz付近で打ち消しが起こるため、
+    // 原音側にも同じ全域通過フィルターを通す。履歴はOFF中も進めておく。
+    dnDryPhaseBuffer.makeCopyOf (dryBuffer, true);
+    {
+        juce::dsp::AudioBlock<float> phaseBlock (dnDryPhaseBuffer);
+        juce::dsp::ProcessContextReplacing<float> phaseCtx (phaseBlock);
+        dnDryPhase1.process (phaseCtx);
+        dnDryPhase2.process (phaseCtx);
+        dnDryPhase3.process (phaseCtx);
+    }
+    const bool dnMixPhase = soujiRun
+        && apvts.getRawParameterValue ("dn_on")->load() > 0.5f
+        && apvts.getRawParameterValue ("denoise")->load() * 0.01f * srcDnScale > 0.001f;
+    // 0%は加工を混ぜないので、位相補償もせず原音の波形をそのまま返す。
+    const juce::AudioBuffer<float>* dryMixSrc = dnMixPhase && wet > 0.0f
+        ? &dnDryPhaseBuffer : &dryBuffer;
     if (voiceLatency > 0 && dryRing.getNumSamples() > 0
         && numSamples <= dryAligned.getNumSamples())
     {
@@ -1667,7 +2710,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         const int lat     = juce::jmin (voiceLatency, ringLen - 1);
         for (int ch = 0; ch < juce::jmin (2, numCh); ++ch)
         {
-            const float* s = dryBuffer.getReadPointer (juce::jmin (ch, dryBuffer.getNumChannels() - 1));
+            const float* s = dryMixSrc->getReadPointer (juce::jmin (ch, dryMixSrc->getNumChannels() - 1));
             float*       r = dryRing.getWritePointer (ch);
             float*       o = dryAligned.getWritePointer (ch);
             int w = dryRingW;
@@ -1683,147 +2726,88 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         dryMixSrc = &dryAligned;
     }
 
+    // v3.0 ★ここは元は1つのループで「あたたかみ・のび」と「Mix(原音の混ぜ戻し)」を
+    //  まとめてやっていた。Mix は**どのモジュールにも属さない全体設定**なので、
+    //  音色づくりを切ったときに一緒に消えてはいけない。2つのループに割った。
+    //  （numSamples は 512 以下なので、2周しても実測で差は出なかった）
+    // ===== モジュール6「音色づくり」後半（あたたかみ・のび）=====
+    if (neiroRun) mods.save (gz::ModuleChain::Neiro, buffer);
+    for (int n = 0; neiroRun && n < numSamples; ++n)
+    {
+        float pk = 0.0f;
+        for (int ch = 0; ch < numCh; ++ch)
+        {
+            float x = buffer.getSample (ch, n);
+            if (driveAmt > 0.001f)
+                x = std::tanh (x * k) / k;
+            buffer.setSample (ch, n, x);
+            pk = juce::jmax (pk, std::abs (x));
+        }
+
+        // 包絡と持ち上げ量は1サンプルに1回だけ更新し、左右へ同じ値を掛ける。
+        // 以前は左を1ブロック処理した後、右全体へ最後のゲインを掛けていたため、
+        // 同じ左右入力でも音像が揺れ、バッファを大きくすると差が増えていた。
+        // 左右の最大値で検出するので、右だけの入力や逆相の入力も見落とさない。
+        if (susAmt > 0.001f)
+        {
+            susEnv += (pk > susEnv ? susEnvAtk : susEnvRel) * (pk - susEnv);
+            const float envDb = 20.0f * std::log10 (juce::jmax (susEnv, 1e-6f));
+            float wantLift = 0.0f;
+            if (envDb < -18.0f && envDb > -55.0f)
+                wantLift = juce::jlimit (0.0f, 7.0f, (-18.0f - envDb) * 0.32f) * susAmt;
+            susLift += 0.002f * (wantLift - susLift);
+
+            const float lg = juce::Decibels::decibelsToGain (susLift);
+            const float bias = 0.35f * susAmt;
+            for (int ch = 0; ch < numCh; ++ch)
+            {
+                const float x = buffer.getSample (ch, n);
+                const float sat  = std::tanh (x * lg * (1.0f + susAmt) + bias) - std::tanh (bias);
+                buffer.setSample (ch, n, x * (1.0f - 0.5f * susAmt)
+                    + sat * 0.5f * susAmt + x * (lg - 1.0f) * 0.6f);
+            }
+        }
+    }
+    if (neiroRun) mods.restore (gz::ModuleChain::Neiro, buffer);
+    // ===== モジュール6「音色づくり」ここまで =====
+
+    // ---- Mix(原音の混ぜ戻し) ---- ★モジュールに属さない全体設定
     for (int ch = 0; ch < numCh; ++ch)
     {
         auto* w = buffer.getWritePointer (ch);
         auto* d = dryMixSrc->getReadPointer (juce::jmin (ch, dryMixSrc->getNumChannels() - 1));
         for (int n = 0; n < numSamples; ++n)
-        {
-            float x = w[n];
-            if (driveAmt > 0.001f)
-                x = std::tanh (x * k) / k;
-
-            // sustain: track envelope on ch0, lift the decaying tail + even harmonics
-            if (susAmt > 0.001f)
-            {
-                if (ch == 0)
-                {
-                    const float pk = std::abs (x);
-                    susEnv += (pk > susEnv ? susEnvAtk : susEnvRel) * (pk - susEnv);
-                    const float envDb = 20.0f * std::log10 (juce::jmax (susEnv, 1e-6f));
-                    // below -18 dB the tail gets lifted, up to +7 dB at -40 dB
-                    float wantLift = 0.0f;
-                    if (envDb < -18.0f && envDb > -55.0f)
-                        wantLift = juce::jlimit (0.0f, 7.0f, (-18.0f - envDb) * 0.32f) * susAmt;
-                    susLift += 0.002f * (wantLift - susLift);
-                }
-                const float lg = juce::Decibels::decibelsToGain (susLift);
-                const float bias = 0.35f * susAmt;
-                const float sat  = std::tanh (x * lg * (1.0f + susAmt) + bias) - std::tanh (bias);
-                x = x * (1.0f - 0.5f * susAmt) + sat * 0.5f * susAmt + x * (lg - 1.0f) * 0.6f;
-            }
-
-            w[n] = x * wet + d[n] * dry;
-        }
+            w[n] = w[n] * wet + d[n] * dry;
     }
 
-    // ---- v1.4.0 character FX: robot voice (ring mod) then megaphone ----
-    {
-        const bool  roboOn = apvts.getRawParameterValue ("robo_on")->load() > 0.5f;
-        const float roboM  = roboOn ? apvts.getRawParameterValue ("robo_mix")->load() * 0.01f : 0.0f;
-        if (roboM > 0.001f)
-        {
-            const float f   = apvts.getRawParameterValue ("robo_freq")->load();
-            const float inc = juce::MathConstants<float>::twoPi * f / (float) currentSampleRate;
-            for (int n = 0; n < numSamples; ++n)
-            {
-                const float s = std::sin (roboPhase);
-                roboPhase += inc;
-                if (roboPhase > juce::MathConstants<float>::twoPi)
-                    roboPhase -= juce::MathConstants<float>::twoPi;
-                for (int ch = 0; ch < numCh; ++ch)
-                {
-                    const float x = buffer.getSample (ch, n);
-                    buffer.setSample (ch, n, x * (1.0f - roboM) + x * s * roboM);
-                }
-            }
-        }
+    // ===== モジュール7「キャラ声」 =====
+    // v3.0-c 分岐3: 「ひろがりを キャラ声の前へ」。
+    //  既定(false)は いままでどおり キャラ声 → ひろがり。
+    //  ON にすると ひろがり → キャラ声 になり、ロボ声やメガホンに
+    //  残響が**後がけされなくなる**（＝声そのものが加工され、響きは素のまま）。
+    //
+    //  入れ替えても サビリフト／エモ が死なないように、
+    //  ON のときは「測る所」だけ先に走らせる。ひろがりはその結果を読む。
+    const bool spaceEarly = apvts.getRawParameterValue ("ord_space")->load() > 0.5f;
+    applyChara (buffer, /*doFx*/ ! spaceEarly, /*doDetect*/ true);
 
-        const bool  megaOn = apvts.getRawParameterValue ("mega_on")->load() > 0.5f;
-        const float megaA  = megaOn ? apvts.getRawParameterValue ("mega_amt")->load() * 0.01f : 0.0f;
-        if (megaA > 0.001f)
-        {
-            const int type = (int) apvts.getRawParameterValue ("mega_type")->load();
-            scratch.makeCopyOf (buffer, true);
-            juce::dsp::AudioBlock<float> mb (scratch);
-            juce::dsp::ProcessContextReplacing<float> mc (mb);
-            megaHP.process (mc);
-            megaPeak.process (mc);
-            megaLP.process (mc);
+    // 検出の結果。以前はキャラ声の区間で作られるローカル変数だった。
+    // 関数へ出したので、ここで受け取ってから下の「ひろがり」で使う（名前も値も同じ）。
+    const float emoBloomNow = emoBloomNowV;
+    const float liftNow     = liftNowV;
 
-            const float mk   = 1.0f + megaA * (type == 1 ? 6.0f : 11.0f);   // radio drives softer
-            const float qLev = type == 2 ? std::pow (2.0f, 9.0f - megaA * 6.0f) : 0.0f;   // lo-fi crush
-
-            for (int ch = 0; ch < numCh; ++ch)
-            {
-                auto* w = buffer.getWritePointer (ch);
-                auto* m = scratch.getReadPointer (juce::jmin (ch, scratch.getNumChannels() - 1));
-                for (int n = 0; n < numSamples; ++n)
-                {
-                    float y = std::tanh (m[n] * mk) * 0.7f;
-                    if (qLev > 0.0f)
-                        y = std::round (y * qLev) / qLev;
-                    w[n] = w[n] * (1.0f - megaA) + y * megaA;
-                }
-            }
-        }
-    }
-
-    // ---- v2.0.0 エモ(ロングトーン検出) & サビリフト(サビ自動検出) ----
-    // どちらも「検出だけ」をここで行い、後段の空間系(ひろがり・かさね・やまびこ・
-    // ひびき)の送り量に係数として掛ける。音の経路そのものは一切変えないので、
-    // 0%なら従来と完全に同じ音。遅延も増えない。
-    float emoBloomNow = 0.0f, liftNow = 0.0f;
-    {
-        const float emoAmt  = apvts.getRawParameterValue ("emo_amt")->load()  * 0.01f;
-        const float liftAmt = apvts.getRawParameterValue ("lift_amt")->load() * 0.01f;
-        const float blockSec = (float) numSamples / (float) currentSampleRate;
-
-        // ブロックRMS (処理後の歌声。空間系に入る直前のレベル)
-        float sumSq = 0.0f;
-        {
-            const float* q = buffer.getReadPointer (0);
-            for (int n = 0; n < numSamples; ++n) sumSq += q[n] * q[n];
-        }
-        const float rmsDb = 10.0f * std::log10 (juce::jmax (sumSq / (float) juce::jmax (1, numSamples), 1.0e-12f));
-
-        if (emoAmt > 0.001f)
-        {
-            // 歌が -35dB より強いまま続いた時間を数える。0.35秒を超えたあたりから
-            // 「ロングトーン」とみなして開き始め、1.2秒で全開。途切れたら素早く閉じる。
-            if (rmsDb > -35.0f) emoHoldSec += blockSec;
-            else                emoHoldSec  = 0.0f;
-            const float t = juce::jlimit (0.0f, 1.0f, (emoHoldSec - 0.35f) / 0.85f);
-            const float target = t * t * (3.0f - 2.0f * t) * emoAmt;        // smoothstep
-            const float a = 1.0f - std::exp (-blockSec / (target > emoBloom ? 0.45f : 0.18f));
-            emoBloom += (target - emoBloom) * a;
-        }
-        else { emoBloom = 0.0f; emoHoldSec = 0.0f; }
-        emoBloomNow = emoBloom;
-
-        if (liftAmt > 0.001f)
-        {
-            // 速い平均(1.2s)が遅い平均(8s)を約2.5dB上回る=サビ。ゆっくり持ち上げ、
-            // Aメロに戻ったら少し早めに戻す。閾値付近のばたつきはsmoothstepで吸収。
-            const float aF = 1.0f - std::exp (-blockSec / 1.2f);
-            const float aS = 1.0f - std::exp (-blockSec / 8.0f);
-            if (rmsDb > -55.0f)   // 無音は学習しない(曲間で基準が下がり切るのを防ぐ)
-            {
-                liftFastDb += (rmsDb - liftFastDb) * aF;
-                liftSlowDb += (rmsDb - liftSlowDb) * aS;
-            }
-            const float over = liftFastDb - liftSlowDb - 1.0f;               // dB
-            const float t = juce::jlimit (0.0f, 1.0f, over / 3.0f);
-            const float target = t * t * (3.0f - 2.0f * t) * liftAmt;
-            const float a = 1.0f - std::exp (-blockSec / (target > liftVal ? 1.5f : 0.6f));
-            liftVal += (target - liftVal) * a;
-        }
-        else { liftVal = 0.0f; liftFastDb = liftSlowDb = -60.0f; }
-        liftNow = liftVal;
-        liftUI.store (liftNow);
-    }
+    // ===== モジュール8「ひろがり」（かさね・ひろがり・コーラス・やまびこ・ひびき）=====
+    // v3.0-b ★ここから「OFF なら**処理そのものを飛ばす**」。
+    //  v3.0-a では走らせて出力を捨てていた（音は素通しだが CPU は減らなかった）。
+    //  ひろがりから始めたのは、チェーンでいちばん重いから
+    //  （ディレイと ひびき のディレイライン、コーラス4声、ダッキング検出）。
+    //  飛ばすので save/restore も要らない ＝ buffer に一切触らない ＝ 完全な素通し。
+    //  渡し中（クロスフェード）のあいだは今までどおり走らせて混ぜる。
+    const bool spaceRun = ! mods.isOff (gz::ModuleChain::Hirogari);
+    if (spaceRun) mods.save (gz::ModuleChain::Hirogari, buffer);
 
     // ---- Doubler (modulated short delay, mono-safe L/R inversion) + Width ----
+    if (spaceRun)
     {
         const bool  dblOn    = apvts.getRawParameterValue ("dbl_on")->load() > 0.5f;
         const float dblAmt   = juce::jlimit (0.0f, 1.0f,
@@ -1878,6 +2862,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     }
 
     // ---- v1.4.0 Chorus (wet-only voices; dry path untouched -> zero latency) ----
+    if (spaceRun)
     {
         const bool  choOn  = apvts.getRawParameterValue ("cho_on")->load() > 0.5f;
         const float choAmt = apvts.getRawParameterValue ("cho_amt")->load() * 0.01f;
@@ -1891,6 +2876,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // ---- v1.4.0 auto-duck detector: key = the finished vocal (before echoes) ----
     // Pro sidechain practice: fast engage, ~200 ms release so tails bloom in gaps.
+    if (spaceRun)
     {
         if (duckGainBuf.size() < (size_t) numSamples)
             duckGainBuf.resize ((size_t) numSamples, 1.0f);
@@ -1919,8 +2905,10 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     }
 
     // ---- Delay (tempo-syncable echo, feedback highcut, ducked wet) ----
+    if (spaceRun)
     {
-        const bool  dlyOn = apvts.getRawParameterValue ("dly_on")->load() > 0.5f;
+        // v2.10.0 しゃべり配信ではやまびこを切る(聞き取りを妨げるため)。
+        const bool  dlyOn = apvts.getRawParameterValue ("dly_on")->load() > 0.5f && srcSpaceOk;
         const float dAmt  = juce::jlimit (0.0f, 1.0f,
                                 (dlyOn ? apvts.getRawParameterValue ("delay")->load() * 0.01f : 0.0f)
                                 * (1.0f + 0.25f * liftNow));   // v2.0.0 サビリフト
@@ -1974,11 +2962,19 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     }
 
     // ---- Reverb (wet-only path: predelay -> tone filter -> duck -> add) ----
+    // モジュール/用途のバイパスでも履歴を凍結させない。
+    // 再ONの瞬間に以前の歌声が戻ることを防ぐ。
+    if ((! spaceRun || ! srcSpaceOk) && revWasRunning)
+        resetReverbState();
+    if (spaceRun)
     {
-        const bool  revOn  = apvts.getRawParameterValue ("revon")->load() > 0.5f;
+        // ON/OFFの選択は、しゃべりを含む全用途で有効。
+        const bool  revOn  = apvts.getRawParameterValue ("revon")->load() > 0.5f && srcSpaceOk;
         const float revMix = apvts.getRawParameterValue ("revmix")->load() * 0.01f;
-        if (revOn && revMix > 0.001f)
+        const bool revEnabled = revOn && revMix > 0.001f;
+        if (revEnabled || revBypassGain > 0.0f)
         {
+            revWasRunning = true;
             revWet.makeCopyOf (buffer, true);
             const int rtype = (int) apvts.getRawParameterValue ("rev_type")->load();
             const float rsz = juce::jlimit (0.0f, 1.0f,
@@ -2000,13 +2996,14 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     int rp = springW - D; while (rp < 0) rp += sz;
                     const float dL = springBufL[(size_t) rp];
                     const float dR = springBufR[(size_t) rp];
-                    springLpL += lpA * (wL[n] + dL * fb - springLpL);
-                    springLpR += lpA * (wR[n] + dR * fb - springLpR);
+                    const float inL = wL[n], inR = wR[n];
+                    springLpL += lpA * (inL + dL * fb - springLpL);
+                    springLpR += lpA * (inR + dR * fb - springLpR);
                     springBufL[(size_t) springW] = juce::jlimit (-1.5f, 1.5f, springLpL);
                     springBufR[(size_t) springW] = juce::jlimit (-1.5f, 1.5f, springLpR);
                     springW = (springW + 1) % sz;
-                    wL[n] = wL[n] * 0.45f + dL * 0.95f;   // drips dominate the tank feed
-                    wR[n] = wR[n] * 0.45f + dR * 0.95f;
+                    wL[n] = inL * 0.45f + dL * 0.95f;   // drips dominate the tank feed
+                    if (numCh > 1) wR[n] = inR * 0.45f + dR * 0.95f;
                 }
             }
 
@@ -2026,13 +3023,47 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             juce::dsp::AudioBlock<float> full (revWet);
             auto wb = full.getSubsetChannelBlock (0, (size_t) numCh).getSubBlock (0, (size_t) numSamples);
             juce::dsp::ProcessContextReplacing<float> wc (wb);
-            reverb.process (wc);   // dryLevel = 0 -> revWet now holds the wet signal only
+
+            if (rtype >= kHeyaFirst && heyaReady.load())
+            {
+                // v4.0.0 へや: 物理で作った部屋のインパルス応答をそのまま畳む。
+                // 分割コンボリューションなので、ホストのブロック長がいくつでも
+                // 追加遅延は0サンプル（tools/dsp_heya.cpp 検査1で直接畳み込みと一致）。
+                // updateParameters でも渡しているが、ここでも当て直す。
+                // （どちらも確保しない・例外を投げない。音声スレッドから呼んでよい）
+                heyaRev.setRoom (rtype - kHeyaFirst);
+                heyaRev.setSize (rsz);
+                // モノ入力ではConvolver内部で左右の応答を平均する。
+                float* wL = revWet.getWritePointer (0);
+                float* wR = revWet.getWritePointer (juce::jmin (1, revWet.getNumChannels() - 1));
+                heyaRev.process (wL, wR, numSamples);
+
+                // ★「ひびき」の量をここで掛ける。
+                //   従来型は juce::dsp::Reverb の wetLevel が中で掛けてくれるが、
+                //   へやは tank を通らないので、掛ける人が誰もいなくなる。
+                //   これを忘れると、revmix を絞っても響きが減らない（＝つまみが効かない）。
+                const float wetG = juce::jlimit (0.0f, 1.0f, revMix);
+                for (int ch = 0; ch < numCh; ++ch)
+                {
+                    float* w = revWet.getWritePointer (juce::jmin (ch, revWet.getNumChannels() - 1));
+                    juce::FloatVectorOperations::multiply (w, wetG, numSamples);
+                }
+            }
+            else
+            {
+                reverb.process (wc);   // dryLevel = 0 -> revWet now holds the wet signal only
+            }
 
             // predelay per type (vocal practice: room 12 / plate 22 / hall 30 /
             // church 50 / spring 8 / shimmer 22 ms; normal keeps legacy = none)
             const int type = rtype;
             static const float preMs[7] = { 0.0f, 12.0f, 22.0f, 30.0f, 50.0f, 8.0f, 22.0f };
-            const int preSamps = (int) (preMs[juce::jlimit (0, 6, type)] * 0.001f * currentSampleRate);
+            // v4.0.0 へや: 部屋ごとのおすすめプリディレイは Heya.h の RoomSpec が持っている
+            // （寸法から決めた値。ここで二重に持たない）。
+            const float preThisType = (type >= kHeyaFirst)
+                ? heya::rooms()[(size_t) juce::jlimit (0, heya::kNumRooms - 1, type - kHeyaFirst)].preDelayMs
+                : preMs[juce::jlimit (0, 6, type)];
+            const int preSamps = (int) (preThisType * 0.001f * currentSampleRate);
             if (preSamps > 0)
             {
                 const int psz = (int) preBufL.size();
@@ -2119,14 +3150,65 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             // v2.0.0: エモ(ロングトーン)とサビリフトは、ここで響きの「量だけ」を
             // 増やす。テールの音色は同じなので、開いても閉じても違和感が出ない。
             const float revLift = 1.0f + 0.80f * emoBloomNow + 0.35f * liftNow;
-            for (int ch = 0; ch < numCh; ++ch)
+            // フェードは1サンプルにつき1度進め、左右に同じゲインを使う。
+            for (int n = 0; n < numSamples; ++n)
             {
-                auto* w = buffer.getWritePointer (ch);
-                auto* v = revWet.getReadPointer (juce::jmin (ch, revWet.getNumChannels() - 1));
-                for (int n = 0; n < numSamples; ++n)
-                    w[n] += v[n] * duckGainBuf[(size_t) n] * revLift;
+                revBypassGain = revEnabled ? juce::jmin (1.0f, revBypassGain + revBypassStep)
+                                           : juce::jmax (0.0f, revBypassGain - revBypassStep);
+                const float gain = duckGainBuf[(size_t) n] * revLift * revBypassGain;
+                for (int ch = 0; ch < numCh; ++ch)
+                    buffer.getWritePointer (ch)[n] += revWet.getReadPointer (ch)[n] * gain;
             }
+            if (! revEnabled && revBypassGain == 0.0f)
+                resetReverbState();
         }
+    }
+
+    if (spaceRun) mods.restore (gz::ModuleChain::Hirogari, buffer);
+    // ===== モジュール8「ひろがり」ここまで =====
+
+    // v3.0-c 分岐3: ON のときだけ、キャラ声をここで掛ける（ひろがりの**あと**）。
+    //  測る所は上で済ませてあるので、ここは音を変える所だけ。
+    //  既定(false)ではこの行は何もしない ＝ いままでと1サンプルも変わらない。
+    if (spaceEarly) applyChara (buffer, /*doFx*/ true, /*doDetect*/ false);
+
+    // ここから先（メーター・遅延自己証明・配信出力）は「しあげ」＝固定で常に通る。
+
+    // ---- v3.0「つぶさない」の自動ヘッドルーム ----
+    // つぶすのをやめれば、当然ピークは伸びる。そのまま 0 dBFS に当たれば
+    // **いちばん汚い潰れ方（デジタルクリップ）**になるので、手前で音量を下げる。
+    //
+    // ★これはリミッタではない。リミッタは「はみ出した頭だけ」を潰す道具で、
+    //   それこそが今回いただいた「潰れる」の正体。ここでやるのは
+    //   **曲全体をゆっくり下げるフェーダー操作**で、波形の形は変えない。
+    //   下げ 20ms / 戻し 1.5秒。この速さだと1音の中では動かないので、
+    //   アタックもビブラートもそのまま残る。
+    //   代わりに、速い1発の頭は数ms分すり抜ける。そこは意図どおり
+    //   （DAW内部は float なので 0dBFS を超えても壊れない。書き出しの前に
+    //     この表示を見て仕上げ音量を下げてください、という設計）。
+    if (crushOn)
+    {
+        float pk = 0.0f;
+        for (int ch = 0; ch < juce::jmin (numCh, 2); ++ch)
+            pk = juce::jmax (pk, buffer.getMagnitude (ch, 0, numSamples));
+        const float ceilingDb = -0.5f;                       // ここより上には出さない
+        const float pkDb   = juce::Decibels::gainToDecibels (pk, -80.0f);
+        const float wantDb = juce::jmin (0.0f, ceilingDb - pkDb);   // 下げるだけ
+        const float a = (wantDb < crushHeadDb) ? crushHeadAtk : crushHeadRel;
+        crushHeadDb += a * (wantDb - crushHeadDb);
+        if (crushHeadDb < -0.05f)
+        {
+            const float g = juce::Decibels::decibelsToGain (crushHeadDb);
+            for (int ch = 0; ch < numCh; ++ch)
+                juce::FloatVectorOperations::multiply (buffer.getWritePointer (ch), g, numSamples);
+        }
+        // 画面に出す「いま守っている量」= 圧縮を緩めたぶん + 下げたぶん
+        crushMeterDb.store (6.0f * crushCg - crushHeadDb);
+    }
+    else
+    {
+        crushHeadDb = 0.0f;
+        crushMeterDb.store (0.0f);
     }
 
     // output meter (peak + smoothed RMS for the stream-loudness display)
@@ -2143,6 +3225,35 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             }
         }
         const float cur = meterOut.load();
+
+    // ---- v2.10.0 #73 ゼロ遅延の自己証明（出口） ----
+    // 出てきた山のいちばん高い場所を覚え、インパルスを入れた場所との差を取る。
+    // そのあと**出力を消す**ので、測っている間は無音になる。
+    if (selfTestRunning.load (std::memory_order_relaxed))
+    {
+        const int pos = selfTestPos.load (std::memory_order_relaxed);
+        const auto* d = buffer.getReadPointer (0);
+        for (int n = 0; n < numSamples; ++n)
+        {
+            const float a = std::abs (d[n]);
+            if (a > selfTestBest) { selfTestBest = a; selfTestBestAt = pos + n; }
+        }
+        for (int ch = 0; ch < numCh; ++ch)
+            juce::FloatVectorOperations::clear (buffer.getWritePointer (ch), numSamples);
+
+        const int next = pos + numSamples;
+        selfTestPos.store (next, std::memory_order_relaxed);
+        if (next >= (int) (currentSampleRate * 1.0))
+        {
+            selfTestMeasured.store ((selfTestBestAt >= 0 && selfTestBest > 1.0e-6f)
+                                        ? (selfTestBestAt - selfTestImpactAt) : -1);
+            selfTestBest = 0.0f; selfTestBestAt = -1;
+            selfTestRunning.store (false, std::memory_order_relaxed);
+        }
+    }
+
+
+
         meterOut.store (pk > cur ? pk : cur * 0.985f);
 
         const float ms = sumSq / (float) juce::jmax (1, numSamples * numCh);
@@ -2266,13 +3377,20 @@ void VocalGzzioProcessor::applyAutoSetup()
         // 3) corrective + colour EQ from the spectral shares
         setP ("lowcut", juce::jlimit (70.0f, 120.0f, 80.0f + rumble * 400.0f));
         const float mudRatio = mud / juce::jmax (1e-4f, bodyLow + midE);
-        setP ("mud",   juce::jlimit (0.0f, 8.0f, (mudRatio - 0.35f) * 22.0f));
-        setP ("harsh", juce::jlimit (0.0f, 7.0f, (pres / juce::jmax (1e-4f, highSum) - 0.4f) * 20.0f));
+        // v2.10.0 ★符号が逆だった。mud/harsh のツマミは -12..0 dB(マイナスが「削る」)
+        //  なのに、おまかせは 0..8 の**プラス**を書き込んでいた。範囲に丸められて
+        //  必ず 0 になるので、**おまかせのこもり取り・かたさ取りは一度も効いていなかった**。
+        //  「おまかせを掛けてもシャリつきが取れない」の一因。マイナスで書く。
+        setP ("mud",   -juce::jlimit (0.0f, 8.0f, (mudRatio - 0.35f) * 22.0f));
+        setP ("harsh", -juce::jlimit (0.0f, 7.0f, (pres / juce::jmax (1e-4f, highSum) - 0.4f) * 20.0f));
         setP ("presence", juce::jlimit (0.5f, 4.0f, (0.30f - pres / juce::jmax (1e-4f, highSum)) * 12.0f + 1.5f));
         setP ("air",   juce::jlimit (1.0f, 6.0f, (0.28f - airE / juce::jmax (1e-4f, highSum)) * 22.0f + 1.0f));
         // the WARMTH knob is the "drive" parameter (soft saturation): thin voices
         // get more body, already-warm voices keep it light
-        setP ("drive", bodyLow < 0.18f ? 28.0f : 12.0f);
+        // v2.12.0 ★「最低でも12%必ず入れる」をやめた(§6-4)。これが
+        // 「うた自動があたたかい声しか出ない」の半分だった。連続値にして、
+        // 胴の鳴っている声(bodyLow>=0.17)には 0% = 何も足さない。
+        setP ("drive", juce::jlimit (0.0f, 28.0f, (0.17f - bodyLow) * 280.0f));
 
         // 4) sibilance + noise
         setP ("deess", juce::jlimit (20.0f, 65.0f, (sib / juce::jmax (1e-4f, highSum)) * 140.0f));
@@ -2293,9 +3411,19 @@ void VocalGzzioProcessor::applyAutoSetup()
         setP ("revmix",  18.0f);
         setP ("mix",     100.0f);
 
-        // result: 10..12 = sing done (tilt), +100 if LEARN is recommended
-        const float tilt = highSum - (rumble + bodyLow + mud);
-        int r = tilt > 0.15f ? 10 : tilt < -0.15f ? 11 : 12;
+        // result: 10..12 = sing done, +100 if LEARN is recommended
+        // v2.12.0 ★判定を作り直した(§6-4)。以前は「高域の割合 − 低域の割合」を
+        // ±0.15 で3択にしていたが、人の声はエネルギーの大半が低域にあるので、
+        // この式ではほぼ全員が「あたたかい」に落ちていた(=あたたかい一辺倒の残り半分)。
+        // 声の標準傾斜ぶん(低域優位・実測でおよそ+8dB)を差し引いた対数比較にする。
+        const float brightDb = 10.0f * std::log10 (juce::jmax (1.0e-4f, highSum)
+                             / juce::jmax (1.0e-4f, rumble + bodyLow + mud));
+        // 補正値+12dB: 標準的な声(-6dB/octの倍音列)でこの比が約-12dBになることを
+        // dsp_autoset で実測して合わせた。ここが0になる声=ふつう。
+        const float delta = brightDb + 12.0f;                    // + = 標準より明るい
+        asBrightDb.store (delta);
+        asSibPct.store (100.0f * sib / juce::jmax (1.0e-4f, highSum));
+        int r = delta > 2.0f ? 10 : delta < -2.0f ? 11 : 12;
         if (dn >= 18.0f) r += 100;                               // noisy room: suggest LEARN
         autoSetupResult.store (r);
         return;
@@ -2306,10 +3434,10 @@ void VocalGzzioProcessor::applyAutoSetup()
 
     // mud dip: only if 250-500 Hz dominates the low end
     const float mudRatio = mud / juce::jmax (1e-4f, bodyLow + midE);
-    setP ("mud", juce::jlimit (0.0f, 8.0f, (mudRatio - 0.35f) * 22.0f));
+    setP ("mud", -juce::jlimit (0.0f, 8.0f, (mudRatio - 0.35f) * 22.0f));   // v2.10.0 符号を直した(上記)
 
     // harshness: strong presence share invites a gentle 3-5 kHz cut
-    setP ("harsh", juce::jlimit (0.0f, 7.0f, (pres / juce::jmax (1e-4f, highSum) - 0.4f) * 20.0f));
+    setP ("harsh", -juce::jlimit (0.0f, 7.0f, (pres / juce::jmax (1e-4f, highSum) - 0.4f) * 20.0f));   // v2.10.0 符号を直した
 
     // de-esser: driven by sibilance share of the highs
     setP ("deess", juce::jlimit (0.0f, 70.0f, (sib / juce::jmax (1e-4f, highSum)) * 140.0f));
@@ -2326,12 +3454,21 @@ void VocalGzzioProcessor::applyAutoSetup()
     // トーク配信は残響が聞き取りを妨げるため、ひびき・やまびこをデフォOFF
     setP ("revmix", 0.0f);
     setP ("delay",  0.0f);
+    // v3.0 トークは長丁場。部屋（PCファン・エアコン）が途中で変わっても
+    // ついていけるよう、静かな間の自動学びなおしを入れる
+    setP ("dn_relearn", 1.0f);
 
-    // pick the nearest mic-preset tilt (very rough: bright vs warm vs neutral)
+    // pick the nearest mic-preset tilt (bright vs warm vs neutral)
+    // v2.12.0 ★うた側と同じ作り直し(§6-4)。生の割合差は声の低域優位で
+    // ほぼ常に「あたたかい」判定になっていた。標準傾斜との差で見る。
     int nearest = -1;
-    const float tilt = highSum - (rumble + bodyLow + mud);   // + = bright, - = warm
-    if      (tilt >  0.15f) nearest = 0;   // bright/condenser-ish
-    else if (tilt < -0.15f) nearest = 1;   // warm/dynamic-ish
+    const float brightDb = 10.0f * std::log10 (juce::jmax (1.0e-4f, highSum)
+                         / juce::jmax (1.0e-4f, rumble + bodyLow + mud));
+    const float delta = brightDb + 12.0f;   // 校正は dsp_autoset(うた側と共通)
+    asBrightDb.store (delta);
+    asSibPct.store (100.0f * sib / juce::jmax (1.0e-4f, highSum));
+    if      (delta >  2.0f) nearest = 0;   // bright/condenser-ish
+    else if (delta < -2.0f) nearest = 1;   // warm/dynamic-ish
     else                    nearest = 2;   // neutral
     autoSetupResult.store (nearest);
 }
@@ -2590,9 +3727,18 @@ void VocalGzzioProcessor::processSmartEQ (juce::AudioBuffer<float>& buffer)
 void VocalGzzioProcessor::readTunerBuffer (std::vector<float>& dest) const
 {
     dest.resize (tunerSize);
-    const int pos = tunerPos.load (std::memory_order_acquire);
-    for (int i = 0; i < tunerSize; ++i)
-        dest[(size_t) i] = tunerBuf[(pos + i) % tunerSize];
+    // 音声処理は待たせない。描画側がコピー中の更新を検知したら取り直す。
+    for (int attempt = 0; attempt < 3; ++attempt)
+    {
+        const unsigned before = tunerSequence.load (std::memory_order_acquire);
+        if ((before & 1u) != 0) continue;
+        const int pos = tunerPos.load (std::memory_order_acquire);
+        for (int i = 0; i < tunerSize; ++i)
+            dest[(size_t) i] = tunerBuf[(pos + i) % tunerSize].load (std::memory_order_relaxed);
+        std::atomic_thread_fence (std::memory_order_acquire);
+        if (before == tunerSequence.load (std::memory_order_acquire)) return;
+    }
+    std::fill (dest.begin(), dest.end(), 0.0f);
 }
 
 //==============================================================================
@@ -2689,7 +3835,7 @@ void VocalGzzioProcessor::handleAsyncUpdate()
         {
             case maAB:      abSwitch (1 - abCurrent.load());          break;
             case maRevOn:   toggleBool ("revon");                     break;
-            case maRevType: cycleChoice ("rev_type", 7, +1);          break;
+            case maRevType: cycleChoice ("rev_type", kRevTypeCount, +1); break;
             case maJnOn:    toggleBool ("jn_on");                     break;
             case maJnSolo:  toggleBool ("jn_solo");                   break;
             case maJnHarm:  cycleChoice ("jn_harm", 9, +1);           break;
@@ -2750,7 +3896,8 @@ void VocalGzzioProcessor::abCopyToOther()
 std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
 {
     auto root = std::make_unique<juce::XmlElement> ("VOCALGZZIO");
-    root->setAttribute ("ver", 2);
+    root->setAttribute ("ver", 4);   // v3.0-c: 3 以降は「直ったサビリフト」
+                                     // v4.0.0: 4 以降は「学びなおし既定ON」
     if (auto params = apvts.copyState().createXml())
         root->addChildElement (params.release());
     auto* d = root->createNewChildElement ("DENOISE");
@@ -2793,6 +3940,11 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
 void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
 {
     restoringState = true;
+    // v3.1 ★状態を読み込むときは「使いかたごとの記憶」を必ず1回空振りさせる。
+    //  読み込みで src_mode が変わると、次の呼び出しが
+    //  「読み込む前の値」で「読み込んだばかりの記録」を上書きしてしまう。
+    //  false にしておけば、次の1回は基準を取り直すだけで終わる。
+    useModeArmed = false;
     auto swapParams = [this] (const juce::XmlElement& p)
     {
         auto old = apvts.state;
@@ -2805,11 +3957,54 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
     {
         if (auto* p = xml.getChildByName (apvts.state.getType()))
             swapParams (*p);
+
+        // ---- v3.0-c 古いプロジェクトは、昔の音のまま開く -------------------
+        //  v3.0-c で「キャラ声を切るとサビリフトが残響に効かない」を直した。
+        //  直したこと自体は正しいが、**すでに保存されている曲の音を変えては
+        //  いけない**。保存に付いている ver が 3 未満なら、そのインスタンスだけ
+        //  昔の動き(lift_legacy = ON)にして開く。
+        //  新しく置いたときは既定の OFF ＝ 直った動きになる。
+        //  ※ ver は保存時に必ず書かれるので、無いものは古いとみなす。
+        if (xml.getIntAttribute ("ver", 0) < 3)
+            if (auto* prm = apvts.getParameter ("lift_legacy"))
+                prm->setValueNotifyingHost (1.0f);
+
+        // ---- v4.0.0 「自動学びなおし」を既定 ON にした ---------------------
+        //  ★既定を変えただけでは、v3.1 から使っている人は直らない。
+        //    保存には false が**書いてある**ので、replaceState でそれが戻る。
+        //  ver < 4 の保存を読んだときだけ、一度だけ ON へ上げる。
+        //  上書きしてよい理由: この項目は v3.0 で足したばかりで、
+        //  トーク配信のおまかせを押した人以外は触ったことがない。
+        //  そして静かな部屋では ON にしても音は変わらない。
+        if (xml.getIntAttribute ("ver", 0) < 4)
+            if (auto* prm = apvts.getParameter ("dn_relearn"))
+                prm->setValueNotifyingHost (1.0f);
         if (auto* d = xml.getChildByName ("DENOISE"))
         {
-            dnLearnedShared.store (d->getBoolAttribute ("learned", false));
+            bool  learned = d->getBoolAttribute ("learned", false);
+            float f[4];
             for (int b = 0; b < 4; ++b)
-                dnFloorShared[b].store ((float) d->getDoubleAttribute ("f" + juce::String (b), 1e-5));
+                f[b] = (float) d->getDoubleAttribute ("f" + juce::String (b), 1e-5);
+
+            // ---- v2.10.0 ★保存されている床が「部屋のノイズ」として有り得ない
+            //      大きさなら、読まずに捨てて自動追従に戻す。
+            //  v2.9.0 までは、声が入っている最中に学習した床がそのまま保存され、
+            //  戻す手段も無かった。すでに汚れた設定を持っている人は、更新しても
+            //  直らないままになる。ここで見つけて捨てる（実測では -45dBFS を
+            //  超える床は必ず声・楽器・モニタ返しが入っている）。
+            if (learned)
+            {
+                float loudest = 0.0f;
+                for (int b = 0; b < 4; ++b) loudest = juce::jmax (loudest, f[b]);
+                if (juce::Decibels::gainToDecibels (loudest, -120.0f) > -45.0f)
+                {
+                    learned = false;
+                    for (int b = 0; b < 4; ++b) f[b] = 1e-5f;
+                }
+            }
+
+            dnLearnedShared.store (learned);
+            for (int b = 0; b < 4; ++b) dnFloorShared[b].store (f[b]);
             dnProfilePending.store (true, std::memory_order_release);
         }
         // v2.8.0: A/Bのもう片方を戻す。A/B切替そのものによる復元では触らない
@@ -2863,10 +4058,62 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
     restoringState = false;
 }
 
+// v2.10.0 #74 報告セット: 版・環境・いまの設定・使われ方を1枚にまとめる。
+// 「再現しません」の往復を減らすための道具。**ネットワークは使わない**。
+juce::String VocalGzzioProcessor::buildReportText() const
+{
+    juce::String s;
+    s << "VocalGzzio 不具合報告セット\n";
+    s << "====================================\n";
+    s << "このファイルは自動送信されません。あなたが送ったときだけ作者に届きます。\n";
+    s << "中身はぜんぶ文字なので、送る前にそのまま読めます。\n\n";
+
+    s << "[版と環境]\n";
+    s << "  VocalGzzio : " << JucePlugin_VersionString << "\n";
+    s << "  形式       : " << juce::AudioProcessor::getWrapperTypeDescription (wrapperType) << "\n";
+    s << "  ホスト     : " << juce::PluginHostType().getHostDescription() << "\n";
+    s << "  OS         : " << juce::SystemStats::getOperatingSystemName() << "\n";
+    s << "  CPU        : " << juce::SystemStats::getCpuModel()
+      << " (" << juce::SystemStats::getNumCpus() << " コア)\n";
+    s << "  メモリ     : " << juce::SystemStats::getMemorySizeInMegabytes() << " MB\n";
+    s << "  書き出し日 : " << juce::Time::getCurrentTime().toISO8601 (true) << "\n\n";
+
+    s << "[音の設定]\n";
+    s << "  サンプリング周波数 : " << juce::String (getSampleRate(), 0) << " Hz\n";
+    s << "  ブロック           : " << getBlockSize() << " サンプル";
+    if (getSampleRate() > 0.0)
+        s << " (" << juce::String (1000.0 * getBlockSize() / getSampleRate(), 2) << " ms)";
+    s << "\n";
+    s << "  申告している遅延   : " << reportedLatency.load() << " サンプル\n";
+    s << "  セッションモード   : " << (sessionActive.load() ? "入" : "切") << "\n\n";
+
+    s << "[使われ方] ※手元に貯めているだけの数字です\n";
+    s << "  はじめて使った日 : " << usageLog.getFirstSeen() << "\n";
+    s << "  起動した回数     : " << usageLog.getLaunches() << "\n";
+    {
+        const auto& all = usageLog.all();
+        const auto keys = all.getAllKeys();
+        if (keys.isEmpty()) s << "  (まだ記録がありません)\n";
+        for (const auto& k : keys)
+        {
+            const double sec = all[k].getDoubleValue();
+            if (sec < 1.0) continue;
+            s << "  " << k.paddedRight (' ', 16) << " : "
+              << juce::String (sec / 60.0, 1) << " 分\n";
+        }
+    }
+    s << "\n[いまの設定]\n";
+    // copyState() は非 const なので、ここでは値ツリーをそのまま複製して書き出す
+    // （中身は同じ。const のまま読める形にしている）。
+    if (auto xml = apvts.state.createXml())
+        s << xml->toString() << "\n";
+
+    return s;
+}
+
 juce::File VocalGzzioProcessor::autosaveFile()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("VocalGzzio").getChildFile ("autosave.xml");
+    return gz::dataDirectory().getChildFile ("autosave.xml");
 }
 
 void VocalGzzioProcessor::flushAutosaveNow()
@@ -2880,19 +4127,105 @@ void VocalGzzioProcessor::flushAutosaveNow()
 
 void VocalGzzioProcessor::timerCallback()
 {
+    // v3.1 使いかたが変わっていたら、その使いかたの値を出し入れする。
+    //  画面のコンボからも即座に同じものを呼ぶので、ふつうはここは空振りする。
+    //  ここが要るのは「画面が開いていないのにホストのオートメーションで
+    //  使いかたが動いた」ときだけ。
+    applyUseModeMemoryIfChanged();
+
+   #if VOCALGZZIO_TRIAL
+    stateDirty.store (false);      // 体験版は autosave を書かない
+   #else
     if (stateDirty.load()
         && juce::Time::getMillisecondCounter() - lastDirtyMs.load() > 1200)
         flushAutosaveNow();
+   #endif
+}
+
+//==============================================================================
+// v3.1「使いかた4種」— 使いかたごとにツマミの値を別に覚える（設計書§3）
+//
+//  記録は apvts.state の子 "usemode_0".."usemode_3" に、
+//  パラメータの**正規化値(0..1)**で入れる。正規化値にしておくと、
+//  あとで範囲を変えても壊れない（dB や Hz の生値で持つと範囲変更で意味が変わる）。
+//  apvts.state はまるごと保存されるので、プロジェクトを開き直しても残る。
+//
+//  ★覚えない物は useModeMemorySkips() にまとめてある（曲そのものの設定・
+//   互換スイッチ・その場のスイッチ）。ここを甘くすると、使いかたを変えただけで
+//   「古い曲を昔の音で開く」設定まで動いてしまう。
+void VocalGzzioProcessor::snapshotUseMode (int mode)
+{
+    if (mode < 0 || mode > 9) return;
+    auto child = apvts.state.getOrCreateChildWithName ("usemode_" + juce::String (mode), nullptr);
+    for (auto* prm : getParameters())
+        if (auto* wp = dynamic_cast<juce::AudioProcessorParameterWithID*> (prm))
+            if (! useModeMemorySkips (wp->paramID))
+                child.setProperty (wp->paramID, wp->getValue(), nullptr);
+}
+
+bool VocalGzzioProcessor::restoreUseMode (int mode)
+{
+    if (mode < 0 || mode > 9) return false;
+    auto child = apvts.state.getChildWithName ("usemode_" + juce::String (mode));
+    if (! child.isValid()) return false;      // その使いかたは初めて＝いまの音のまま
+
+    for (auto* prm : getParameters())
+        if (auto* wp = dynamic_cast<juce::AudioProcessorParameterWithID*> (prm))
+        {
+            if (useModeMemorySkips (wp->paramID)) continue;
+            if (! child.hasProperty (wp->paramID)) continue;
+            const float v = juce::jlimit (0.0f, 1.0f, (float) (double) child.getProperty (wp->paramID));
+            //  同じ値なら触らない。触るとホストの「変更あり」印が付き、
+            //  オートメーションにも無意味な点が並ぶ。
+            if (std::abs (v - wp->getValue()) > 1.0e-6f)
+            {
+                wp->beginChangeGesture();
+                wp->setValueNotifyingHost (v);
+                wp->endChangeGesture();
+            }
+        }
+    return true;
+}
+
+void VocalGzzioProcessor::applyUseModeMemoryIfChanged()
+{
+    const int cur = (int) apvts.getRawParameterValue ("src_mode")->load();
+
+    //  ★状態を読み込んだ直後の1回は、必ず空振りさせる。
+    //   ここで空振りさせないと、「読み込む前の値」で「読み込んだばかりの記録」を
+    //   上書きしてしまう（＝プロジェクトを開くたびに設定が壊れる）。
+    if (! useModeArmed)
+    {
+        useModeArmed = true;
+        useModeLast  = cur;
+        return;
+    }
+    if (cur == useModeLast) return;
+
+    snapshotUseMode (useModeLast);   // 出ていく使いかたを覚える
+    restoreUseMode  (cur);           // 入る使いかたを思い出す（初めてなら何もしない）
+    useModeLast = cur;
 }
 
 void VocalGzzioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
+   #if VOCALGZZIO_TRIAL
+    // 体験版は設定を保存しない。空ではなく「体験版でした」だけを書く
+    // （製品版がこれを読んでも既定のまま＝事故にならない）。
+    juce::XmlElement t ("VOCALGZZIO_TRIAL_NOSAVE");
+    copyXmlToBinary (t, destData);
+    return;
+   #endif
     if (auto xml = makeStateXml())
         copyXmlToBinary (*xml, destData);
 }
 
 void VocalGzzioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
+   #if VOCALGZZIO_TRIAL
+    juce::ignoreUnused (data, sizeInBytes);   // 体験版は読みもしない（毎回まっさら）
+    return;
+   #endif
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
     {
         applyStateXml (*xml);

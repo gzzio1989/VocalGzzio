@@ -1,0 +1,80 @@
+================================================================
+ VocalGzzio に含まれる第三者ソフトウェアについて
+ Third-Party Software Notices for VocalGzzio v4.0.0
+================================================================
+
+VocalGzzio には、以下のソフトウェアが含まれています。
+それぞれの著作権は各権利者に帰属し、各ライセンスの条件が適用されます。
+ライセンス全文は、このフォルダ内の各ファイルをご覧ください。
+
+
+────────────────────────────────────────────────
+1. JUCE 8 Framework
+────────────────────────────────────────────────
+  著作権   : Raw Material Software Limited
+  ウェブ   : https://juce.com
+  ライセンス: JUCE 8 End User Licence Agreement （商用ライセンス）
+             https://juce.com/legal/juce-8-licence/
+  全文     : JUCE-8-licence.txt
+
+  VocalGzzio は JUCE 8 を AGPLv3 ではなく **商用ライセンス**
+  （Starter ティア）のもとで利用しています。
+
+
+────────────────────────────────────────────────
+2. VST 3 SDK
+────────────────────────────────────────────────
+  著作権   : Copyright (c) 2025, Steinberg Media Technologies GmbH
+  ライセンス: MIT License
+  全文     : VST3-SDK-MIT.txt
+
+  VST is a trademark of Steinberg Media Technologies GmbH,
+  registered in Europe and other countries.
+  VST は Steinberg Media Technologies GmbH の商標です。
+
+
+────────────────────────────────────────────────
+3. Mochiy Pop One（画面表示に使っている書体）
+────────────────────────────────────────────────
+  著作権   : Copyright 2020 The MochiyPop Project Authors
+             https://github.com/fontdasu/Mochiypop
+  ライセンス: SIL Open Font License, Version 1.1
+  全文     : MochiyPopOne-OFL-1.1.txt
+
+  VocalGzzio では、画面に出る文字だけを収めた
+  サブセット版（2,388字）を同梱しています。
+  この書体には Reserved Font Name の指定がないため、
+  サブセット後も元の書体名のまま配布しています。
+
+
+────────────────────────────────────────────────
+4. JUCE に含まれるその他の部品
+────────────────────────────────────────────────
+  JUCE 8 の内部では、以下が使われています。
+  いずれも JUCE 側で条件を満たした形で同梱されているものです。
+
+    zlib          (zlib license)
+    pnglib        (zlib license)
+    jpeglib       (Independent JPEG Group License)
+    FLAC          (BSD)
+    Ogg Vorbis    (BSD)
+    HarfBuzz      (Old MIT)
+    SheenBidi     (Apache 2.0)
+
+  詳細は JUCE の LICENSE.md をご覧ください:
+  https://github.com/juce-framework/JUCE/blob/master/LICENSE.md
+
+
+────────────────────────────────────────────────
+5. VocalGzzio 本体
+────────────────────────────────────────────────
+  著作権   : Gzzio（グッジオ）
+  ライセンス: 使用許諾契約書.txt をご覧ください。
+
+  ※ v3.x 以前は GitHub 上で AGPLv3 として公開していました。
+     v4.0.0 以降は、上記の使用許諾契約書のもとで
+     BOOTH にて販売しています。
+     すでに AGPLv3 版を入手されている方の権利は、
+     その版に限り従来どおりです。
+
+================================================================

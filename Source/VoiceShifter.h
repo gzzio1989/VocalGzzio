@@ -1,16 +1,14 @@
-﻿#pragma once
-// VoiceShifter - STFT phase-vocoder pitch shifting with source-filter
-// (formant) preservation. Validated in voice_shifter_bench.cpp:
-//   * pitch +/-12 and +/-7 semitone accuracy on tones (440.1 / 110.4 / 329.7 Hz from 220)
-//   * formant-only shift leaves pitch untouched (anti-chipmunk verified via
-//     spectral centroid: pitch+12 keeps centroid x1.18 vs x2.07 for formant+12)
-//   * silence / full-scale noise stay finite; no allocations in process
-//   * worst-case load ~1.2-1.4 % of one core @44.1/48k (generic FFT, N=512/hop=128)
-// Latency: exactly N samples (512 = approx 11.6 ms @44.1k). Mono; run one per channel.
+#pragma once
+// 位相を倍音ピークへそろえる短時間フーリエ変換による単音用の移調。
+// 声のスペクトル包絡を保ち、子音には原音を使うことができる。
+// 遅延は N-1 標本。標準窓2048では48kHz時に約42.6ms。
+// 客観的な回帰検査は tools/dsp_pitchquality.cpp と dsp_vc_uv.cpp。
+// 合成音での検査だけで実際の歌声の聴感を保証するものではない。
 
 #include <vector>
 #include <complex>
 #include <cmath>
+#include <algorithm>
 
 namespace gz
 {
@@ -18,8 +16,19 @@ namespace gz
 class VoiceShifter
 {
 public:
-    void prepare (double /*sampleRate*/, int fftOrder = 10, int overlap = 4)
+    static int recommendedWindowOrder (double sampleRate) noexcept
     {
+        // 約43ms以上を確保する。96kHzでも低音を分析できる周期数を保つ。
+        return sampleRate > 96000.0 ? 13 : sampleRate > 48000.0 ? 12 : 11;
+    }
+
+    void prepare (double sampleRate, int fftOrder = 0, int overlap = 4)
+    {
+        if (fftOrder == 0) fftOrder = recommendedWindowOrder (sampleRate);
+        // v2.12.0: 無声ガードの係数計算に使う(それまでは未使用だった)
+        srHz = (sampleRate > 8000.0) ? sampleRate : 48000.0;
+        uvAtk = 1.0f - std::exp (-1.0f / (0.003f * (float) srHz));   // 声→子音 3ms
+        uvRel = 1.0f - std::exp (-1.0f / (0.008f * (float) srHz));   // 子音→声 8ms
         // fftOrder=10 -> N=1024 (was 512). Twice the frequency resolution, which
         // removed most of the smearing and grain in the low register. overlap=4 (75%) kept.
         // v1.9.6: prepare で確保したサイズを最大値として覚えておく。低遅延モードは
@@ -27,9 +36,9 @@ public:
         //         = オーディオスレッドから安全に切り替えられる。
         maxN = 1 << fftOrder; ovl = overlap;
         N = 1 << fftOrder; hop = N / overlap; bins = N / 2 + 1;
-        // v1.9.0: measured wet latency is N-hop, but the dry line was N-1, so any
-        //         mix between the two combed by ~5.8 ms. Align them here.
-        dryDelay = N - hop;
+        // フレーム最古の標本を現在位置から重ねるので実遅延は N-1。
+        // N-hop とすると原音との中間ミックスや子音保護でコムフィルターになる。
+        dryDelay = N - 1;
         win.resize ((size_t) N);
         double wsum2 = 0.0;
         for (int n = 0; n < N; ++n)
@@ -44,10 +53,12 @@ public:
         dryLine.assign ((size_t) N, 0.0f);
         frame.assign ((size_t) N, cf (0.0f, 0.0f));
         mag.assign ((size_t) bins, 0.0f);  lastPhase.assign ((size_t) bins, 0.0f);
-        sumPhase.assign ((size_t) bins, 0.0f); trueFreq.assign ((size_t) bins, 0.0f);
-        env.assign ((size_t) bins, 0.0f);  exc.assign ((size_t) bins, 0.0f);
-        synMag.assign ((size_t) bins, 0.0f); synFreq.assign ((size_t) bins, 0.0f);
-        finalMag.assign ((size_t) bins, 0.0f);
+        trueFreq.assign ((size_t) bins, 0.0f);
+        env.assign ((size_t) bins, 0.0f);
+        phaseOffset.assign ((size_t) bins, 0.0f);
+        nextOffset.assign ((size_t) bins, 0.0f);
+        peakOwner.assign ((size_t) bins, 0);
+        nextOwner.assign ((size_t) bins, 0);
         reset();
         setParams (0.0f, 0.0f, 1.0f);
     }
@@ -58,16 +69,34 @@ public:
         std::fill (ola.begin(),  ola.end(),  0.0f);
         std::fill (dryLine.begin(), dryLine.end(), 0.0f);
         std::fill (lastPhase.begin(), lastPhase.end(), 0.0f);
-        std::fill (sumPhase.begin(),  sumPhase.end(),  0.0f);
+        std::fill (phaseOffset.begin(), phaseOffset.end(), 0.0f);
+        for (int k = 0; k < bins; ++k) peakOwner[(size_t) k] = k;
         histPos = olaHead = dryPos = samplesSinceFrame = 0;
+        uvGain = 1.0f; uvTarget = 1.0f;                     // v2.12.0 無声ガード
     }
+
+    // ------------------------------------------------------------------
+    // v2.12.0 無声ガード（v3.0設計書 §6-3「ボイチェンで言葉が伝わらない」）
+    //
+    //  子音(サ行・カ行・タ行)は倍音構造の無いノイズなので、ピッチ/フォルマント
+    //  シフトを掛けると濁って言葉が潰れる。フレームごとに無声/有声を判定して、
+    //   mode 1 … 無声のあいだ出力を**元の音**へ寄せる(本人の声・オートチューン用。
+    //            子音はそもそも音程を持たないので、補正しない方が正しい)
+    //   mode 2 … 無声のあいだ出力を**無音**へ寄せる(ユニゾン/ハモリの分身用。
+    //            4人分の「サッ」が重なって歯擦音が4倍になるのを防ぐ。
+    //            子音は本人の1回だけ聞こえるのが自然)
+    //   mode 0 … 何もしない(既定。今までと1サンプルも変わらない)
+    //  切り替えは3ms/8msのなめらかな係数で行う(プチッと言わせない)。
+    // ------------------------------------------------------------------
+    void setUnvoicedGuard (int mode) noexcept { uvMode = mode; }
+    bool lastFrameUnvoiced() const noexcept   { return uvTarget < 0.5f; }
 
     // semitones / semitones / 0..1
     void setParams (float pitchSemi, float formantSemi, float mixAmt)
     {
-        pitchFactor   = std::pow (2.0f, pitchSemi   / 12.0f);
-        formantFactor = std::pow (2.0f, formantSemi / 12.0f);
-        mix = mixAmt;
+        pitchFactor   = std::pow (2.0f, std::clamp (std::isfinite (pitchSemi) ? pitchSemi : 0.0f, -36.0f, 36.0f) / 12.0f);
+        formantFactor = std::pow (2.0f, std::clamp (std::isfinite (formantSemi) ? formantSemi : 0.0f, -36.0f, 36.0f) / 12.0f);
+        mix = std::clamp (std::isfinite (mixAmt) ? mixAmt : 0.0f, 0.0f, 1.0f);
     }
 
     // v1.9.6 低遅延モード: 窓を 1024 -> 512 に縮めると遅延が半分になる。
@@ -77,7 +106,7 @@ public:
     {
         const int newN = 1 << fftOrder;
         if (newN == N || newN > maxN || newN < 128) return;
-        N = newN; hop = N / ovl; bins = N / 2 + 1; dryDelay = N - hop;
+        N = newN; hop = N / ovl; bins = N / 2 + 1; dryDelay = N - 1;
         double wsum2 = 0.0;
         for (int n = 0; n < N; ++n)
         {
@@ -93,7 +122,7 @@ public:
     }
     int currentWindow() const { return N; }
 
-    int latencySamples() const { return N - hop; }   // v1.9.0: matches the measured delay
+    int latencySamples() const { return dryDelay; }
 
     void processBlock (float* d, int num)   { for (int i = 0; i < num; ++i) d[i] = tick (d[i]); }
 
@@ -144,15 +173,31 @@ private:
         if (++samplesSinceFrame >= hop) { samplesSinceFrame = 0; renderFrame(); }
         const float wet = ola[(size_t) olaHead]; ola[(size_t) olaHead] = 0.0f;
         if (++olaHead >= N) olaHead = 0;
+
+        // v2.12.0 無声ガード。uvMode==0 なら uvGain は 1 のままで、式は従来と同一。
+        if (uvMode != 0)
+            uvGain += (uvTarget > uvGain ? uvRel : uvAtk) * (uvTarget - uvGain);
+        if (uvMode == 2)                                    // 分身: 子音は黙る
+            return (dryDelayed + mix * (wet - dryDelayed)) * uvGain;
+        if (uvMode == 1)                                    // 本人: 子音は素通し
+            return dryDelayed + mix * uvGain * (wet - dryDelayed);
         return dryDelayed + mix * (wet - dryDelayed);
     }
 
     void renderFrame()
     {
+        // v2.12.0 無声ガード用: 窓を掛ける前の波形でゼロ交差率を数える
+        int zc = 0; float prevS = 0.0f; double frameE = 0.0;
         for (int n = 0; n < N; ++n)
         {
             int idx = histPos + n; if (idx >= N) idx -= N;
-            frame[(size_t) n] = cf (hist[(size_t) idx] * win[(size_t) n], 0.0f);
+            const float s = hist[(size_t) idx];
+            if (uvMode != 0)
+            {
+                if (n > 0 && ((s > 0.0f) != (prevS > 0.0f))) ++zc;
+                prevS = s; frameE += (double) s * s;
+            }
+            frame[(size_t) n] = cf (s * win[(size_t) n], 0.0f);
         }
         fft (frame, false);
         for (int k = 0; k < bins; ++k)
@@ -171,9 +216,34 @@ private:
             trueFreq[(size_t) k] = (float) k + dphi * (float) N / (2.0f * PI * (float) hop);
         }
 
+        // v2.12.0 無声ガード: このフレームが子音(無声)かどうかを決める。
+        //  ・ゼロ交差率が高い(ノイズ的) かつ 4kHz以上にエネルギーが寄っている
+        //  ・またはゼロ交差率が極端に高い
+        //  静かなフレーム(-60dBFS未満)は判定を変えない(無音で采配がばたつくと、
+        //  mode2 の分身が息継ぎのたびに音量を上下させてしまう)。
+        if (uvMode != 0)
+        {
+            const float rms = std::sqrt ((float) (frameE / (double) N));
+            if (rms > 1.0e-3f)
+            {
+                const float zcr = (float) zc / (float) N;
+                int bin4k = (int) (4000.0 * (double) N / srHz);
+                if (bin4k < 1) bin4k = 1; if (bin4k > bins - 1) bin4k = bins - 1;
+                double hi = 0.0, all = 1.0e-12;
+                for (int k = 1; k < bins; ++k)
+                {
+                    const double e2 = (double) mag[(size_t) k] * mag[(size_t) k];
+                    all += e2; if (k >= bin4k) hi += e2;
+                }
+                const float hfr = (float) (hi / all);
+                const bool unvoiced = (zcr > 0.22f && hfr > 0.40f) || zcr > 0.33f;
+                uvTarget = unvoiced ? 0.0f : 1.0f;
+            }
+        }
+
         // spectral envelope: zero-phase one-pole smoothing (fwd+bwd, two passes)
         for (int k = 0; k < bins; ++k) env[(size_t) k] = mag[(size_t) k];
-        smooth (env, 0.78f); smooth (env, 0.42f);
+        smooth (env, bins, 0.78f); smooth (env, bins, 0.42f);
         // v1.9.0: an absolute floor of 1e-7 let the excitation blow up to 1e7x inside
         //         spectral valleys, which could explode on formant moves. Peak-relative now.
         float envPeak = 0.0f;
@@ -182,81 +252,68 @@ private:
         for (int k = 0; k < bins; ++k)
         {
             if (env[(size_t) k] < envFloor) env[(size_t) k] = envFloor;
-            exc[(size_t) k] = mag[(size_t) k] / env[(size_t) k];
         }
 
-        // ---- Pitch shift: scale each analysis bin's true frequency by pitchFactor and
-        //      spread its energy linearly across the two nearest synthesis bins.
-        //      The old code just rounded k*pitchFactor to an integer bin, so several
-        //      bins collapsed onto one, interfered, and rang metallic. Keeping the true
-        //      frequency and recording it per bin preserves phase coherence.
-        std::fill (synMag.begin(),  synMag.end(),  0.0f);
-        std::fill (synFreq.begin(), synFreq.end(), 0.0f);
+        // 倍音ピークごとに位相を進め、周辺の帯域は入力の相対位相を保つ。
+        // 以前は同じ出力帯域へ入る成分が周波数を上書きし合っていたため、
+        // 補正ゼロでも原音の位相が失われ、薄い声と金属的な揺れを作っていた。
+        int leftPeak = 0;
+        for (int k = 1; k < bins; ++k)
+        {
+            const bool peak = k == bins - 1 || (mag[(size_t) k] > mag[(size_t)(k-1)]
+                              && mag[(size_t) k] >= mag[(size_t)(k+1)]);
+            if (! peak) continue;
+            const int boundary = (leftPeak + k) / 2;
+            for (int j = leftPeak; j <= boundary; ++j) nextOwner[(size_t) j] = leftPeak;
+            for (int j = boundary + 1; j <= k; ++j) nextOwner[(size_t) j] = k;
+            leftPeak = k;
+        }
+        const float phaseStep = 2.0f * PI * (float) hop / (float) N;
         for (int k = 0; k < bins; ++k)
         {
-            const float shifted = trueFreq[(size_t) k] * pitchFactor;  // target frequency [bins]
-            // v2.6.0: 「範囲内なら通す」と書く。以前の「範囲外なら弾く」形だと
-            // NaN は全ての比較が false になるため素通りし、(int) NaN が
-            // INT_MIN になって配列外を書きに行っていた(実測クラッシュ)。
-            if (! (shifted >= 0.0f && shifted < (float) (bins - 1))) continue;
-            const int   j0 = (int) shifted;
-            const float fr = shifted - (float) j0;
-            const float e  = exc[(size_t) k];
-            // Spread energy over the two neighbouring bins; record the frequency on both.
-            synMag[(size_t) j0]       += e * (1.0f - fr);
-            synFreq[(size_t) j0]       = shifted;
-            if (j0 + 1 < bins)
-            {
-                synMag[(size_t)(j0 + 1)] += e * fr;
-                synFreq[(size_t)(j0 + 1)] = shifted;
-            }
-        }
-        // v1.9.3: bound how much the formant filter may change any single bin.
-        // On very pure material (whistle, flute, a sine-like synth) the envelope is
-        // one narrow bump, so shifting the excitation out from under it dropped the
-        // level by ~30 dB - the sound effectively vanished. Real voices have broad
-        // formants and never hit this, but the limit costs nothing and stops it.
-        const float kFormantGainMax = 4.0f;      // +/-12 dB
-        for (int k = 0; k < bins; ++k)
-        {
-            const float src = (float) k / formantFactor; float e;
-            if (src <= 0.0f)                 e = env[0];
-            else if (src >= (float)(bins-1)) e = env[(size_t)(bins - 1)];
-            else { const int i0 = (int) src; const float fr = src - (float) i0;
-                   e = env[(size_t) i0] + (env[(size_t)(i0 + 1)] - env[(size_t) i0]) * fr; }
-            const float here  = env[(size_t) k];
-            const float ratio = e / (here > 0.0f ? here : 1.0e-12f);
-            const float lim   = (ratio > kFormantGainMax) ? kFormantGainMax
-                              : (ratio < 1.0f / kFormantGainMax) ? 1.0f / kFormantGainMax : ratio;
-            finalMag[(size_t) k] = synMag[(size_t) k] * here * lim;
-        }
-        {   // v1.9.0 safety valve: never emit more than 4x the input magnitude,
-            double inSum = 0.0, outSum = 0.0;
-            for (int k = 0; k < bins; ++k) { inSum += mag[(size_t) k]; outSum += finalMag[(size_t) k]; }
-            // 上限: 何かが破綻しても入力の4倍を超える音は出さない
-            // 下限: 純音のようにフォルマント構造が無い素材だと、励起が包絡の
-            //       山から外れて -30dB まで落ちることがある。フレーム全体で
-            //       -12dB を下回らないようにして「音が消える」のを防ぐ。
-            double g = 1.0;
-            if      (outSum > 4.00 * inSum + 1.0e-9) g = (4.00 * inSum) / outSum;
-            else if (outSum > 1.0e-9 && outSum < 0.25 * inSum) g = (0.25 * inSum) / outSum;
-            if (g != 1.0)
-                for (int k = 0; k < bins; ++k) finalMag[(size_t) k] *= (float) g;
+            const int oldPeak = peakOwner[(size_t) k];
+            nextOffset[(size_t) k] = std::remainder (phaseOffset[(size_t) oldPeak]
+                 + phaseStep * trueFreq[(size_t) k] * (pitchFactor - 1.0f), 2.0f * PI);
+            if (! std::isfinite (nextOffset[(size_t) k])) nextOffset[(size_t) k] = 0.0f;
         }
         for (int k = 0; k < bins; ++k)
         {
-            sumPhase[(size_t) k] += 2.0f * PI * (float) hop * synFreq[(size_t) k] / (float) N;
-            // Wrap the accumulated phase into [-2pi,2pi]. Left alone it overflows the
-            // float mantissa and the sound turns grainy after a few minutes.
-            sumPhase[(size_t) k] = std::fmod (sumPhase[(size_t) k], 2.0f * PI);
-            // v2.6.0: 位相の積算はフレームをまたいで残る唯一の値。ここが一度でも
-            // 壊れると以降ずっと壊れたままなので、壊れていたら0へ戻す(自己回復)。
-            if (! std::isfinite (sumPhase[(size_t) k])) sumPhase[(size_t) k] = 0.0f;
-            float fm = finalMag[(size_t) k];
-            if (! std::isfinite (fm)) fm = 0.0f;
-            frame[(size_t) k] = cf (fm * std::cos (sumPhase[(size_t) k]),
-                                    fm * std::sin (sumPhase[(size_t) k]));
+            phaseOffset[(size_t) k] = nextOffset[(size_t) k];
+            peakOwner[(size_t) k] = nextOwner[(size_t) k];
         }
+        std::fill (frame.begin(), frame.end(), cf (0.0f, 0.0f));
+        auto envelopeAt = [&] (float position)
+        {
+            position = std::clamp (position, 0.0f, (float) (bins - 1));
+            const int index = (int) position;
+            const int next = std::min (index + 1, bins - 1);
+            return env[(size_t) index] + (position - (float) index)
+                        * (env[(size_t) next] - env[(size_t) index]);
+        };
+        double inPower = 0.0;
+        for (int k = 0; k < bins; ++k)
+        {
+            const int owner = peakOwner[(size_t) k];
+            // ピーク周りの窓の形は引き伸ばさず、まとまりのまま移動する。
+            // 帯域番号そのものを倍にすると窓に穴が空き、オクターブで音が消える。
+            const float position = (float) k + trueFreq[(size_t) owner] * (pitchFactor - 1.0f);
+            const int dest = (int) std::lround (position);
+            if (dest < 0 || dest >= bins) continue;
+            const float formantGain = std::clamp (envelopeAt (position / formantFactor)
+                                         / env[(size_t) k], 0.25f, 4.0f);
+            const float magnitude = mag[(size_t) k] * formantGain;
+            const float phase = lastPhase[(size_t) k] + phaseOffset[(size_t) owner];
+            frame[(size_t) dest] += cf (magnitude * std::cos (phase), magnitude * std::sin (phase));
+            inPower += (double) mag[(size_t) k] * mag[(size_t) k];
+        }
+        double outPower = 0.0;
+        for (int k = 0; k < bins; ++k) outPower += std::norm (frame[(size_t) k]);
+        // フォルマントを保つ処理で声量まで大きく変えない。無音の床は持ち上げない。
+        const float gain = (outPower > 1.0e-18 && inPower > 1.0e-18)
+                         ? (float) std::clamp (std::sqrt (inPower / outPower), 0.25, 4.0) : 1.0f;
+        for (int k = 0; k < bins; ++k) frame[(size_t) k] *= gain;
+        frame[0] = cf (frame[0].real(), 0.0f);
+        frame[(size_t)(bins - 1)] = cf (frame[(size_t)(bins - 1)].real(), 0.0f);
         for (int k = 1; k < N - (bins - 1); ++k)
             frame[(size_t)(N - k)] = std::conj (frame[(size_t) k]);
         fft (frame, true);
@@ -269,9 +326,9 @@ private:
         }
     }
 
-    static void smooth (std::vector<float>& v, float a)
+    static void smooth (std::vector<float>& v, int n, float a)
     {
-        const int n = (int) v.size(); const float b = 1.0f - a;
+        const float b = 1.0f - a;
         for (int k = 1; k < n; ++k)    v[(size_t) k] = a * v[(size_t)(k-1)] + b * v[(size_t) k];
         for (int k = n - 2; k >= 0; --k) v[(size_t) k] = a * v[(size_t)(k+1)] + b * v[(size_t) k];
     }
@@ -279,11 +336,17 @@ private:
     int N = 512, hop = 128, bins = 257;
     std::vector<float> win; float winNorm = 1.0f;
     std::vector<float> hist, ola, dryLine;
-    int histPos = 0, olaHead = 0, dryPos = 0, samplesSinceFrame = 0, dryDelay = 384;
+    int histPos = 0, olaHead = 0, dryPos = 0, samplesSinceFrame = 0, dryDelay = 511;
     int maxN = 1024, ovl = 4;                 // v1.9.6: 低遅延モード用
     std::vector<cf> frame;
-    std::vector<float> mag, lastPhase, sumPhase, trueFreq, env, exc, synMag, synFreq, finalMag;
+    std::vector<float> mag, lastPhase, trueFreq, env;
+    std::vector<float> phaseOffset, nextOffset;
+    std::vector<int> peakOwner, nextOwner;
     float pitchFactor = 1.0f, formantFactor = 1.0f, mix = 1.0f;
+    // v2.12.0 無声ガード
+    int    uvMode = 0;
+    float  uvGain = 1.0f, uvTarget = 1.0f, uvAtk = 0.01f, uvRel = 0.005f;
+    double srHz = 48000.0;
 };
 
 } // namespace gz

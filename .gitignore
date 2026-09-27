@@ -1,4 +1,5 @@
 build/
+build_trial/
 installer_output/
 .vs/
 *.user
@@ -10,3 +11,11 @@ tools/dsp_*
 
 # 作業用の置き場（GitHubには上げない）
 _to_delete/
+
+# 整理スクリプトのログ
+整理のログ.txt
+
+# 配布鍵と製品版の作業用成果物はGitへ入れない。
+review/
+release/
+*.private.pem

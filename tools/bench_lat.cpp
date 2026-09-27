@@ -195,6 +195,65 @@ int main()
         CHECK (p99 < 30.0, "99%%点が締切の3割未満 (%.1f%%)", p99);
     }
 
+    // ---- v2.10.0 #73 ゼロ遅延の自己証明 ----
+    // 「はかる」を押したときと同じことをして、出てきた実測値が申告値と合うか見る。
+    // 画面では音声デバイスが要るので確かめられない。ここが唯一の検証場所。
+    std::printf ("#73 ゼロ遅延の自己証明\n");
+    for (int scen = 0; scen < 2; ++scen)
+    {
+        VocalGzzioProcessor proc;
+        setP (proc, "session", 0);
+        const char* name = "出荷状態";
+        int expect = 0;
+        if (scen == 1) { setP (proc, "at_on", 1); setP (proc, "at_amount", 80);
+                         name = "ピッチ補正80"; expect = 768; }
+
+        proc.prepareToPlay (sr, block);
+        juce::AudioBuffer<float> buf (2, block);
+        juce::MidiBuffer midi;
+        Voice v; v.sr = sr;
+        for (int b = 0; b < (int) (2.0 * sr / block); ++b)   // 検出器を起こす
+        {
+            float* L = buf.getWritePointer (0); float* R = buf.getWritePointer (1);
+            for (int n = 0; n < block; ++n) { const float s = v.next (196.0); L[n] = s; R[n] = s; }
+            proc.processBlock (buf, midi);
+        }
+
+        proc.requestLatencySelfTest();
+        int guard = 0;
+        double loudest = 0.0;
+        while (proc.isSelfTestRunning() && guard++ < (int) (3.0 * sr / block))
+        {
+            float* L = buf.getWritePointer (0); float* R = buf.getWritePointer (1);
+            for (int n = 0; n < block; ++n) { const float s = v.next (196.0); L[n] = s; R[n] = s; }
+            proc.processBlock (buf, midi);
+            for (int n = 0; n < block; ++n)
+                loudest = juce::jmax (loudest, (double) std::abs (buf.getReadPointer (0)[n]));
+        }
+        const int measured = proc.getSelfTestMeasured();
+        std::printf ("  %s: 申告 %d / 自己証明の実測 %d\n",
+                     name, proc.getLatencySamples(), measured);
+        CHECK (! proc.isSelfTestRunning(), "測り終わって自動で止まる");
+        CHECK (measured >= 0 && std::abs (measured - expect) <= 256,
+               "実測が想定どおり (%d, 想定%d)", measured, expect);
+        // 測っている間は耳に何も届かないこと（出力が消えていること）
+        CHECK (loudest < 1.0e-6, "測定中の出力は無音 (最大 %.3g)", loudest);
+    }
+    std::printf ("\n");
+
+    // ---- v2.10.0 #74 手がかりの書き出し ----
+    {
+        VocalGzzioProcessor proc;
+        proc.prepareToPlay (sr, block);
+        const auto txt = proc.buildReportText();
+        std::printf ("#74 手がかりの書き出し: %d 文字\n", txt.length());
+        CHECK (txt.contains (JucePlugin_VersionString), "版が入っている");
+        CHECK (txt.contains (juce::String::fromUTF8 ("\xe9\x80\x81\xe4\xbf\xa1")),
+               "「送信」の説明が入っている");
+        CHECK (txt.contains ("PARAMS"), "いまの設定が入っている");
+        std::printf ("\n");
+    }
+
     std::printf (gFail ? "== %d 件 FAIL ==\n" : "== 全テスト PASS ==\n", gFail);
     return gFail ? 1 : 0;
 }

@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include <initializer_list>
+
 // Preset definition tables for VocalGzzio v1.3.0.
 // Generated data: names/descriptions are UTF-8 escaped Japanese strings.
 // Voice presets own compressor + tone character, mic presets own the
@@ -8,6 +10,101 @@
 
 namespace gzzio
 {
+// 「声／マイク／EQ」の旧表は保存済みの選択番号との互換用に残す。
+// 主画面では下記の目的別仕上がりを使う。プリセット選択時だけ変更し、
+// プロジェクトを開いたことを理由に既存の音を作り替えない。
+struct FinishPresetDef
+{
+    const char* name;
+    const char* nameEn;
+    const char* desc;
+    const char* descEn;
+    float lowcut, mud, harsh, presence, air, warmth;
+    float peaks, level, attack, release, deess, sustain, consonants;
+    int reverbType;
+    float reverb, size, delay, delayMs, feedback, duck;
+};
+
+inline constexpr FinishPresetDef kFinishPresets[] =
+{
+    { "自然に整える", "Natural",
+      "声や楽器の抑揚を残して、低い振動と小さな音量差を整えます。響きは短く控えめ。まず原音に近い仕上がりから始めたいときに。",
+      "Keeps the expression of your voice or instrument, gently controlling rumble and peaks with a small room. Start here for a natural finish.",
+      75, -1, -0.5f, 0, 0, 0, 12, 10, 24, 180, 15, 0, 0,
+      1, 9, 20, 0, 240, 15, 0 },
+    { "歌詞を前へ", "Vocal Forward",
+      "低いこもりを引いて言葉の輪郭と明るさを足します。大小をそろえ、短い響きで歌を伴奏の前へ。硬く感じたら「明るさ」を下げてください。",
+      "Clears low mids, adds presence and air, and evens out phrases. A short plate keeps the vocal in front of the backing. Reduce brightness if it sounds sharp.",
+      120, -4.5f, -1, 4.5f, 3, 12, 45, 52, 8, 100, 40, 0, 15,
+      2, 15, 35, 0, 240, 15, 30 },
+    { "丸く親密に", "Warm & Intimate",
+      "低音の厚みを残し、耳に当たる高音を丸くします。遅めの音量調整で出だしを残す、近く落ち着いた声。明るすぎる録音や静かな曲に。",
+      "Retains body while softening the upper mids. Slower dynamics preserve the start of each phrase, with a close room for intimate vocals or bright recordings.",
+      65, 0, -4, -2, 0, 32, 20, 34, 25, 220, 30, 8, 0,
+      1, 14, 30, 0, 240, 15, 0 },
+    { "太く力強く", "Dense & Driven",
+      "大きな音を速く受け止め、音量差を強めにそろえて密度を出します。中高音の芯と軽い歪みを足す、ロックや力強い歌の仕上がり。",
+      "Catches loud peaks quickly and reduces the gap between loud and quiet phrases. Adds midrange weight and gentle saturation for dense, driven vocals.",
+      90, -2, -1.5f, 3, 1, 55, 65, 60, 4, 90, 45, 12, 5,
+      2, 10, 20, 0, 240, 15, 40 },
+    { "語りをくっきり", "Speech Focus",
+      "低音の膨らみを削り、言葉の出だしと小さな声をそろえます。残響とやまびこは切り、言葉を近くはっきり届けます。歌では乾いた質感に。",
+      "Reduces low-end buildup and brings quiet words forward. Reverb and delay are off for close, intelligible speech or a deliberately dry vocal.",
+      145, -5, -2, 2.5f, 0, 0, 35, 68, 3, 80, 50, 0, 30,
+      1, 0, 0, 0, 240, 15, 0 },
+    { "広く響かせる", "Wide Ballad",
+      "明るさを少し足し、長いホールと薄いやまびこで余韻を広げます。歌っている間は響きを抑え、語尾から広がるバラード向け。響きが多ければ「残響量」を下げてください。",
+      "Adds a long hall and a quiet echo, opening up the ends of phrases. Ducking keeps the words clear while you sing. Reduce reverb for a closer sound.",
+      90, -2.5f, -1, 1, 3.5f, 10, 28, 28, 18, 180, 28, 0, 0,
+      3, 32, 70, 12, 320, 18, 35 }
+};
+inline constexpr int kNumFinishPresets = (int) (sizeof (kFinishPresets) / sizeof (kFinishPresets[0]));
+
+// setParameter(const char* id, float unnormalisedValue) をUIと検査で共用。
+// 入力音量・ノイズ測定・用途・音程設定・出力音量を保持する。
+// 一方、音色/音量/空間の設定は毎回確定し、直前の補助設定に依存させない。
+// 音程補正やハモリを保ったまま、仕上がりだけを比較できる。
+template <typename SetParameter>
+bool applyFinishPreset (int index, SetParameter&& setParameter)
+{
+    if (index < 0 || index >= kNumFinishPresets) return false;
+    const auto& p = kFinishPresets[index];
+    for (const char* id : { "mod_totonoe", "mod_soroe", "mod_sagyo", "mod_neiro", "mod_hirogari" })
+        setParameter (id, 1.0f);
+    for (const char* id : { "res_amt", "ride_amt", "ring", "br_amt", "emo_amt", "lift_amt",
+                           "robo_mix", "mega_amt", "cho_amt", "doubler", "width", "seq_on",
+                           "crush_on", "ord_eq", "ord_space", "jn_solo" })
+        setParameter (id, 0.0f);
+    setParameter ("mix", 100.0f);
+    setParameter ("ord_deess", 1.0f);
+    setParameter ("ds_on", 1.0f);
+    setParameter ("lowcut", p.lowcut);
+    setParameter ("mud", p.mud);
+    setParameter ("harsh", p.harsh);
+    setParameter ("presence", p.presence);
+    setParameter ("air", p.air);
+    setParameter ("drive", p.warmth);
+    setParameter ("comp1", p.peaks);
+    setParameter ("comp2", p.level);
+    setParameter ("attack", p.attack);
+    setParameter ("release", p.release);
+    setParameter ("deess", p.deess);
+    setParameter ("sustain", p.sustain);
+    setParameter ("cons_amt", p.consonants);
+    setParameter ("rev_type", (float) p.reverbType);
+    setParameter ("revon", p.reverb > 0.0f ? 1.0f : 0.0f);
+    setParameter ("revmix", p.reverb);
+    setParameter ("revsize", p.size);
+    setParameter ("dly_on", p.delay > 0.0f ? 1.0f : 0.0f);
+    setParameter ("delay", p.delay);
+    setParameter ("dly_sync", 0.0f);
+    setParameter ("dly_ms", p.delayMs);
+    setParameter ("dly_fb", p.feedback);
+    setParameter ("dly_hc", 5000.0f);
+    setParameter ("duck", p.duck);
+    return true;
+}
+
 // v1.9.0: name = 日本語表示 / nameEn = ブランドモード(英語UI)表示
 struct VoicePresetDef { const char* name; const char* nameEn; const char* desc; float c1, c2, atk, rel, pres, drv, sus; };
 inline constexpr VoicePresetDef kVoicePresets[] =

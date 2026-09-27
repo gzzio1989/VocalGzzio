@@ -1,10 +1,12 @@
-﻿#pragma once
+#pragma once
 #include <cstdlib>   // GZ_JN test hook
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <vector>
 #include <map>
 #include <atomic>
+#include <mutex>
+#include <array>
 #include "PluginProcessor.h"
 
 //==============================================================================
@@ -17,20 +19,20 @@ namespace Palette
     // v1.7.0: the palette is now MUTABLE so the theme switch (cross-switch)
     // can recolour every card/text/hairline at once. Defaults below are the
     // neutral "watchmaker" dark look; applyTheme() rewrites them per mode.
-    inline juce::Colour bgTop    { 0xff181b21 };   // bg0 (brushed dark steel)
-    inline juce::Colour bgBot    { 0xff0b0d11 };
-    inline juce::Colour panel    { 0xff20242c };   // bg1 (cards, steel plate)
-    inline juce::Colour panel2   { 0xff2a303a };   // bg2 (raised surfaces)
-    inline juce::Colour panelLn  { 0xff3e4552 };   // hairlines / grid
-    inline juce::Colour ink      { 0xffe9edf4 };   // primary text
-    inline juce::Colour inkSoft  { 0xff9ba6b6 };   // secondary text
-    inline juce::Colour yellow   { 0xfff2cf4a };   // butter / polished brass
-    inline juce::Colour yellowDk { 0xffd8b331 };
-    inline juce::Colour green    { 0xff43d492 };   // accent G
-    inline juce::Colour salmon   { 0xffff7a85 };   // accent R (ruby bearings)
-    inline juce::Colour blue     { 0xff6ea8ff };   // accent B
-    inline juce::Colour ice      { 0xff5ce8bc };   // mint: knob arcs / highlights
-    inline juce::Colour track    { 0xff30363f };   // knob/meter track
+    inline juce::Colour bgTop    { 0xff111719 };   // bg0 (brushed dark steel)
+    inline juce::Colour bgBot    { 0xff090d0f };
+    inline juce::Colour panel    { 0xff171e21 };   // bg1 (cards, steel plate)
+    inline juce::Colour panel2   { 0xff20292d };   // bg2 (raised surfaces)
+    inline juce::Colour panelLn  { 0xff344247 };   // hairlines / grid
+    inline juce::Colour ink      { 0xfff0f3ee };   // primary text
+    inline juce::Colour inkSoft  { 0xffa3b1b3 };   // secondary text
+    inline juce::Colour yellow   { 0xffd4f87b };   // butter / polished brass
+    inline juce::Colour yellowDk { 0xffb5d45f };
+    inline juce::Colour green    { 0xff85dcc4 };   // accent G
+    inline juce::Colour salmon   { 0xffff8b99 };   // accent R (ruby bearings)
+    inline juce::Colour blue     { 0xffb6aff8 };   // accent B
+    inline juce::Colour ice      { 0xffd4f87b };   // mint: knob arcs / highlights
+    inline juce::Colour track    { 0xff303c40 };   // knob/meter track
     inline juce::Colour badge    { 0xfffdfcf7 };   // paper badge for the mascot
 
     // mode: 1 = yuru-kawa (soft pastel, light cards), else neutral (dark)
@@ -86,6 +88,28 @@ namespace Palette
             ice      = juce::Colour (0xff8fd8c4);   // soft mint arcs/highlights
             track    = juce::Colour (0xffe6dfd0);   // light knob/meter track
             badge    = juce::Colour (0xfffffdf8);
+        }
+        else if (mode == 8)   // v2.11.0 ゆるふわ・よる: 夜でも目が痛くならない暗いパステル
+        {
+            // 「ふつう(0)」の青灰ダークとは別物。ゆるふわの暖かさを残したまま
+            // 明度だけ落とした「月あかりの子ども部屋」。差し色は昼より彩度を
+            // 落としてある(暗い下地では同じ彩度でも眩しく感じるため)。
+            // 文字色のコントラストは全ペア 5.9:1 以上で実測ずみ(WCAG AA)。
+            bgTop    = juce::Colour (0xff221d2e);   // 夕闇のインディゴ
+            bgBot    = juce::Colour (0xff15111f);
+            panel    = juce::Colour (0xff2b2439);   // 暗いプラムのカード
+            panel2   = juce::Colour (0xff342a45);   // ひとつ上の面(ヒーロー帯)
+            panelLn  = juce::Colour (0xff4a3f60);
+            ink      = juce::Colour (0xfff2ece1);   // 月あかりのクリーム(暖色寄り)
+            inkSoft  = juce::Colour (0xffb3a8bd);
+            yellow   = juce::Colour (0xfff0d38a);   // 昼より落とした月バター
+            yellowDk = juce::Colour (0xffd9b96a);
+            green    = juce::Colour (0xff86d9bd);
+            salmon   = juce::Colour (0xfff0a1b4);
+            blue     = juce::Colour (0xffa7bdf0);
+            ice      = juce::Colour (0xff8fdccb);
+            track    = juce::Colour (0xff3a3049);
+            badge    = juce::Colour (0xfff6f1ea);
         }
         else if (mode == 2)   // 自然（四季・癒し）: 明るい緑/土のやすらぎ配色
         {
@@ -163,29 +187,60 @@ namespace Palette
         }
         else
         {
-            bgTop    = juce::Colour (0xff181b21);
-            bgBot    = juce::Colour (0xff0b0d11);
-            panel    = juce::Colour (0xff20242c);
-            panel2   = juce::Colour (0xff2a303a);
-            panelLn  = juce::Colour (0xff3e4552);
-            ink      = juce::Colour (0xffe9edf4);
-            inkSoft  = juce::Colour (0xff9ba6b6);
-            yellow   = juce::Colour (0xfff2cf4a);
-            yellowDk = juce::Colour (0xffd8b331);
-            green    = juce::Colour (0xff43d492);
-            salmon   = juce::Colour (0xffff7a85);
-            blue     = juce::Colour (0xff6ea8ff);
-            ice      = juce::Colour (0xff5ce8bc);
-            track    = juce::Colour (0xff30363f);
+            bgTop    = juce::Colour (0xff111719);
+            bgBot    = juce::Colour (0xff090d0f);
+            panel    = juce::Colour (0xff171e21);
+            panel2   = juce::Colour (0xff20292d);
+            panelLn  = juce::Colour (0xff344247);
+            ink      = juce::Colour (0xfff0f3ee);
+            inkSoft  = juce::Colour (0xffa3b1b3);
+            yellow   = juce::Colour (0xffd4f87b);
+            yellowDk = juce::Colour (0xffb5d45f);
+            green    = juce::Colour (0xff85dcc4);
+            salmon   = juce::Colour (0xffff8b99);
+            blue     = juce::Colour (0xffb6aff8);
+            ice      = juce::Colour (0xffd4f87b);
+            track    = juce::Colour (0xff303c40);
             badge    = juce::Colour (0xfffdfcf7);
         }
     }
 }
 
 //==============================================================================
+// ============================================================================
+//  文字の大きさを「実際に描いたときに」測るための覗き窓（設計書§4 文字の規律）
+//  ------------------------------------------------------------------------
+//  ★検査のときだけ有効にする作りにはしない。検査と本体で関数の中身が変わると、
+//   同じ名前で別物が2つある状態（ODR違反）になって、嘘の結果が出る。
+//   常に入れておき、on() が false のときは atomic の読み1回で終わる。
+//   フォントを作るのは描画のときだけなので、音には一切関係しない。
+struct FontProbe
+{
+    static std::atomic<bool>&    on()   { static std::atomic<bool> b { false }; return b; }
+    static std::mutex&           mtx()  { static std::mutex m; return m; }
+    static std::vector<float>&   seen() { static std::vector<float> v; return v; }
+    static void note (float h)
+    {
+        if (! on().load (std::memory_order_relaxed)) return;
+        const std::lock_guard<std::mutex> lock (mtx());
+        seen().push_back (h);
+    }
+};
+
 class GzzioLnF : public juce::LookAndFeel_V4
 {
 public:
+    // v3.1 §4-0「押す物は36px以上・スライダーつまみ42px」。
+    //  JUCE の既定は高さの半分ぶんしかないので、横スライダーのつまみが
+    //  32pxの器で16pxになる。指でもマウスでも掴みにくいので、ここで広げる。
+    //  縦横どちらの線形スライダーにも効く（回すツマミは自前描画なので無関係）。
+    int getSliderThumbRadius (juce::Slider& s) override
+    {
+        if (s.isBar()) return juce::LookAndFeel_V4::getSliderThumbRadius (s);
+        const int box = s.isHorizontal() ? s.getHeight() : s.getWidth();
+        return juce::jlimit (7, 21, juce::roundToInt (box * 0.62f));
+    }
+
     GzzioLnF()
     {
         // v1.6.1: unit gear silhouettes for the watch-movement knob faces.
@@ -310,6 +365,7 @@ public:
     // render Japanese crisply; fall back gracefully elsewhere.
     static juce::Font uiFont (float height, bool bold)
     {
+        FontProbe::note (height);
         if (s_useKawaii && s_kawaiiFace != nullptr)
             return juce::Font (s_kawaiiFace).withHeight (height);  // rounded font (single weight)
 
@@ -337,14 +393,39 @@ public:
         return uiFont (base * fontScale, bold);
     }
 
+    // v2.12.0 ★「文字が省略されるのは論外」への、最後の砦。
+    //  箱に入らないとき JUCE は 横に潰す → それでも無理なら「…」で切る、
+    //  という順で動く。切られると**名前そのものが消える**。
+    //  そこで、切る前に**その文字だけ小さくして、必ず全部出す**。
+    //  文字を大きくした結果ツマミの名前が消えるくらいなら、その名前だけ
+    //  少し小さいほうがいい（それでも 100% のときより大きい）。
+    //  下限は 0.62 倍。ここから先は横の潰し(最大0.7)に任せる＝実効 0.43 倍まで
+    //  入るので、日本語5文字が59pxの枠でも「…」にならない。
+    //  下限は「絶対に読める大きさ」= 12px。ここを下回るなら箱のほうが間違って
+    //  いるので、tools/ui_fit がそれを **小さすぎ** として報告する。
+    //  §4 文字の規律: 100%表示時に 14px を下回らせない。
+    //  ★ここが 12.0f だったせいで、箱に入らない文字が黙って 12px まで縮んでいた。
+    //   「入らないなら縮める」は、読めなくなる方向に必ず倒れる。
+    static constexpr float kFitMinPx = 14.0f;
+    static juce::Font fitFont (juce::Font f, const juce::String& t, int w)
+    {
+        if (t.isEmpty() || w <= 0) return f;
+        const int need = juce::GlyphArrangement::getStringWidthInt (f, t);
+        if (need <= w) return f;
+        //  縮めた結果も測る。ここが「気づかないうちに小さくなる」いちばんの入口。
+        const float shrunk = juce::jmax (kFitMinPx, f.getHeight() * (float) w / (float) need);
+        FontProbe::note (shrunk);
+        return f.withHeight (shrunk);
+    }
+
     void drawLabel (juce::Graphics& g, juce::Label& l) override
     {
         if (l.isBeingEdited()) return;
-        const auto f = getLabelFont (l);
+        const auto area = l.getBorderSize().subtractedFrom (l.getLocalBounds());
+        const auto f = fitFont (getLabelFont (l), l.getText(), area.getWidth());
         g.setColour (l.findColour (juce::Label::textColourId)
                          .withMultipliedAlpha (l.isEnabled() ? 1.0f : 0.5f));
         g.setFont (f);
-        const auto area = l.getBorderSize().subtractedFrom (l.getLocalBounds());
         g.drawFittedText (l.getText(), area, l.getJustificationType(),
                           juce::jmax (1, (int) ((float) area.getHeight() / f.getHeight())),
                           l.getMinimumHorizontalScale());
@@ -435,16 +516,23 @@ public:
                            (bool) sl.getProperties().getWithDefault ("wideGlass", false));
             return;
         }
-        // v1.6.1 watch-movement look. Load discipline:
-        //  - the dial (plate/bridge/rubies/brass rim) is a CACHED image -> 1 blit
-        //  - the two meshed gears rotate with the VALUE, so they only ever move
-        //    while the knob is being turned (which repaints it anyway)
-        //  - nothing here adds a timer; an idle knob costs zero repaints
-        auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height).reduced (4.0f);
+        // 目盛り・値の弧・指針だけで読めるダイヤル。待機中のアニメーションは不要。
+        auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height).reduced (8.0f);
         const float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
         const auto  c      = bounds.getCentre();
         const float angle  = startAngle + pos * (endAngle - startAngle);
-        const float ring   = juce::jmax (4.5f, radius * 0.13f);
+        const float ring   = juce::jmax (3.0f, radius * 0.055f);
+        const int group = (int) sl.getProperties().getWithDefault ("signalGroup", 2);
+        const auto groupAccent = group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc;
+        const auto accent = sl.isEnabled() ? groupAccent : Palette::inkSoft;
+        for (int tick = 0; tick <= 20; ++tick)
+        {
+            const float a = startAngle + (endAngle - startAngle) * (float) tick / 20.0f;
+            const float inner = radius + 4.0f, outer = radius + (tick % 5 == 0 ? 8.0f : 6.0f);
+            g.setColour (Palette::inkSoft.withAlpha (tick % 5 == 0 ? 0.55f : 0.22f));
+            g.drawLine (c.x + inner * std::sin (a), c.y - inner * std::cos (a),
+                        c.x + outer * std::sin (a), c.y - outer * std::cos (a), 1.0f);
+        }
 
         juce::Path track;
         track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
@@ -453,53 +541,28 @@ public:
 
         juce::Path value;
         value.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
-        g.setColour (themeArc);
+        g.setColour (accent);
         g.strokePath (value, juce::PathStrokeType (ring, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.fillEllipse (c.x + radius * std::sin (angle) - ring * 0.55f,
                        c.y - radius * std::cos (angle) - ring * 0.55f, ring * 1.1f, ring * 1.1f);
 
-        // static movement face (cached per size)
         const float kr = radius - ring - 3.0f;
         if (kr < 5.0f)
             return;
-        const int facePx = juce::roundToInt (kr * 2.0f);
-        g.drawImage (getMovementFace (facePx),
-                     juce::Rectangle<float> (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f));
-
-        // meshed gears, geared to the value: turning the knob drives the train
-        // (big brass wheel and mint pinion counter-rotate at 12:8)
-        {
-            const float turnsBig = pos * juce::MathConstants<float>::twoPi * 1.5f;
-            const float turnsSml = -turnsBig * (12.0f / 8.0f) + 0.35f;
-            const float rB = kr * 0.52f, rS = kr * 0.30f;
-            const auto  tB = juce::AffineTransform::scale (rB).rotated (turnsBig)
-                                 .translated (c.x - kr * 0.14f, c.y + kr * 0.16f);
-            const auto  tS = juce::AffineTransform::scale (rS).rotated (turnsSml)
-                                 .translated (c.x + kr * 0.44f, c.y - kr * 0.30f);
-            g.setColour (Palette::yellowDk);
-            g.fillPath (uGearBig, tB);
-            g.setColour (Palette::panelLn.darker (0.2f));
-            g.strokePath (uGearBig, juce::PathStrokeType (1.0f), tB);
-            g.setColour (themeArc.withAlpha (0.92f));
-            g.fillPath (uGearSmall, tS);
-            g.setColour (Palette::panelLn.darker (0.2f));
-            g.strokePath (uGearSmall, juce::PathStrokeType (1.0f), tS);
-            // gear axle rubies
-            g.setColour (Palette::salmon);
-            g.fillEllipse (c.x - kr * 0.14f - kr * 0.05f, c.y + kr * 0.16f - kr * 0.05f, kr * 0.10f, kr * 0.10f);
-            g.fillEllipse (c.x + kr * 0.44f - kr * 0.04f, c.y - kr * 0.30f - kr * 0.04f, kr * 0.08f, kr * 0.08f);
-        }
-
-        // hand on top: slim polished pointer with a mint jewel cap
-        const float pOut = kr * 0.92f, pIn = kr * 0.30f;
+        g.setColour (juce::Colours::black.withAlpha (0.22f));
+        g.fillEllipse (c.x - kr, c.y - kr + 3.0f, kr * 2.0f, kr * 2.0f);
+        g.setGradientFill (juce::ColourGradient (Palette::panel2.brighter (0.10f), c.x, c.y - kr,
+                                                 Palette::panel, c.x, c.y + kr, false));
+        g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+        g.setColour (Palette::panelLn);
+        g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 1.0f);
+        const float pOut = kr * 0.84f, pIn = kr * 0.57f;
         juce::Path pointer;
         pointer.startNewSubPath (c.x + pIn  * std::sin (angle), c.y - pIn  * std::cos (angle));
         pointer.lineTo          (c.x + pOut * std::sin (angle), c.y - pOut * std::cos (angle));
-        g.setColour (Palette::ink);
-        g.strokePath (pointer, juce::PathStrokeType (juce::jmax (2.6f, kr * 0.11f),
+        g.setColour (accent);
+        g.strokePath (pointer, juce::PathStrokeType (juce::jmax (2.6f, kr * 0.06f),
                                                      juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        g.setColour (themeArc.withAlpha (0.95f));
-        g.fillEllipse (c.x - kr * 0.10f, c.y - kr * 0.10f, kr * 0.20f, kr * 0.20f);
     }
 
     // ================= v1.7.0 yuru-kawa: juice-glass knobs =================
@@ -652,20 +715,94 @@ public:
     }
     // =======================================================================
 
+    // v2.12.0 ★「オンオフがぱっと見わからない」への直し。
+    //
+    //  今までは ON/OFF の差が**色の濃さだけ**だった。しかも押すだけのボタン
+    //  （点検・SAVE 等）とスイッチ（ボイス変換・ピッチ補正 等）が同じ形なので、
+    //  「どれがスイッチなのか」すら見分けられなかった。
+    //
+    //  直し: スイッチにだけ**ランプ**を付ける。
+    //    ON  … 塗りつぶした丸 + 白いふち + 太い枠 + 濃い地
+    //    OFF … 中抜きの輪っか + 細い枠 + 素の地
+    //  形がちがうので、色の濃淡が分からない人・小さい画面でも判別できる。
+    //  押すだけのボタンにはランプが付かない＝「これは切り替えではない」と分かる。
+    static constexpr float kLampBox = 20.0f;   // ランプに使う左側の幅
+
+    static float lampWidthFor (const juce::Button& b) noexcept
+    {
+        return b.getClickingTogglesState() ? kLampBox : 0.0f;
+    }
+
     void drawButtonBackground (juce::Graphics& g, juce::Button& b, const juce::Colour& bg,
                                bool over, bool down) override
     {
         // v1.5.0: full pill buttons (radius = height/2) for the friendly brand look
         auto r = b.getLocalBounds().toFloat().reduced (0.5f);
-        const float rad = r.getHeight() * 0.5f;
-        auto col = b.getToggleState() ? b.findColour (juce::TextButton::buttonOnColourId)
-                                      : bg;
+        const float rad = s_useKawaii ? r.getHeight() * 0.5f : 7.0f;
+        const bool  on  = b.getToggleState();
+        const bool  sw  = b.getClickingTogglesState();
+
+        auto col = on ? b.findColour (juce::TextButton::buttonOnColourId) : bg;
+        // ★ON の地が薄すぎると OFF と区別できない。呼び出し側が
+        //   withAlpha(0.16f) のような淡い色を渡していても、ここで最低限まで濃くする。
+        if (on && col.getFloatAlpha() < 0.85f)
+            col = col.withAlpha (juce::jmax (0.85f, col.getFloatAlpha()));
         if (down) col = col.brighter (0.12f);
         else if (over) col = col.brighter (0.06f);
         g.setColour (col);
         g.fillRoundedRectangle (r, rad);
-        g.setColour (b.getToggleState() ? col.brighter (0.25f) : Palette::panelLn);
-        g.drawRoundedRectangle (r, rad, b.getToggleState() ? 1.6f : 1.2f);
+        g.setColour (on ? col.darker (0.35f) : Palette::panelLn);
+        g.drawRoundedRectangle (r, rad, on ? 2.2f : 1.2f);
+
+        if (! sw) return;                       // 押すだけのボタンにはランプを付けない
+
+        // ---- ランプ ----
+        const float d  = juce::jmin (11.0f, r.getHeight() - 8.0f);
+        const float cx = r.getX() + 4.0f + kLampBox * 0.5f;
+        const float cy = r.getCentreY();
+        juce::Rectangle<float> lamp (cx - d * 0.5f, cy - d * 0.5f, d, d);
+        if (on)
+        {
+            g.setColour (Palette::readableOn (col));            // 地の上で必ず見える色
+            g.fillEllipse (lamp);
+            g.setColour (col.contrasting (0.85f).withAlpha (0.55f));
+            g.drawEllipse (lamp.expanded (1.6f), 1.4f);         // 光っている輪
+        }
+        else
+        {
+            g.setColour (Palette::inkSoft.withAlpha (0.55f));
+            g.drawEllipse (lamp, 1.8f);                          // 中抜き＝消えている
+        }
+    }
+
+    // v2.12.0 ランプのぶんだけ文字を右へ寄せる。
+    // ★JUCE の既定はボタンの中央に置くので、ランプと重なって読めなくなる。
+    void drawButtonText (juce::Graphics& g, juce::TextButton& b,
+                         bool /*over*/, bool /*down*/) override
+    {
+        auto area = b.getLocalBounds()
+                     .withTrimmedLeft  (juce::roundToInt (lampWidthFor (b)) + 4)
+                     .withTrimmedRight (4);
+        // ★縮小許容は 0.92 まで。これ以上詰めると「…」で省略されてしまう。
+        //   入り切らないのは箱が狭いということなので、まず箱のほうを直す
+        //   (buttonWidthFor で実測する)。それでも狭いときの最後の砦が fitFont で、
+        //   文字だけ小さくして「…」にはしない。
+        const auto f = fitFont (getTextButtonFont (b, b.getHeight()),
+                                b.getButtonText(), area.getWidth());
+        g.setFont (f);
+        g.setColour ((b.getToggleState() ? Palette::readableOn (b.findColour (juce::TextButton::buttonOnColourId))
+                                        : b.findColour (juce::TextButton::textColourOffId))
+                       .withMultipliedAlpha (b.isEnabled() ? 1.0f : 0.5f));
+        g.drawFittedText (b.getButtonText(), area, juce::Justification::centred, 1, 0.92f);
+    }
+
+    // v2.12.0 「箱が文字に合わせる」ための実測。ボタンの中身が必ず収まる幅を返す。
+    //  文字サイズを上げたときに「Ba…」「トー…」と省略されるのを、**寸法の側**で断つ。
+    int buttonWidthFor (juce::TextButton& b, int h, int extraPad = 26)
+    {
+        const int textW = juce::GlyphArrangement::getStringWidthInt (getTextButtonFont (b, h),
+                                                                    b.getButtonText());
+        return textW + extraPad + (b.getClickingTogglesState() ? (int) kLampBox + 4 : 0);
     }
 
     // ---- Larger, wrapped tooltips (fixes "description text too small") ----
@@ -735,10 +872,16 @@ public:
 private:
     void timerCallback() override;
     void analyse();
+    void clearPitchDisplay();
+    int controlHeight() const;
 
     VocalGzzioProcessor& proc;
     std::vector<float>   buffer;
-    juce::ComboBox       refPitchBox;
+    std::vector<float>   analysisBuffer;
+    juce::ComboBox       refPitchBox, tunerModeBox, guitarStringBox;
+    bool guitarMode { false }, rangeToolsVisible { false };
+    int guitarString { 0 }, detectedString { 0 }, displayMidi { -1 };
+    inline static constexpr int guitarNotes[6] { 40, 45, 50, 55, 59, 64 };
 
     juce::String noteName { "--" };
     float cents { 0 }, freq { 0 };
@@ -786,10 +929,19 @@ public:
     // v1.9.1: 言語切替でチューナー内のボタン文言も貼り替える（従来は生成時のみで日本語のまま）
     void refreshLanguage();
     bool isRailMode() const   { return railMode; }
+    void setGuitarMode (bool enabled);
+    bool isGuitarMode() const { return guitarMode; }
+    void setGuitarString (int stringChoice);
+   #if VOCALGZZIO_TESTING
+    float measureForTest() { analyse(); return hasPitch ? freq : 0.0f; }
+    int detectedStringForTest() const { return detectedString; }
+    float centsForTest() const { return cents; }
+   #endif
     void setRangeToolsVisible (bool v)   // note-rail toggle + range check (advanced only)
     {
-        railToggle .setVisible (v);
-        rangeButton.setVisible (v);
+        rangeToolsVisible = v;
+        railToggle .setVisible (v && ! guitarMode);
+        rangeButton.setVisible (v && ! guitarMode);
         if (! v) { railMode = false; railToggle.setToggleState (false, juce::dontSendNotification);
                    if (rangeChecking) stopRange(); }
         resized();
@@ -931,23 +1083,19 @@ public:
         auto r = getLocalBounds().toFloat();
         const auto c   = r.getCentre();
         const float rad = juce::jmin (r.getWidth(), r.getHeight()) * 0.5f - 1.0f;
-        const float ir  = rad * 0.72f;   // v1.6.1: bigger lamp body (was 0.60)
-        if (getToggleState())
-        {
-            g.setColour (Palette::salmon.withAlpha (0.30f));   // glow halo
-            g.fillEllipse (c.x - rad, c.y - rad, rad * 2.0f, rad * 2.0f);
-            g.setColour (over ? Palette::salmon.brighter (0.25f) : Palette::salmon);
-            g.fillEllipse (c.x - ir, c.y - ir, ir * 2.0f, ir * 2.0f);
-            g.setColour (juce::Colours::white.withAlpha (0.7f));   // specular dot
-            g.fillEllipse (c.x - ir * 0.4f, c.y - ir * 0.6f, ir * 0.55f, ir * 0.45f);
-        }
-        else
-        {
-            g.setColour (juce::Colour (0xff141920));
-            g.fillEllipse (c.x - ir, c.y - ir, ir * 2.0f, ir * 2.0f);
-            g.setColour (over ? Palette::inkSoft : Palette::panelLn);
-            g.drawEllipse (c.x - ir, c.y - ir, ir * 2.0f, ir * 2.0f, 1.2f);
-        }
+        const float ir = rad * 0.54f;
+        const auto accent = getToggleState() ? Palette::green : Palette::inkSoft;
+        g.setColour (Palette::panel);
+        g.fillEllipse (r.reduced (0.5f));
+        g.setColour (accent.withAlpha (over ? 0.40f : 0.20f));
+        g.fillEllipse (r.reduced (0.5f));
+        g.setColour (accent);
+        juce::Path power;
+        power.addCentredArc (c.x, c.y, ir, ir, 0.0f, 0.65f,
+                             juce::MathConstants<float>::twoPi - 0.65f, true);
+        g.strokePath (power, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved,
+                                                   juce::PathStrokeType::rounded));
+        g.drawLine (c.x, c.y - ir - 1.0f, c.x, c.y, 1.6f);
     }
 };
 
@@ -968,6 +1116,7 @@ public:
     bool paint (juce::Graphics& g)
     {
         if (mode == 1) { paintYuruKawa (g); return true; }
+        if (mode == 8) { paintYuruNight (g); return true; }   // v2.11.0 ゆるふわ・よる
         if (mode == 2) { paintNature   (g); return true; }
         if (mode == 3) { paintBrand    (g); return true; }
         if (mode == 4) { paintAurora   (g); return true; }
@@ -1006,6 +1155,79 @@ private:
         }
         // NB: the mascot is drawn big & translucent in the FOREGROUND (end of
         // Content::paint) so it reads as a "see-through" hero over the UI.
+    }
+
+    // v2.11.0 ゆるふわ・よる。昼版と同じく**完全に静止画**（アニメなし）。
+    // 夜中に配信・録音する人が、クリーム地のまぶしさで目をやられないための版。
+    // 星は乱数を使わず固定の漸化式で置くので、毎回まったく同じ絵になる
+    // （＝再描画のたびに星がチラつかない。確保も一切しない）。
+    void paintYuruNight (juce::Graphics& g)
+    {
+        auto r = area.toFloat();
+
+        // 夜空。上ほど深く、下は街あかりでほんの少し暖かい
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff1b1729), r.getX(), r.getY(),
+                                                 juce::Colour (0xff241d31), r.getX(), r.getBottom(),
+                                                 false));
+        g.fillRect (r);
+
+        // 星。奥(小さく暗い)から手前(大きく明るい)へ3層
+        {
+            juce::uint32 s = 0x9e3779b9u;                     // 固定の種
+            auto rnd = [&s] { s = s * 1664525u + 1013904223u; return (float) (s >> 8) / 16777216.0f; };
+            for (int layer = 0; layer < 3; ++layer)
+            {
+                const int   n   = 34 - layer * 8;
+                const float dia = 1.1f + (float) layer * 0.7f;
+                g.setColour (juce::Colours::white.withAlpha (0.10f + 0.09f * (float) layer));
+                for (int i = 0; i < n; ++i)
+                {
+                    const float x = r.getX() + r.getWidth()  * rnd();
+                    const float y = r.getY() + r.getHeight() * rnd() * 0.82f;   // 下は空けておく
+                    g.fillEllipse (x, y, dia, dia);
+                }
+            }
+        }
+
+        // お月さま（右上）。かさ(halo)を先に敷いて、その上に丸を置く
+        {
+            const float mr = juce::jmax (r.getWidth(), r.getHeight()) * 0.052f;
+            const float cx = r.getX() + r.getWidth() * 0.895f;
+            const float cy = r.getY() + r.getHeight() * 0.155f;
+            const float hr = mr * 4.2f;
+            juce::ColourGradient halo (juce::Colour (0x3af3e6b8), cx, cy,
+                                       juce::Colour (0x00f3e6b8), cx + hr, cy, true);
+            g.setGradientFill (halo);
+            g.fillEllipse (cx - hr, cy - hr, hr * 2.0f, hr * 2.0f);
+            g.setColour (juce::Colour (0xfff5ead0));
+            g.fillEllipse (cx - mr, cy - mr, mr * 2.0f, mr * 2.0f);
+            // うっすらクレーター（べた塗りの円に見えないように）
+            g.setColour (juce::Colour (0x18a08a5a));
+            g.fillEllipse (cx - mr * 0.42f, cy - mr * 0.30f, mr * 0.44f, mr * 0.44f);
+            g.fillEllipse (cx + mr * 0.10f, cy + mr * 0.22f, mr * 0.30f, mr * 0.30f);
+        }
+
+        // 昼版と同じ水彩のにじみ。夜なので色を寄せて、alpha もぐっと落とす
+        struct Bloom { float x, y, rad; juce::uint32 col; };
+        static const Bloom blooms[] = {
+            { 0.12f, 0.15f, 0.34f, 0x1c6fb9a2 },   // 夜のミント
+            { 0.82f, 0.10f, 0.30f, 0x18c07a92 },   // 夜のさくら
+            { 0.92f, 0.60f, 0.40f, 0x186f8ec0 },   // 夜の空色
+            { 0.28f, 0.84f, 0.34f, 0x14c0a45a },   // 夜のバター
+            { 0.55f, 0.42f, 0.40f, 0x12c07a92 },
+            { 0.04f, 0.58f, 0.30f, 0x146fb9a2 }
+        };
+        const float rad = juce::jmax (r.getWidth(), r.getHeight());
+        for (auto& b : blooms)
+        {
+            const float cx = r.getX() + r.getWidth()  * b.x;
+            const float cy = r.getY() + r.getHeight() * b.y;
+            const float rr = rad * b.rad;
+            juce::Colour c (b.col);
+            juce::ColourGradient grad (c, cx, cy, c.withAlpha (0.0f), cx + rr, cy, true);
+            g.setGradientFill (grad);
+            g.fillEllipse (cx - rr, cy - rr, rr * 2.0f, rr * 2.0f);
+        }
     }
 
     // ==================================================================
@@ -1628,13 +1850,35 @@ public:
                 drawMonoCanvas (cg, rz, 0.08f);
                 drawWeaveBand (cg, { rz.getX(), rz.getY(),              rz.getWidth(), 14.0f }, 0.55f);
                 drawWeaveBand (cg, { rz.getX(), rz.getBottom() - 14.0f, rz.getWidth(), 14.0f }, 0.55f);
-                const float m = 24.0f, sm = 19.0f;
-                drawMedallion (cg, rz.getX() + m,      rz.getY() + m,      sm, 0.55f);
-                drawMedallion (cg, rz.getRight() - m,  rz.getY() + m,      sm, 0.55f);
+                // v2.12.0 ★上2つの飾りメダルを、ヘッダ(72px)の**下**へ移した。
+                //  以前は右上のメダルがテーマチップ帯の下敷きになって見えなかった
+                //  だけで、チップを外した今は「文字・見た目」ボタンの文字の上に
+                //  重なって出てしまう。飾りが操作の上に乗るのは順序が逆。
+                const float m = 24.0f, sm = 19.0f, hdr = 72.0f;
+                drawMedallion (cg, rz.getX() + m,      rz.getY() + hdr + m, sm, 0.55f);
+                drawMedallion (cg, rz.getRight() - m,  rz.getY() + hdr + m, sm, 0.55f);
                 drawMedallion (cg, rz.getX() + m,      rz.getBottom() - m, sm, 0.55f);
                 drawMedallion (cg, rz.getRight() - m,  rz.getBottom() - m, sm, 0.55f);
             }
             g.drawImageAt (brandFgCache, area.getX(), area.getY());
+        }
+        else if (mode == 8)
+        {
+            // v2.11.0 ゆるふわ・よる。カードが画面のほとんどを覆うので、背景に
+            // 星を置いても見えない。ごく薄い星だけをパネルの**上に**散らす。
+            // ・完全に静止（またたかせない）… 目の休まらない画面にしないため
+            // ・alpha 0.05〜0.09 … 文字の読みやすさを1ミリも削らない濃さ
+            // ・確保なし・毎回同じ位置（固定の漸化式）
+            juce::uint32 s = 0x2545f491u;
+            auto rnd = [&s] { s = s * 1664525u + 1013904223u; return (float) (s >> 8) / 16777216.0f; };
+            for (int i = 0; i < 46; ++i)
+            {
+                const float x  = r.getX() + r.getWidth()  * rnd();
+                const float y  = r.getY() + r.getHeight() * rnd();
+                const float sz = 1.2f + rnd() * 1.5f;
+                g.setColour (juce::Colours::white.withAlpha (0.05f + rnd() * 0.04f));
+                g.fillEllipse (x, y, sz, sz);
+            }
         }
         else if (mode == 4)
         {
@@ -1661,6 +1905,212 @@ public:
     juce::Image          mascot;
     juce::Rectangle<int> area;
     int                  mode { 0 };
+};
+
+//==============================================================================
+// v3.0-c 「音のとおり道」— 画面の左に**常時**出るカードの列
+//
+//  設計書 §4「骨格（案A）」の左1/4。前回は吹き出しの中に作って中身だけ先に
+//  固めた。今回それを常設の列へ移し、ミニメーターを足す。
+//
+//  カード1枚 = 番号 / 名前 / ひとこと / はたらき量 / ON-OFF。
+//
+//  文字の規律（設計書 §4-0）をそのまま持ち込む:
+//   * 名前17px・ひとこと14px（100%表示のとき）。**14px未満にしない**
+//   * 押す物は高さ30px以上（トグルは 62×30）
+//   * 箱が文字に合わせて広がる。入り切らないときは**折り返す**（省略しない）
+//   * それでも縦に入り切らないときは列ごと**スクロール**する（Viewport）
+// v3.0-c ★メーターの帯は**独立した不透明な子**にする。
+//  理由: カードは下地が透けているので、カードに repaint を頼むと
+//  その席の背景（テーマの絵・マスコット・ガラス）まで描き直される。
+//  実測で 1枚あたり 0.70ms、8枚×20回/秒で **毎秒112ms**（1コアの11%）だった。
+//  不透明な子にすると JUCE は親を描き直さないので、実測 0.003ms まで落ちる。
+class MeterBar : public juce::Component
+{
+public:
+    void paint (juce::Graphics& g) override
+    {
+        if (isOpaque()) g.fillAll (bg);
+        const float mh = (float) getHeight();
+        auto r = getLocalBounds().toFloat();
+        g.setColour (track);
+        g.fillRoundedRectangle (r, mh * 0.5f);
+        if (level > 0.005f)
+        {
+            g.setColour (fill);
+            g.fillRoundedRectangle (r.withWidth (juce::jmax (mh, r.getWidth() * level)), mh * 0.5f);
+        }
+    }
+    void setLevel (float v)
+    {
+        v = juce::jlimit (0.0f, 1.0f, v);
+        if (std::abs (v - level) < 0.02f) return;
+        level = v; repaint();
+    }
+    // bg が不透明なときだけ opaque にできる（OFFのカードは半透明なので不可。
+    // ただしOFFのときメーターは0で止まっているので、速さは要らない）
+    void setColours (juce::Colour background, juce::Colour tr, juce::Colour fl)
+    {
+        bg = background; track = tr; fill = fl;
+        setOpaque (background.isOpaque());
+        repaint();
+    }
+private:
+    float level { 0.0f };
+    juce::Colour bg { juce::Colours::transparentBlack }, track, fill;
+};
+
+class ModuleCard : public juce::Component
+{
+public:
+    // v3.1 §4 endpoint: 0=ふつうの箱 / 1=入(マイクから) / 2=出(しあげ)
+    //  「入」「出」は箱ではないので、スイッチも矢印も持たない。
+    ModuleCard (VocalGzzioProcessor&, int index, int endpoint = 0);
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+    void  setUiScale (float s);
+    void  refreshText();                       // 日本語/英語の切替
+    void  refreshColours();                    // テーマ切替（色は都度取り直す）
+    // v3.0-c 順番の分岐。動かせるカードにだけ矢印を出す（0=出さない / -1=上へ / +1=下へ）
+    void  setMove (int dir, const juce::String& tip);
+    void  setDisplayIndex (int n);             // 表示する番号（実際の順に振り直す）
+    std::function<void()> onMove;
+    int   preferredHeight (int width) const;   // 折り返し後の高さ
+    int   wantedWidth() const;                 // 文字が切れない最小の幅
+    bool  isOn() const { return sw.getToggleState(); }
+    void  setMeter (float v);                  // 0.0〜1.0（はたらき量）
+    // v3.1 §4「1つずつ」: いま見ている1枚。カードの地を押すと選ばれる。
+    //  ★スイッチと矢印は子コンポーネントなので、そこを押しても選択は動かない
+    //   （ON/OFF したいだけなのに画面が切り替わるのを避ける）。
+    void  setSelected (bool s);
+    bool  isSelected() const { return selected; }
+    std::function<void(int)> onSelect;          // 引数はモジュール番号
+
+    std::function<void()> onToggled;
+
+private:
+    juce::String name() const;
+    juce::String note() const;
+    int  noteLines (int width) const;
+    juce::StringArray noteRows (int width) const;   // 日本語は自前で折り返す
+    // 幅が足りないとき（文字を大きくしたとき）は、名前とスイッチを**縦に積む**。
+    // 名前を縮めたり省略したりはしない。
+    bool stacked (int width) const;
+    void updateBarColours();
+
+    // ★毎フレームの文字計測をやめるためのキャッシュ。
+    //  日本語の折り返しは1文字ずつ幅を測るので、20Hz×8枚で回すと
+    //  メッセージスレッドを食い潰す（実際、音が途切れる原因になった）。
+    mutable juce::StringArray cachedRows;
+    mutable juce::String      cachedNote;
+    mutable int   cachedRowsW   { -1 };
+    mutable float cachedRowsSc  { -1.0f };
+    mutable bool  cachedRowsArrow { false };   // 矢印が出入りしたら折り返しも作り直す
+    mutable int   cachedStackW  { -1 };
+    mutable float cachedStackSc { -1.0f };
+    mutable bool  cachedStacked { false };
+    void mouseDown (const juce::MouseEvent&) override;   // v3.1 地を押したら選ぶ
+    bool selected { false };
+    int  endpoint { 0 };            // v3.1 0=箱 / 1=入 / 2=出
+    juce::Rectangle<int> meterRect;   // 帯の席
+    MeterBar bar;                     // 不透明な子。親を描き直させない
+
+    VocalGzzioProcessor& proc;
+    int   id { 0 };
+    int   shown { 0 };          // 画面に出す番号-1（実際の順）
+    int   moveDir { 0 };        // 0/-1/+1
+    float scale { 1.0f };
+    float meter { 0.0f };
+    juce::TextButton sw;
+    std::unique_ptr<juce::ArrowButton> moveBtn;   // ▲▼ はフォントに無いので図形で描く
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> att;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModuleCard)
+};
+
+// 押している「間だけ」効く小さなボタン。TextButton の onClick は離したときに
+// 一度呼ばれるだけなので、押し下げと離しを別々に受け取れるようにする。
+class HoldButton : public juce::TextButton
+{
+public:
+    std::function<void()> onDown, onUp;
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        juce::TextButton::mouseDown (e);
+        held = true; if (onDown) onDown(); repaint();
+    }
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        juce::TextButton::mouseUp (e);
+        if (held) { held = false; if (onUp) onUp(); repaint(); }
+    }
+    // 押したままウィンドウの外へ出て離された場合の取りこぼしを防ぐ
+    void focusLost (FocusChangeType t) override
+    {
+        juce::TextButton::focusLost (t);
+        if (held) { held = false; if (onUp) onUp(); repaint(); }
+    }
+    bool isHeld() const noexcept { return held; }
+private:
+    bool held { false };
+};
+
+class PathRail : public juce::Component
+{
+public:
+    explicit PathRail (VocalGzzioProcessor&);
+    ~PathRail() override;
+
+    void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;   // くらべる中の幕
+    void resized() override;
+
+    void setUiScale (float s);
+    void refreshText();
+    void refreshColours();
+    void tick();                               // 20Hz: メーターを取り込む
+    int  wantedWidth() const;                  // 文字が切れない最小の幅
+    int  preferredHeight (int width) const;
+
+private:
+    juce::StringArray headerRows (int width) const;
+    int  headerHeight (int width) const;
+    // v3.0-c いまの実際の順（分岐パラメータから作る）
+    std::array<int, gz::ModuleChain::Count> currentOrder() const;
+    void applyOrder();
+    void updateLegacyVisibility();
+public:
+    // v3.1 §4「1つずつ」。選ばれているカード（モジュール番号）。
+    void setSelected (int module);
+    int  getSelected() const { return selectedModule; }
+    // v3.1 その箱が「いま何番目を通るか」（順番の分岐を反映した表示上の位置）
+    int  displayPosOf (int module) const;
+    std::function<void(int)> onSelect;
+private:
+    int selectedModule { -1 };
+private:
+
+    VocalGzzioProcessor& proc;
+    std::array<int, gz::ModuleChain::Count> shownOrder { -1 };  // -1 = まだ決めていない
+    juce::OwnedArray<ModuleCard> cards;
+    // v3.1 §4 案A の固定カード。箱ではないので cards には入れない
+    //  （入れると「順番の分岐」や「ぜんぶ入れる/切る」の対象になってしまう）。
+    std::unique_ptr<ModuleCard> inCard, outCard;
+    juce::TextButton allOn, allOff;
+    HoldButton       compareBtn;      // v3.0-c 押している間だけ素通し
+public:
+    // v3.1 §4「1つずつ」。列の中に置く（カードを見ている所で切り替えたいので）。
+    juce::TextButton focusBtn;
+    std::function<void(bool)> onFocusToggled;
+private:
+    // v3.0-c サビリフトの互換スイッチ。**意味があるときだけ**出す
+    //  （いつも出しておくと、99%の人には関係のない札が常に居座ることになる）
+    juce::TextButton legacyBtn;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> legacyAtt;
+    bool legacyShown { false };
+    float scale { 1.0f };
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PathRail)
 };
 
 //==============================================================================
@@ -1695,20 +2145,74 @@ public:
                 jp->setValueNotifyingHost (1.0f);
     }
     bool  isAdvanced() const { return advancedMode; }
+    void setOverview (bool on);
+    bool isOverview() const { return overviewEnabled && advancedMode; }
+    void setFocusedEditing (bool on)
+    {
+        focusMode = on;
+        pathRail.focusBtn.setToggleState (on, juce::dontSendNotification);
+        pathRail.setSelected (on ? focusModule : -1);
+        applyKnobVisibility();
+    }
 
     // ---- v1.7.0 theme selector ----
-    // 0 ニュートラル(dark,既定) / 1 ゆるふわ(pastel) / 2 自然(四季) /
-    // 3 ブランド(leather,English) / 4 ライブ(venue) / 5 軽量 / 6 ジャニーズ(unison)
+    // 生きている番号: 0 ふつう(既定) / 1 ゆるふわ / 2 自然(四季) /
+    //                 3 ブランド(leather,English) / 7 色覚(CUD) /
+    //                 8 ゆるふわ・よる(v2.11.0: 1 の暗い版。もう一度押すと切替)
+    // 廃止した番号(古い保存データが来たら setThemeMode が寄せる):
+    //   4 ライブ / 6 ジャニーズ → 1 へ   (v2.4.0)
+    //   5 軽量                  → 0 へ   (v2.12.0)
     void setThemeMode (int m);
     void refreshLanguage();                                 // v1.8.0: JP <-> EN re-label
     void forceSeason (int s);                               // test hook (GZ_SEASON)
     int  getThemeMode() const { return themeMode; }
-    bool pastelTheme() const { return themeMode == 1; }   // rounded font + juice knobs (ゆるふわ)
-    bool liteTheme()   const { return themeMode == 5; }   // no graph, no animation (軽量)
+    // v2.11.0: よる(8)も「ゆるふわの仲間」。丸文字・ジュースツマミ・ぷにぐじは共通で、
+    //          変わるのは配色と背景だけ。ここを 1 だけにしておくと、よるで急に
+    //          角ばった文字に戻って別テーマに見えてしまう。
+    bool pastelTheme() const { return themeMode == 1 || themeMode == 8; }
+    bool nightTheme()  const { return themeMode == 8; }   // ゆるふわ・よる
+    // v2.12.0: liteTheme()（軽量）は廃止。理由は kThemeOfChip のコメントに記録。
     void  setAdvanced (bool a) { advancedMode = a; applyModeVisibility(); if (onUiStateChange) onUiStateChange ("ui_advanced", a ? 1 : 0); }
     VocalTuner& getTuner() { return tuner; }
 
+    // v2.12.0: テーマ6枚はヘッダのチップから「文字・見た目」の吹き出しへ引っ越した。
+    //  吹き出し(CallOutBox の中身)から名前・選択状態・切り替えを呼ぶための3つ。
+    //  名前を2か所に持つと必ずずれるので、正本はここ1か所にしてある。
+    juce::String themeArmName (int i) const;
+    bool         themeArmSelected (int i) const;
+    void         chooseTheme (int i);
+
+    // v2.12.0 直接描いている文字（ボタンでもラベルでもない見出し・ヒント）用。
+    //  ここも「入らなければ小さくして全部出す」。ui_fit は Component しか
+    //  見られないので、直描きは必ずこれを通す、という取り決めにする。
+    void fitText (juce::Graphics& g, const juce::String& t, juce::Rectangle<int> r,
+                  juce::Justification j, float h, bool bold) const
+    {
+        g.setFont (GzzioLnF::fitFont (cfont (h, bold), t, r.getWidth() - 2));
+        g.drawText (t, r, j);
+    }
+
 private:
+    void initialiseOverview();
+    void updateOverviewVisibility();
+    void restoreOverviewVisibility();
+    void resizedOverview();
+    void paintOverview (juce::Graphics&);
+    void refreshOverviewText();
+    void updateOverviewState();
+    bool overviewEnabled { true };
+    std::vector<std::pair<juce::Component*, bool>> overviewOldVisibility;
+    juce::ComboBox finishPresetBox;
+    juce::TextButton overviewDetails, overviewReturn, overviewPitch;
+    HoldButton overviewCompare;
+    juce::TextButton reverbPower;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> reverbPowerAttachment;
+    std::array<juce::TextButton, 3> overviewMore;
+    std::array<juce::TextButton, 3> overviewSectionPower;
+    std::array<juce::Rectangle<int>, 3> overviewCards;
+    juce::Rectangle<int> overviewMonitor, overviewOutput, overviewHelp;
+    juce::String overviewHint;
+    int finishPresetIndex { -1 };
     struct Knob
     {
         ClickToEditSlider slider;
@@ -1720,6 +2224,9 @@ private:
     void addKnob (Knob& k, const juce::String& paramID, const juce::String& text,
                   const juce::String& tooltip, const juce::String& suffix);
     void placeRow (juce::Rectangle<int> area, std::initializer_list<Knob*> ks);
+    // v3.1 §4「1つずつ」は並べる本数が実行時に決まるので、vector 版が要る。
+    //  initializer_list 版はこれを呼ぶだけにして、置きかたを1か所に保つ。
+    void placeRowVec (juce::Rectangle<int> area, const std::vector<Knob*>& ks);
     void styleButton (juce::TextButton& b);
     juce::Font cfont (float h, bool bold = false) const;
     void applyVoicePreset (int id);
@@ -1730,6 +2237,12 @@ private:
     static juce::String keyName (int tonic, bool isMinor);       // v1.4.0 key label
     static juce::String suggestChords (int tonic, bool isMinor); // diatonic progression suggestion
     void  applyModeVisibility();    // show/hide advanced-only controls
+    // v3.1「使いかた4種」: 見せる/隠すだけを切り出したもの（副作用なし）。
+    //  使いかたを変えたときは、おまかせの途中経過などを壊さずにここだけ回す。
+    void  applyKnobVisibility();
+    // v3.1 使いかたで「そもそも通っていない」ツマミを画面から出さない。
+    //  ★ここは**隠すだけ**。出すのは applyKnobVisibility()/updateTabVisibility() の仕事。
+    void  applyUseModeMask();
     void applyScene();
     void updateABButtons();
     void savePreset();
@@ -1737,17 +2250,28 @@ private:
 
     // ---- v1.7.0 theme (cross-switch) ----
     void applyThemeToKnobs();                       // push per-theme arc colour to the LnF
-    // v2.4.0: 0-5=テーマチップ(上段) / 6=かんたんモードのスイッチ(下段)
+    // v2.12.0: 6=かんたんモードのスイッチだけ。0-5(テーマチップ)は空矩形を返す
+    //          （チップは「文字・見た目」の吹き出しへ引っ越した）
     juce::Rectangle<int> crossHit (int idx) const;
-    void drawThemeCross (juce::Graphics& g);        // テーマチップ + かんたんモードのスイッチ
-    void drawCrossSwitch (juce::Graphics&);         // (旧v1.7.0のアイコン版。未使用)
+    void drawThemeCross (juce::Graphics& g);        // かんたんモードのスイッチ
+    // v2.12.0: drawCrossSwitch (旧v1.7.0のアイコン版) は実装・呼び出しとも撤去。
     float rowScale { 1.0f };   // v2.4.0 かんたんモードでツマミ周りの文字/箱を拡大
     bool  heroBig  { false };  // v2.4.0 おまかせ設定の帯を大きく描くか
     // v2.4.0 かんたんモードの10秒おまかせ: 0=待機 1=しずかに(2秒: 0.5s間+1.5sノイズ学習)
     // 2=うた自動(8秒)実行中。タイマー(20Hz)が easyComboTick で進める。
     int   easyComboPhase { 0 }, easyComboTick { 0 };
-    // チップの並び順 -> themeMode (4=オーロラ は v2.4.0 で廃止)
-    static constexpr int kThemeOfChip[6] = { 0, 1, 2, 3, 7, 5 };
+    // 並び順 -> themeMode (4=オーロラ は v2.4.0 で廃止 / 5=軽量 は v2.12.0 で廃止)
+    // v2.12.0 ★軽量を外した理由:
+    //   「軽量」がしていたのは (1) 暗い配色を強制 (2) EQスペクトラムを隠す の2つだけ。
+    //   音声コールバックは1行も変わらない（アナライザへの書き込みは常に走る）ので、
+    //   **音が途切れる原因になるスレッドでは 1 サイクルも軽くなっていなかった**。
+    //   画面側の唯一の節約＝グラフの30Hzタイマー停止は、エフェクトタブへ移るか
+    //   かんたんモードにするだけで同じことが起きる（visibilityChanged で止まる）。
+    //   実測しても差は 0.04 秒 / 30 秒 対 0.04 秒 / 30 秒 で、雑音以下だった。
+    //   そのうえ「軽量」を選ぶと配色まで暗くなるので、ゆるふわを使いたい人は
+    //   軽さと見た目のどちらかを諦める作りになっていた。名前だけの機能だった。
+    static constexpr int kThemeCount = 5;
+    static constexpr int kThemeOfChip[kThemeCount] = { 0, 1, 2, 3, 7 };
     static constexpr int kChipH    = 21;            // テーマチップの高さ
     static constexpr int kSwitchW  = 244;           // かんたんモードのスイッチ(大きめ)
     static constexpr int kSwitchH  = 31;
@@ -1756,9 +2280,16 @@ private:
     VocalGzzioProcessor& processor;
     juce::Image          mascot;
     int                  themeMode { 0 };
+    // v2.11.0: ゆるふわチップを押したとき、ひる(1)とよる(8)のどちらへ戻すか。
+    // 一度よるにした人が別テーマを経由して戻ってきても、よるのままで戻れる。
+    bool                 yuruNight { false };
     int                  crossHover { -1 };            // hovered cross cell (-1 none)
     juce::Image          kawaiiMascot;               // yuru-kawa backdrop art
     ThemePainter         themePainter;
+    juce::Rectangle<int> crushReadArea;   // v3.0「つぶさない」の数字を出す場所
+    juce::Rectangle<int> revTypeLabArea;  // v3.0-c「ひびきの種類」の見出し（空=譲った）
+    juce::Rectangle<int> heroTitleArea;   // v3.0-c かんたんモードの「おまかせ設定」の席
+    int                  revHeaderLeft { 0 };   // パネル4見出し行で、右側が使っている左端
     juce::Rectangle<int> crossArea;                  // header theme switch bounds
     int                  themeAnimFrame { 0 };       // v1.8.0 anim frame divider
     int                  lastTheme { 1 };             // v1.8.1 center-toggle restore target
@@ -1777,11 +2308,70 @@ private:
     juce::ComboBox voiceBox, micBox;
     juce::ComboBox eqPresetBox;                            // famous vocal EQ recipes
     juce::String   infoText;                               // preset description shown under the graph
-    juce::TextButton sceneSolo, sceneTalk, sceneBand { "Band" };
-    int currentScene { 1 };   // 0 Solo, 1 Talk, 2 Band
+    juce::TextButton sceneSolo, sceneTalk, sceneBand { juce::String::fromUTF8 ("バンド") };
+    juce::TextButton tuningPopBtn { juce::String::fromUTF8 ("チューナー") };
+    int  currentScene { 1 };   // 0 Solo, 1 Talk, 2 Band
+    bool sceneChosen  { false };  // v3.0-c 本人が選んだか（既定のまま＝false）
+    // v3.1 「ぜんぶ表示」= 使いかたで使わないツマミも画面に出す（上級者向けの逃げ道）。
+    //  apvts.state の "ui_show_all" に入れるので、プロジェクトに残る。
+    bool showAllKnobs { false };
 
-    juce::TextButton learnButton { "LEARN" };
+    // ---- v3.1 §4「1つずつ」（画面案A の中央＝選んだモジュールの詳細）----
+    //  ツマミが60個ならぶ画面をやめて、いま直したい1枚だけを大きく出す。
+    //  ★モードの正体は「どのツマミを出すか」と「どこへ置くか」だけ。
+    //   ツマミそのものは今までと同じ子コンポーネントを使い回す
+    //   （作り直すとアタッチメントが切れて、値が飛ぶ）。
+    bool focusMode   { false };      // 全体を見渡す画面を既定にする。
+    int  focusModule { 0 };          // いま見ているモジュール（gz::ModuleChain::Id）
+    juce::String focusTipText;       // 説明欄に出す文（ツマミに乗ると入れ替わる）
+    // v3.1 その使いかたで中身が丸ごと消える箱に出す一文。
+    //  ★描くだけでなく**部品**にする。そうしないと検査から見えない
+    //   （「出ているつもり」を検査が確かめられない物は作らない）。
+    struct FocusEmptyNote : juce::Component
+    {
+        float scale { 1.0f };
+        void paint (juce::Graphics&) override;
+    };
+    FocusEmptyNote focusEmpty;
+    juce::Rectangle<int> focusHeadArea, focusTipArea, focusFinishArea;
+    // v3.1 §4 右1/4「ぜんたい」。入出力メーターと、文字/画面の大きさの大きなスライダー。
+    //  ★「表示をかるくする」は入れない。案A には描いてあるが、その正体だった
+    //   「軽量モード」は v2.12.0 で**撤廃した**もの。撤廃した物を設計図に
+    //   残っているからという理由で戻すのは、決めたことを忘れるのと同じ。
+    juce::Rectangle<int> focusSideArea, focusMeterArea;
+    HoldButton focusCompare;         // その1枚だけ くらべる
+    // 選んだモジュールに属するツマミを返す（出ていない物も含む。ふるいは別）
+    std::vector<Knob*> focusKnobs (int module);
+    // ツマミ以外の物（スイッチ・コンボ・横スライダー）。ここも置かないと
+    // 「選べるのに操作できない箱」ができる（へんしん がまさにそうなった）。
+    std::vector<juce::Component*> focusExtras (int module);
+    void applyFocusSelection (int module);
+
+    juce::TextButton learnButton { juce::String::fromUTF8 ("学習") };
+    // v3.0 じどう学びなおし（しゃべっていない間にノイズ床を追従させる）
+    juce::TextButton relearnBtn;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> relearnAtt;
+    // v3.0「つぶさない」（音量が上がっても潰れないモード）。音量そろえの見出しに置く。
+    juce::TextButton crushBtn;
+    // v3.0 「効果のオンオフ」ボタン → 8モジュールのスイッチを並べた吹き出し。
+    //  v3.0-c: くわしい画面では**左の常設列**が本体になったので、この吹き出しは
+    //  かんたんモード専用にした（同じ物への入口が2つあるのは、ただの散らかり）。
+    juce::TextButton modPopBtn;
+    // v3.0-c 左の常設列「音のとおり道」。縦に入り切らないときのために Viewport 越し。
+    juce::Viewport   railView;
+    PathRail         pathRail;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> crushAttach;
     juce::TextButton autoSetupButton, songSetupButton, tempoFitButton;
+
+    // ---- v2.10.0 ★ノイズ床の学習を、汚れたまま固定させない ----
+    //  これまで「覚えた床」は true になるだけで、false へ戻す道がどこにも無く、
+    //  しかも状態XMLに保存されていた。声が入っている最中に LEARN(または
+    //  10秒おまかせの自動学習)が走ると、低域 -10.5dB / 空気 +2.7dB / 山谷 +4.0dB の
+    //  設定ができ上がり、再起動しても版を上げても直らなかった。
+    //  → 覚えている間だけ「学習ずみ」と出し、1押しで自動追従へ戻せるようにする。
+    juce::TextButton dnClearButton;
+    int dnMsgTicks { 0 };                    // 学習結果メッセージの残り(20Hz)
+    juce::String dnLearnMsgPending;          // 10秒おまかせ中の学習結果(最後にまとめて出す)
 
     // ---- v2.8.0 ★かんたんモードの「見えないのに効いている」対策 ----
     // ボイス変換やロボ声は「こだわりモード」のエフェクト欄にしかない。ところが
@@ -1801,13 +2391,13 @@ private:
     juce::String     autoSetupMsg, tempoFitMsg;
     int              tempoFitMsgTtl { 0 };   // frames left to show the tempo-fit confirmation
     juce::Rectangle<int> lvMeterArea;        // stream-loudness meter (header)
-    juce::TextButton resetButton { "RESET" };
-    juce::TextButton abA { "A" }, abB { "B" }, abCopy { "A>B" }, saveButton { "SAVE" }, loadButton { "LOAD" };
+    juce::TextButton resetButton { juce::String::fromUTF8 ("初期化") };
+    juce::TextButton abA { "A" }, abB { "B" }, abCopy { "A>B" }, saveButton { juce::String::fromUTF8 ("保存") }, loadButton { juce::String::fromUTF8 ("読込") };
 
     // ---- v1.4.0: right-column tabs (EQ | Effects) ----
     juce::TextButton tabEqButton { "EQ" }, tabFxButton;
     // v2.4.0: modeButton(かんたん/こだわり)は廃止。ヘッダの大きなスイッチへ統合。
-    bool  advancedMode { false };
+    bool  advancedMode { true };
     int currentTab { 0 };
     void updateTabVisibility();
 
@@ -1816,11 +2406,13 @@ private:
     Knob brK, emoK, liftK;                                 // v2.0.0 エモート(息/エモ/サビリフト)
     Knob popK, lipK;                                       // v2.3.0 ポップ/リップ除去
     Knob resK;                                             // v2.4.0 なめらか(動的レゾナンス抑制)
+    Knob pickK;                                            // v3.1 ピックおさえ(アコギだけ)
     Knob inGainK;                                          // v2.4.0 マイク音量(入力トリム)
     Knob rideK;                                            // v2.4.0 音量キープ(自動ゲインライド)
     Knob humK;                                             // v2.6.0 ジー音(電源ハムの自動除去)
     Knob consK;                                            // v2.6.0 ことば(子音エンハンサー)
     int  humShownHz = -1;                                  // v2.6.0 ラベルに出している検出値
+    Knob proxK;                                            // v2.10.0 きょり(距離ならし)
     Knob vcPitchK, vcFormK, jnMixK;                        // v1.8.0 voice changer / unison
     juce::TextButton vcOnButton, jnOnButton;
     juce::ComboBox   jnHarmBox;                            // ハモリ (ユニゾン/3度/5度/3&5)
@@ -1851,6 +2443,8 @@ private:
     juce::TextButton tapButton { "TAP" };
     juce::TextButton midiButton;                           // v2.1.0 MIDIスイッチ設定
     juce::TextButton streamButton;                         // v2.2.0 配信出力(単体起動版のみ)
+    juce::TextButton checkupButton;                        // v2.10.0 点検
+    double lastUsageMs = 0.0;                              // v2.10.0 使われ方の集計時刻
     double lastTapMs { 0.0 };
     float  tapBpm { 0.0f };
     int    tapCount { 0 };
@@ -1875,6 +2469,10 @@ private:
     juce::Label  fontSliderLabel;
     ClickToEditSlider zoomSlider;                          // window zoom ratio
     juce::Label  zoomSliderLabel;
+    // v2.12.0: ヘッダの13pxスライダーは「文字を大きくする操作なのに小さくて
+    // 押せない」ため、ボタン→大きなスライダー(高さ34px・つまみも大きい)の
+    // 吹き出しに変えた。元の2本は互換のため残すが非表示(値の保存/復元用)。
+    juce::TextButton  sizePopBtn;
 
 public:
     // called by the editor when the window is resized by its corner handle
@@ -1894,6 +2492,14 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> seqOnAttach;
     juce::ComboBox seqModeBox;                             // 自動 / 手動
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> seqModeAttach;
+
+    // ---- v2.10.0 #77/#78 音源モード ----
+    //  「プリセット」ではなく、同じツマミが見るところを持ち替えるスイッチ。
+    //  ヘッダ2段目の空き地(x=860〜1220)に置く。1段目はシーンとテーマ帯で埋まっていて、
+    //  入れるとシーンボタンがテーマ帯(x=980から)の下敷きになる。
+    juce::ComboBox srcModeBox;
+    juce::Rectangle<int> srcModeLabelArea;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> srcModeAttach;
     juce::Rectangle<int> seqArea;
     void updateSeqModeVisibility();
 
@@ -1905,6 +2511,7 @@ private:
 
     juce::Rectangle<int> cleanArea, dynArea, toneArea, spaceArea;
     juce::Rectangle<int> heroArea;           // v1.5.0 one-press auto-setup band
+    juce::Rectangle<int> voiceStageArea;     // かんたん画面の案内とブランド表示
     juce::Rectangle<int> eqGraphArea;   // EQ graph region inside the seq panel
 
     // update notice (GitHub Releases check, display only)
@@ -1930,9 +2537,15 @@ public:
 
     void resized() override;
 
+    // ★ここが**唯一**の既定サイズ。中身は必ずこの寸法で組んでから、窓の大きさに
+    //  合わせて拡大縮小される（content.setBounds(0,0,baseW,baseH) + Transform）。
+    //  v3.0-c: 左に「音のとおり道」の列(約212px)＋間隔10pxが増えたぶん横を広げ、
+    //  カード8枚がスクロールなしで収まるぶん縦を足した。**既存の3列は1pxも
+    //  狭めていない**（狭めればツマミが小さくなる＝老眼への指摘に逆行する）。
+    static constexpr int baseW = 1582;  // v1.8.3: +80 → v3.0-c: +222(とおり道の列)
+    static constexpr int baseH = 892;   // v1.8.3: +24 → v3.0-c: +34(カード8枚)
+
 private:
-    static constexpr int baseW = 1360;  // v1.8.3: +80 横幅拡大
-    static constexpr int baseH = 858;   // v1.8.3: +24 (下部46pxは背景が見える帯)
     static constexpr float kFontRebase = 1.5f;   // new 100 percent = old 150 percent
 
     void applyScale (float s);

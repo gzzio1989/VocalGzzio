@@ -1,54 +1,148 @@
-name: build
-
-# VocalGzzio CI: builds Windows (VST3/Standalone) and macOS (AU/VST3/Standalone)
-# on GitHub-hosted runners. Public repos get these runners for free, so Mac
-# binaries can be produced without owning a Mac. macOS artifacts are UNSIGNED:
-# users must right-click-open the app once, or clear quarantine for plugins:
-#   xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/VocalGzzio.vst3
+name: 検査と配布物の作成
 
 on:
   push:
-    branches: [ main, master ]
-    tags: [ 'v*' ]
+    branches: [main, master]
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      edition:
+        description: '作成する版（公開リポジトリの製品版は暗号化して受け渡し）'
+        type: choice
+        default: trial
+        options: [trial, product]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}-${{ github.event.inputs.edition || 'trial' }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  validate:
+    name: 回帰検査
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 検査用に構成
+        run: cmake -S . -B build/validation -DCMAKE_BUILD_TYPE=Release -DVOCALGZZIO_BUILD_TESTS=ON -DVOCALGZZIO_TRIAL=OFF
+      - name: 検査をビルド
+        run: cmake --build build/validation --config Release --target VocalGzzioTests --parallel 3
+      - name: 全回帰検査
+        run: ctest --test-dir build/validation -C Release --output-on-failure --no-tests=error --output-junit results.xml
+
+  package:
+    name: ${{ matrix.name }} の配布物
+    needs: validate
+    # 公開リポジトリから製品版が無償配布されることを防ぐ。
+    if: github.event.repository.private || github.event.inputs.edition != 'product'
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            name: windows
-          - os: macos-latest
-            name: macos
+            name: Windows
+          - os: macos-14
+            name: Mac
     runs-on: ${{ matrix.os }}
+    env:
+      GZ_EDITION: ${{ github.event.inputs.edition || 'trial' }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build --config Release --parallel 4
-
-      - name: Collect artifacts (Windows)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 版番号を確認
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, pathlib, re
+          version = re.search(r'project\(VocalGzzio\s+VERSION\s+(\d+\.\d+\.\d+)', pathlib.Path('CMakeLists.txt').read_text(encoding='utf-8-sig')).group(1)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'GZ_VERSION={version}\n')
+          PY
+      - name: Windows版を構成
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item -Recurse "build/VocalGzzio_artefacts/Release/VST3/VocalGzzio.vst3" dist/
-          Copy-Item "build/VocalGzzio_artefacts/Release/Standalone/VocalGzzio.exe" dist/
-
-      - name: Collect artifacts (macOS)
+          $trial = if ($env:GZ_EDITION -eq 'trial') { 'ON' } else { 'OFF' }
+          cmake -S . -B build/package -DCMAKE_BUILD_TYPE=Release -DVOCALGZZIO_BUILD_TESTS=OFF -DVOCALGZZIO_LITE=OFF "-DVOCALGZZIO_TRIAL=$trial"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Mac両CPU対応版を構成
         if: runner.os == 'macOS'
+        shell: bash
         run: |
-          mkdir -p dist
-          cp -R "build/VocalGzzio_artefacts/Release/VST3/VocalGzzio.vst3" dist/
-          cp -R "build/VocalGzzio_artefacts/Release/AU/VocalGzzio.component" dist/
-          cp -R "build/VocalGzzio_artefacts/Release/Standalone/VocalGzzio.app" dist/
-
+          trial=OFF
+          if [ "$GZ_EDITION" = trial ]; then trial=ON; fi
+          cmake -S . -B build/package -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' -DVOCALGZZIO_BUILD_TESTS=OFF -DVOCALGZZIO_LITE=OFF "-DVOCALGZZIO_TRIAL=$trial"
+      - name: 配布用の本体をビルド
+        run: cmake --build build/package --config Release --parallel 3
+      - name: Windowsインストーラー
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:GZ_EDITION -eq 'trial') {
+            ./tools/package_windows.ps1 -BuildDirectory build/package -OutputDirectory release/windows -Trial
+          } else {
+            ./tools/package_windows.ps1 -BuildDirectory build/package -OutputDirectory release/windows
+          }
+      - name: MacインストーラーとZIP
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          public_flag=()
+          if [ '${{ github.event.repository.private }}' != true ]; then public_flag=(--public-artifact); fi
+          python tools/package_macos.py --build build/package --out release/macos --edition "$GZ_EDITION" --version "$GZ_VERSION" "${public_flag[@]}"
       - uses: actions/upload-artifact@v4
         with:
-          name: VocalGzzio-${{ matrix.name }}
-          path: dist/
+          name: VocalGzzio-${{ matrix.name }}-${{ env.GZ_EDITION }}-${{ env.GZ_VERSION }}
+          path: |
+            release/**/*.exe
+            release/**/*.zip
+            release/**/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  encrypted-mac-product:
+    name: Mac製品版（暗号化して受け渡し）
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.edition == 'product' && !github.event.repository.private
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 配布用の両CPU対応版を構成
+        run: cmake -S . -B build/product -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' -DVOCALGZZIO_BUILD_TESTS=OFF -DVOCALGZZIO_TRIAL=OFF -DVOCALGZZIO_LITE=OFF
+      - name: 製品版をビルド
+        run: cmake --build build/product --config Release --parallel 3
+      - name: 梱包して公開鍵で暗号化
+        shell: bash
+        run: |
+          python -m pip install -r tools/release-requirements.txt
+          python - <<'PY'
+          import pathlib, re, subprocess, sys
+          root = pathlib.Path('.')
+          version = re.search(r'project\(VocalGzzio\s+VERSION\s+(\d+\.\d+\.\d+)', (root/'CMakeLists.txt').read_text(encoding='utf-8-sig')).group(1)
+          subprocess.run([sys.executable, 'tools/package_macos.py', '--build', 'build/product', '--out', 'release/private-mac', '--edition', 'product', '--version', version], check=True)
+          archives = list((root/'release/private-mac').glob('*.zip'))
+          if not archives:
+              raise SystemExit('配布ZIPがありません')
+          for archive in archives:
+              subprocess.run([sys.executable, 'tools/release_crypto.py', 'encrypt', '--input', str(archive), '--output', 'release/encrypted/'+archive.name+'.vgzenc', '--public', 'Resources/release-public.pem'], check=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VocalGzzio-Mac-product-encrypted
+          path: release/encrypted/*.vgzenc
+          if-no-files-found: error
+          retention-days: 7

@@ -68,12 +68,20 @@ public:
     // The estimate is held between analysis hops.
     float process (const float* mono, int n)
     {
-        push (mono, n);
-        sinceAnalyze += n;
-        if (sinceAnalyze >= hopIn && ready())
+        // ホストのブロック境界ではなく一定の標本数で分析する。
+        // 大きなブロックでも途中の音程を捨てず、小さなブロックでも周期が伸びない。
+        int offset = 0;
+        while (offset < n)
         {
-            sinceAnalyze = 0;
-            analyze();
+            const int take = std::min (n - offset, hopIn - sinceAnalyze);
+            push (mono + offset, take);
+            offset += take;
+            sinceAnalyze += take;
+            if (sinceAnalyze >= hopIn)
+            {
+                sinceAnalyze = 0;
+                if (ready()) analyze();
+            }
         }
         return lastHz;
     }
@@ -89,7 +97,8 @@ private:
         const int cap = (int) buf.size();
         for (int i = 0; i < n; ++i)
         {
-            lp1 = lpB * x[i]  + lpA * lp1;             // 2-pole LP anti-alias
+            const float sample = std::isfinite (x[i]) ? x[i] : 0.0f;
+            lp1 = lpB * sample + lpA * lp1;             // 2-pole LP anti-alias
             lp2 = lpB * lp1   + lpA * lp2;
             if (++decimCnt >= decim)
             {
@@ -114,7 +123,13 @@ private:
         auto at = [&] (int k) -> float { int idx = start + k; if (idx >= cap) idx -= cap; return buf[(size_t) idx]; };
 
         // 1) difference function d(tau) = sum_j (x[j] - x[j+tau])^2
-        for (int tau = tLo; tau <= tHi; ++tau)
+        // CMNDF の分母は探索下限に関係なく lag=1 から累積する。
+        // 下限から始めると、同じ音でも前回の検出音によって結果が変わる。
+        double energy = 0.0, dc = 0.0;
+        for (int j = 0; j < Wloc; ++j) { const double x = at(j); energy += x*x; dc += x; }
+        if (energy / Wloc - (dc / Wloc) * (dc / Wloc) < 1.0e-9)
+        { confOut = 0.0f; return -1.0f; } // 無音・直流・-90dBFS未満を音程としない
+        for (int tau = 1; tau <= tHi; ++tau)
         {
             float sum = 0.0f;
             for (int j = 0; j < Wloc; ++j)
@@ -127,10 +142,10 @@ private:
 
         // 2) cumulative mean normalized difference d'(tau)
         float running = 0.0f;
-        for (int tau = tLo; tau <= tHi; ++tau)
+        for (int tau = 1; tau <= tHi; ++tau)
         {
             running += d[(size_t) tau];
-            dp[(size_t) tau] = (running > 0.0f) ? d[(size_t) tau] * (float) (tau - tLo + 1) / running : 1.0f;
+            dp[(size_t) tau] = (running > 0.0f) ? d[(size_t) tau] * (float) tau / running : 1.0f;
         }
 
         // 3) absolute threshold: first dip below it (walk down to its local min),
@@ -160,7 +175,7 @@ private:
             const float denom = s0 + s2 - 2.0f * s1;
             if (std::abs (denom) > 1e-9f) betterTau = (float) tau + 0.5f * (s0 - s2) / denom;
         }
-        confOut = 1.0f - dp[(size_t) tau];
+        confOut = std::clamp (1.0f - dp[(size_t) tau], 0.0f, 1.0f);
         lastTau = tau;
         return betterTau;
     }
@@ -170,14 +185,16 @@ private:
     // half the time, which is what makes a fast retune actually sound fast.
     // A weak result falls straight back to the full range, so octave leaps and
     // new phrases are still picked up on the same hop.
-    void analyze (float threshold = 0.12f, float minConfidence = 0.55f)
+    void analyze (float threshold = 0.12f, float minConfidence = 0.82f)
     {
         float conf = 0.0f;
         float betterTau = -1.0f;
 
         if (lockTau > 0)
         {
-            const int tLo  = std::max (tauMin, (int) ((float) lockTau * 0.62f));          // about -8 semitones
+            // 上側を前回の音で制限すると、オクターブ上がった音の2周期に
+            // 完全一致して誤検出を固定してしまう。短い周期は毎回すべて探す。
+            const int tLo  = tauMin;
             const int tHi  = std::min (tauMax, (int) ((float) lockTau * 1.62f) + 1);      // about +8 semitones
             const int Wloc = std::min (W, std::max (2 * lockTau, 4 * tauMin));
             if (tHi > tLo + 2)

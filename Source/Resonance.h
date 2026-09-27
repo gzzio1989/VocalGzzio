@@ -76,10 +76,15 @@ public:
     static constexpr int kCtrl  = 32;       // ゲイン計算はこのサンプル数ごと
     static constexpr int kNeigh = 5;        // 地ならし線に使う左右のバンド数
 
-    void prepare (double sampleRate)
+    // v2.10.0 #77 見張る範囲を持ち替えられるようにした。
+    //  既定(900Hz-9kHz)は歌の声向け。アコギは胴鳴りのピークがもっと低いところに
+    //  出るので 250Hz-6kHz を渡す。確保は起きない(配列は固定長)ので、
+    //  モードが変わったときに音声コールバックの中から呼んでも安全。
+    void prepare (double sampleRate, double loHz = 900.0, double hiHz = 9000.0)
     {
         sr = sampleRate;
-        const double f0 = 900.0, f1 = 9000.0;
+        const double f0 = std::max (20.0, loHz);
+        const double f1 = std::max (f0 * 2.0, hiHz);
         const double r  = std::pow (f1 / f0, 1.0 / (double) (kBands - 1));
         for (int b = 0; b < kBands; ++b)
         {
@@ -89,6 +94,10 @@ public:
             const double bw = centre[b] * (r - 1.0 / r) * 0.5 * 1.25;
             for (int ch = 0; ch < 2; ++ch)
                 ap[ch][b].set (centre[b], std::max (20.0, bw), sr);
+            // v2.12.0 張り保護の重み: 2〜4kHz(声の通り道)を中心にした対数ガウス。
+            // 2.9kHz で 1.0、1.5k/5.6k あたりで 0.5、遠くで 0。
+            const double oct = std::log (centre[b] / 2900.0) / std::log (2.0);
+            protW[b] = (float) std::exp (-0.5 * (oct / 0.60) * (oct / 0.60));
         }
         envA = tc (5.0);    envR = tc (50.0);      // バンド包絡
         gDn  = tc (8.0);    gUp  = tc (120.0);     // ゲインの寄せ方(削る/戻す)
@@ -105,6 +114,14 @@ public:
 
     // amount 0..1。0 のときは何もしない(呼び出し側で丸ごと飛ばしてよい)
     void setAmount (float a) noexcept { amount = std::min (1.0f, std::max (0.0f, a)); }
+
+    // v2.12.0 張り保護（v3.0設計書 §6-2「張った声の抜けが悪い」）
+    //  張った声は 2〜4kHz の倍音の束(歌手のフォルマント)が立つ。ここは
+    //  「声が通る」場所そのものなのに、地ならし線より出っ張るので今までは
+    //  レゾナンス扱いで削られていた＝張るほど詰まる。
+    //  呼び出し側が「いつもより何dB張っているか」を 0..1 で渡し、張っている間は
+    //  2〜4kHz帯の削り量を最大50%まで緩める。0 のときは従来と完全に同じ。
+    void setBeltProtect (float b) noexcept { belt = std::min (1.0f, std::max (0.0f, b)); }
 
     // L / R をその場で処理する。R は nullptr 可(モノラル)。
     void process (float* L, float* R, int numSamples) noexcept
@@ -192,7 +209,8 @@ private:
             if (lin[b] > 3.0e-4f && excessDb > kThreshDb)
                 cutDb = (excessDb - kThreshDb) * kRatio;
 
-            cutDb = std::min (cutDb, kMaxCutDb) * amount;
+            cutDb = std::min (cutDb, kMaxCutDb) * amount
+                  * (1.0f - 0.5f * belt * protW[b]);       // v2.12.0 張り保護
             kTarget[b] = std::pow (10.0f, -cutDb / 20.0f);
         }
     }
@@ -208,6 +226,7 @@ private:
     float kTarget[kBands] {}, kNow[kBands] {};
     float envA = 0.0f, envR = 0.0f, gDn = 0.0f, gUp = 0.0f;
     float amount = 0.0f, maxCutDb = 0.0f;
+    float belt = 0.0f, protW[kBands] {};      // v2.12.0 張り保護
     int   ctrlCount = 0;
 };
 
