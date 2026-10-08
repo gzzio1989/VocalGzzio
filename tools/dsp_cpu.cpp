@@ -31,10 +31,12 @@ static void setP (VocalGzzioProcessor& p, const char* id, float v)
 struct Src
 {
     double ph = 0.0; unsigned s = 4242u;
+    bool noiseOnly = false;
     float next() noexcept
     {
         s = s * 1664525u + 1013904223u;
         const float n = (float) ((int) (s >> 9) - 4194304) / 4194304.0f;
+        if (noiseOnly) return n * 0.025f;
         double v = 0.0;
         for (int h = 1; h <= 6; ++h) v += std::sin (ph * h) / h;
         ph += 2.0 * juce::MathConstants<double>::pi * 196.0 / 44100.0;
@@ -127,7 +129,7 @@ int main()
     const double deadline = deadlineMs;
 
     // セッションで使う構成（うた）
-    Stat sVocal {}, sGuitar {}, sLearn {}, sHeavy {};
+    Stat sVocal {}, sGuitar {}, sLearn {}, sHeavy {}, sNoise {};
     {
         fresh(); VocalGzzioProcessor p; Src src;
         setP (p, "hum_amt", 100); setP (p, "cons_amt", 35); setP (p, "comp2", 30);
@@ -173,11 +175,22 @@ int main()
         measure (p, src, 200);
         sHeavy = measure (p, src, 4000);
     }
+    {   // 非周期の部屋ノイズでは両チャンネルで和音保護の周波数解析まで動く。
+        fresh(); VocalGzzioProcessor p; Src src;
+        src.noiseOnly = true;
+        for (int m = 0; m < gz::ModuleChain::Count; ++m)
+            setP (p, gz::ModuleChain::paramId (m), m == gz::ModuleChain::Souji ? 1.0f : 0.0f);
+        setP (p, "gate_on", 0); setP (p, "dn_on", 1); setP (p, "denoise", 60);
+        p.prepareToPlay (44100.0, 124);
+        measure (p, src, 200);
+        sNoise = measure (p, src, 4000);
+    }
 
     report ("セッション構成（うた）", sVocal);
     report ("セッション構成（アコギ）", sGuitar);
     report ("ノイズ床を学習している最中", sLearn);
     report ("全部盛り（ピッチ系まで）", sHeavy);
+    report ("部屋ノイズの和音保護解析", sNoise);
     std::printf ("\n");
 
     // ★判定は 99%点で行う。「最悪」は参考値。
@@ -191,9 +204,10 @@ int main()
     CHECK (sGuitar.p99 < deadline, "アコギの99%%点が締切内 (%.3f ms)", sGuitar.p99);
     CHECK (sLearn.p99  < deadline, "学習中の99%%点が締切内 (%.3f ms)", sLearn.p99);
     CHECK (sHeavy.p99  < deadline, "全部盛りの99%%点が締切内 (%.3f ms)", sHeavy.p99);
+    CHECK (sNoise.p99  < deadline, "部屋ノイズ解析の99%%点が締切内 (%.3f ms)", sNoise.p99);
     // 固定の「6割以内」は速い開発機の余裕率で、音声バッファの期限ではない。
     // 余裕率は上に実測表示し、代わりに処理が持続的に期限を超えていないかを確認する。
-    for (const auto& s : { sVocal, sGuitar, sLearn, sHeavy })
+    for (const auto& s : { sVocal, sGuitar, sLearn, sHeavy, sNoise })
     {
         CHECK (s.sustainedP95 < deadline,
                "32ブロック単位の継続負荷95%%点が期限内 (%.3f / %.3f ms)", s.sustainedP95, deadline);

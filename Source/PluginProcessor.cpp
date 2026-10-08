@@ -9,7 +9,13 @@
 // 人の目や zip の名前に頼らず、**出来上がったバイナリそのもの**から
 // 機械で判別できるように、合い言葉を埋めておく。
 // tools/pack_booth.py がこの文字列を読んで、袋詰めの直前に検査する。
-extern "C" const char VocalGzzioEditionMarker[] =
+// Macでは最適化と未使用セクション除去の両方を止める必要がある。
+// volatile ポインターを宣言するだけでは、そのポインターごと消える。
+extern "C"
+   #if defined(__APPLE__) && defined(__clang__)
+    __attribute__((used))
+   #endif
+const char VocalGzzioEditionMarker[] =
    #if VOCALGZZIO_TRIAL
     "VOCALGZZIO-EDITION:TRIAL";
    #elif VOCALGZZIO_LITE
@@ -871,13 +877,12 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     dsBroadEnv = 0.0f;
     dsBbAtk = 1.0f - std::exp (-1.0f / (0.010f * (float) sampleRate));
     dsBbRel = 1.0f - std::exp (-1.0f / (0.200f * (float) sampleRate));
-    dnFloorRise = std::pow (10.0f, 3.0f / 20.0f / (float) sampleRate);   // +3 dB/s adaptive drift
+    dnClassifier.prepare (sampleRate);
+    dnInitialFollowCoef = 1.0f - std::exp (-1.0f / (0.35f * (float) sampleRate));
+    dnLearnPeriodicFrames = 0;
+    dnLearnStationaryFrames = 0;
     // v3.0 自動学びなおし
     dnRelearnCoef = 1.0f - std::exp (-1.0f / (2.0f * (float) sampleRate));   // τ≈2秒
-    dnQuietNeed   = (int) (0.400 * sampleRate);
-    dnQuietHold   = 0;
-    dnOpenRunMax  = (int) (20.0 * sampleRate);
-    dnOpenRun     = 0;
     dnFallMax     = (int) (0.030 * sampleRate);
     for (auto& r : dnFallRun) r = 0;
     dnEnvSlowCoef = 1.0f - std::exp (-1.0f / (0.15f * (float) sampleRate));   // v3.1 さ行の頭
@@ -1087,6 +1092,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     for (auto& sample : tunerBuf) sample.store (0.0f, std::memory_order_relaxed);
     tunerSequence.store (0);
     tunerPos.store (0);
+    tunerChannelEnergy[0] = tunerChannelEnergy[1] = 0.0;
+    tunerInputChannel = 0;
     std::fill (std::begin (analyzerBuf), std::end (analyzerBuf), 0.0f);
     analyzerPos.store (0);
     for (int b = 0; b < seqBands; ++b)
@@ -1407,12 +1414,16 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         for (auto& row : dnHist) for (auto& count : row) count = 0;
         dnHistCount = 0;
         dnHistDecim = 0;
+        dnLearnPeriodicFrames = 0;
+        dnLearnStationaryFrames = 0;
         dnLearnResult.store (0);
         learnCountdown.store (dnCommand == 1 ? (int) (1.5 * currentSampleRate) : 0);
         if (dnCommand == -1)
         {
             dnLearned = false;
             dnLearnedShared.store (false);
+            dnProfileValidation.store (0);
+            dnClassifier.prepare (currentSampleRate);
             for (int b = 0; b < 4; ++b)
             {
                 dnFloor[b] = 1e-5f;
@@ -1584,15 +1595,46 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     }
 
 
-    // tuner feed (dry mono)
+    // Tuner feed only: summing stereo can cancel opposite-polarity inputs and
+    // attenuate a quiet instrument connected to only one input by 6 dB. Keep
+    // one channel, switching only when the other has clearly more energy.
+    // Smoothed energy plus 6 dB hysteresis avoids sample-by-sample switching.
     {
         const float* dl = dryBuffer.getReadPointer (0);
         const float* dr = dryBuffer.getReadPointer (juce::jmin (1, dryBuffer.getNumChannels() - 1));
+        double channelEnergy[2] {};
+        for (int n = 0; n < numSamples; ++n)
+        {
+            channelEnergy[0] += (double) dl[n] * dl[n];
+            channelEnergy[1] += (double) dr[n] * dr[n];
+        }
+        const double energyAlpha = 1.0 - std::exp (-numSamples / (0.030 * currentSampleRate));
+        for (int ch = 0; ch < 2; ++ch)
+            tunerChannelEnergy[ch] += energyAlpha
+                * (channelEnergy[ch] / juce::jmax (1, numSamples) - tunerChannelEnergy[ch]);
+        const int other = 1 - tunerInputChannel;
+        if (tunerChannelEnergy[other] > 1.0e-10
+            && tunerChannelEnergy[other] > 4.0 * tunerChannelEnergy[tunerInputChannel])
+            tunerInputChannel = other;
+        // v4.3.1 ★いま見ている側が「このブロックで完全に無音」のときは、平滑を
+        //  待たずにすぐ乗り換える。
+        //  平滑(30ms)＋6dBヒステリシスだけだと、直前が大きい音だった場合に
+        //  乗り換えまで約0.3秒かかる。その間チューナーは無音の側を解析し続け、
+        //  解析窓(32768サンプル)に無音が残るため音程がずれる。
+        //  96kHz/192kHz では解析窓が時間として短く、残った無音の割合が大きい
+        //  ので誤差が出た（実測: B0 を右だけに入れて 9.81セント / ui_tuner）。
+        //  「完全な無音」(-120dBFS未満)だけを対象にするので、小さい楽器の音で
+        //  ばたつくことはない。
+        const double instantCurrent = channelEnergy[tunerInputChannel] / juce::jmax (1, numSamples);
+        const double instantOther   = channelEnergy[other]             / juce::jmax (1, numSamples);
+        if (instantOther > 1.0e-10 && instantCurrent < 1.0e-12)
+            tunerInputChannel = other;
+        const float* tunerInput = tunerInputChannel == 0 ? dl : dr;
         tunerSequence.fetch_add (1, std::memory_order_acq_rel);
         int pos = tunerPos.load (std::memory_order_relaxed);
         for (int n = 0; n < numSamples; ++n)
         {
-            tunerBuf[pos].store (0.5f * (dl[n] + dr[n]), std::memory_order_relaxed);
+            tunerBuf[pos].store (tunerInput[n], std::memory_order_relaxed);
             pos = (pos + 1) % tunerSize;
         }
         tunerPos.store (pos, std::memory_order_release);
@@ -1700,6 +1742,16 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
             for (int n = 0; n < numSamples; ++n)
             {
+                // 音量の大小と関係なく、声・演奏の周期性と部屋の安定性を測る。
+                // 左右を足すと逆相の声が消えるので、判定は左右で独立する。
+                if (dnClassifier.push (buffer.getSample (0, n),
+                                       buffer.getSample (juce::jmin (1, numCh - 1), n),
+                                       dnEnv, gateGain > 0.99f)
+                    && learn > 0)
+                {
+                    if (dnClassifier.isPeriodic()) ++dnLearnPeriodicFrames;
+                    if (dnClassifier.isStationary()) ++dnLearnStationaryFrames;
+                }
                 // 高域の子音は高域自身の立ち上がりで保護する。
                 // 母音が出たことだけを理由に高域の部屋ノイズを開放しない。
                 const bool hfOnset = dnEnv[3] > 2.2e-3f
@@ -1751,10 +1803,6 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                                  dnEnv[3], dnEnvSlow3, dnFloor[3], (int) voiceOpen); }
                #endif
 
-                // v3.0 静けさの時計と、声判定の詰まり検出（下の床の更新が読む）
-                if (voiceOpen) { dnQuietHold = 0; if (dnOpenRun < dnOpenRunMax) ++dnOpenRun; }
-                else           { dnOpenRun = 0;   if (dnQuietHold <= dnQuietNeed) ++dnQuietHold; }
-
                 for (int b = 0; b < 4; ++b)
                 {
                     float pk = 0.0f;
@@ -1793,52 +1841,16 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     //   ときに「押しただけで音が変わる」ことになり（実測 低域 +3.9dB）、
                     //   拒否が無害にならない。学習中も追従は回し続ける。
                     //   採用したときは、下でどうせ床を上書きするので影響しない。
-                    if (! dnLearned && gateGain > 0.99f)
+                    // 未学習時も約0.5秒の定常・非周期音を確認してから床へ寄せる。
+                    // 初期床から+3dB/秒で這い上がる方式は、大きいノイズを声と
+                    // 誤認すると数十秒間まったく働かなかった。声の周期があれば
+                    // 時間が経っても更新せず、演奏をノイズへ取り込まない。
+                    if ((! dnLearned || dnRelearn) && gateGain > 0.99f
+                        && dnClassifier.isStationary() && dnFallRun[b] <= dnFallMax)
                     {
-                        // adaptive minimum tracking: fast down, slow drift up
-                        // v2.8.0 ★ゲートが閉じている間は学習しない。
-                        // 以前はゲート後の信号で床を測っていたので、フレーズの合間に
-                        // ゲートが黙らせるたび床が最小値(1e-6)まで落ちていた。すると
-                        // openThr = 床×2.5 が本物のノイズより下がってしまい、
-                        // 「ゲートONだとノイズ除去がまったく効かない」状態になっていた。
-                        // 戻りは +3dB/秒なので、一度落ちると20秒近く効かない。
-                        // v3.0 ★上向きのドリフトは「声が出ていない間」だけにした。
-                        //  以前は声の間も +3dB/秒で床が声を追いかけていた。ふつうの
-                        //  話し方なら息つぎで包絡が床を割って即座に戻るが、切れ目なく
-                        //  歌い続けると床が上がり、30秒で約1dB声が削れていた
-                        //  （tools/dsp_dnfade [2] で実測）。声の間は凍らせる。
-                        //  例外: 床が実際よりずっと低くて「声判定」が20秒詰まりっ
-                        //  ぱなしのとき（うるさい部屋で初めて挿した場合）だけは、
-                        //  昔どおり上向きを許して自力で抜ける。人の声で、包絡が
-                        //  20秒間一度も床×4を割らないことは無い。
-                        if (dnEnv[b] < dnFloor[b])
-                            dnFloor[b] = dnEnv[b];
-                        else if (! voiceOpen || dnOpenRun >= dnOpenRunMax)
-                            dnFloor[b] = juce::jmin (dnFloor[b] * dnFloorRise, 0.5f);
-                        dnFloor[b] = juce::jmax (dnFloor[b], 1e-6f);
-                    }
-                    else if (dnLearned && dnRelearn && gateGain > 0.99f
-                             && dnQuietHold > dnQuietNeed && dnEnv[b] > 1.0e-5f
-                             && dnFallRun[b] <= dnFallMax)
-                    {
-                        // v3.0 自動学びなおし（しゃべっていない間だけ、部屋を測り直す）
-                        //  報告:「ノイズ除去が、最初は良いのに時間が経つとサフサフしてくる」。
-                        //  LEARN した床は固定なので、配信の途中で PC のファンが速くなる・
-                        //  エアコンが入るなど部屋が変わると、ノイズが判定線の上に出て、
-                        //  エキスパンダーが判定線の際でばたつく（＝サフサフ）。
-                        //  静かな間だけ、ゆっくり床を現実に合わせ直す。
-                        //   ・声が消えて 400ms 待ってから（息の尻尾を部屋と間違えない）
-                        //   ・τ≈2秒（イスのきしみ1回では動かない）
-                        //   ・完全な無音（ミュート・入力切替）では動かさない（1e-5未満）
-                        //   ・ゲートが閉じている間も動かさない（v2.8.0 と同じ理由）
-                        // ★2026-08-31 直し: ×1.4 の余裕をここでも掛ける。
-                        //  LEARN が作る床は「包絡の中央値 ×1.4(+3dB)」。
-                        //  なのに学びなおしは包絡そのものへ寄っていくので、
-                        //  静かな時間がたまるほど床が +3dB ぶん下がっていく。
-                        //  実測(tools/dsp_dnslow): 学習直後 4.427e-3 → 3.216e-3
-                        //  ＝ -2.78dB。だまっている間の残りノイズが 1.6dB 大きくなる。
-                        //  「学習したのに、しばらくすると効きが浅くなる」の正体。
-                        dnFloor[b] += dnRelearnCoef * (dnEnv[b] * 1.4f - dnFloor[b]);
+                        const float target = dnClassifier.floorTarget (b);
+                        const float follow = dnLearned ? dnRelearnCoef : dnInitialFollowCoef;
+                        dnFloor[b] += follow * (target - dnFloor[b]);
                         dnFloor[b] = juce::jlimit (1.0e-6f, 0.5f, dnFloor[b]);
                     }
 
@@ -1905,12 +1917,21 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     dnLearnLevelDb .store (loudestMed);
                     dnLearnSpreadDb.store (widestSpread);
 
-                    //  -45dBFS を超える「ノイズ床」は、もう部屋の音ではない。
-                    //  開きが12dBを超えたら、その1.5秒は静かではなかった。
-                    const bool tooLoud  = loudestMed   > -45.0f;
-                    const bool notSteady= widestSpread >  12.0f;
+                    // 大きいホワイトノイズも学習できる。声・演奏は周期性で拒否し、
+                    // 変動の大きい音と過大入力も採用しない。
+                    const bool tooLoud  = loudestMed > -12.0f;
+                    // v4.3.1 ★「静かすぎる」門。これが無かった。
+                    //  入力が来ていない状態（I/Fのミュート・入力chの選び間違い・
+                    //  ケーブル未接続）で「ノイズを測る」を押すと、中央値が -120dB の
+                    //  まま床 1e-6 が採用され、dnLearned=true で保存まで残る。
+                    //  以後その床は openThr を本物のノイズより下へ置き続けるので、
+                    //  ノイズ除去が完全に無処理になる（学びなおしOFFだと直る道が無い）。
+                    //  2026-09-01「v4.0.1 でやる：ノイズ除去の根治」§B の根っこ。
+                    const bool tooQuiet = loudestMed < kDenoiseMinLearnedFloorDb;
+                    const bool notSteady = widestSpread > 12.0f || dnLearnPeriodicFrames > 0
+                                        || dnLearnStationaryFrames == 0;
 
-                    if (tooLoud || notSteady)
+                    if (tooLoud || tooQuiet || notSteady)
                     {
                         dnLearnResult.store (tooLoud ? 2 : 3);     // 採用しない
                         // ★床には触らない。前の状態のまま（自動追従なら自動追従のまま）。
@@ -1927,6 +1948,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                         }
                         dnLearned = true;
                         dnLearnedShared.store (true);
+                        dnProfileValidation.store (1);
                         dnLearnResult.store (1);
                         markStateDirty();                          // autosave the new profile
                     }
@@ -3902,6 +3924,7 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         root->addChildElement (params.release());
     auto* d = root->createNewChildElement ("DENOISE");
     d->setAttribute ("learned", dnLearnedShared.load());
+    d->setAttribute ("validation", dnProfileValidation.load());
     for (int b = 0; b < 4; ++b)
         d->setAttribute ("f" + juce::String (b), (double) dnFloorShared[b].load());
 
@@ -3986,22 +4009,32 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
             for (int b = 0; b < 4; ++b)
                 f[b] = (float) d->getDoubleAttribute ("f" + juce::String (b), 1e-5);
 
-            // ---- v2.10.0 ★保存されている床が「部屋のノイズ」として有り得ない
-            //      大きさなら、読まずに捨てて自動追従に戻す。
-            //  v2.9.0 までは、声が入っている最中に学習した床がそのまま保存され、
-            //  戻す手段も無かった。すでに汚れた設定を持っている人は、更新しても
-            //  直らないままになる。ここで見つけて捨てる（実測では -45dBFS を
-            //  超える床は必ず声・楽器・モニタ返しが入っている）。
-            if (learned)
+            // 新しい測定は音量だけで拒否しない。旧版の危険な学習は従来通り
+            // 捨てる。NaN・無限大・範囲外の値は検証方式にかかわらず採用しない。
+            const int validation = d->getIntAttribute ("validation", 0);
+            bool validFloor = true;
+            float loudest = 0.0f;
+            for (float floor : f)
             {
-                float loudest = 0.0f;
-                for (int b = 0; b < 4; ++b) loudest = juce::jmax (loudest, f[b]);
-                if (juce::Decibels::gainToDecibels (loudest, -120.0f) > -45.0f)
-                {
-                    learned = false;
-                    for (int b = 0; b < 4; ++b) f[b] = 1e-5f;
-                }
+                validFloor = validFloor && std::isfinite (floor) && floor >= 1e-6f && floor <= 0.5f;
+                loudest = juce::jmax (loudest, floor);
             }
+            // v4.3.1 ★静かすぎる床は「学習済み」として採用しない。
+            //  うるさすぎる側しか弾いていなかったため、過去に無入力で測って
+            //  しまった床がそのまま復元され、ノイズ除去が効かないままになる。
+            //  スタンドアロンは設定ファイルから必ずこの道を通るので、
+            //  一度書き込まれると再インストールしても直らなかった。
+            //  採用しない場合は未学習に戻すだけで、自動追従がすぐ測り直す。
+            const float minLearnedFloor =
+                juce::Decibels::decibelsToGain (kDenoiseMinLearnedFloorDb) * 1.4f;
+            const bool tooQuietFloor = loudest < minLearnedFloor;
+            if (! validFloor || tooQuietFloor || (learned && validation < 1
+                && juce::Decibels::gainToDecibels (loudest, -120.0f) > -45.0f))
+            {
+                learned = false;
+                for (float& floor : f) floor = 1e-5f;
+            }
+            dnProfileValidation.store (learned ? validation : 0);
 
             dnLearnedShared.store (learned);
             for (int b = 0; b < 4; ++b) dnFloorShared[b].store (f[b]);

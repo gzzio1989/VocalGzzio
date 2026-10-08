@@ -9,6 +9,7 @@
 #include "PitchCorrection.h"
 #include "StreamOut.h"
 #include "Heya.h"
+#include "DenoiseClassifier.h"
 
 // v4.0.0 リバーブ種別の番号。0..6 は従来のアルゴリズム式、
 // 7..12 は「へや」= 計算で生成した空間IRの畳み込み。
@@ -590,17 +591,23 @@ private:
     std::atomic<float> atDetectedHz { 0.0f };        // last detected F0 (UI; 0 = unvoiced)
     std::atomic<float> atCurrentCorrection { 0.0f }; // applied correction in semitones (UI)
     float dnEnv[4]   = {};          // per-band envelope
+    // v4.3.1 ★「学習した床」として信用できる下限（採用時と復元時の両方で使う）。
+    //  これより静かな床は、実在の部屋の音ではなく「入力が無かった」ことを意味する。
+    //  床が低すぎると openThr = 床×2.5 が本物のノイズより下に来るため、
+    //  エキスパンダーが一度も閉じず、ノイズ除去が完全に無処理になる。
+    //  実測: 床 1e-5 を復元＋学びなおしOFF で削れ 0.00dB（tools/dsp_dnrestore）。
+    //  -93dBFS は、実在するどんな静かな部屋・機材の床よりも低い。
+    static constexpr float kDenoiseMinLearnedFloorDb = -93.0f;
     float dnFloor[4] = { 1e-5f, 1e-5f, 1e-5f, 1e-5f };   // estimated noise floor
     float dnFloorLearn[4] = {};     // capture during learn (peak; v2.10.0 は判定用)
     float dnGain[4]  = { 1, 1, 1, 1 };
     float dnEnvAtk = 0, dnEnvRel = 0, dnOpenCoef = 0, dnCloseCoef = 0;
-    float dnFloorRise = 1.0f;       // adaptive: slow upward drift per sample
+    gz::DenoiseClassifier dnClassifier;
+    float dnInitialFollowCoef = 0.0f;
+    int dnLearnPeriodicFrames = 0;
+    int dnLearnStationaryFrames = 0;
     // v3.0 自動学びなおし(dn_relearn)と、床の這い上がり対策
     float dnRelearnCoef = 0.0f;     // 学びなおしの速さ (τ≈2秒, サンプル毎)
-    int   dnQuietHold = 0;          // 「声」が消えてからのサンプル数
-    int   dnQuietNeed = 0;          // これだけ静かが続いたら学びなおす (400ms)
-    int   dnOpenRun = 0;            // 「声判定」が連続しているサンプル数（詰まり検出）
-    int   dnOpenRunMax = 0;         // 20秒
     int   dnShareDecim = 0;         // dnFloorShared へ書く間引き
     int   dnFallRun[4] = {};        // 包絡が自由落下している連続サンプル数
     int   dnFallMax = 0;            // 30ms（これを超えたら学びなおし停止）
@@ -664,6 +671,7 @@ private:
     // thread) and restore (written on the message thread, picked up in processBlock).
     std::atomic<float> dnFloorShared[4] { 1e-5f, 1e-5f, 1e-5f, 1e-5f };
     std::atomic<bool>  dnLearnedShared  { false };
+    std::atomic<int>   dnProfileValidation { 0 }; // 1=周期性と安定性を確認した学習
     std::atomic<bool>  dnProfilePending { false };
 
     // ---- Sustain (のび): tail lift + even-harmonic generation ----
@@ -869,6 +877,9 @@ private:
     std::atomic<float> tunerBuf[tunerSize] {};
     std::atomic<unsigned> tunerSequence { 0 };
     std::atomic<int> tunerPos { 0 };
+    // Audio-thread-only selection: never sum opposing stereo waveforms for tuning.
+    double tunerChannelEnergy[2] {};
+    int tunerInputChannel { 0 };
 
     // Analyzer ring (post-processing mono mix)
     float            analyzerBuf[analyzerSize] = {};

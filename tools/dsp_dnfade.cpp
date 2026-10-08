@@ -14,9 +14,8 @@
 //     最初は良いのに時間とともに悪化する、の正体。
 //
 //  直しかた: 上向きのドリフトは「声が出ていない間」だけにする。
-//  ただし床が明らかに低すぎて「声判定が常時ON」に詰まったとき
-//  （うるさい部屋で初めて使う場合）だけは、20秒続いたら昔どおり
-//  上向きを許して自力で抜ける。
+//  起動時は音量で声と決めつけず、定常で周期性のないノイズを確認して
+//  床へ追従する。数十秒の待ち時間を必要とせず、早く効いた状態を維持する。
 //
 //  ここで確かめること:
 //   [1] トークの形（声2秒+間0.4秒×150秒・ゲートON）で、声の通り方が
@@ -192,8 +191,9 @@ int main()
 
     // ---------------------------------------------------------------- [3]
     std::printf ("\n[3] うるさい部屋（-45dBFS）でも、自力でノイズを消し始めるか\n");
-    //  床の初期値(1e-5)が実際より40dB低く、「声判定」が常時ONに詰まる形。
-    //  20秒詰まったら昔どおり上向きを許して抜ける、を確かめる。
+    //  初期床が実際より低い場合でも、開始直後から十分に抑制できる。
+    //  早期より後期が下がることは要求しない。早期・後期の絶対低減量と
+    //  長時間の悪化量を別々に確認し、遅れて効く旧不具合も検出する。
     {
         VocalGzzioProcessor p; dnOnlySetup (p, -80.0f, 60.0f);
         p.prepareToPlay (kSR, kBS);
@@ -219,8 +219,12 @@ int main()
         }
         std::printf ("  ノイズの通り方: 2〜6秒 %.2f dB → 60秒以降 %.2f dB\n",
                      early.ratioDb(), late.ratioDb());
-        CHECK (late.ratioDb() < early.ratioDb() - 6.0,
-               "60秒後にはノイズが消え始めている (%.2f → %.2f dB)", early.ratioDb(), late.ratioDb());
+        CHECK (early.ratioDb() < -6.0,
+               "開始2〜6秒でノイズを6dB以上抑える (%.2f dB)", early.ratioDb());
+        CHECK (late.ratioDb() < -6.0,
+               "60秒後もノイズを6dB以上抑える (%.2f dB)", late.ratioDb());
+        CHECK (late.ratioDb() - early.ratioDb() < 1.0,
+               "長時間使っても抑制が悪化しない (差 %.2f dB)", late.ratioDb() - early.ratioDb());
     }
 
     // ---------------------------------------------------------------- [4][5][6]
@@ -250,8 +254,10 @@ int main()
         auto xml = juce::AudioProcessor::getXmlFromBinary (mb.getData(), (int) mb.getSize());
         std::array<double,4> f {};
         if (xml != nullptr)
-            if (auto* d = xml->getChildByName ("denoise"))
+            if (auto* d = xml->getChildByName ("DENOISE"))
                 for (int b = 0; b < 4; ++b) f[(size_t) b] = d->getDoubleAttribute ("f" + juce::String (b));
+        CHECK (std::all_of (f.begin(), f.end(), [] (double value) { return std::isfinite (value) && value > 0.0; }),
+               "4帯域の有効な学習値を保存から読み出せる");
         return f;
     };
     auto runNoise = [] (VocalGzzioProcessor& p, double seconds, float noiseDb,

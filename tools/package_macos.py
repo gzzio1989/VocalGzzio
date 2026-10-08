@@ -61,7 +61,10 @@ def verify_bundle(bundle, edition, version):
         for architecture in sorted(ARCHITECTURES):
             thin = Path(temporary) / architecture
             run("lipo", binary, "-thin", architecture, "-output", thin)
-            verify_marker(thin.read_bytes(), edition)
+            try:
+                verify_marker(thin.read_bytes(), edition)
+            except ValueError as error:
+                raise ValueError(f"{bundle.name} / {architecture}: {error}") from error
     return binary
 
 

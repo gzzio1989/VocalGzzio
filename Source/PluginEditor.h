@@ -8,6 +8,7 @@
 #include <mutex>
 #include <array>
 #include "PluginProcessor.h"
+#include "Tooltips.h"
 
 //==============================================================================
 // Dark palette (v1.3.0): blue-grey base with 3 elevation levels; accents are
@@ -863,8 +864,9 @@ private:
 // whether they are holding pitch steadily. Green centre band = in tune.
 class VocalTuner : public juce::Component, private juce::Timer
 {
+    std::shared_ptr<tip::Language> language;
 public:
-    explicit VocalTuner (VocalGzzioProcessor& p);
+    explicit VocalTuner (VocalGzzioProcessor& p, std::shared_ptr<tip::Language> language = std::make_shared<tip::Language>());
 
     void paint   (juce::Graphics&) override;
     void resized ()                override;
@@ -873,6 +875,11 @@ private:
     void timerCallback() override;
     void analyse();
     void clearPitchDisplay();
+    void updatePitchDisplay();
+    bool isInstrumentMode() const { return tuningMode != 0; }
+    int stringCount() const { return tuningMode == 3 ? 5 : tuningMode == 2 ? 4 : 6; }
+    int stringNote (int index) const;
+    bool displayInTune() const { return hasPitch && pitchStable && std::abs (dispCents) <= 5.0f && std::abs (cents) <= 6.0f; }
     int controlHeight() const;
 
     VocalGzzioProcessor& proc;
@@ -880,8 +887,14 @@ private:
     std::vector<float>   analysisBuffer;
     juce::ComboBox       refPitchBox, tunerModeBox, guitarStringBox;
     bool guitarMode { false }, rangeToolsVisible { false };
+    int tuningMode { 0 }; // voice / guitar / four-string bass / five-string bass
     int guitarString { 0 }, detectedString { 0 }, displayMidi { -1 };
     inline static constexpr int guitarNotes[6] { 40, 45, 50, 55, 59, 64 };
+    inline static constexpr int bassNotes[5] { 23, 28, 33, 38, 43 };
+    std::array<double, 1024> difference {}, normalisedDifference {};
+    std::array<float, 5> recentCents {};
+    int recentCount { 0 }, recentPosition { 0 }, pendingMidi { -1 }, pendingCount { 0 };
+    bool pitchStable { false };
 
     juce::String noteName { "--" };
     float cents { 0 }, freq { 0 };
@@ -931,17 +944,25 @@ public:
     bool isRailMode() const   { return railMode; }
     void setGuitarMode (bool enabled);
     bool isGuitarMode() const { return guitarMode; }
+    void setTuningMode (int mode);
+    int getTuningMode() const { return tuningMode; }
+    int getTuningString() const { return guitarString; }
     void setGuitarString (int stringChoice);
    #if VOCALGZZIO_TESTING
     float measureForTest() { analyse(); return hasPitch ? freq : 0.0f; }
     int detectedStringForTest() const { return detectedString; }
     float centsForTest() const { return cents; }
+    void advanceDisplayForTest() { updatePitchDisplay(); }
+    float displayCentsForTest() const { return dispCents; }
+    bool stableForTest() const { return pitchStable; }
+    bool inTuneForTest() const { return displayInTune(); }
+    int displayNoteForTest() const { return displayMidi; }
    #endif
     void setRangeToolsVisible (bool v)   // note-rail toggle + range check (advanced only)
     {
         rangeToolsVisible = v;
-        railToggle .setVisible (v && ! guitarMode);
-        rangeButton.setVisible (v && ! guitarMode);
+        railToggle .setVisible (v && ! isInstrumentMode());
+        rangeButton.setVisible (v && ! isInstrumentMode());
         if (! v) { railMode = false; railToggle.setToggleState (false, juce::dontSendNotification);
                    if (rangeChecking) stopRange(); }
         resized();
@@ -962,8 +983,9 @@ public:
 // Display only: it reads parameter values / atomics and never touches audio.
 class EQGraph : public juce::Component, private juce::Timer
 {
+    std::shared_ptr<tip::Language> language;
 public:
-    explicit EQGraph (VocalGzzioProcessor& p) : proc (p)
+    explicit EQGraph (VocalGzzioProcessor& p, std::shared_ptr<tip::Language> value = std::make_shared<tip::Language>()) : language (std::move (value)), proc (p)
     {
         timeData.resize ((size_t) VocalGzzioProcessor::analyzerSize, 0.0f);
         fftData .resize ((size_t) VocalGzzioProcessor::analyzerSize * 2, 0.0f);
@@ -1962,10 +1984,11 @@ private:
 
 class ModuleCard : public juce::Component
 {
+    std::shared_ptr<tip::Language> language;
 public:
     // v3.1 §4 endpoint: 0=ふつうの箱 / 1=入(マイクから) / 2=出(しあげ)
     //  「入」「出」は箱ではないので、スイッチも矢印も持たない。
-    ModuleCard (VocalGzzioProcessor&, int index, int endpoint = 0);
+    ModuleCard (VocalGzzioProcessor&, int index, int endpoint = 0, std::shared_ptr<tip::Language> language = std::make_shared<tip::Language>());
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -2058,8 +2081,9 @@ private:
 
 class PathRail : public juce::Component
 {
+    std::shared_ptr<tip::Language> language;
 public:
-    explicit PathRail (VocalGzzioProcessor&);
+    explicit PathRail (VocalGzzioProcessor&, std::shared_ptr<tip::Language> language = std::make_shared<tip::Language>());
     ~PathRail() override;
 
     void paint (juce::Graphics&) override;
@@ -2116,6 +2140,7 @@ private:
 //==============================================================================
 class VocalGzzioContent : public juce::Component, private juce::Timer
 {
+    std::shared_ptr<tip::Language> language { std::make_shared<tip::Language>() };
 public:
     explicit VocalGzzioContent (VocalGzzioProcessor&);
 
@@ -2201,7 +2226,7 @@ private:
     void refreshOverviewText();
     void updateOverviewState();
     bool overviewEnabled { true };
-    std::vector<std::pair<juce::Component*, bool>> overviewOldVisibility;
+    std::vector<std::pair<juce::Component::SafePointer<juce::Component>, bool>> overviewOldVisibility;
     juce::ComboBox finishPresetBox;
     juce::TextButton overviewDetails, overviewReturn, overviewPitch;
     HoldButton overviewCompare;
@@ -2212,6 +2237,7 @@ private:
     std::array<juce::Rectangle<int>, 3> overviewCards;
     juce::Rectangle<int> overviewMonitor, overviewOutput, overviewHelp;
     juce::String overviewHint;
+    juce::Label overviewNoiseStatus;
     int finishPresetIndex { -1 };
     struct Knob
     {
@@ -2234,8 +2260,8 @@ private:
     void applyEqPreset (int id);
     void refreshPresetDisplays();   // restore combo selections from apvts.state (display only)
     void applyTempoFit();           // set delay/reverb lengths from current BPM (v1.4.0)
-    static juce::String keyName (int tonic, bool isMinor);       // v1.4.0 key label
-    static juce::String suggestChords (int tonic, bool isMinor); // diatonic progression suggestion
+    juce::String keyName (int tonic, bool isMinor);       // v1.4.0 key label
+    juce::String suggestChords (int tonic, bool isMinor); // diatonic progression suggestion
     void  applyModeVisibility();    // show/hide advanced-only controls
     // v3.1「使いかた4種」: 見せる/隠すだけを切り出したもの（副作用なし）。
     //  使いかたを変えたときは、おまかせの途中経過などを壊さずにここだけ回す。
@@ -2329,10 +2355,12 @@ private:
     //   （「出ているつもり」を検査が確かめられない物は作らない）。
     struct FocusEmptyNote : juce::Component
     {
+        explicit FocusEmptyNote (std::shared_ptr<tip::Language> value) : language (std::move (value)) {}
+        std::shared_ptr<tip::Language> language;
         float scale { 1.0f };
         void paint (juce::Graphics&) override;
     };
-    FocusEmptyNote focusEmpty;
+    FocusEmptyNote focusEmpty { language };
     juce::Rectangle<int> focusHeadArea, focusTipArea, focusFinishArea;
     // v3.1 §4 右1/4「ぜんたい」。入出力メーターと、文字/画面の大きさの大きなスライダー。
     //  ★「表示をかるくする」は入れない。案A には描いてあるが、その正体だった

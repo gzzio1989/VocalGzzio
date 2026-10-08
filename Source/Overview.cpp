@@ -18,8 +18,13 @@ void VocalGzzioContent::initialiseOverview()
     srcModeBox.setComponentID ("sourceMode");
     learnButton.setComponentID ("learnNoise");
     relearnBtn.setComponentID ("autoLearnNoise");
+    overviewNoiseStatus.setComponentID ("noiseStatus");
+    overviewNoiseStatus.getProperties().set ("fontH", 13.0);
+    overviewNoiseStatus.setJustificationType (juce::Justification::centredLeft);
+    addChildComponent (overviewNoiseStatus);
+    dnClearButton.setComponentID ("clearNoise");
     finishPresetBox.setComponentID ("finishPreset");
-    finishPresetBox.setTooltip (tip::T ("目的から仕上がりを選びます。音色・音量の整え方・残響が一緒に変わります。入力音量と出力音量、ノイズ学習、音程の設定は保持します。", "Choose a complete tone, dynamics and ambience recipe. Input/output gain, noise learning and pitch settings are preserved."));
+    finishPresetBox.setTooltip (language->T ("目的から仕上がりを選びます。音色・音量の整え方・残響が一緒に変わります。入力音量と出力音量、ノイズ学習、音程の設定は保持します。", "Choose a complete tone, dynamics and ambience recipe. Input/output gain, noise learning and pitch settings are preserved."));
     addChildComponent (finishPresetBox);
     finishPresetBox.onChange = [this]
     {
@@ -36,7 +41,7 @@ void VocalGzzioContent::initialiseOverview()
         });
         finishPresetIndex = index;
         processor.apvts.state.setProperty ("finish_preset", index, nullptr);
-        overviewHint = juce::String::fromUTF8 (tip::english ? gzzio::kFinishPresets[index].descEn : gzzio::kFinishPresets[index].desc);
+        overviewHint = juce::String::fromUTF8 (language->english ? gzzio::kFinishPresets[index].descEn : gzzio::kFinishPresets[index].desc);
         repaint();
     };
     finishPresetIndex = (int) processor.apvts.state.getProperty ("finish_preset", -1);
@@ -99,13 +104,15 @@ void VocalGzzioContent::setOverview (bool on)
 
 void VocalGzzioContent::restoreOverviewVisibility()
 {
-    for (const auto& item : overviewOldVisibility) item.first->setVisible (item.second);
+    for (const auto& item : overviewOldVisibility)
+        if (auto* component = item.first.getComponent()) component->setVisible (item.second);
     overviewOldVisibility.clear();
     for (auto* k : { &inGainK, &makeupK, &denoiseK, &gate, &lowCut, &mudK,
                      &comp2K, &deessK, &presenceK, &airK, &warmthK, &resK,
                      &revMixK, &revSizeK, &delayK, &widthK })
     { k->slider.setEnabled (true); k->label.setAlpha (1.0f); }
     for (auto* c : std::initializer_list<juce::Component*> { &finishPresetBox, &overviewDetails, &overviewCompare,
+                     &overviewNoiseStatus,
                      &overviewPitch, &overviewMore[0], &overviewMore[1], &overviewMore[2],
                      &overviewSectionPower[0], &overviewSectionPower[1], &overviewSectionPower[2] })
         c->setVisible (false);
@@ -115,8 +122,14 @@ void VocalGzzioContent::updateOverviewVisibility()
 {
     if (! isOverview()) return;
     if (overviewOldVisibility.empty())
-        for (auto* c : getChildren()) overviewOldVisibility.emplace_back (c, c->isVisible());
-    for (auto* c : getChildren()) c->setVisible (false);
+        for (auto* c : getChildren())
+            if (dynamic_cast<juce::CallOutBox*> (c) == nullptr)
+                overviewOldVisibility.emplace_back (c, c->isVisible());
+    // Popups own their visibility and are destroyed asynchronously when closed.
+    // Capturing them here hid the open tuner/settings panel and left dangling
+    // references for the next detail/pitch/overview navigation.
+    for (auto* c : getChildren())
+        if (dynamic_cast<juce::CallOutBox*> (c) == nullptr) c->setVisible (false);
     for (auto* c : { (juce::Component*) &finishPresetBox, (juce::Component*) &srcModeBox,
          (juce::Component*) &overviewDetails, (juce::Component*) &overviewCompare,
          (juce::Component*) &overviewPitch, (juce::Component*) &sizePopBtn,
@@ -125,6 +138,7 @@ void VocalGzzioContent::updateOverviewVisibility()
          (juce::Component*) &loadButton, (juce::Component*) &abA, (juce::Component*) &abB,
          (juce::Component*) &abCopy, (juce::Component*) &tuner, (juce::Component*) &eqGraph,
          (juce::Component*) &learnButton, (juce::Component*) &relearnBtn,
+         (juce::Component*) &overviewNoiseStatus,
          (juce::Component*) &reverbPower, (juce::Component*) &revTypeBox,
          (juce::Component*) &overviewMore[0], (juce::Component*) &overviewMore[1],
          (juce::Component*) &overviewMore[2] }) c->setVisible (true);
@@ -146,6 +160,19 @@ void VocalGzzioContent::updateOverviewVisibility()
 void VocalGzzioContent::updateOverviewState()
 {
     auto active = [this] (const char* id) { return processor.apvts.getRawParameterValue (id)->load() > 0.5f; };
+    const bool learned = processor.isDenoiseLearned();
+    const bool learning = processor.isDenoiseLearning();
+    const bool enabled = active ("mod_souji") && active ("dn_on");
+    const int amount = juce::roundToInt (processor.apvts.getRawParameterValue ("denoise")->load());
+    const auto measured = learned ? language->T ("学習済", "Learned") : language->T ("自動推定", "Adaptive");
+    const auto status = learning ? language->T ("測定中：声を出さないで", "Learning: stay quiet")
+                      : ! enabled ? measured + language->T (" ／ ノイズ除去は切", " / Reduction OFF")
+                      : measured + language->T (" ／ 除去量 ", " / Amount ") + juce::String (amount) + "%";
+    overviewNoiseStatus.setText (status, juce::dontSendNotification);
+    dnClearButton.setVisible (learned);
+    overviewNoiseStatus.setColour (juce::Label::textColourId, ! enabled || amount == 0 ? Palette::yellow : Palette::inkSoft);
+    const auto help = language->learn_tip() + "\n" + language->T ("測定だけでは除去量は変わりません。処理を入れ、ノイズ除去を20〜40%から上げて聴き比べてください。", "Learning does not change the amount. Enable processing, then start noise reduction at 20-40% and compare.");
+    overviewNoiseStatus.setTooltip (help);
     for (int i = 0; i < 3; ++i)
     {
         const auto modules = overviewModules (i);
@@ -153,8 +180,8 @@ void VocalGzzioContent::updateOverviewState()
         for (auto* id : modules) if (active (id)) ++count;
         auto& button = overviewSectionPower[(size_t) i];
         button.setToggleState (count > 0, juce::dontSendNotification);
-        button.setButtonText (count == (int) modules.size() ? tip::T ("入", "ON") : count == 0 ? tip::T ("切", "OFF") : tip::T ("一部", "PART"));
-        button.setTooltip (tip::T ("この区画の処理をまとめて入／切します。詳細画面で一部だけ切っている場合は「一部」と表示します。", "Enable or bypass this section. PART means some processors were bypassed in the detailed view."));
+        button.setButtonText (count == (int) modules.size() ? language->T ("入", "ON") : count == 0 ? language->T ("切", "OFF") : language->T ("一部", "PART"));
+        button.setTooltip (language->T ("この区画の処理をまとめて入／切します。詳細画面で一部だけ切っている場合は「一部」と表示します。", "Enable or bypass this section. PART means some processors were bypassed in the detailed view."));
     }
     auto enable = [] (Knob& k, bool state) { k.slider.setEnabled (state); k.label.setAlpha (state ? 1.0f : 0.5f); };
     for (auto* k : { &denoiseK, &gate }) enable (*k, active ("mod_souji"));
@@ -167,28 +194,31 @@ void VocalGzzioContent::updateOverviewState()
 
 void VocalGzzioContent::refreshOverviewText()
 {
-    learnButton.setButtonText (tip::T ("ノイズを測る", "Learn noise"));
-    relearnBtn.setButtonText (tip::dn_relearn_label());
+    overviewHint.clear();
+    finishPresetBox.setTooltip (language->T ("目的から仕上がりを選びます。音色・音量の整え方・残響が一緒に変わります。入力音量と出力音量、ノイズ学習、音程の設定は保持します。", "Choose a complete tone, dynamics and ambience recipe. Input/output gain, noise learning and pitch settings are preserved."));
+    learnButton.setButtonText (language->T ("ノイズを測る", "Learn noise"));
+    relearnBtn.setButtonText (language->dn_relearn_label());
+    dnClearButton.setButtonText (isOverview() ? language->T ("学習を消す", "Clear noise") : language->dnlearn_done());
     const int selected = finishPresetBox.getSelectedId();
     finishPresetBox.clear (juce::dontSendNotification);
     for (int i = 0; i < gzzio::kNumFinishPresets; ++i)
-        finishPresetBox.addItem (juce::String::fromUTF8 (tip::english ? gzzio::kFinishPresets[i].nameEn : gzzio::kFinishPresets[i].name), i + 1);
-    finishPresetBox.setTextWhenNothingSelected (tip::T ("仕上がりを選ぶ", "Choose a finish"));
+        finishPresetBox.addItem (juce::String::fromUTF8 (language->english ? gzzio::kFinishPresets[i].nameEn : gzzio::kFinishPresets[i].name), i + 1);
+    finishPresetBox.setTextWhenNothingSelected (language->T ("仕上がりを選ぶ", "Choose a finish"));
     finishPresetBox.setSelectedId (selected > 0 ? selected : finishPresetIndex + 1, juce::dontSendNotification);
-    overviewDetails.setButtonText (tip::T ("詳細調整", "All controls"));
-    overviewReturn.setButtonText (tip::T ("総合画面", "Overview"));
-    overviewPitch.setButtonText (tip::T ("音程・ハモリ", "Pitch & harmony"));
-    overviewCompare.setButtonText (tip::T ("押して原音と比較", "Hold to compare"));
-    overviewCompare.setTooltip (tip::T ("押している間は処理前の音を聴けます。離すと元の設定に戻ります。音量の差だけで判断せず、声の輪郭や余韻を比べてください。", "Hold to hear the unprocessed input. Release to return. Compare the tone and tail as well as loudness."));
-    reverbPower.setButtonText (tip::T ("リバーブ 入／切", "Reverb ON / OFF"));
-    reverbPower.setTooltip (tip::rev_tip());
+    overviewDetails.setButtonText (language->T ("詳細調整", "All controls"));
+    overviewReturn.setButtonText (language->T ("総合画面", "Overview"));
+    overviewPitch.setButtonText (language->T ("音程・ハモリ", "Pitch & harmony"));
+    overviewCompare.setButtonText (language->T ("押して原音と比較", "Hold to compare"));
+    overviewCompare.setTooltip (language->T ("押している間は処理前の音を聴けます。離すと元の設定に戻ります。音量の差だけで判断せず、声の輪郭や余韻を比べてください。", "Hold to hear the unprocessed input. Release to return. Compare the tone and tail as well as loudness."));
+    reverbPower.setButtonText (language->T ("リバーブ 入／切", "Reverb ON / OFF"));
+    reverbPower.setTooltip (language->rev_tip());
     reverbPower.setColour (juce::TextButton::buttonOnColourId, Palette::green);
     for (auto& power : overviewSectionPower) power.setColour (juce::TextButton::buttonOnColourId, Palette::green);
-    tuningPopBtn.setButtonText (tip::T ("チューナー", "Tuner"));
-    sessionButton.setButtonText (tip::T ("低遅延モード", "Low latency"));
-    for (auto& b : overviewMore) b.setButtonText (tip::T ("詳しく調整", "More"));
-    auto label = [] (Knob& k, const char* jp, const char* en)
-    { k.label.setText (tip::T (jp, en), juce::dontSendNotification); };
+    tuningPopBtn.setButtonText (language->T ("チューナー", "Tuner"));
+    sessionButton.setButtonText (language->T ("低遅延モード", "Low latency"));
+    for (auto& b : overviewMore) b.setButtonText (language->T ("詳しく調整", "More"));
+    auto label = [this] (Knob& k, const char* jp, const char* en)
+    { k.label.setText (language->T (jp, en), juce::dontSendNotification); };
     if (isOverview())
     {
         label (inGainK, "入力音量", "Input"); label (makeupK, "出力音量", "Output");
@@ -211,12 +241,12 @@ void VocalGzzioContent::refreshOverviewText()
         label (deessK, "サ行おさえ", "DE-ESS");
         label (presenceK, advancedMode ? "ヌケ感" : "声の明るさ", "PRESENCE");
         label (airK, "キラキラ", "AIR"); label (warmthK, "あたたかみ", "WARMTH");
-        resK.label.setText (tip::res_label(), juce::dontSendNotification);
+        resK.label.setText (language->res_label(), juce::dontSendNotification);
         label (revMixK, "ひびき", "REVERB"); label (revSizeK, "部屋の広さ", "ROOM SIZE");
         label (delayK, "やまびこ", "ECHO"); label (widthK, "ひろがり", "WIDTH");
     }
-    auto explain = [] (Knob& k, const char* jp, const char* en)
-    { k.slider.setTooltip (tip::T (jp, en)); k.label.setTooltip (tip::T (jp, en)); };
+    auto explain = [this] (Knob& k, const char* jp, const char* en)
+    { k.slider.setTooltip (language->T (jp, en)); k.label.setTooltip (language->T (jp, en)); };
     explain (denoiseK, "一定のサー音を小さくします。まず黙った状態で「ノイズを測る」を押し、量を少しずつ上げます。声が薄くなったら下げてください。", "Reduces steady hiss. Measure the noise while silent, then raise the amount gradually. Back off if the voice becomes thin.");
     explain (comp2K, "強い声と弱い声の差を小さくします。上げるほど声量がそろいます。抑揚が平らになったら下げます。出力音量とは別の調整です。", "Reduces the difference between loud and quiet phrases. Increase for steadier level; reduce to preserve expression. This is not output gain.");
     explain (presenceK, "言葉の輪郭が聞こえる中高音を調整します。伴奏に埋もれるときは上げ、硬く耳に当たるときは下げます。", "Adjusts the upper mids that carry vocal clarity. Raise it to cut through a mix, lower it if the voice sounds hard.");
@@ -283,12 +313,16 @@ void VocalGzzioContent::resizedOverview()
         }
     };
     grid (overviewOutput.reduced (10).withTrimmedTop (60), { &inGainK, &makeupK }, 2);
-    grid (overviewCards[0].reduced (16).withTrimmedTop (102), { &denoiseK, &gate, &lowCut, &mudK }, 2);
-    grid (overviewCards[1].reduced (16).withTrimmedTop (102), { &comp2K, &deessK, &presenceK, &warmthK }, 2);
-    grid (overviewCards[2].reduced (16).withTrimmedTop (102), { &revMixK, &revSizeK, &delayK, &widthK }, 2);
+    grid (overviewCards[0].reduced (16).withTrimmedTop (128), { &denoiseK, &gate, &lowCut, &mudK }, 2);
+    grid (overviewCards[1].reduced (16).withTrimmedTop (128), { &comp2K, &deessK, &presenceK, &warmthK }, 2);
+    grid (overviewCards[2].reduced (16).withTrimmedTop (128), { &revMixK, &revSizeK, &delayK, &widthK }, 2);
     auto learning = overviewCards[0].reduced (16).withTrimmedTop (55).withHeight (36);
     learnButton.setBounds (learning.removeFromLeft (learning.getWidth() / 2)); learning.removeFromLeft (8);
     relearnBtn.setBounds (learning);
+    auto noiseState = overviewCards[0].reduced (16).withTrimmedTop (94).withHeight (32);
+    dnClearButton.setBounds (noiseState.removeFromRight (116));
+    noiseState.removeFromRight (8);
+    overviewNoiseStatus.setBounds (noiseState);
     auto reverb = overviewCards[2].reduced (16).withTrimmedTop (55).withHeight (36);
     reverbPower.setBounds (reverb.removeFromLeft (juce::jmin (210, reverb.getWidth() / 2)));
     reverb.removeFromLeft (8); revTypeBox.setBounds (reverb);
@@ -322,13 +356,13 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     text ("VocalGzzio", { 76, 18, 270, 42 }, 31, Palette::ink, true);
     const auto latencyMs = 1000.0 * processor.addedLatencySamples() / juce::jmax (1.0, processor.getTunerSampleRate());
    #if VOCALGZZIO_TRIAL
-    text ("4.2 / " + tip::T ("体験版 / 遅延 ", "TRIAL / Latency ") + juce::String (latencyMs, 1) + " ms", latBadgeArea, 19, Palette::yellow, true);
+    text (juce::String (JucePlugin_VersionString) + " / " + language->T ("体験版 / 遅延 ", "TRIAL / Latency ") + juce::String (latencyMs, 1) + " ms", latBadgeArea, 19, Palette::yellow, true);
    #else
-    text ("4.2  /  " + tip::T ("追加遅延 ", "Latency ") + juce::String (latencyMs, 1) + " ms", latBadgeArea, 21, Palette::inkSoft);
+    text (juce::String (JucePlugin_VersionString) + " / " + language->T ("追加遅延 ", "Latency ") + juce::String (latencyMs, 1) + " ms", latBadgeArea, 21, Palette::inkSoft);
    #endif
     g.setColour (Palette::panelLn);
     g.drawHorizontalLine (80, 24.0f, (float) getWidth() - 24.0f);
-    text (tip::T ("仕上がり", "FINISH"), { 28, 100, 90, 40 }, 19, Palette::ink, true);
+    text (language->T ("仕上がり", "FINISH"), { 28, 100, 90, 40 }, 19, Palette::ink, true);
     auto card = [&] (juce::Rectangle<int> r, juce::Colour accent)
     {
         g.setColour (Palette::panel); g.fillRoundedRectangle (r.toFloat(), 16.0f);
@@ -336,9 +370,9 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         g.setColour (accent); g.fillRoundedRectangle ((float) r.getX() + 18, (float) r.getY() + 20, 4.0f, 24.0f, 2.0f);
     };
     card (overviewMonitor, Palette::blue);
-    text (tip::T ("音の輪郭", "SPECTRUM"), overviewMonitor.reduced (30, 12).withHeight (30), 17, Palette::ink, true);
+    text (language->T ("音の輪郭", "SPECTRUM"), overviewMonitor.reduced (30, 12).withHeight (30), 17, Palette::ink, true);
     card (overviewOutput, Palette::green);
-    text (tip::T ("入出力", "LEVELS"), overviewOutput.reduced (30, 12).withHeight (30), 17, Palette::ink, true);
+    text (language->T ("入出力", "LEVELS"), overviewOutput.reduced (30, 12).withHeight (30), 17, Palette::ink, true);
     const char* namesJa[] = { "整える", "声をつくる", "空間をつくる" };
     const char* namesEn[] = { "CLEAN", "CHARACTER", "SPACE" };
     const juce::Colour accents[] = { Palette::green, Palette::blue, Palette::yellow };
@@ -346,9 +380,9 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     {
         auto r = overviewCards[(size_t) i];
         card (r, accents[i]);
-        text (juce::String::fromUTF8 (tip::english ? namesEn[i] : namesJa[i]), r.reduced (32, 10).withHeight (40), 23, Palette::ink, true);
+        text (juce::String::fromUTF8 (language->english ? namesEn[i] : namesJa[i]), r.reduced (32, 10).withHeight (40), 23, Palette::ink, true);
     }
-    text (tip::T ("音量の差と、声の質感を整える", "Shape dynamics and vocal texture"), overviewCards[1].reduced (24).withTrimmedTop (40).withHeight (36), 20, Palette::inkSoft);
+    text (language->T ("音量の差と、声の質感を整える", "Shape dynamics and vocal texture"), overviewCards[1].reduced (24).withTrimmedTop (40).withHeight (36), 20, Palette::inkSoft);
     const float levels[] = { processor.getInputLevel(), processor.getOutputLevel() };
     for (int i = 0; i < 2; ++i)
     {
@@ -362,11 +396,14 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     }
     g.setColour (Palette::panel2); g.fillRoundedRectangle (overviewHelp.toFloat(), 12.0f);
    #if VOCALGZZIO_TRIAL
-    const auto defaultHint = tip::T ("体験版：60秒ごとに0.6秒だけ音量が下がります。設定の保存・読込は利用できません。つまみにカーソルを合わせると、効果と使いどころを表示します。", "Trial: the sound dips for 0.6 seconds every 60 seconds. Settings cannot be saved or loaded. Hover over a control to see its effect and when to use it.");
+    const auto defaultHint = language->T ("体験版：60秒ごとに0.6秒だけ音量が下がります。設定の保存・読込は利用できません。つまみにカーソルを合わせると、効果と使いどころを表示します。", "Trial: the sound dips for 0.6 seconds every 60 seconds. Settings cannot be saved or loaded. Hover over a control to see its effect and when to use it.");
    #else
-    const auto defaultHint = tip::T ("仕上がりを選び、原音と比べながら調整。つまみにカーソルを合わせると、変化と使いどころをここに表示します。", "Choose a finish, compare it with the original, then adjust. Hover over a control to see what it changes and when to use it.");
+    const auto defaultHint = language->T ("仕上がりを選び、原音と比べながら調整。つまみにカーソルを合わせると、変化と使いどころをここに表示します。", "Choose a finish, compare it with the original, then adjust. Hover over a control to see what it changes and when to use it.");
    #endif
-    const auto hint = overviewHint.isNotEmpty() ? overviewHint : defaultHint;
+    // Learning success/failure must be visible in the overview too. The old detail-only
+    // infoText left the default screen silent when a measurement was rejected.
+    const auto hint = dnMsgTicks > 0 && infoText.isNotEmpty() ? infoText
+                    : overviewHint.isNotEmpty() ? overviewHint : defaultHint;
     g.setColour (Palette::ink);
     g.setFont (GzzioLnF::uiFont (21.0f * juce::jlimit (1.0f, 1.3f, fontScale / 1.5f), false));
     g.drawFittedText (hint, overviewHelp.reduced (18, 8), juce::Justification::centredLeft, 2, 1.0f);

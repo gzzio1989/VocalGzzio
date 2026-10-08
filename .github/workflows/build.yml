@@ -32,6 +32,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Mac梱包の取り違え防止検査
+        run: python -m unittest discover -s tools -p test_package_macos.py -v
       - name: 検査用に構成
         run: cmake -S . -B build/validation -DCMAKE_BUILD_TYPE=Release -DVOCALGZZIO_BUILD_TESTS=ON -DVOCALGZZIO_TRIAL=OFF
       - name: 検査をビルド
