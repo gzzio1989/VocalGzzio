@@ -24,7 +24,7 @@ Set-StrictMode -Version Latest
 $repo = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 # 違う製品や別ユーザーの場所を誤って操作しないため、この端末の更新先を固定する。
 $installedBundle = 'C:\Program Files\Common Files\VST3\VocalGzzio.vst3'
-$backupRoot = 'C:\Users\silve\VocalGzzio_Backups'
+$backupRoot = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'VocalGzzio_Backups'
 $installedParent = Split-Path -Parent $installedBundle
 
 function Assert-ChildPath([string]$Path, [string]$Parent) {
