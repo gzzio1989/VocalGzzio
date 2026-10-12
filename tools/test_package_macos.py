@@ -24,6 +24,7 @@ class MacPackageTest(unittest.TestCase):
         contents = bundle / "Contents"
         (contents / "MacOS").mkdir(parents=True)
         (contents / "MacOS" / "VocalGzzio").write_bytes(b"universal-binary-placeholder")
+        (contents / "MacOS" / "VocalGzzio").chmod(0o755)
         (contents / "Info.plist").write_bytes(plistlib.dumps({
             "CFBundleShortVersionString": "4.2.0", "CFBundleExecutable": "VocalGzzio"}))
         return bundle
@@ -69,6 +70,31 @@ class MacPackageTest(unittest.TestCase):
             bundle = self.make_bundle(Path(temporary))
             with patch.object(package, "run", return_value="arm64"):
                 with self.assertRaises(ValueError):
+                    package.verify_bundle(bundle, "product", "4.2.0")
+
+    def test_standalone_requires_microphone_permission_description(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            bundle = self.make_bundle(Path(temporary))
+            app = bundle.with_suffix(".app")
+            bundle.rename(app)
+            with patch.object(package, "run") as run:
+                with self.assertRaisesRegex(ValueError, "マイク"):
+                    package.verify_bundle(app, "product", "4.2.0")
+                run.assert_not_called()
+
+    def test_mac_binary_requires_execute_permission(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            bundle = self.make_bundle(Path(temporary))
+            binary = bundle / "Contents/MacOS/VocalGzzio"
+            original_stat = Path.stat
+            def without_execute(path, *args, **kwargs):
+                result = original_stat(path, *args, **kwargs)
+                if path == binary:
+                    from types import SimpleNamespace
+                    return SimpleNamespace(st_mode=result.st_mode & ~0o111)
+                return result
+            with patch.object(package.sys, "platform", "darwin"), patch.object(Path, "stat", without_execute):
+                with self.assertRaisesRegex(ValueError, "実行権限"):
                     package.verify_bundle(bundle, "product", "4.2.0")
 
     def test_old_version_is_refused_before_lipo(self):

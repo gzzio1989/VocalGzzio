@@ -1660,25 +1660,9 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     // 通る前と後で波形が1サンプルも変わらない（tools/dsp_modules で一致確認）。
     if (soujiRun) mods.save (gz::ModuleChain::Souji, buffer);
 
-    // ---- gate ----
-    if (soujiRun && apvts.getRawParameterValue ("gate_on")->load() > 0.5f)
-    {
-        const float thr = juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("gate")->load());
-        for (int n = 0; n < numSamples; ++n)
-        {
-            float inPk = 0.0f;
-            for (int ch = 0; ch < numCh; ++ch)
-                inPk = juce::jmax (inPk, std::abs (buffer.getSample (ch, n)));
-            gateEnv += (inPk > gateEnv ? gateEnvAtk : gateEnvRel) * (inPk - gateEnv);
-            const float target = gateEnv >= thr ? 1.0f : 0.0f;
-            gateGain += (target > gateGain ? gateOpenCoef : gateCloseCoef) * (target - gateGain);
-            for (int ch = 0; ch < numCh; ++ch)
-                buffer.setSample (ch, n, buffer.getSample (ch, n) * gateGain);
-        }
-    }
-    else gateGain = 1.0f;   // v2.8.0: ゲートOFFなら「開いている」に戻す(下のノイズ除去が見る)
-
     // ---- de-noise (4-band adaptive downward expander, RX-style Learn) ----
+    // ゲートより先に入力を測る。ゲートが閉じていても環境音を学習し、
+    // 古い学習済みの床が固定されたままになることを防ぐ。
     {
         const bool  dnOn   = apvts.getRawParameterValue ("dn_on")->load() > 0.5f;
         const bool  dnRelearn = apvts.getRawParameterValue ("dn_relearn")->load() > 0.5f;
@@ -1746,7 +1730,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 // 左右を足すと逆相の声が消えるので、判定は左右で独立する。
                 if (dnClassifier.push (buffer.getSample (0, n),
                                        buffer.getSample (juce::jmin (1, numCh - 1), n),
-                                       dnEnv, gateGain > 0.99f)
+                                       dnEnv, true)
                     && learn > 0)
                 {
                     if (dnClassifier.isPeriodic()) ++dnLearnPeriodicFrames;
@@ -1845,7 +1829,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     // 初期床から+3dB/秒で這い上がる方式は、大きいノイズを声と
                     // 誤認すると数十秒間まったく働かなかった。声の周期があれば
                     // 時間が経っても更新せず、演奏をノイズへ取り込まない。
-                    if ((! dnLearned || dnRelearn) && gateGain > 0.99f
+                    if ((! dnLearned || dnRelearn)
                         && dnClassifier.isStationary() && dnFallRun[b] <= dnFallMax)
                     {
                         const float target = dnClassifier.floorTarget (b);
@@ -1971,6 +1955,26 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         else
             meterDN.store (meterDN.load() * 0.9f);
     }
+
+    // ---- gate ----
+    // 判定には除去前の入力を使い、減衰だけをノイズ除去後へ適用する。
+    // これにより学習を妨げず、既存のゲートしきい値と開閉速度を保つ。
+    if (soujiRun && apvts.getRawParameterValue ("gate_on")->load() > 0.5f)
+    {
+        const float thr = juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("gate")->load());
+        for (int n = 0; n < numSamples; ++n)
+        {
+            float inPk = 0.0f;
+            for (int ch = 0; ch < numCh; ++ch)
+                inPk = juce::jmax (inPk, std::abs (dryBuffer.getSample (ch, n)));
+            gateEnv += (inPk > gateEnv ? gateEnvAtk : gateEnvRel) * (inPk - gateEnv);
+            const float target = gateEnv >= thr ? 1.0f : 0.0f;
+            gateGain += (target > gateGain ? gateOpenCoef : gateCloseCoef) * (target - gateGain);
+            for (int ch = 0; ch < numCh; ++ch)
+                buffer.setSample (ch, n, buffer.getSample (ch, n) * gateGain);
+        }
+    }
+    else gateGain = 1.0f;
 
     if (soujiRun) mods.restore (gz::ModuleChain::Souji, buffer);
     // ===== モジュール1「おそうじ」前半ここまで（ポップ・リップは後半にある）=====
@@ -4119,6 +4123,24 @@ juce::String VocalGzzioProcessor::buildReportText() const
     s << "\n";
     s << "  申告している遅延   : " << reportedLatency.load() << " サンプル\n";
     s << "  セッションモード   : " << (sessionActive.load() ? "入" : "切") << "\n\n";
+
+    s << "[ノイズ除去の診断]\n";
+    auto value = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
+    s << "  おそうじ区画 : " << (value ("mod_souji") > 0.5f ? "入" : "切") << "\n";
+    s << "  ノイズ除去   : " << (value ("dn_on") > 0.5f ? "入" : "切")
+      << " / " << juce::String (value ("denoise"), 0) << "%\n";
+    s << "  加工音の割合 : " << juce::String (value ("mix"), 0) << "%\n";
+    s << "  原音比較中   : " << (compareBypass.load() ? "はい" : "いいえ")
+      << " / 区画比較番号 " << compareOne.load() << "（-1は比較なし）\n";
+    s << "  ノイズ学習   : " << (isDenoiseLearning() ? "測定中" : isDenoiseLearned() ? "学習済み" : "自動推定")
+      << " / 自動学習 " << (value ("dn_relearn") > 0.5f ? "入" : "切") << "\n";
+    s << "  無音時カット : " << (value ("gate_on") > 0.5f ? "入" : "切")
+      << " / " << juce::String (value ("gate"), 1) << " dB\n";
+    s << "  保存用のノイズ基準（低域から4帯域、dBFS） :";
+    for (const auto& floor : dnFloorShared)
+        s << " " << juce::String (juce::Decibels::gainToDecibels (floor.load(), -120.0f), 1);
+    s << "\n  内部の除去動作指標 : " << juce::String (getDenoiseActivity(), 3)
+      << "（0は減衰なし。機器の直接モニター音は測定対象外）\n\n";
 
     s << "[使われ方] ※手元に貯めているだけの数字です\n";
     s << "  はじめて使った日 : " << usageLog.getFirstSeen() << "\n";

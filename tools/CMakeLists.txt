@@ -5,7 +5,7 @@ set(gz_unit_tests
     dsp_voiceshift_stress dsp_pitchquality)
 
 set(gz_integration_tests
-    dsp_noalloc dsp_checkup dsp_dnlearn dsp_dnstartup dsp_srcmode dsp_rt_alloc dsp_cpu
+    dsp_noalloc dsp_checkup dsp_dnlearn dsp_dnstartup dsp_dnpreinput dsp_srcmode dsp_rt_alloc dsp_cpu
     dsp_dnonset dsp_belt dsp_autoset dsp_modules dsp_crush dsp_order
     dsp_host dsp_dnfade dsp_swish dsp_usemode dsp_usememo dsp_pick
     dsp_rates ui_fit ui_usemode ui_focus ui_load dsp_dnslow dsp_dndrift
