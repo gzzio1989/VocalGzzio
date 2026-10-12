@@ -316,7 +316,9 @@ def package_distribution(args, bundles, stem, label):
         (documents / "mac-install.html").write_text(guide, encoding="utf-8")
         (package / "ここから始める.html").write_text(
             guide.replace('href="説明書.html"', 'href="説明書/説明書.html"'), encoding="utf-8")
-        shutil.copy2(ROOT / "docs" / "manual.html", documents / "説明書.html")
+        manual = (ROOT / "docs" / "manual.html").read_text(encoding="utf-8").replace(
+            'href="https://gzzio1989.github.io/apps/vocalgzzio/mac-install.html"', 'href="mac-install.html"')
+        (documents / "説明書.html").write_text(manual, encoding="utf-8")
         shutil.copy2(ROOT / "docs" / "style.css", documents / "style.css")
         license_dir = package / "ライセンス"
         license_dir.mkdir()
