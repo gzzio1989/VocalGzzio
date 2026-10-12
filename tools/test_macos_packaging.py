@@ -123,9 +123,12 @@ class PackagingTests(unittest.TestCase):
             self.assertIn('href="説明書.html"', guide)
             entry = archive.read(root + "ここから始める.html").decode("utf-8")
             self.assertIn('href="説明書/説明書.html"', entry)
+            self.assertIn("VocalGzzio旧版保管", entry)
             self.assertFalse(any("手動インストール/" in name for name in archive.namelist()))
             self.assertFalse(any(".component/" in name or ".app/" in name for name in archive.namelist()))
             self.assertIn(root + "VocalGzzio_v4.3.1_Mac_製品版_未公証.pkg", archive.namelist())
+        installed = self.installer_snapshots[0]
+        self.assertTrue(any(name.endswith("ここから始める.html") for name in installed))
 
     def test_notarization_rejection_never_publishes_zip(self):
         self.signed()

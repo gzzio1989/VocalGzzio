@@ -249,6 +249,17 @@ def publish_archive(staged_archive, destination):
     return checksum
 
 
+def previous_install_html(stem, version):
+    stem, version = html.escape(stem), html.escape(version)
+    return f"""<h2>以前に手動で導入した方へ</h2>
+<p>録音ソフトとVocalGzzioを終了し、ホームフォルダー内の
+<code>~/Library/Audio/Plug-Ins/Components</code>、<code>~/Library/Audio/Plug-Ins/VST3</code>、
+<code>~/Applications</code> に「{stem}」の旧版が残っていないか確認してください。
+残っている場合は、その製品の該当項目だけをデスクトップ等の「VocalGzzio旧版保管」フォルダーへ移動して保管し、
+今回のインストーラーを実行します。製品版と体験版は共存できるため、違う版種やほかのプラグイン・設定ファイルは移動しません。</p>
+<p>起動後に、本体の版番号が <strong>{version}</strong> であることを確認してください。</p>"""
+
+
 def package_distribution(args, bundles, stem, label):
     config = signing_configuration(args)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -312,6 +323,8 @@ def package_distribution(args, bundles, stem, label):
         else:
             readme = unsigned_readme(args.version, label, installer_name)
             guide = unsigned_install_html(args.version, installer_name, stem)
+        guide = guide.replace("</main>", previous_install_html(stem, args.version) + "</main>")
+        readme += "\n以前に手動導入した方は「ここから始める.html」の旧版についての案内もご確認ください。\n"
         (package / "はじめにお読みください.md").write_text(readme, encoding="utf-8")
         (documents / "mac-install.html").write_text(guide, encoding="utf-8")
         (package / "ここから始める.html").write_text(
@@ -326,7 +339,7 @@ def package_distribution(args, bundles, stem, label):
             shutil.copy2(ROOT / "配布物" / "ライセンス" / name, license_dir / name)
         installed_docs = payload / "Library" / "Application Support" / "Gzzio" / stem
         installed_docs.mkdir(parents=True)
-        for document in ("説明書", "ライセンス", "はじめにお読みください.md"):
+        for document in ("説明書", "ライセンス", "はじめにお読みください.md", "ここから始める.html"):
             run("ditto", package / document, installed_docs / document)
         if config:
             # ここで確認済みなのは本体の公証まで。最終PKGの成功情報を先取りしない。
