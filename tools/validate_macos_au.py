@@ -6,6 +6,7 @@ from pathlib import Path
 import plistlib
 import subprocess
 import sys
+import time
 
 INSTALL_ROOT = Path("/")
 
@@ -13,6 +14,45 @@ INSTALL_ROOT = Path("/")
 def require_ci_mac():
     if sys.platform != "darwin" or os.environ.get("GITHUB_ACTIONS") != "true":
         raise ValueError("この検査はGitHubの使い捨てMac実行機専用です。")
+
+
+def wait_for_registration(identity, timeout=45.0):
+    """配置直後のAU登録を待つ。登録済みでも、本体の検証は別途必須。"""
+    require_ci_mac()
+    deadline = time.monotonic() + timeout
+    last_output = ""
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ValueError(
+                f"AU登録待ちが{timeout:g}秒で終了しました: {' '.join(identity)}\n"
+                f"最後のAU一覧:\n{last_output[-12000:]}")
+        try:
+            listing = subprocess.run(["/usr/bin/auval", "-a"], check=True,
+                                     capture_output=True, text=True,
+                                     timeout=min(15.0, remaining))
+        except subprocess.CalledProcessError as error:
+            raise ValueError(
+                f"AU一覧の取得に失敗しました（終了値 {error.returncode}）。\n"
+                f"{error.stdout or ''}\n{error.stderr or ''}") from error
+        except subprocess.TimeoutExpired as error:
+            raise ValueError(
+                f"AU一覧の取得が制限時間を超えました。\n"
+                f"{error.stdout or ''}\n{error.stderr or ''}") from error
+        last_output = (listing.stdout or "") + "\n" + (listing.stderr or "")
+        # 名前中の文字列や別形式・別版を誤認しない。auvalの一覧の先頭3コードを照合する。
+        if any(tuple(line.split()[:3]) == tuple(identity)
+               for line in (listing.stdout or "").splitlines()):
+            return
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(1.0, remaining))
+
+
+def validate_registered_au(identity):
+    wait_for_registration(identity)
+    # 登録待ちで成功を代用しない。本物の検証が失敗した場合は再試行で隠さず停止する。
+    subprocess.run(["/usr/bin/auval", "-v", *identity], check=True, timeout=180)
 
 
 def validate_installer(installer, edition, version):
@@ -44,7 +84,7 @@ def validate_installer(installer, edition, version):
             raise ValueError("導入された本体の実行ファイル・実行権限がありません。")
         if target.suffix == ".component":
             identity = validate_identity(info, edition, version)
-    subprocess.run(["/usr/bin/auval", "-v", *identity], check=True, timeout=180)
+    validate_registered_au(identity)
     print("インストーラーによる3形式の導入と、導入されたAUの読み込み検査に合格しました。")
     return {"installer_succeeded": True, "installed_formats": ["Standalone", "AU", "VST3"],
             "auval_native_architecture": "passed", "gatekeeper_download_tested": False,
@@ -90,7 +130,7 @@ def main():
         raise ValueError("検査先に同名AUがあるため上書きを中止しました。")
     folder.mkdir(parents=True, exist_ok=True)
     subprocess.run(["ditto", str(bundle), str(target)], check=True, timeout=60)
-    subprocess.run(["/usr/bin/auval", "-v", *identity], check=True, timeout=180)
+    validate_registered_au(identity)
     print("AUをAppleの検証ホストへ読み込み、検査に合格しました。")
     print("検査対象はこの実行機のCPUです。公証・利用者環境・Logic Proでの試奏確認とは別です。")
 

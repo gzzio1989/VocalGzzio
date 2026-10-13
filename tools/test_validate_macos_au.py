@@ -65,7 +65,9 @@ class AudioUnitIdentityTest(unittest.TestCase):
                      "--edition", "product", "--version", "4.3.1"]), \
                  patch.object(validation.Path, "home", return_value=root), \
                  patch.object(validation.subprocess, "run", side_effect=[
-                     None, subprocess.CalledProcessError(1, "auval")]) as run, \
+                     None, subprocess.CompletedProcess([], 0,
+                         stdout="aumf Vcgj Gzzo - Gzzio: VocalGzzio\n", stderr=""),
+                     subprocess.CalledProcessError(1, "auval")]) as run, \
                  patch("builtins.print") as report:
                 with self.assertRaises(subprocess.CalledProcessError):
                     validation.main()
@@ -104,6 +106,10 @@ class AudioUnitIdentityTest(unittest.TestCase):
                                 if failure == "version":
                                     info["CFBundleShortVersionString"] = "4.2.1"
                                 (contents / "Info.plist").write_bytes(plistlib.dumps(info))
+                        elif command == ["/usr/bin/auval", "-a"]:
+                            subtype = "Vcgt" if trial else "Vcgj"
+                            return subprocess.CompletedProcess(command, 0,
+                                stdout=f"aumf {subtype} Gzzo - Gzzio: {stem}\n", stderr="")
                         else:
                             self.assertEqual(command, ["/usr/bin/auval", "-v", "aumf",
                                                        "Vcgt" if trial else "Vcgj", "Gzzo"])
@@ -122,11 +128,99 @@ class AudioUnitIdentityTest(unittest.TestCase):
                             proof = validation.validate_installer(Path("example.pkg"), edition, "4.3.1")
                             self.assertTrue(proof["installer_succeeded"])
                             self.assertFalse(proof["gatekeeper_download_tested"])
-                            self.assertEqual(run.call_count, 2)
+                            self.assertEqual(run.call_count, 3)
                             run.reset_mock()
                             with self.assertRaisesRegex(ValueError, "上書き"):
                                 validation.validate_installer(Path("example.pkg"), edition, "4.3.1")
                             run.assert_not_called()
+
+
+class AudioUnitRegistrationTest(unittest.TestCase):
+    identity = ("aumf", "Vcgj", "Gzzo")
+
+    def listing(self, output, error=""):
+        return subprocess.CompletedProcess(["/usr/bin/auval", "-a"], 0,
+                                           stdout=output, stderr=error)
+
+    def test_delayed_registration_then_real_validation_runs_once(self):
+        now = [0.0]
+        def sleep(seconds):
+            now[0] += seconds
+        with patch.object(validation, "require_ci_mac"), \
+             patch.object(validation.time, "monotonic", side_effect=lambda: now[0]), \
+             patch.object(validation.time, "sleep", side_effect=sleep) as pause, \
+             patch.object(validation.subprocess, "run", side_effect=[
+                 self.listing("aufx appl test - Apple\n"),
+                 self.listing("  aumf Vcgj Gzzo - Gzzio: VocalGzzio\n"),
+                 subprocess.CompletedProcess([], 0)]) as run:
+            validation.validate_registered_au(self.identity)
+            self.assertEqual(now[0], 1.0)
+            pause.assert_called_once_with(1.0)
+            self.assertEqual([call.args[0] for call in run.call_args_list], [
+                ["/usr/bin/auval", "-a"], ["/usr/bin/auval", "-a"],
+                ["/usr/bin/auval", "-v", *self.identity]])
+            self.assertTrue(all(call.kwargs["check"] for call in run.call_args_list))
+
+    def test_timeout_rejects_other_edition_type_case_and_codes_only_in_name(self):
+        output = ("aumf Vcgt Gzzo - Gzzio: VocalGzzio Trial\n"
+                  "aufx Vcgj Gzzo - Gzzio: VocalGzzio\n"
+                  "aumf vcgj Gzzo - Gzzio: VocalGzzio\n"
+                  "aumf Test Gzzo - Gzzio: aumf Vcgj Gzzo\n")
+        now = [0.0]
+        def enumerate_au(command, **kwargs):
+            self.assertEqual(command, ["/usr/bin/auval", "-a"])
+            self.assertLessEqual(kwargs["timeout"], 45.0 - now[0])
+            now[0] += 0.25  # 一覧を取得している時間も上限に含める。
+            return self.listing(output)
+        def sleep(seconds):
+            now[0] += seconds
+        with patch.object(validation, "require_ci_mac"), \
+             patch.object(validation.time, "monotonic", side_effect=lambda: now[0]), \
+             patch.object(validation.time, "sleep", side_effect=sleep), \
+             patch.object(validation.subprocess, "run", side_effect=enumerate_au) as run:
+            with self.assertRaisesRegex(ValueError, "45秒") as caught:
+                validation.validate_registered_au(self.identity)
+            self.assertEqual(now[0], 45.0)
+            self.assertIn(output, str(caught.exception))
+            self.assertGreater(run.call_count, 1)
+
+    def test_failed_enumeration_cannot_pass_even_if_output_contains_expected_codes(self):
+        output = "aumf Vcgj Gzzo - Gzzio: VocalGzzio"
+        for failure in (subprocess.CalledProcessError(2, "auval", output=output,
+                                                    stderr="一覧失敗の詳細"),
+                        subprocess.TimeoutExpired("auval", 15, output=output,
+                                                  stderr="一覧失敗の詳細")):
+            with self.subTest(failure=type(failure).__name__), \
+                 patch.object(validation, "require_ci_mac"), \
+                 patch.object(validation.subprocess, "run", side_effect=failure) as run, \
+                 patch.object(validation.time, "sleep") as pause:
+                with self.assertRaises(ValueError) as caught:
+                    validation.validate_registered_au(self.identity)
+                self.assertIn(output, str(caught.exception))
+                self.assertIn("一覧失敗の詳細", str(caught.exception))
+                run.assert_called_once()
+                pause.assert_not_called()
+
+    def test_validation_failure_after_registration_is_not_retried(self):
+        with patch.object(validation, "require_ci_mac"), \
+             patch.object(validation.subprocess, "run", side_effect=[
+                 self.listing("aumf Vcgj Gzzo - Gzzio: VocalGzzio\n"),
+                 subprocess.CalledProcessError(1, "auval")]) as run, \
+             patch.object(validation.time, "sleep") as pause:
+            with self.assertRaises(subprocess.CalledProcessError):
+                validation.validate_registered_au(self.identity)
+            self.assertEqual(run.call_count, 2)
+            pause.assert_not_called()
+
+    def test_registration_wait_is_for_ci_mac_only(self):
+        for platform, github_actions in (("win32", "true"), ("darwin", "false")):
+            with self.subTest(platform=platform, github_actions=github_actions), \
+                 patch.dict(os.environ, {"GITHUB_ACTIONS": github_actions}), \
+                 patch.object(validation.sys, "platform", platform), \
+                 patch.object(validation.subprocess, "run") as run:
+                with self.assertRaises(ValueError):
+                    validation.validate_registered_au(self.identity)
+                run.assert_not_called()
 
 
 if __name__ == "__main__":
