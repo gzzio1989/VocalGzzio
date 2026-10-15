@@ -376,6 +376,12 @@ int main()
         for (double sr : { 44100.0, 48000.0, 96000.0 })
         {
             VocalGzzioProcessor proc;
+            // A processor restores the last closed instance's settings. The trim
+            // test above intentionally saved the tone module OFF; restore a known
+            // signal chain before testing the Argon detector, for every sample rate.
+            for (auto* parameter : proc.getParameters())
+                parameter->setValueNotifyingHost (parameter->getDefaultValue());
+            proc.clearDenoiseLearn();
             proc.setPlayConfigDetails (2, 2, sr, 256);
             proc.prepareToPlay (sr, 256);
             auto setRaw = [&] (const char* id, float plainVal)
@@ -440,6 +446,8 @@ int main()
                 proc.processBlock (buf, midi);
             }
             const float sibilantVelvetMeter = proc.getArgonVelvetMeter();
+            std::printf ("Argon %.0f Hz: vowel velvet=%.6f, focus=%.6f, sibilant velvet=%.6f\n",
+                         sr, voicedVelvetMeter, voicedFocusMeter, sibilantVelvetMeter);
             check (sibilantVelvetMeter < voicedVelvetMeter * 0.25f, "Sibilant burst automatically gates off Argon Velvet distortion");
 
             // 3) State save & restore preserves all 4 Argon parameters
@@ -454,6 +462,19 @@ int main()
                 && std::abs (restored.apvts.getRawParameterValue ("argon_silk")->load()   - 80.0f) < 0.5f
                 && std::abs (restored.apvts.getRawParameterValue ("argon_halo")->load()   - 75.0f) < 0.5f,
                    "DAW state save/restore preserves Argon Velvet, Focus, Silk, and Halo parameters");
+
+            // The whole tone module can be bypassed from the overview. Its meters
+            // must settle to zero after the existing 10 ms module fade completes.
+            setRaw ("mod_neiro", 0.0f);
+            for (int block = 0; block < 20; ++block)
+            {
+                buf.clear();
+                proc.processBlock (buf, midi);
+            }
+            check (proc.getArgonVelvetMeter() == 0.0f && proc.getArgonFocusMeter() == 0.0f
+                && proc.getArgonSilkMeter() == 0.0f && proc.getArgonHaloMeter() == 0.0f
+                && proc.getArgonVoicedRatio() == 0.0f,
+                   "bypassing the tone module clears all Argon activity meters");
             proc.releaseResources();
             restored.releaseResources();
         }

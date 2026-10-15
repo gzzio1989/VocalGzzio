@@ -258,34 +258,37 @@ int main()
     }
     std::printf ("\n");
 
-    // ---- 7. 低い定常ノイズの合成信号: 狭帯域成分と広帯域ヒスを混ぜる ----
+    // ---- 7. 低い定常ノイズの合成信号: 低域ハムと広帯域ヒスを混ぜる ----
     // 固定の乱数種を使い、ローカルと CI で必ず同じ音声を検査する。
     // 実機・ASIO 経路での動作確認を代替するものではない。
-    std::printf ("[7] 合成ノイズ（複数の定常音＋ヒス）の学習と除去\n");
+    std::printf ("[7] 合成ノイズ（低域ハム＋広帯域ヒス）の学習と除去\n");
     {
-        std::vector<float> wavL, wavR;
+        std::vector<float> wavL, wavR, tonal;
         {
-            // 約 -68 dBFS、48 kHz、9 秒。周波数と振幅は決定的な検査条件。
+            // 48 kHz、9 秒。周波数と振幅は決定的な検査条件。
+            // 旧fixtureは声の帯域に強い正弦波を5本加えた和音状の信号だった。
+            // 和音を保護する判定へ「必ず学習する」と要求せず、拒否ケースとして別途残す。
             const size_t N = 48000 * 9;
-            wavL.resize (N); wavR.resize (N);
+            wavL.resize (N); wavR.resize (N); tonal.resize (N);
             Rnd rr;
             for (size_t i = 0; i < N; ++i)
             {
                 double t = (double) i / 48000.0;
                 double s = 0.00012 * std::sin (2.0 * juce::MathConstants<double>::pi * 50.0 * t)
                          + 0.00021 * std::sin (2.0 * juce::MathConstants<double>::pi * 79.63 * t)
+                         + 0.00045 * rr.next();
+                tonal[i] = (float) (s
                          + 0.00014 * std::sin (2.0 * juce::MathConstants<double>::pi * 120.0 * t)
                          + 0.00013 * std::sin (2.0 * juce::MathConstants<double>::pi * 334.7 * t)
                          + 0.00017 * std::sin (2.0 * juce::MathConstants<double>::pi * 801.8 * t)
                          + 0.00020 * std::sin (2.0 * juce::MathConstants<double>::pi * 2414.8 * t)
-                         + 0.00011 * std::sin (2.0 * juce::MathConstants<double>::pi * 3119.1 * t)
-                         + 0.00045 * rr.next();
+                         + 0.00011 * std::sin (2.0 * juce::MathConstants<double>::pi * 3119.1 * t));
                 wavL[i] = (float) s;
                 wavR[i] = (float) s;
             }
         }
 
-        auto runWav = [&] (VocalGzzioProcessor& p, bool doLearn, bool ch1Only, float& inDbOut, float& outDbOut)
+        auto runWav = [&] (VocalGzzioProcessor& p, bool doLearn, bool ch1Only, float& inDbOut, float& outDbOut, bool tonalFixture = false)
         {
             const int block = 128;
             juce::AudioBuffer<float> buf (2, block);
@@ -293,6 +296,8 @@ int main()
             double inSq = 0.0, outSq = 0.0;
             size_t count = 0;
             const int measCh = ch1Only ? 1 : 0;
+            const auto& sourceL = tonalFixture ? tonal : wavL;
+            const auto& sourceR = tonalFixture ? tonal : wavR;
             for (size_t pos = 0; pos + (size_t) block <= wavL.size(); pos += (size_t) block)
             {
                 if (doLearn && pos == 48000 / block * block)
@@ -301,8 +306,8 @@ int main()
                 auto* R = buf.getWritePointer (1);
                 for (int n = 0; n < block; ++n)
                 {
-                    L[n] = ch1Only ? 0.0f : wavL[pos + (size_t) n];
-                    R[n] = wavR[pos + (size_t) n];
+                    L[n] = ch1Only ? 0.0f : sourceL[pos + (size_t) n];
+                    R[n] = sourceR[pos + (size_t) n];
                 }
                 p.processBlock (buf, midi);
                 // 3.0秒以降（学習または自動追従の完了後）のRMSを比較
@@ -310,7 +315,7 @@ int main()
                 {
                     for (int n = 0; n < block; ++n)
                     {
-                        const double xi = ch1Only ? wavR[pos + (size_t) n] : wavL[pos + (size_t) n];
+                        const double xi = ch1Only ? sourceR[pos + (size_t) n] : sourceL[pos + (size_t) n];
                         const double xo = buf.getSample (measCh, n);
                         inSq  += xi * xi;
                         outSq += xo * xo;
@@ -403,6 +408,26 @@ int main()
                          inDb, outDb, outDb - inDb, p.getDenoiseLearnResult());
             CHECK (p.getDenoiseLearnResult() == 1, "Input 2 (ch1単体) でも手動学習が採用される (result=%d)", p.getDenoiseLearnResult());
             CHECK (outDb - inDb < -10.0f, "Input 2 (ch1単体) でも 10dB 以上減衰する (%.2f dB)", outDb - inDb);
+        }
+
+        // (d) 旧fixtureの和音状信号は、小さいからといってノイズ床へ固定しない。
+        {
+            fresh();
+            auto pStorage = std::make_unique<VocalGzzioProcessor>(); auto& p = *pStorage;
+            using M = gz::ModuleChain;
+            for (int m : { (int) M::Henshin, (int) M::Totonoe, (int) M::Soroe,
+                           (int) M::Sagyo, (int) M::Neiro, (int) M::Chara, (int) M::Hirogari })
+                setP (p, M::paramId (m), 0.0f);
+            setP (p, "gate_on", 0.0f);
+            setP (p, "dn_on", 1.0f);
+            setP (p, "denoise", 60.0f);
+            setP (p, "hum_amt", 100.0f);
+            setP (p, "makeup", 0.0f);
+            p.prepareToPlay (48000.0, 128);
+            float inDb = 0.0f, outDb = 0.0f;
+            runWav (p, true, false, inDb, outDb, true);
+            CHECK (p.getDenoiseLearnResult() == 3 && ! p.isDenoiseLearned(),
+                   "低い和音状信号はノイズとして固定しない (result=%d)", p.getDenoiseLearnResult());
         }
     }
     std::printf ("\n");

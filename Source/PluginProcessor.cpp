@@ -2839,6 +2839,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         meterArgonVoiced.store (argonEngine.voicedRatioNow(), std::memory_order_relaxed);
         mods.restore (gz::ModuleChain::Neiro, buffer);
     }
+    else
+    {
+        // 音色づくりを切った後も、最後に処理した値が画面に残らないようにする。
+        meterArgonVelvet.store (0.0f, std::memory_order_relaxed);
+        meterArgonFocus.store  (0.0f, std::memory_order_relaxed);
+        meterArgonSilk.store   (0.0f, std::memory_order_relaxed);
+        meterArgonHalo.store   (0.0f, std::memory_order_relaxed);
+        meterArgonVoiced.store (0.0f, std::memory_order_relaxed);
+    }
     // ===== モジュール6「音色づくり」ここまで =====
 
     // ---- Mix(原音の混ぜ戻し) ---- ★モジュールに属さない全体設定
