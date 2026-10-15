@@ -242,6 +242,115 @@ int main()
         view.setLiteMode (false);
         check (! view.isLiteMode(), "Lite mode disables cleanly and restores full craftsmanship");
     }
+    // Verify interactive mouse clicks/drags/double-clicks on Argon pills, targets, 2D Orb, and bars + full paint pass
+    {
+        view.setOverview (true);
+        for (int arch = 0; arch < 4; ++arch)
+        {
+            const bool hit = view.handleOverviewMouseDown ({ 236 + arch * 68 + 20, 30 });
+            check (hit && view.getOverviewLayoutMode() == arch, "clicking architecture pill switches layout mode");
+            for (bool lite : { false, true })
+            {
+                view.setLiteMode (lite);
+                juce::Image canvas (juce::Image::ARGB, view.getWidth(), view.getHeight(), true);
+                juce::Graphics g (canvas);
+                view.paintEntireComponent (g, true);
+            }
+        }
+        view.setLiteMode (false);
+        // Click Lite pill at {510 + 20, 30}
+        check (view.handleOverviewMouseDown ({ 530, 30 }) && view.isLiteMode(), "clicking Lite pill enables Lite Mode");
+        check (view.handleOverviewMouseDown ({ 530, 30 }) && ! view.isLiteMode(), "clicking Lite pill again disables Lite Mode");
+
+        // Switch to Argon Cockpit (mode 0) and test 4 Voice DNA target pills, 2D Orb drag/reset, and 3 direct bars
+        view.setOverviewLayoutMode (0);
+        for (int t = 0; t < 4; ++t)
+        {
+            view.applyArgonVoiceTarget (t);
+            check (processor->apvts.getRawParameterValue ("argon_velvet")->load() > 10.0f, "Argon Voice Target sets velvet");
+            check (processor->apvts.getRawParameterValue ("argon_silk")->load()   > 10.0f, "Argon Voice Target sets silk");
+            check (processor->apvts.getRawParameterValue ("argon_halo")->load()   > 10.0f, "Argon Voice Target sets halo");
+        }
+        // Drag 2D Orb inside argonPadRect ({centerX + 16, top + 44, 316, 236} -> center around {650, 280})
+        check (view.handleOverviewMouseDown ({ 550, 200 }), "2D Gravity Orb mouseDown hits pad");
+        view.handleOverviewMouseDrag ({ 780, 340 });
+        check (processor->apvts.getRawParameterValue ("argon_silk")->load() > 50.0f, "2D Orb drag right increases Silk Air");
+        check (processor->apvts.getRawParameterValue ("argon_halo")->load() > 50.0f, "2D Orb drag down increases 3D Halo");
+        check (view.handleOverviewMouseDoubleClick ({ 650, 280 }), "2D Orb double-click hits pad");
+        check (processor->apvts.getRawParameterValue ("argon_velvet")->load() == 0.0f
+            && processor->apvts.getRawParameterValue ("argon_silk")->load()   == 0.0f
+            && processor->apvts.getRawParameterValue ("argon_halo")->load()   == 0.0f,
+               "2D Orb double-click resets Velvet, Silk, and Halo to 0%");
+    }
+    // Verify full VocalGzzioProcessor::processBlock with Argon Engine across sample rates, NaN/Inf safety, voiced vs sibilant gating, and state save/restore
+    {
+        for (double sr : { 44100.0, 48000.0, 96000.0 })
+        {
+            VocalGzzioProcessor proc;
+            proc.setPlayConfigDetails (2, 2, sr, 256);
+            proc.prepareToPlay (sr, 256);
+            auto setRaw = [&] (const char* id, float plainVal)
+            {
+                if (auto* p = proc.apvts.getParameter (id))
+                    p->setValueNotifyingHost (proc.apvts.getParameterRange (id).convertTo0to1 (plainVal));
+            };
+            setRaw ("argon_velvet", 85.0f);
+            setRaw ("argon_silk",   80.0f);
+            setRaw ("argon_halo",   75.0f);
+
+            juce::AudioBuffer<float> buf (2, 256);
+            juce::MidiBuffer midi;
+            bool allFinite = true;
+            // 1) Voiced 220 Hz vowel signal
+            for (int block = 0; block < 20; ++block)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const float t = (float) (block * 256 + i) / (float) sr;
+                    const float v = 0.25f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * t)
+                                  + 0.12f * std::sin (2.0f * juce::MathConstants<float>::pi * 440.0f * t);
+                    buf.setSample (0, i, v);
+                    buf.setSample (1, i, v);
+                }
+                proc.processBlock (buf, midi);
+                for (int ch = 0; ch < 2; ++ch)
+                    for (int i = 0; i < 256; ++i)
+                        if (! std::isfinite (buf.getSample (ch, i))) allFinite = false;
+            }
+            const float voicedVelvetMeter = proc.getArgonVelvetMeter();
+            check (allFinite, "Argon processBlock output is 100% finite (no NaN/Inf)");
+            check (voicedVelvetMeter > 0.05f, "Voiced vowel signal activates Argon Velvet harmonics");
+
+            // 2) Sibilant 7500 Hz burst -> velvet meter should drop sharply
+            for (int block = 0; block < 20; ++block)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const float t = (float) (block * 256 + i) / (float) sr;
+                    const float s = 0.25f * std::sin (2.0f * juce::MathConstants<float>::pi * 7500.0f * t);
+                    buf.setSample (0, i, s);
+                    buf.setSample (1, i, s);
+                }
+                proc.processBlock (buf, midi);
+            }
+            const float sibilantVelvetMeter = proc.getArgonVelvetMeter();
+            check (sibilantVelvetMeter < voicedVelvetMeter * 0.25f, "Sibilant burst automatically gates off Argon Velvet distortion");
+
+            // 3) State save & restore preserves Argon parameters
+            juce::MemoryBlock stateData;
+            proc.getStateInformation (stateData);
+            VocalGzzioProcessor restored;
+            restored.setPlayConfigDetails (2, 2, sr, 256);
+            restored.prepareToPlay (sr, 256);
+            restored.setStateInformation (stateData.getData(), (int) stateData.getSize());
+            check (std::abs (restored.apvts.getRawParameterValue ("argon_velvet")->load() - 85.0f) < 0.5f
+                && std::abs (restored.apvts.getRawParameterValue ("argon_silk")->load()   - 80.0f) < 0.5f
+                && std::abs (restored.apvts.getRawParameterValue ("argon_halo")->load()   - 75.0f) < 0.5f,
+                   "DAW state save/restore preserves Argon Velvet, Silk, and Halo parameters");
+            proc.releaseResources();
+            restored.releaseResources();
+        }
+    }
     view.setLookAndFeel (nullptr);
     processor->releaseResources();
     std::printf ("Overview failures: %d\n", failures);

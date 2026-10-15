@@ -1,11 +1,11 @@
 # VocalGzzio 4.4.0（Gemini4Argon Edition）
 
-> **配布状況（2026年10月15日）**：4.4.0のWindows版・Mac版を[BOOTH](https://gzzio.booth.pm/items/8764003)で公開しました。同じ製品の購入に両OS版が含まれ、過去の購入者も追加購入なしで利用できます。両OSの無料体験版もあります。更新内容は[変更記録](docs/updates-4.4.0.md)をご覧ください。
+> **配布状況（2026年10月15日）**：4.4.0のWindows版・Mac版を[BOOTH](https://gzzio.booth.pm/items/8764003)で公開しました。同じ製品の購入に両OS版が含まれ、過去の購入者も追加購入なしで利用できます。両OSの無料体験版もあります。更新内容は[変更記録](docs/updates-4.4.0.md)、旧版（`v1.0.0`〜`v4.3.3`）の画面変遷は[歴代UI変遷録](docs/archive-ui-history.md)をご覧ください。
 
 歌・話し声・アコースティックギターの音を整えるプラグインです。
 入力から残響まで見渡せる総合画面（4種の画面構造と2D声質重力場オーブ）と、細かく調整できる詳細画面を備えています。
 
-[商品と体験版](https://gzzio.booth.pm/items/8764003) · [使い方](docs/manual.html) · [Macの導入と起動警告](https://gzzio1989.github.io/apps/vocalgzzio/mac-install.html)
+[商品と体験版](https://gzzio.booth.pm/items/8764003) · [使い方](docs/manual.html) · [変更記録](docs/updates-4.4.0.md) · [歴代UI変遷録（v1.0.0〜v4.4.0）](docs/archive-ui-history.md) · [Macの導入と起動警告](https://gzzio1989.github.io/apps/vocalgzzio/mac-install.html)
 
 > **Mac版の起動警告について**：現行4.4.0の開発元署名・公証は未対応です。`.component` は録音ソフトが読み込む部品で、直接起動するアプリではありません。導入には `.pkg`、単体で使う場合は導入済みの `.app` を使います。対象を直しても警告が解消するとは限らないため、上の導入案内をご確認ください。
 
