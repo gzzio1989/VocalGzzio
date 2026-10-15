@@ -258,6 +258,155 @@ int main()
     }
     std::printf ("\n");
 
+    // ---- 7. 低い定常ノイズの合成信号: 狭帯域成分と広帯域ヒスを混ぜる ----
+    // 固定の乱数種を使い、ローカルと CI で必ず同じ音声を検査する。
+    // 実機・ASIO 経路での動作確認を代替するものではない。
+    std::printf ("[7] 合成ノイズ（複数の定常音＋ヒス）の学習と除去\n");
+    {
+        std::vector<float> wavL, wavR;
+        {
+            // 約 -68 dBFS、48 kHz、9 秒。周波数と振幅は決定的な検査条件。
+            const size_t N = 48000 * 9;
+            wavL.resize (N); wavR.resize (N);
+            Rnd rr;
+            for (size_t i = 0; i < N; ++i)
+            {
+                double t = (double) i / 48000.0;
+                double s = 0.00012 * std::sin (2.0 * juce::MathConstants<double>::pi * 50.0 * t)
+                         + 0.00021 * std::sin (2.0 * juce::MathConstants<double>::pi * 79.63 * t)
+                         + 0.00014 * std::sin (2.0 * juce::MathConstants<double>::pi * 120.0 * t)
+                         + 0.00013 * std::sin (2.0 * juce::MathConstants<double>::pi * 334.7 * t)
+                         + 0.00017 * std::sin (2.0 * juce::MathConstants<double>::pi * 801.8 * t)
+                         + 0.00020 * std::sin (2.0 * juce::MathConstants<double>::pi * 2414.8 * t)
+                         + 0.00011 * std::sin (2.0 * juce::MathConstants<double>::pi * 3119.1 * t)
+                         + 0.00045 * rr.next();
+                wavL[i] = (float) s;
+                wavR[i] = (float) s;
+            }
+        }
+
+        auto runWav = [&] (VocalGzzioProcessor& p, bool doLearn, bool ch1Only, float& inDbOut, float& outDbOut)
+        {
+            const int block = 128;
+            juce::AudioBuffer<float> buf (2, block);
+            juce::MidiBuffer midi;
+            double inSq = 0.0, outSq = 0.0;
+            size_t count = 0;
+            const int measCh = ch1Only ? 1 : 0;
+            for (size_t pos = 0; pos + (size_t) block <= wavL.size(); pos += (size_t) block)
+            {
+                if (doLearn && pos == 48000 / block * block)
+                    p.requestDenoiseLearn();
+                auto* L = buf.getWritePointer (0);
+                auto* R = buf.getWritePointer (1);
+                for (int n = 0; n < block; ++n)
+                {
+                    L[n] = ch1Only ? 0.0f : wavL[pos + (size_t) n];
+                    R[n] = wavR[pos + (size_t) n];
+                }
+                p.processBlock (buf, midi);
+                // 3.0秒以降（学習または自動追従の完了後）のRMSを比較
+                if (pos >= 48000 * 3)
+                {
+                    for (int n = 0; n < block; ++n)
+                    {
+                        const double xi = ch1Only ? wavR[pos + (size_t) n] : wavL[pos + (size_t) n];
+                        const double xo = buf.getSample (measCh, n);
+                        inSq  += xi * xi;
+                        outSq += xo * xo;
+                        ++count;
+                    }
+                }
+            }
+            inDbOut  = (float) (10.0 * std::log10 (inSq  / (double) juce::jmax ((size_t) 1, count) + 1e-30));
+            outDbOut = (float) (10.0 * std::log10 (outSq / (double) juce::jmax ((size_t) 1, count) + 1e-30));
+        };
+
+        // (a) 単体おそうじモード (手動学習 ON, denoise=60%)
+        {
+            fresh();
+            auto pStorage = std::make_unique<VocalGzzioProcessor>(); auto& p = *pStorage;
+            using M = gz::ModuleChain;
+            for (int m : { (int) M::Henshin, (int) M::Totonoe, (int) M::Soroe,
+                           (int) M::Sagyo, (int) M::Neiro, (int) M::Chara, (int) M::Hirogari })
+                setP (p, M::paramId (m), 0.0f);
+            setP (p, "gate_on", 0.0f);
+            setP (p, "dn_on", 1.0f);
+            setP (p, "denoise", 60.0f);
+            setP (p, "hum_amt", 100.0f);
+            setP (p, "makeup", 0.0f);
+            p.prepareToPlay (48000.0, 128);
+            float inDb = 0.0f, outDb = 0.0f;
+            runWav (p, true, false, inDb, outDb);
+            std::printf ("  [手動学習 60%%] 入力 %.2f dBFS → 出力 %.2f dBFS (減衰 %.2f dB, learnResult=%d)\n",
+                         inDb, outDb, outDb - inDb, p.getDenoiseLearnResult());
+            CHECK (p.getDenoiseLearnResult() == 1, "合成ノイズで手動学習が採用される (result=%d)", p.getDenoiseLearnResult());
+            CHECK (outDb - inDb < -10.0f, "手動学習 60%% で 10dB 以上減衰する (%.2f dB)", outDb - inDb);
+
+            // 学習ボタン直後のデバイス再初期化でもコマンドを失わず、
+            // 報告にあった 100% 設定が 60% より強く効くことを確かめる。
+            const float out60 = outDb;
+            setP (p, "denoise", 100.0f);
+            p.requestDenoiseLearn();
+            p.prepareToPlay (48000.0, 128);
+            CHECK (p.isDenoiseLearning(), "再初期化しても保留中の手動学習を維持する");
+            runWav (p, false, false, inDb, outDb);
+            CHECK (p.getDenoiseLearnResult() == 1, "再初期化後の手動学習が完了する");
+            CHECK (outDb < out60 - 3.0f, "100%% は 60%% より 3dB 以上強く除去する (差 %.2f dB)", outDb - out60);
+
+            p.clearDenoiseLearn();
+            p.prepareToPlay (48000.0, 128);
+            CHECK (! p.isDenoiseLearned() && ! p.isDenoiseLearning(),
+                   "学習解除直後の再初期化で古い学習が復活しない");
+        }
+
+        // (b) 単体おそうじモード (自動追従のみ・手動学習なし, denoise=60%)
+        {
+            fresh();
+            auto pStorage = std::make_unique<VocalGzzioProcessor>(); auto& p = *pStorage;
+            using M = gz::ModuleChain;
+            for (int m : { (int) M::Henshin, (int) M::Totonoe, (int) M::Soroe,
+                           (int) M::Sagyo, (int) M::Neiro, (int) M::Chara, (int) M::Hirogari })
+                setP (p, M::paramId (m), 0.0f);
+            setP (p, "gate_on", 0.0f);
+            setP (p, "dn_on", 1.0f);
+            setP (p, "denoise", 60.0f);
+            setP (p, "dn_relearn", 1.0f);
+            setP (p, "hum_amt", 100.0f);
+            setP (p, "makeup", 0.0f);
+            p.prepareToPlay (48000.0, 128);
+            float inDb = 0.0f, outDb = 0.0f;
+            runWav (p, false, false, inDb, outDb);
+            std::printf ("  [自動追従 60%%] 入力 %.2f dBFS → 出力 %.2f dBFS (減衰 %.2f dB)\n",
+                         inDb, outDb, outDb - inDb);
+            CHECK (outDb - inDb < -10.0f, "自動追従 60%% でも 10dB 以上減衰する (%.2f dB)", outDb - inDb);
+        }
+
+        // (c) 入力 2 相当（ch 1 のみに入力、ch 0 は無音）。機材には依存しない。
+        {
+            fresh();
+            auto pStorage = std::make_unique<VocalGzzioProcessor>(); auto& p = *pStorage;
+            using M = gz::ModuleChain;
+            for (int m : { (int) M::Henshin, (int) M::Totonoe, (int) M::Soroe,
+                           (int) M::Sagyo, (int) M::Neiro, (int) M::Chara, (int) M::Hirogari })
+                setP (p, M::paramId (m), 0.0f);
+            setP (p, "gate_on", 0.0f);
+            setP (p, "dn_on", 1.0f);
+            setP (p, "denoise", 60.0f);
+            setP (p, "dn_relearn", 1.0f);
+            setP (p, "hum_amt", 100.0f);
+            setP (p, "makeup", 0.0f);
+            p.prepareToPlay (48000.0, 128);
+            float inDb = 0.0f, outDb = 0.0f;
+            runWav (p, true, true, inDb, outDb);
+            std::printf ("  [入力2相当の合成音 (ch1単体) 60%%] 入力 %.2f dBFS → 出力 %.2f dBFS (減衰 %.2f dB, learnResult=%d)\n",
+                         inDb, outDb, outDb - inDb, p.getDenoiseLearnResult());
+            CHECK (p.getDenoiseLearnResult() == 1, "Input 2 (ch1単体) でも手動学習が採用される (result=%d)", p.getDenoiseLearnResult());
+            CHECK (outDb - inDb < -10.0f, "Input 2 (ch1単体) でも 10dB 以上減衰する (%.2f dB)", outDb - inDb);
+        }
+    }
+    std::printf ("\n");
+
     std::printf (gFail ? "== %d 件 FAIL ==\n" : "== 全テスト PASS ==\n", gFail);
     return gFail ? 1 : 0;
 }

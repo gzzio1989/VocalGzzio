@@ -2684,6 +2684,14 @@ public:
         g.drawText (t, r, j);
     }
 
+    bool handleOverviewMouseDown (juce::Point<int> pt);
+    bool handleOverviewMouseDoubleClick (juce::Point<int> pt);
+    void handleOverviewMouseDrag (juce::Point<int> pt);
+    void applyArgonOrbFromXY (float nx, float ny);
+    void applyArgonVoiceTarget (int idx);
+    void syncArgonOrbFromParams() noexcept;
+    juce::String overviewHelpAt (juce::Point<int> pt) const;
+
 private:
     void initialiseOverview();
     void updateOverviewVisibility();
@@ -2692,11 +2700,7 @@ private:
     void paintOverview (juce::Graphics&);
     void refreshOverviewText();
     void updateOverviewState();
-    bool handleOverviewMouseDown (juce::Point<int> pt);
-    bool handleOverviewMouseDoubleClick (juce::Point<int> pt);
-    void handleOverviewMouseDrag (juce::Point<int> pt);
-    void applyArgonOrbFromXY (float nx, float ny);
-    void applyArgonVoiceTarget (int idx);
+    void trimOverviewOutputLevel();
     bool overviewEnabled { true };
     int  overviewLayoutMode { 0 };     // 0=Argon Cockpit, 1=V-Liver Stage, 2=Studio Rack, 3=Classic
     bool overviewLayoutManual { false };
@@ -2704,14 +2708,15 @@ private:
     std::array<juce::Rectangle<int>, 4> archPillRects;
     juce::Rectangle<int> litePillRect;
     juce::Rectangle<int> argonPadRect;
-    std::array<juce::Rectangle<int>, 3> argonBarRects;
+    std::array<juce::Rectangle<int>, 4> argonBarRects;
     std::array<juce::Rectangle<int>, 4> argonTargetRects;
+    juce::Rectangle<int> levelBadgeRect;
     float argonOrbX { 0.46f }, argonOrbY { 0.36f };
     int   argonDragging { -1 };
     int   argonActiveTarget { -1 };
     std::vector<std::pair<juce::Component::SafePointer<juce::Component>, bool>> overviewOldVisibility;
     juce::ComboBox finishPresetBox;
-    juce::TextButton overviewDetails, overviewReturn, overviewPitch;
+    juce::TextButton overviewDetails, overviewReturn, overviewPitch, overviewOutputTrim;
     HoldButton overviewCompare;
     juce::TextButton reverbPower;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> reverbPowerAttachment;

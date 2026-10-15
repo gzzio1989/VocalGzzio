@@ -31,6 +31,10 @@ namespace gz { namespace argon
 //     シュレーダー全域通過拡散器(All-Pass Diffuser)を通して Side 成分(L+, R-)へ
 //     直交注入する。スマホ等のモノラル再生(L+R)では完全相殺されてコムフィルタが
 //     一切起きず、ステレオ再生では声の周囲に立体的な光の輪(Halo)が浮かぶ。
+//  4. Dynamic Singer's Formant Focus & Anti-Harshness Guard (声芯フォーカス / focus) [v4.5.0]
+//     歌詞の明瞭度と伴奏抜けを決定づけるシンガーズ・フォルマント帯域(1.85kHz-3.65kHz)を抽出し、
+//     小〜中声量のフレーズでは上向きハーモニック圧縮で声の芯を前へ押し出しつつ、張り上げ(ベルティング)や
+//     強い歯擦音では自動で軟飽和クランプをかけて3kHz帯の耳刺さりを防ぐ。
 //==============================================================================
 class VelvetEngine
 {
@@ -54,6 +58,8 @@ public:
         cChestDc   = pole (32.0f);
         cTriodeLp  = pole (3600.0f);
         cTriodeDc  = pole (28.0f);
+        cFocusHp   = pole (1850.0f);
+        cFocusLp   = pole (3650.0f);
         cAirHp1    = pole (8200.0f);
         cAirHp2    = pole (11200.0f);
         cHaloHp    = pole (260.0f);
@@ -64,6 +70,8 @@ public:
         vRel   = 1.0f - std::exp (-1.0f / (0.0250f * fs));
         sAtk   = 1.0f - std::exp (-1.0f / (0.0008f * fs));
         sRel   = 1.0f - std::exp (-1.0f / (0.0180f * fs));
+        fAtk   = 1.0f - std::exp (-1.0f / (0.0018f * fs));
+        fRel   = 1.0f - std::exp (-1.0f / (0.0220f * fs));
         ratioFall = 1.0f - std::exp (-1.0f / (0.0012f * fs));  // instant sibilant guard
         ratioRise = 1.0f - std::exp (-1.0f / (0.0160f * fs));
         paramSlew = 1.0f - std::exp (-1.0f / (0.0080f * fs));
@@ -82,27 +90,29 @@ public:
     void reset() noexcept
     {
         vLp = vHp = sHp = 0.0f;
-        vEnv = sEnv = voicedRatio = 0.0f;
+        vEnv = sEnv = fEnv = voicedRatio = 0.0f;
         for (int ch = 0; ch < 2; ++ch)
         {
             chestHp[ch] = chestLp[ch] = chestDc[ch] = 0.0f;
             triLp[ch] = triDc[ch] = 0.0f;
+            focHp[ch] = focLp[ch] = 0.0f;
             airHp1[ch] = airHp2[ch] = 0.0f;
         }
         haloHpState = haloLpState = 0.0f;
         haloWrite = ap1Idx = ap2Idx = 0;
         lfoPhase = 0.0f;
-        velvetSm = silkSm = haloSm = 0.0f;
-        lastVelvetMeter = lastSilkMeter = lastHaloMeter = lastVoicedMeter = 0.0f;
+        velvetSm = focusSm = silkSm = haloSm = 0.0f;
+        lastVelvetMeter = lastFocusMeter = lastSilkMeter = lastHaloMeter = lastVoicedMeter = 0.0f;
         std::fill (haloBuf.begin(), haloBuf.end(), 0.0f);
         std::fill (ap1Buf.begin(), ap1Buf.end(), 0.0f);
         std::fill (ap2Buf.begin(), ap2Buf.end(), 0.0f);
     }
 
     void setParams (float velvet01, float silk01, float halo01,
-                    float crushGuard01, bool voiceOnly) noexcept
+                    float crushGuard01, bool voiceOnly, float focus01 = 0.0f) noexcept
     {
         velvetTarget = voiceOnly ? juce::jlimit (0.0f, 1.0f, velvet01) : 0.0f;
+        focusTarget  = voiceOnly ? juce::jlimit (0.0f, 1.0f, focus01)  : 0.0f;
         silkTarget   = juce::jlimit (0.0f, 1.0f, silk01);
         haloTarget   = juce::jlimit (0.0f, 1.0f, halo01);
         crushGuard   = juce::jlimit (0.0f, 1.0f, crushGuard01);
@@ -113,10 +123,10 @@ public:
         if (L == nullptr || numSamples <= 0) return;
 
         // Fast bypass when all Argon parameters are at 0 (bit-identical pass-through)
-        if (velvetTarget <= 1.0e-4f && silkTarget <= 1.0e-4f && haloTarget <= 1.0e-4f
-            && velvetSm <= 1.0e-4f && silkSm <= 1.0e-4f && haloSm <= 1.0e-4f)
+        if (velvetTarget <= 1.0e-4f && focusTarget <= 1.0e-4f && silkTarget <= 1.0e-4f && haloTarget <= 1.0e-4f
+            && velvetSm <= 1.0e-4f && focusSm <= 1.0e-4f && silkSm <= 1.0e-4f && haloSm <= 1.0e-4f)
         {
-            lastVelvetMeter = lastSilkMeter = lastHaloMeter = 0.0f;
+            lastVelvetMeter = lastFocusMeter = lastSilkMeter = lastHaloMeter = 0.0f;
             return;
         }
 
@@ -127,12 +137,13 @@ public:
         const float tapMod   = 0.0011f * fs;   // +-1.1 ms quadrature excursion
         const float crushScale = 1.0f - 0.55f * crushGuard;
 
-        float vMeterAcc = 0.0f, sMeterAcc = 0.0f, hMeterAcc = 0.0f, vrAcc = 0.0f;
+        float vMeterAcc = 0.0f, fMeterAcc = 0.0f, sMeterAcc = 0.0f, hMeterAcc = 0.0f, vrAcc = 0.0f;
         const bool hasHaloRing = ! haloBuf.empty() && ! ap1Buf.empty() && ! ap2Buf.empty();
 
         for (int n = 0; n < numSamples; ++n)
         {
             velvetSm += paramSlew * (velvetTarget - velvetSm);
+            focusSm  += paramSlew * (focusTarget  - focusSm);
             silkSm   += paramSlew * (silkTarget   - silkSm);
             haloSm   += paramSlew * (haloTarget   - haloSm);
 
@@ -161,7 +172,7 @@ public:
             float outL = inL;
             float outR = inR;
 
-            // ---- 2. Voiced-Gated Asymmetric Triode & Chest Sub-Anchor ----
+            // ---- 2. Voiced-Gated Asymmetric Triode & Chest Sub-Anchor (VELVET) ----
             if (velvetSm > 1.0e-4f)
             {
                 const float effVelvet = velvetSm * voicedRatio * crushScale;
@@ -195,7 +206,44 @@ public:
                 vMeterAcc += effVelvet * juce::jlimit (0.0f, 1.0f, vEnv * 6.0f);
             }
 
-            // ---- 3. Crest-Protected Dynamic 14kHz Silk Air Exciter ----
+            // ---- 3. Dynamic Singer's Formant Focus & Articulation (FOCUS: 1.85-3.65 kHz) [v4.5.0] ----
+            if (focusSm > 1.0e-4f)
+            {
+                focHp[0] += cFocusHp * (outL - focHp[0]);
+                const float fBandL = outL - focHp[0];
+                focLp[0] += cFocusLp * (fBandL - focLp[0]);
+                const float fCoreL = focLp[0];
+
+                float fCoreR = fCoreL;
+                if (R != nullptr)
+                {
+                    focHp[1] += cFocusHp * (outR - focHp[1]);
+                    const float fBandR = outR - focHp[1];
+                    focLp[1] += cFocusLp * (fBandR - focLp[1]);
+                    fCoreR = focLp[1];
+                }
+
+                const float absF = 0.5f * (std::abs (fCoreL) + std::abs (fCoreR));
+                fEnv += (absF > fEnv ? fAtk : fRel) * (absF - fEnv);
+
+                // Upward articulation lift for quiet/mid phrases + anti-harshness clamp on loud belts
+                const float sibGuard   = 1.0f / (1.0f + 12.0f * sEnv);
+                const float upwardLift = juce::jlimit (0.45f, 1.45f, 1.38f - 2.4f * fEnv);
+                const float voiceGate  = 0.25f + 0.75f * voicedRatio;
+                const float effFocus   = focusSm * sibGuard * upwardLift * voiceGate * crushScale;
+
+                auto shapeFocus = [effFocus] (float fCore) noexcept
+                {
+                    const float shaped = (fCore * (1.0f + 1.5f * effFocus)) / (1.0f + 2.2f * std::abs (fCore));
+                    return shaped * (0.68f * effFocus);
+                };
+
+                outL += shapeFocus (fCoreL);
+                if (R != nullptr) outR += shapeFocus (fCoreR);
+                fMeterAcc += effFocus * juce::jlimit (0.0f, 1.0f, (absF + absV) * 5.2f);
+            }
+
+            // ---- 4. Crest-Protected Dynamic 14kHz Silk Air Exciter (SILK) ----
             if (silkSm > 1.0e-4f)
             {
                 // Whisper/soft boost & loud sibilant guard
@@ -219,7 +267,7 @@ public:
                 sMeterAcc += effSilk * juce::jlimit (0.0f, 1.0f, (absS + absV) * 5.0f);
             }
 
-            // ---- 4. Mono-Safe Quadrature All-Pass Binaural Halo ----
+            // ---- 5. Mono-Safe Quadrature All-Pass Binaural Halo (HALO) ----
             if (hasHaloRing && (haloSm > 1.0e-4f || haloWrite != 0))
             {
                 haloHpState += cHaloHp * (mono - haloHpState);
@@ -274,18 +322,22 @@ public:
                 haloWrite = (haloWrite + 1) & haloMask;
             }
 
+            // HALO の後で左右を別々に飽和させると、モノ合算時の相殺が崩れる。
+            // 音量は本体の出力調整と既存の自動ヘッドルームで扱う。
             L[n] = outL;
             if (R != nullptr) R[n] = outR;
         }
 
         const float invN = 1.0f / (float) numSamples;
         lastVelvetMeter = juce::jlimit (0.0f, 1.0f, vMeterAcc * invN);
+        lastFocusMeter  = juce::jlimit (0.0f, 1.0f, fMeterAcc * invN);
         lastSilkMeter   = juce::jlimit (0.0f, 1.0f, sMeterAcc * invN);
         lastHaloMeter   = juce::jlimit (0.0f, 1.0f, hMeterAcc * invN);
         lastVoicedMeter = juce::jlimit (0.0f, 1.0f, vrAcc * invN);
     }
 
     float velvetActivity() const noexcept { return lastVelvetMeter; }
+    float focusActivity()  const noexcept { return lastFocusMeter; }
     float silkActivity()   const noexcept { return lastSilkMeter; }
     float haloActivity()   const noexcept { return lastHaloMeter; }
     float voicedRatioNow() const noexcept { return lastVoicedMeter; }
@@ -295,15 +347,17 @@ private:
     float cVoicedLp = 0.1f, cVoicedHp = 0.01f, cSibHp = 0.3f;
     float cChestHp = 0.01f, cChestLp = 0.03f, cChestDc = 0.004f;
     float cTriodeLp = 0.25f, cTriodeDc = 0.004f;
+    float cFocusHp = 0.20f, cFocusLp = 0.35f;
     float cAirHp1 = 0.45f, cAirHp2 = 0.55f;
     float cHaloHp = 0.03f, cHaloLp = 0.40f;
-    float vAtk = 0.01f, vRel = 0.001f, sAtk = 0.03f, sRel = 0.002f;
+    float vAtk = 0.01f, vRel = 0.001f, sAtk = 0.03f, sRel = 0.002f, fAtk = 0.015f, fRel = 0.0015f;
     float ratioFall = 0.02f, ratioRise = 0.002f, paramSlew = 0.003f;
 
     float vLp = 0.0f, vHp = 0.0f, sHp = 0.0f;
-    float vEnv = 0.0f, sEnv = 0.0f, voicedRatio = 0.0f;
+    float vEnv = 0.0f, sEnv = 0.0f, fEnv = 0.0f, voicedRatio = 0.0f;
     float chestHp[2] {}, chestLp[2] {}, chestDc[2] {};
     float triLp[2] {}, triDc[2] {};
+    float focHp[2] {}, focLp[2] {};
     float airHp1[2] {}, airHp2[2] {};
 
     int haloMask = 16383, haloWrite = 0;
@@ -312,9 +366,9 @@ private:
     int ap1Len = 148, ap2Len = 225, ap1Idx = 0, ap2Idx = 0;
     std::vector<float> ap1Buf, ap2Buf;
 
-    float velvetTarget = 0.0f, silkTarget = 0.0f, haloTarget = 0.0f, crushGuard = 0.0f;
-    float velvetSm = 0.0f, silkSm = 0.0f, haloSm = 0.0f;
-    float lastVelvetMeter = 0.0f, lastSilkMeter = 0.0f, lastHaloMeter = 0.0f, lastVoicedMeter = 0.0f;
+    float velvetTarget = 0.0f, focusTarget = 0.0f, silkTarget = 0.0f, haloTarget = 0.0f, crushGuard = 0.0f;
+    float velvetSm = 0.0f, focusSm = 0.0f, silkSm = 0.0f, haloSm = 0.0f;
+    float lastVelvetMeter = 0.0f, lastFocusMeter = 0.0f, lastSilkMeter = 0.0f, lastHaloMeter = 0.0f, lastVoicedMeter = 0.0f;
 };
 
 }} // namespace gz::argon

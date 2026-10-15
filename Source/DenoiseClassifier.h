@@ -28,12 +28,25 @@ public:
     {
         // 学習解除からも呼ばれるので、音声スレッドで表の再生成や確保をしない。
         sum.fill (0); bandSum.fill (0); bandMean.fill (0);
+        hpZ1.fill (0); hpZ2.fill (0);
         decimCount = position = sampleCount = stableFrames = 0;
         periodic = stationary = havePrevious = false;
         silent = frameGateOpen = true;
         decimation = std::max (1, (int) std::floor (sampleRate / 8000.0));
         analysisRate = sampleRate / decimation;
         neededFrames = (int) std::ceil (0.5 * analysisRate / frameSize);
+        // 50/60 Hz 電源ハムや約80 Hz のPCファン周期音を「声・演奏の周期」と誤認しないよう、
+        // 周期判定の分析側鎖に 125 Hz 2次ハイパスを通す（低い声やギター弦は倍音列が
+        // 130 Hz 以上に並ぶため、基本周期もスペクトル山谷もそのまま検出できる）。
+        const double w0 = 2.0 * 3.14159265358979323846 * 125.0 / analysisRate;
+        const double cosW = std::cos (w0), sinW = std::sin (w0);
+        const double alpha = sinW / 1.4142135623730951;
+        const double a0 = 1.0 + alpha;
+        hpB0 = (float) ((1.0 + cosW) * 0.5 / a0);
+        hpB1 = (float) (-(1.0 + cosW) / a0);
+        hpB2 = hpB0;
+        hpA1 = (float) ((-2.0 * cosW) / a0);
+        hpA2 = (float) ((1.0 - alpha) / a0);
     }
 
     bool push (float left, float right, const float* envelopes, bool gateOpen) noexcept
@@ -46,8 +59,12 @@ public:
         decimCount = 0;
         for (int ch = 0; ch < 2; ++ch)
         {
-            samples[(size_t) ch][(size_t) position] = sum[(size_t) ch] / (float) decimation;
+            const float raw = sum[(size_t) ch] / (float) decimation;
             sum[(size_t) ch] = 0;
+            const float y = hpB0 * raw + hpZ1[(size_t) ch];
+            hpZ1[(size_t) ch] = hpB1 * raw - hpA1 * y + hpZ2[(size_t) ch];
+            hpZ2[(size_t) ch] = hpB2 * raw - hpA2 * y;
+            samples[(size_t) ch][(size_t) position] = y;
         }
         if (++position < frameSize) return false;
         position = 0;
@@ -144,7 +161,7 @@ private:
 
         // 全体の傾きは部屋ノイズでも生じる。近傍の平均でならしてから
         // 平坦さを測り、低域の多いノイズを和音と取り違えないようにする。
-        const int first = std::max (1, (int) std::ceil (55.0 * frameSize / analysisRate));
+        const int first = std::max (1, (int) std::ceil (125.0 * frameSize / analysisRate));
         const int last = std::min (frameSize / 2 - 8, (int) (2000.0 * frameSize / analysisRate));
         double logSum = 0, linearSum = 0;
         for (int bin = first; bin <= last; ++bin)
@@ -167,9 +184,10 @@ private:
     std::array<std::complex<float>, frameSize / 2> twiddles {};
     std::array<std::complex<float>, frameSize> spectrum {};
     std::array<float, frameSize / 2 + 1> power {};
-    std::array<float, 2> sum {};
+    std::array<float, 2> sum {}, hpZ1 {}, hpZ2 {};
     std::array<double, 4> bandSum {};
     std::array<float, 4> bandMean {};
+    float hpB0 = 1.0f, hpB1 = 0.0f, hpB2 = 0.0f, hpA1 = 0.0f, hpA2 = 0.0f;
     double analysisRate = 8000;
     int decimation = 1, decimCount = 0, position = 0, sampleCount = 0;
     int stableFrames = 0, neededFrames = 8;

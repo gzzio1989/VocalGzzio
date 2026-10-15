@@ -62,6 +62,28 @@ int main()
     VocalGzzioProcessor p;
     p.prepareToPlay (kSR, maxBlock);
 
+    // 4.4 の末尾 3 項目の順序を変えず、新規 FOCUS だけを追加する。
+    // Logic/GarageBand は AU パラメーターを番号で記憶するため、版ヒントも検査する。
+    {
+        const char* tail[] { "argon_velvet", "argon_silk", "argon_halo", "argon_focus" };
+        const auto& params = p.getParameters();
+        const int first = params.size() - 4;
+        CHECK (first >= 0, "Argon パラメーターが登録されている");
+        if (first >= 0)
+            for (int i = 0; i < 4; ++i)
+            {
+                auto* param = dynamic_cast<juce::AudioProcessorParameterWithID*> (params[first + i]);
+                CHECK (param != nullptr && param->paramID == tail[i],
+                       "既存パラメーターの末尾順序を保持: %s", tail[i]);
+                CHECK (params[first + i]->getVersionHint() == (i == 3 ? 2 : 1),
+                       "AU の版ヒントを保持: %s", tail[i]);
+            }
+        bool existingHintsUnchanged = first >= 0;
+        for (int i = 0; i < first; ++i)
+            existingHintsUnchanged = existingHintsUnchanged && params[i]->getVersionHint() == 1;
+        CHECK (existingHintsUnchanged, "既存 AU パラメーターの版ヒントをすべて保持");
+    }
+
     // 全部入りにして、いちばん重い経路を通す
     auto setP = [&p] (const char* id, float v)
     {

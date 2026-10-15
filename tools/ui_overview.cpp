@@ -123,7 +123,7 @@ int main()
             check (preset != nullptr && preset->getNumItems() == gzzio::kNumFinishPresets, "complete finish presets reachable");
             for (const char* directId : { "autoSetup", "songSetup", "resetAll", "abSlotA", "abSlotB", "abCopy",
                                           "crushGuard", "smartEqPower", "pitchFixPower", "unisonPower", "voiceFxPower",
-                                          "reverbType", "tempoFit", "sessionMode", "openCheckup" })
+                                          "reverbType", "tempoFit", "sessionMode", "openCheckup", "trimOutputBoost" })
             {
                 auto* direct = find (directId);
                 check (direct != nullptr && direct->isVisible(), "direct overview control reachable without leaving overview");
@@ -218,21 +218,24 @@ int main()
     {
         gz::argon::VelvetEngine engine;
         engine.prepare (48000.0);
-        std::vector<float> left (512, 0.0f), right (512, 0.0f);
-        for (int i = 0; i < 512; ++i)
+        constexpr int samples = 48000;
+        std::vector<float> left (samples, 0.0f), right (samples, 0.0f);
+        for (int i = 0; i < samples; ++i)
         {
-            const float v = 0.25f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * (float) i / 48000.0f);
+            const float v = 0.95f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * (float) i / 48000.0f);
             left[(size_t) i] = v;
             right[(size_t) i] = v;
         }
         engine.setParams (0.0f, 0.0f, 0.85f, 0.0f, true);
-        engine.process (left.data(), right.data(), 512);
-        float maxMonoDiff = 0.0f;
-        for (int i = 0; i < 512; ++i)
+        engine.process (left.data(), right.data(), samples);
+        float maxMonoDiff = 0.0f, maxSide = 0.0f;
+        for (int i = 0; i < samples; ++i)
         {
-            const float expectedMono = 0.5f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * (float) i / 48000.0f);
+            const float expectedMono = 1.9f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * (float) i / 48000.0f);
             maxMonoDiff = std::max (maxMonoDiff, std::abs ((left[(size_t) i] + right[(size_t) i]) - expectedMono));
+            maxSide = std::max (maxSide, std::abs (left[(size_t) i] - right[(size_t) i]));
         }
+        check (maxSide > 0.001f, "Halo delay has actually produced audible stereo width before testing mono sum");
         check (maxMonoDiff < 1.0e-5f, "Argon Binaural Halo is 100% mono-compatible (zero mono comb filtering)");
     }
     // Verify Lightweight (Eco) Mode toggles cleanly and preserves all layout invariants
@@ -262,27 +265,113 @@ int main()
         check (view.handleOverviewMouseDown ({ 530, 30 }) && view.isLiteMode(), "clicking Lite pill enables Lite Mode");
         check (view.handleOverviewMouseDown ({ 530, 30 }) && ! view.isLiteMode(), "clicking Lite pill again disables Lite Mode");
 
-        // Switch to Argon Cockpit (mode 0) and test 4 Voice DNA target pills, 2D Orb drag/reset, and 3 direct bars
+        // Switch to Argon Cockpit (mode 0) and test 4 Voice DNA target pills, 2D Orb drag/reset, 4 direct bars, and Smart Level-Match badge
         view.setOverviewLayoutMode (0);
+        {
+            juce::Image canvas (juce::Image::ARGB, view.getWidth(), view.getHeight(), true);
+            juce::Graphics g (canvas);
+            view.paintEntireComponent (g, true);
+        }
         for (int t = 0; t < 4; ++t)
         {
+            setParameter ("denoise", 0.0f);
+            setParameter ("dn_relearn", 0.0f);
+            setParameter ("hum_amt", 15.0f);
             view.applyArgonVoiceTarget (t);
             check (processor->apvts.getRawParameterValue ("argon_velvet")->load() > 10.0f, "Argon Voice Target sets velvet");
+            check (processor->apvts.getRawParameterValue ("argon_focus")->load()  > 10.0f, "Argon Voice Target sets focus");
             check (processor->apvts.getRawParameterValue ("argon_silk")->load()   > 10.0f, "Argon Voice Target sets silk");
             check (processor->apvts.getRawParameterValue ("argon_halo")->load()   > 10.0f, "Argon Voice Target sets halo");
+            check (processor->apvts.getRawParameterValue ("denoise")->load() == 0.0f
+                && processor->apvts.getRawParameterValue ("dn_relearn")->load() == 0.0f
+                && processor->apvts.getRawParameterValue ("hum_amt")->load() == 15.0f,
+                   "voice targets preserve noise reduction, learning and hum settings");
         }
+        setParameter ("presence", -2.0f);
+        setParameter ("drive", 12.0f);
+        setParameter ("revmix", 17.0f);
         // Drag 2D Orb inside argonPadRect ({centerX + 16, top + 44, 316, 236} -> center around {650, 280})
         check (view.handleOverviewMouseDown ({ 550, 200 }), "2D Gravity Orb mouseDown hits pad");
         view.handleOverviewMouseDrag ({ 780, 340 });
-        check (processor->apvts.getRawParameterValue ("argon_silk")->load() > 50.0f, "2D Orb drag right increases Silk Air");
-        check (processor->apvts.getRawParameterValue ("argon_halo")->load() > 50.0f, "2D Orb drag down increases 3D Halo");
+        check (processor->apvts.getRawParameterValue ("argon_focus")->load() > 10.0f, "2D Orb drag updates 2.8kHz Focus");
+        check (processor->apvts.getRawParameterValue ("argon_silk")->load()  > 50.0f, "2D Orb drag right increases Silk Air");
+        check (processor->apvts.getRawParameterValue ("argon_halo")->load()  > 50.0f, "2D Orb drag down increases 3D Halo");
         check (view.handleOverviewMouseDoubleClick ({ 650, 280 }), "2D Orb double-click hits pad");
         check (processor->apvts.getRawParameterValue ("argon_velvet")->load() == 0.0f
+            && processor->apvts.getRawParameterValue ("argon_focus")->load()  == 0.0f
             && processor->apvts.getRawParameterValue ("argon_silk")->load()   == 0.0f
             && processor->apvts.getRawParameterValue ("argon_halo")->load()   == 0.0f,
-               "2D Orb double-click resets Velvet, Silk, and Halo to 0%");
+               "2D Orb double-click resets Velvet, Focus, Silk, and Halo to 0%");
+        check (processor->apvts.getRawParameterValue ("presence")->load() == -2.0f
+            && processor->apvts.getRawParameterValue ("drive")->load() == 12.0f
+            && processor->apvts.getRawParameterValue ("revmix")->load() == 17.0f,
+               "orb drag and reset preserve separately controlled tone and reverb");
+        check (view.overviewHelpAt ({ 650, 280 }).isNotEmpty(), "orb has hover help");
+        for (int i = 0; i < 4; ++i)
+            check (view.overviewHelpAt ({ 920, 288 + i * 32 }).isNotEmpty(), "each Argon bar has hover help");
+        view.setThemeMode (3);
+        check (! containsJapanese (view.overviewHelpAt ({ 650, 280 })), "brand orb hover help uses English");
+        view.setThemeMode (0);
+
+        // Click One-Click Smart Level-Match badge in Telemetry (rightX = 1102, overviewOutput right = 1558, badge around {1490, 142})
+        check (view.handleOverviewMouseDown ({ 1490, 142 }), "One-Click Smart Level-Match badge click hits levelBadgeRect");
     }
-    // Verify full VocalGzzioProcessor::processBlock with Argon Engine across sample rates, NaN/Inf safety, voiced vs sibilant gating, and state save/restore
+    // Output trim must use an actual signal and must never boost silence or quiet input.
+    {
+        auto trimProcessorOwner = std::make_unique<VocalGzzioProcessor>();
+        auto& trimProcessor = *trimProcessorOwner;
+        trimProcessor.setPlayConfigDetails (2, 2, 48000.0, 256);
+        trimProcessor.prepareToPlay (48000.0, 256);
+        auto setRaw = [&] (const char* id, float value)
+        {
+            auto* p = trimProcessor.apvts.getParameter (id);
+            p->setValueNotifyingHost (trimProcessor.apvts.getParameterRange (id).convertTo0to1 (value));
+        };
+        for (const char* id : { "mod_souji", "mod_henshin", "mod_totonoe", "mod_soroe",
+                                "mod_sagyo", "mod_neiro", "mod_hirogari" })
+            if (trimProcessor.apvts.getParameter (id)) setRaw (id, 0.0f);
+        auto trimViewOwner = std::make_unique<VocalGzzioContent> (trimProcessor);
+        auto& trimView = *trimViewOwner;
+        trimView.setSize (VocalGzzioEditor::baseW, VocalGzzioEditor::baseH);
+        trimView.setOverview (true);
+        auto* trim = dynamic_cast<juce::TextButton*> (trimView.findChildWithID ("trimOutputBoost"));
+        check (trim && trim->isVisible() && trim->getTooltip().isNotEmpty(), "output trim has a reachable button and explanatory help");
+        auto runSignal = [&] (float amplitude)
+        {
+            juce::AudioBuffer<float> signal (2, 256);
+            juce::MidiBuffer events;
+            for (int b = 0; b < 200; ++b)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const float value = amplitude * std::sin (juce::MathConstants<float>::twoPi * 220.0f * (float) (b * 256 + i) / 48000.0f);
+                    signal.setSample (0, i, value);
+                    signal.setSample (1, i, value);
+                }
+                trimProcessor.processBlock (signal, events);
+            }
+        };
+        auto gain = [&] { return trimProcessor.apvts.getRawParameterValue ("makeup")->load(); };
+        setRaw ("makeup", 12.0f);
+        runSignal (0.0f);
+        if (trim) trim->onClick();
+        check (gain() == 12.0f, "output trim leaves gain unchanged during silence");
+        runSignal (0.003f);
+        if (trim) trim->onClick();
+        check (gain() == 12.0f, "output trim never raises quiet audio");
+        setRaw ("makeup", 18.0f);
+        runSignal (0.6f);
+        check (trimProcessor.getOutputLevel() > juce::Decibels::decibelsToGain (-14.0f), "trim test has a measured loud output");
+        const float oldInputGain = trimProcessor.apvts.getRawParameterValue ("in_gain")->load();
+        if (trim) trim->onClick();
+        check (gain() < 18.0f && gain() >= 0.0f, "loud output reduces only available output boost");
+        check (trimProcessor.apvts.getRawParameterValue ("in_gain")->load() == oldInputGain, "output trim does not silently alter input gain");
+        setRaw ("makeup", 0.0f);
+        runSignal (0.6f);
+        if (trim) trim->onClick();
+        check (gain() == 0.0f, "output trim respects the compatible zero-dB minimum");
+    }
+    // Verify full VocalGzzioProcessor::processBlock with 4-Axis Argon Engine across sample rates, NaN/Inf safety, bypass, voiced vs sibilant gating, and state save/restore
     {
         for (double sr : { 44100.0, 48000.0, 96000.0 })
         {
@@ -295,20 +384,22 @@ int main()
                     p->setValueNotifyingHost (proc.apvts.getParameterRange (id).convertTo0to1 (plainVal));
             };
             setRaw ("argon_velvet", 85.0f);
+            setRaw ("argon_focus",  80.0f);
             setRaw ("argon_silk",   80.0f);
             setRaw ("argon_halo",   75.0f);
 
             juce::AudioBuffer<float> buf (2, 256);
             juce::MidiBuffer midi;
             bool allFinite = true;
-            // 1) Voiced 220 Hz vowel signal
+            // 1) Voiced 220 Hz + 2800 Hz Singer's Formant vowel signal
             for (int block = 0; block < 20; ++block)
             {
                 for (int i = 0; i < 256; ++i)
                 {
                     const float t = (float) (block * 256 + i) / (float) sr;
-                    const float v = 0.25f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * t)
-                                  + 0.12f * std::sin (2.0f * juce::MathConstants<float>::pi * 440.0f * t);
+                    const float v = 0.22f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * t)
+                                  + 0.10f * std::sin (2.0f * juce::MathConstants<float>::pi * 440.0f * t)
+                                  + 0.06f * std::sin (2.0f * juce::MathConstants<float>::pi * 2800.0f * t);
                     buf.setSample (0, i, v);
                     buf.setSample (1, i, v);
                 }
@@ -318,8 +409,23 @@ int main()
                         if (! std::isfinite (buf.getSample (ch, i))) allFinite = false;
             }
             const float voicedVelvetMeter = proc.getArgonVelvetMeter();
+            const float voicedFocusMeter  = proc.getArgonFocusMeter();
             check (allFinite, "Argon processBlock output is 100% finite (no NaN/Inf)");
             check (voicedVelvetMeter > 0.05f, "Voiced vowel signal activates Argon Velvet harmonics");
+            check (voicedFocusMeter  > 0.05f, "Singer's Formant signal activates Argon Focus");
+
+            // 1b) All Argon amounts at zero must preserve hot floating-point audio exactly.
+            {
+                gz::argon::VelvetEngine bypassEng;
+                bypassEng.prepare (sr);
+                bypassEng.setParams (0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f);
+                std::vector<float> hotL (256, 1.5f), hotR (256, -1.5f);
+                bypassEng.process (hotL.data(), hotR.data(), 256);
+                bool exact = true;
+                for (int i = 0; i < 256; ++i)
+                    exact = exact && hotL[(size_t) i] == 1.5f && hotR[(size_t) i] == -1.5f;
+                check (exact, "all-zero Argon preserves hot floating-point samples without clipping");
+            }
 
             // 2) Sibilant 7500 Hz burst -> velvet meter should drop sharply
             for (int block = 0; block < 20; ++block)
@@ -336,7 +442,7 @@ int main()
             const float sibilantVelvetMeter = proc.getArgonVelvetMeter();
             check (sibilantVelvetMeter < voicedVelvetMeter * 0.25f, "Sibilant burst automatically gates off Argon Velvet distortion");
 
-            // 3) State save & restore preserves Argon parameters
+            // 3) State save & restore preserves all 4 Argon parameters
             juce::MemoryBlock stateData;
             proc.getStateInformation (stateData);
             VocalGzzioProcessor restored;
@@ -344,9 +450,10 @@ int main()
             restored.prepareToPlay (sr, 256);
             restored.setStateInformation (stateData.getData(), (int) stateData.getSize());
             check (std::abs (restored.apvts.getRawParameterValue ("argon_velvet")->load() - 85.0f) < 0.5f
+                && std::abs (restored.apvts.getRawParameterValue ("argon_focus")->load()  - 80.0f) < 0.5f
                 && std::abs (restored.apvts.getRawParameterValue ("argon_silk")->load()   - 80.0f) < 0.5f
                 && std::abs (restored.apvts.getRawParameterValue ("argon_halo")->load()   - 75.0f) < 0.5f,
-                   "DAW state save/restore preserves Argon Velvet, Silk, and Halo parameters");
+                   "DAW state save/restore preserves Argon Velvet, Focus, Silk, and Halo parameters");
             proc.releaseResources();
             restored.releaseResources();
         }

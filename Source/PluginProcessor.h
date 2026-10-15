@@ -508,6 +508,7 @@ private:
 public:
     const gz::ModuleChain& moduleChain() const noexcept { return mods; }   // 画面から状態を読む
     float getArgonVelvetMeter() const noexcept { return meterArgonVelvet.load (std::memory_order_relaxed); }
+    float getArgonFocusMeter()  const noexcept { return meterArgonFocus.load (std::memory_order_relaxed); }
     float getArgonSilkMeter()   const noexcept { return meterArgonSilk.load (std::memory_order_relaxed); }
     float getArgonHaloMeter()   const noexcept { return meterArgonHalo.load (std::memory_order_relaxed); }
     float getArgonVoicedRatio() const noexcept { return meterArgonVoiced.load (std::memory_order_relaxed); }
@@ -900,7 +901,7 @@ private:
     // Meters
     std::atomic<float> meterIn { 0 }, meterOut { 0 }, meterGR { 0 }, meterDS { 0 }, meterDN { 0 };
     gz::argon::VelvetEngine argonEngine;
-    std::atomic<float> meterArgonVelvet { 0.0f }, meterArgonSilk { 0.0f }, meterArgonHalo { 0.0f }, meterArgonVoiced { 0.0f };
+    std::atomic<float> meterArgonVelvet { 0.0f }, meterArgonFocus { 0.0f }, meterArgonSilk { 0.0f }, meterArgonHalo { 0.0f }, meterArgonVoiced { 0.0f };
 
     void updateParameters();
 

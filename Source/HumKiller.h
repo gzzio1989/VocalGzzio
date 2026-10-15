@@ -196,11 +196,17 @@ public:
                 }
             }
 
-            // --- 検出用のならし(基本波・左chのみ) ---
+            // --- 検出用のならし(基本波・有効chの大きい側) ---
             for (int sIdx = 0; sIdx < 2; ++sIdx)
             {
-                const float a = wa[sIdx][0][0], b = wb[sIdx][0][0];
-                mFast[sIdx] += fastA * (std::sqrt (a * a + b * b) - mFast[sIdx]);
+                const float a0 = wa[sIdx][0][0], b0 = wb[sIdx][0][0];
+                const float m0 = a0 * a0 + b0 * b0;
+                const float a1 = wa[sIdx][0][1], b1 = wb[sIdx][0][1];
+                const float m1 = a1 * a1 + b1 * b1;
+                const bool useCh1 = (nCh > 1 && m1 > m0);
+                const float a = useCh1 ? a1 : a0;
+                const float b = useCh1 ? b1 : b0;
+                mFast[sIdx] += fastA * (std::sqrt (useCh1 ? m1 : m0) - mFast[sIdx]);
                 msA  [sIdx] += slowA * (a - msA[sIdx]);
                 msB  [sIdx] += slowA * (b - msB[sIdx]);
             }
@@ -208,8 +214,9 @@ public:
 
             if (sel >= 0)
                 for (int h = 0; h < kHarm; ++h)
-                    peak = std::max (peak, std::sqrt (wa[sel][h][0] * wa[sel][h][0]
-                                                    + wb[sel][h][0] * wb[sel][h][0]));
+                    for (int ch = 0; ch < nCh; ++ch)
+                        peak = std::max (peak, std::sqrt (wa[sel][h][ch] * wa[sel][h][ch]
+                                                        + wb[sel][h][ch] * wb[sel][h][ch]));
         }
 
         humDb = (peak > 1.0e-6f) ? 20.0f * std::log10 (peak) : -120.0f;

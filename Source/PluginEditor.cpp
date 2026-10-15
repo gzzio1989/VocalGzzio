@@ -4362,9 +4362,12 @@ void VocalGzzioContent::timerCallback()
         updateOverviewState();
         juce::String hint;
         if (auto* under = juce::Desktop::getInstance().getMainMouseSource().getComponentUnderMouse())
+        {
+            if (under == this) hint = overviewHelpAt (getMouseXYRelative());
             if (isParentOf (under))
                 for (auto* c = under; c != nullptr && c != this && hint.isEmpty(); c = c->getParentComponent())
                     if (auto* client = dynamic_cast<juce::TooltipClient*> (c)) hint = client->getTooltip();
+        }
         if (hint.isNotEmpty() && hint != overviewHint) { overviewHint = hint; repaint (overviewHelp); }
         repaint (overviewOutput);
     }
@@ -4520,6 +4523,8 @@ void VocalGzzioContent::timerCallback()
         if (res == 100)                       // capture finished -> compute & apply now
         {
             processor.applyAutoSetup();
+            syncArgonOrbFromParams();
+            argonActiveTarget = -1;
             const int applied  = processor.getAutoSetupResult();
             const bool suggest = applied >= 100;           // sing: noisy room -> LEARN hint
             const int  base    = applied % 100;

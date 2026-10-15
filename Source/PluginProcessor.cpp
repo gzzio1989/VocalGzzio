@@ -326,12 +326,16 @@ VocalGzzioProcessor::createParameterLayout()
     layout.add (std::make_unique<juce::AudioParameterBool>(
         pid ("lift_legacy"), "Legacy: Lift Needs Character", false));
 
-    // ---- v4.4.0 Argon Velvet Engine (母音感応2次倍音・シルク空気感・モノラル互換バイノーラルHalo) ----
+    // ---- v4.4.0/v4.5.0 Argon Velvet Engine (母音感応2次倍音・声芯フォーカス・シルク空気感・モノラル互換バイノーラルHalo) ----
     // 既定値は 0% ＝ 既存のプリセットや回帰検査はビット単位で完全に同じ音を保つ。
-    // 2D Voice Gravity Orb や Argon Target を動かしたときに滑らかに働く。
+    // 2D Voice Gravity Orb や Argon Target・自動設定を動かしたときに滑らかに働く。
     layout.add (std::make_unique<P>(pid ("argon_velvet"), "Argon Velvet",   R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
     layout.add (std::make_unique<P>(pid ("argon_silk"),   "Argon Silk Air", R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
     layout.add (std::make_unique<P>(pid ("argon_halo"),   "Argon 3D Halo",  R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
+    // 既存パラメーターの順序と AU オートメーションを保つため末尾に追加し、
+    // 新規パラメーターだけ版ヒントを上げる（既存は 1 のまま）。
+    layout.add (std::make_unique<P>(juce::ParameterID { "argon_focus", 2 },
+                                  "Argon Focus", R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
 
     return layout;
 }
@@ -823,11 +827,12 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     makeup.setRampDurationSeconds (0.02);
     reverb.prepare (spec);
 
-    dryBuffer.setSize (2, samplesPerBlock, false, false, true);
-    scratch.setSize   (2, samplesPerBlock, false, false, true);
-    scratch2.setSize  (2, samplesPerBlock, false, false, true);   // v3.1 2点目の側鎖
+    const int maxCh = juce::jmax (2, getTotalNumInputChannels(), getTotalNumOutputChannels());
+    dryBuffer.setSize (maxCh, samplesPerBlock, false, false, true);
+    scratch.setSize   (maxCh, samplesPerBlock, false, false, true);
+    scratch2.setSize  (maxCh, samplesPerBlock, false, false, true);   // v3.1 2点目の側鎖
     // v3.0 モジュールの退避先。音声コールバックでは一切確保しないので、ここで取る。
-    mods.prepare (sampleRate, samplesPerBlock, 2);
+    mods.prepare (sampleRate, samplesPerBlock, maxCh);
 
     // gate constants
     gateEnvAtk    = 1.0f - std::exp (-1.0f / (0.004f * (float) sampleRate));
@@ -864,7 +869,7 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     dnDryPhase1.setCutoffFrequency (250.0f);
     dnDryPhase2.setCutoffFrequency (1200.0f);
     dnDryPhase3.setCutoffFrequency (5000.0f);
-    const int maxCh = juce::jmax (2, getTotalNumInputChannels(), getTotalNumOutputChannels()); dnDryPhaseBuffer.setSize (maxCh, samplesPerBlock, false, false, true);
+    dnDryPhaseBuffer.setSize (maxCh, samplesPerBlock, false, false, true);
     for (auto& b : bandBuf) b.setSize (maxCh, samplesPerBlock, false, false, true);
     dnEnvAtk    = 1.0f - std::exp (-1.0f / (0.002f * (float) sampleRate));
     dnEnvRel    = 1.0f - std::exp (-1.0f / (0.060f * (float) sampleRate));
@@ -916,12 +921,26 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
    #endif
     for (int b = 0; b < 4; ++b) { dnEnv[b] = 0; dnGain[b] = 1; }
     // v1.5.0: a learned noise profile is part of the user's settings now, so it
-    // survives prepareToPlay (levels are sample-rate independent). Only the
-    // adaptive tracker restarts when nothing has been learned yet.
+    // survives prepareToPlay (levels are sample-rate independent).
+    // ASIO (FireFace UC等) や SONAR 等の再初期化で prepareToPlay が先に呼ばれた場合も、
+    // 保留中のプロファイル復元や解除コマンドをここで確実に反映する。
+    if (dnProfilePending.exchange (false, std::memory_order_acquire))
+    {
+        dnLearned = dnLearnedShared.load();
+        for (int b = 0; b < 4; ++b) dnFloor[b] = dnFloorShared[b].load();
+    }
+    int pendingClear = -1;
+    if (dnLearnCommand.compare_exchange_strong (pendingClear, 0, std::memory_order_acq_rel))
+    {
+        dnLearned = false;
+        dnLearnedShared.store (false);
+        dnProfileValidation.store (0);
+        for (int b = 0; b < 4; ++b) { dnFloor[b] = 1e-5f; dnFloorShared[b].store (1e-5f); }
+    }
     if (! dnLearned)
         for (int b = 0; b < 4; ++b) dnFloor[b] = 1e-5f;
     learnCountdown.store (0);
-    dnLearnCommand.store (0);
+    // 操作側が新しく送った学習／解除は消さず、次の音声ブロックで処理する。
 
     // ---- sustain constants ----
     susEnvAtk = 1.0f - std::exp (-1.0f / (0.005f * (float) sampleRate));
@@ -1013,7 +1032,7 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     dblBuf.assign ((size_t) ((int) (0.045 * sampleRate) + 8), 0.0f);
     dblWrite = 0; dblLfoPhase = 0;
     argonEngine.prepare (sampleRate);
-    meterArgonVelvet.store (0.0f); meterArgonSilk.store (0.0f);
+    meterArgonVelvet.store (0.0f); meterArgonFocus.store (0.0f); meterArgonSilk.store (0.0f);
     meterArgonHalo.store (0.0f);   meterArgonVoiced.store (0.0f);
 
     // delay buffer (up to ~2 s for slow-tempo dotted notes)
@@ -1496,7 +1515,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         proxEvener.setAmount (pa);
         if (pa > 0.0f)
         {
-            const float rms = buffer.getRMSLevel (0, 0, numSamples);
+            float rms = buffer.getRMSLevel (0, 0, numSamples);
+            if (numCh > 1) rms = juce::jmax (rms, buffer.getRMSLevel (1, 0, numSamples));
             proxEvener.process (buffer.getWritePointer (0),
                                 numCh > 1 ? buffer.getWritePointer (1) : nullptr,
                                 numSamples, rms > 0.0006f);   // ざっくり -64dBFS 以上を「声」とみなす
@@ -1567,10 +1587,17 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         asPeak.store (pk);
 
         // level + dynamics statistics (used by the sing mode, cheap adds)
+        // FireFace UC 等の多入力インターフェースで Mic 2 (ch 1) だけにマイクを挿した
+        // 場合でも無音(-120dBFS)と誤測定しないよう、有効チャンネルの最大エネルギーを使う。
         {
-            const float* r0 = dryBuffer.getReadPointer (0);
             double ss = 0.0;
-            for (int n = 0; n < numSamples; ++n) ss += (double) r0[n] * r0[n];
+            for (int ch = 0; ch < juce::jmin (2, dryBuffer.getNumChannels()); ++ch)
+            {
+                const float* r = dryBuffer.getReadPointer (ch);
+                double chSs = 0.0;
+                for (int n = 0; n < numSamples; ++n) chSs += (double) r[n] * r[n];
+                ss = juce::jmax (ss, chSs);
+            }
             asSumSq.store (asSumSq.load() + ss);
             const float blockDb = (float) (10.0 * std::log10 (ss / juce::jmax (1, numSamples) + 1e-12));
             asBlockDbSum  .store (asBlockDbSum.load()   + blockDb);
@@ -1593,7 +1620,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     // audio thread once the scan completes (finalizeKeyScanIfReady on the message thread).
     if (keyScanCountdown.load() > 0)
     {
-        const float* in = dryBuffer.getReadPointer (0);
+        const int keyCh = juce::jlimit (0, juce::jmax (0, dryBuffer.getNumChannels() - 1), tunerInputChannel);
+        const float* in = dryBuffer.getReadPointer (keyCh);
         const int cap = (int) keyCaptureBuf.size();
         int w = keyCaptureWrite.load (std::memory_order_relaxed);
         for (int n = 0; n < numSamples && w < cap; ++n) keyCaptureBuf[(size_t) w++] = in[n];
@@ -1755,38 +1783,19 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 // ---- v2.12.0 サフサフ対策(§6-1) ----
                 // 声の中心帯域(250-1200 / 1200-5000)が床から+12dB(×4)を超えたら
                 // 「声が出ている」。その間+80msは**全帯域を一斉に開く**。
-                // 今までは帯域ごとに独立して開いていたので、喋りはじめの弱い
-                // 子音・息(床に近い)が高域だけ「まだノイズ」と判定されて削られ、
-                // サ行・ハ行の頭がサフサフになっていた。判定は1サンプル前の
-                // 包絡を見るが、保持が80msあるので問題にならない。
-                // ★条件は「2帯域そろって+12dB」または「片帯域が+20dB」。
-                //  片帯域+12dBだけにすると、部屋ノイズの包絡の揺れ(床は最小値
-                //  追従なので、揺れの上側は床の4倍を超えることがある)で誤発火し、
-                //  声のない区間まで開きっぱなしになる(dsp_dnonset[2]で実測)。
-                //  さらに絶対レベルの下限(-52dBFS相当)を重ねる。床は最小値追従
-                //  なので、静かな部屋ノイズでも包絡の揺れの上側が床の4倍を超えて
-                //  「声」と誤認し、開きっぱなしになる(dsp_dnonset[2]で実測)。
-                //  声・ささやきは-45dBFSより上に来るので、この下限では切れない。
-                // v3.1 ★「喋りはじめのさ行」も声として扱う。
-                //  さ・し・す…のエネルギーは5kHzより上（帯域3）に集まるが、
-                //  この判定は帯域1・2しか見ていなかった。フレーズの頭が子音だと
-                //  母音が来るまで発火せず、その間の子音がエキスパンダーに揉まれて
-                //  シャフシャフしていた（文中の子音は80ms保持に守られるので無事＝
-                //  「喋りはじめだけ」症状が出る、という報告どおり）。
-                //  レベルだけでは騒がしい部屋の床と子音を区別できないので、
-                //  **立ち上がりの速さ**で見る: 帯域3の包絡が「ゆっくり平均(0.15s)」を
-                //  一気に上回るのは子音の頭だけ。しきい値は実測から決めた:
-                //   ・さ行の頭のジャンプ = ×1.38（-48dBの部屋で-45dB相当の弱い子音）
-                //   ・定常ノイズの包絡の揺れ = ×1.05〜1.08（release 60msが均すため）
-                //  → 中間の ×1.25（+2dB）。絶対の下限(-53dBFS相当)も重ねて、
-                //  無音の空騒ぎを弾く（dsp_dnonset[2]が誤発火を毎回見張る）。
-                //  ★「床より上」の条件は置かない。学習した床は med×1.4、つまり
-                //  包絡の中央値より**上**にあるので、床と比べると弱い子音
-                //  （床×1.06 とか）を自分で弾いてしまう（実測でそれが起きた）。
+                // 未学習直後や低い保存床からの復帰中、dnClassifier がすでに「定常・非周期の
+                // 部屋ノイズ」と確認している間は、現在のノイズ床推定値(floorTarget)も
+                // 基準の下限に入れて「定常ノイズで voiceOpen がロックする」デッドロックを防ぐ。
+                const float vFloor1 = (dnClassifier.isStationary() && ! dnClassifier.isPeriodic())
+                                    ? juce::jmax (dnFloor[1], dnClassifier.floorTarget (1))
+                                    : dnFloor[1];
+                const float vFloor2 = (dnClassifier.isStationary() && ! dnClassifier.isPeriodic())
+                                    ? juce::jmax (dnFloor[2], dnClassifier.floorTarget (2))
+                                    : dnFloor[2];
                 if (((dnEnv[1] + dnEnv[2] > 2.5e-3f)
-                     && ((dnEnv[1] > dnFloor[1] * 4.0f && dnEnv[2] > dnFloor[2] * 4.0f)
-                          || dnEnv[1] > dnFloor[1] * 10.0f
-                          || dnEnv[2] > dnFloor[2] * 10.0f))
+                     && ((dnEnv[1] > vFloor1 * 4.0f && dnEnv[2] > vFloor2 * 4.0f)
+                          || dnEnv[1] > vFloor1 * 10.0f
+                          || dnEnv[2] > vFloor2 * 10.0f))
                     || hfOnset)
                     dnVoiceHold = dnHoldSamples;
                 else if (dnVoiceHold > 0) --dnVoiceHold;
@@ -1830,20 +1839,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                             if (b == 3) ++dnHistCount;      // 最後の帯域で1回だけ数える
                         }
                     }
-                    // v2.10.0 ★ここは else ではない。
-                    //   以前は学習中の1.5秒だけ自動追従が止まっていた。採用しなかった
-                    //   ときに「押しただけで音が変わる」ことになり（実測 低域 +3.9dB）、
-                    //   拒否が無害にならない。学習中も追従は回し続ける。
-                    //   採用したときは、下でどうせ床を上書きするので影響しない。
-                    // 未学習時も約0.5秒の定常・非周期音を確認してから床へ寄せる。
-                    // 初期床から+3dB/秒で這い上がる方式は、大きいノイズを声と
-                    // 誤認すると数十秒間まったく働かなかった。声の周期があれば
-                    // 時間が経っても更新せず、演奏をノイズへ取り込まない。
+                    // 未学習時および自動学習時は約0.5秒の定常・非周期音を確認してから床へ寄せる。
+                    // 保存された床が現在の定常ノイズより大幅に低い場合(dnFloor < target * 0.25)も
+                    // 速い時定数で追いつかせ、エキスパンダーが開きっぱなしになるのを防ぐ。
                     if ((! dnLearned || dnRelearn)
                         && dnClassifier.isStationary() && dnFallRun[b] <= dnFallMax)
                     {
                         const float target = dnClassifier.floorTarget (b);
-                        const float follow = dnLearned ? dnRelearnCoef : dnInitialFollowCoef;
+                        const float follow = (! dnLearned || dnFloor[b] < target * 0.25f)
+                                           ? dnInitialFollowCoef : dnRelearnCoef;
                         dnFloor[b] += follow * (target - dnFloor[b]);
                         dnFloor[b] = juce::jlimit (1.0e-6f, 0.5f, dnFloor[b]);
                     }
@@ -1851,14 +1855,14 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     const float openThr = dnFloor[b] * 2.5f;   // ~+8 dB above floor
 
                     // 高域は声の有無で二択に切り替えず、床からの余裕で連続的に減衰。
-                    // 以前は母音中に -6dB まで必ず開いていたため、黙っている間に
-                    // 抑えたノイズが声と一緒に戻っていた。子音の立ち上がりだけ保持する。
+                    // ノイズ包絡の中央値付近(dnFloor/1.4)では最大減衰(below≈1.0)がしっかり掛かり、
+                    // ノイズのランダムな小ピークで高速開放(dnOpenCoef)が誤発火しないようにする。
                     const bool protectBand = b == 3 ? dnHfVoiceHold > 0 : voiceOpen;
                     const float below = juce::jlimit (0.0f, 1.0f,
-                                          (openThr - dnEnv[b]) / juce::jmax (openThr, 1e-9f));
+                                          (openThr - dnEnv[b]) / juce::jmax (openThr - dnFloor[b] * 0.5f, 1e-9f));
                     const float targetGain = protectBand ? 1.0f
                         : juce::Decibels::decibelsToGain (-maxAttenDb * below);
-                    const bool bandHasSignal = dnEnv[b] > dnFloor[b] * 1.3f;
+                    const bool bandHasSignal = dnEnv[b] > dnFloor[b] * 1.6f;
                     const float upCoef = protectBand ? dnFastOpen
                                        : (bandHasSignal ? dnOpenCoef : dnSoftOpen);
                     const float coef = targetGain > dnGain[b] ? upCoef
@@ -2821,13 +2825,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     if (neiroRun)
     {
         const float arVelvet = apvts.getRawParameterValue ("argon_velvet")->load() * 0.01f;
+        const float arFocus  = apvts.getRawParameterValue ("argon_focus")->load()  * 0.01f;
         const float arSilk   = apvts.getRawParameterValue ("argon_silk")->load()   * 0.01f;
         const float arHalo   = apvts.getRawParameterValue ("argon_halo")->load()   * 0.01f;
-        argonEngine.setParams (arVelvet, arSilk, arHalo, crushCg, srcVoiceOnly);
+        argonEngine.setParams (arVelvet, arSilk, arHalo, crushCg, srcVoiceOnly, arFocus);
         argonEngine.process (buffer.getWritePointer (0),
                              numCh > 1 ? buffer.getWritePointer (1) : nullptr,
                              numSamples);
         meterArgonVelvet.store (argonEngine.velvetActivity(), std::memory_order_relaxed);
+        meterArgonFocus.store  (argonEngine.focusActivity(),  std::memory_order_relaxed);
         meterArgonSilk.store   (argonEngine.silkActivity(),   std::memory_order_relaxed);
         meterArgonHalo.store   (argonEngine.haloActivity(),   std::memory_order_relaxed);
         meterArgonVoiced.store (argonEngine.voicedRatioNow(), std::memory_order_relaxed);
@@ -3457,16 +3463,20 @@ void VocalGzzioProcessor::applyAutoSetup()
         setP ("drive", juce::jlimit (0.0f, 28.0f, (0.17f - bodyLow) * 280.0f));
 
         // 4) sibilance + noise
+        // FireFace UC 等の高ヘッドルーム機材では無音時が -68 dBFS 前後になるが、
+        // 後段の makeup (+12dB) / air / presence / Argon 倍音でフロアが +15dB 以上
+        // 持ち上がるため、8% では実質無処理になる。最低 25%〜42% を入れて自動学習も有効化する。
         setP ("deess", juce::jlimit (20.0f, 65.0f, (sib / juce::jmax (1e-4f, highSum)) * 140.0f));
-        const float dn = floorDb > -50.0f ? 30.0f : floorDb > -62.0f ? 18.0f : 8.0f;
+        const float dn = floorDb > -50.0f ? 42.0f : floorDb > -65.0f ? 32.0f : 25.0f;
         setP ("denoise", dn);
+        setP ("dn_relearn", 1.0f);
         // v2.6.0 おまかせで2つの新機能も入れる。
         //  ジー音 … ハムが無ければ何もしない作りなので、常にONで安全
         //  ことば … 歌は歌詞が届いてこそ。控えめな 35% を既定に
         setP ("hum_amt",  100.0f);
         setP ("cons_amt",  35.0f);
 
-        // 5) singing feel: sustain and a pleasant space
+        // 5) singing feel: sustain, pleasant space, and v4.5.0 Argon Velvet Engine calibration
         setP ("sustain", 30.0f);
         setP ("width",   28.0f);
         setP ("doubler", 0.0f);      // かさねはデフォOFF (お好みで後から)
@@ -3474,6 +3484,10 @@ void VocalGzzioProcessor::applyAutoSetup()
         setP ("revsize", 42.0f);
         setP ("revmix",  18.0f);
         setP ("mix",     100.0f);
+        setP ("argon_velvet", juce::jlimit (18.0f, 68.0f, 34.0f + (0.17f - bodyLow) * 210.0f));
+        setP ("argon_focus",  juce::jlimit (22.0f, 66.0f, 38.0f + (0.30f - pres / juce::jmax (1e-4f, highSum)) * 110.0f));
+        setP ("argon_silk",   juce::jlimit (20.0f, 74.0f, 36.0f + (0.28f - airE / juce::jmax (1e-4f, highSum)) * 130.0f));
+        setP ("argon_halo",   36.0f);
 
         // result: 10..12 = sing done, +100 if LEARN is recommended
         // v2.12.0 ★判定を作り直した(§6-4)。以前は「高域の割合 − 低域の割合」を
@@ -3488,7 +3502,7 @@ void VocalGzzioProcessor::applyAutoSetup()
         asBrightDb.store (delta);
         asSibPct.store (100.0f * sib / juce::jmax (1.0e-4f, highSum));
         int r = delta > 2.0f ? 10 : delta < -2.0f ? 11 : 12;
-        if (dn >= 18.0f) r += 100;                               // noisy room: suggest LEARN
+        if (floorDb > -62.0f) r += 100;                          // noisy room: suggest LEARN
         autoSetupResult.store (r);
         return;
     }
@@ -3510,7 +3524,7 @@ void VocalGzzioProcessor::applyAutoSetup()
     setP ("air", juce::jlimit (0.0f, 6.0f, (0.28f - airE / juce::jmax (1e-4f, highSum)) * 22.0f));
 
     // gentle noise floor cleanup based on the quietest capture level
-    setP ("denoise", juce::jlimit (0.0f, 30.0f, asPeak.load() < 0.2f ? 25.0f : 10.0f));
+    setP ("denoise", juce::jlimit (0.0f, 45.0f, asPeak.load() < 0.2f ? 35.0f : 25.0f));
     // v2.6.0 しゃべりでは「ことば」を歌より強めに(聞き取りやすさが最優先)
     setP ("hum_amt",  100.0f);
     setP ("cons_amt",  50.0f);
@@ -3521,6 +3535,12 @@ void VocalGzzioProcessor::applyAutoSetup()
     // v3.0 トークは長丁場。部屋（PCファン・エアコン）が途中で変わっても
     // ついていけるよう、静かな間の自動学びなおしを入れる
     setP ("dn_relearn", 1.0f);
+
+    // v4.5.0 トーク用 Argon キャリブレーション: 言葉の芯(FOCUS)と母音の温かみ(VELVET)を整え、空間ハローは近接重視に抑える
+    setP ("argon_velvet", juce::jlimit (12.0f, 52.0f, 26.0f + (0.17f - bodyLow) * 160.0f));
+    setP ("argon_focus",  juce::jlimit (28.0f, 68.0f, 44.0f + (0.30f - pres / juce::jmax (1e-4f, highSum)) * 100.0f));
+    setP ("argon_silk",   juce::jlimit (14.0f, 54.0f, 24.0f + (0.28f - airE / juce::jmax (1e-4f, highSum)) * 110.0f));
+    setP ("argon_halo",   10.0f);
 
     // pick the nearest mic-preset tilt (bright vs warm vs neutral)
     // v2.12.0 ★うた側と同じ作り直し(§6-4)。生の割合差は声の低域優位で

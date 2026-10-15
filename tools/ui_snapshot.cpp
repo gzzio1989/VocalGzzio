@@ -35,12 +35,14 @@ int main (int argc, char** argv)
                     p->setValueNotifyingHost (processor.apvts.getParameterRange (id).convertTo0to1 (val));
             };
             setParam ("argon_velvet", 62.0f);
+            setParam ("argon_focus",  58.0f);
             setParam ("argon_silk",   54.0f);
             setParam ("argon_halo",   42.0f);
             setParam ("denoise",      28.0f);
-            setParam ("comp_amount",  48.0f);
+            setParam ("comp2",        48.0f);
             setParam ("air",          36.0f);
-            setParam ("reverb_mix",   24.0f);
+            setParam ("revmix",       24.0f);
+            content.syncArgonOrbFromParams();
             juce::AudioBuffer<float> demoBuf (2, 256);
             juce::MidiBuffer midi;
             double phase = 0.0;

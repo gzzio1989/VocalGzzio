@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$BuildDirectory,
     [string]$OutputDirectory = 'release/windows',
@@ -71,5 +71,11 @@ $ErrorActionPreference = $savedPreference
 if ($result -ne 0 -or -not (Test-Path -LiteralPath $installer)) { throw "インストーラー作成に失敗しました。記録: $log" }
 $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText($installer + '.sha256', $hash + '  ' + [IO.Path]::GetFileName($installer) + "`n", [Text.UTF8Encoding]::new($false))
+$legacyOut = Join-Path $repo 'installer_output'
+if ($OutputDirectory -ne $legacyOut) {
+    New-Item -ItemType Directory -Path $legacyOut -Force | Out-Null
+    Copy-Item -LiteralPath $installer -Destination (Join-Path $legacyOut ([IO.Path]::GetFileName($installer))) -Force
+    Copy-Item -LiteralPath ($installer + '.sha256') -Destination (Join-Path $legacyOut ([IO.Path]::GetFileName($installer) + '.sha256')) -Force
+}
 Write-Host "作成完了: $installer"
 Write-Host '電子署名は付与していません。インストール操作は実行していません。'

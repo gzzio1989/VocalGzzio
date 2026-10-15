@@ -34,11 +34,31 @@ void VocalGzzioContent::setLiteMode (bool on)
     applyThemeToKnobs();
     if (onUiStateChange) onUiStateChange ("ui_lite", liteMode ? 1 : 0);
     overviewHint = liteMode
-        ? language->T ("【⚡ 軽量モード ON】4096点FFTスペクトラム・背景パーティクル・半透明ガラス合成を休止し、GPU/CPU負荷を極小化しました（Argon倍音エンジンを含む音声DSPは100%最高音質のまま動作します）。",
-                       "[LITE MODE ON] 4096-pt FFT spectrum, background animations, and glass overdraw paused for minimal GPU/CPU load (100% full audio DSP quality preserved).")
-        : language->T ("【⚡ 軽量モード OFF】フルアニメーション・リアルタイムFFTスペクトラム・高精度ハードウェア描画を再開しました。",
-                       "[LITE MODE OFF] Full animations, real-time FFT spectrum, and bespoke hardware rendering resumed.");
+        ? language->T ("【軽量モード 入】背景アニメーションとスペクトラム表示を休止し、画面描画の負荷を軽減します。音声処理の設定は変わりません。",
+                       "[LITE MODE ON] Pauses background animations and the spectrum display to reduce drawing work. Audio processing settings are unchanged.")
+        : language->T ("【軽量モード 切】背景アニメーションとスペクトラム表示を再開します。音声処理の設定は変わりません。",
+                       "[LITE MODE OFF] Resumes background animations and the spectrum display. Audio processing settings are unchanged.");
     repaint();
+}
+
+void VocalGzzioContent::syncArgonOrbFromParams() noexcept
+{
+    const float v = processor.apvts.getRawParameterValue ("argon_velvet")->load();
+    const float s = processor.apvts.getRawParameterValue ("argon_silk")->load();
+    const float h = processor.apvts.getRawParameterValue ("argon_halo")->load();
+    if (v > 0.5f || s > 0.5f || h > 0.5f)
+    {
+        argonOrbX = juce::jlimit (0.08f, 0.92f, 0.50f + (s - v) * 0.0055f);
+        argonOrbY = juce::jlimit (0.08f, 0.92f, h / 92.0f);
+    }
+    else
+    {
+        const float pres = processor.apvts.getRawParameterValue ("presence")->load();
+        const float drv  = processor.apvts.getRawParameterValue ("drive")->load();
+        const float rev  = processor.apvts.getRawParameterValue ("revmix")->load();
+        argonOrbX = juce::jlimit (0.12f, 0.88f, 0.50f + pres * 0.06f - drv * 0.005f);
+        argonOrbY = juce::jlimit (0.12f, 0.88f, 0.16f + rev * 0.022f);
+    }
 }
 
 void VocalGzzioContent::applyArgonOrbFromXY (float nx, float ny)
@@ -47,9 +67,10 @@ void VocalGzzioContent::applyArgonOrbFromXY (float nx, float ny)
     argonOrbY = juce::jlimit (0.0f, 1.0f, ny);
     argonActiveTarget = -1;
 
-    // X軸: 左(0.0)=Warm Velvet(母音2次倍音・胸声アンカー) ⇄ 右(1.0)=Silk Air(14kHz透明感・子音保護)
+    // X軸: 左(0.0)=Warm Velvet(母音2次倍音・胸声アンカー) ⇄ 中央=Focus(2.8kHz声芯) ⇄ 右(1.0)=Silk Air(14kHz透明感・子音保護)
     // Y軸: 上(0.0)=Up-Front ASMR(超近接・耳元密度)        ⇄ 下(1.0)=3D Stage Halo(バイノーラル立体空間)
     const float velvet = juce::jlimit (0.0f, 100.0f, (1.0f - argonOrbX * 0.52f) * 78.0f + (1.0f - argonOrbY) * 22.0f);
+    const float focus  = juce::jlimit (0.0f, 100.0f, (1.0f - std::abs (argonOrbX - 0.54f) * 1.10f) * 66.0f + (1.0f - argonOrbY * 0.58f) * 32.0f);
     const float silk   = juce::jlimit (0.0f, 100.0f, (0.22f + argonOrbX * 0.78f) * 88.0f);
     const float halo   = juce::jlimit (0.0f, 100.0f, argonOrbY * 92.0f);
 
@@ -63,17 +84,13 @@ void VocalGzzioContent::applyArgonOrbFromXY (float nx, float ny)
         }
     };
     setParam ("argon_velvet", velvet);
+    setParam ("argon_focus",  focus);
     setParam ("argon_silk",   silk);
     setParam ("argon_halo",   halo);
 
-    // 2D オーブに連動して基本トーン＆空間も音楽的に微調整する
-    setParam ("presence", juce::jmap (argonOrbX, -0.5f, 4.2f));
-    setParam ("drive",    juce::jmap (1.0f - argonOrbX, 8.0f, 38.0f));
-    setParam ("revmix",   juce::jmap (argonOrbY, 4.0f, 28.0f));
-
     overviewHint = language->T (
-        "Argon 2D 重力場オーブ：横軸で「温かい母音2次倍音 ⇄ 14kHzシルク空気感」、縦軸で「耳元ASMR近接感 ⇄ モノ互換3D立体ハロー」を同時に連続成形しています（ダブルクリックで0%へリセット）。",
-        "Argon 2D Voice Gravity Orb: X-axis morphs Warm Triode Velvet <-> 14kHz Silk Air; Y-axis morphs Up-Front ASMR <-> Mono-Safe 3D Binaural Halo (double-click to reset).");
+        "左で温かく、右で明るく、下で広がる声へ。中央の4つの効果をまとめて調整します。ダブルクリックで4つとも0%に戻します。リバーブや既存の音色つまみは変えません。",
+        "Drag left for warmth, right for air, and down for stereo space. Adjusts the four Argon effects only; double-click resets all four to 0%. Reverb and other tone controls stay unchanged.");
     repaint();
 }
 
@@ -83,28 +100,28 @@ void VocalGzzioContent::applyArgonVoiceTarget (int idx)
     struct Target
     {
         float ox, oy;
-        float velvet, silk, halo;
+        float velvet, focus, silk, halo;
         float comp2, pres, drive, revmix, revsize;
         const char* hintJa;
         const char* hintEn;
     };
     static const Target kTargets[4] = {
         // 0: ★ VELVET 歌枠 (王道ベルベットボーカル)
-        { 0.44f, 0.42f, 64.0f, 58.0f, 46.0f, 45.0f, 2.2f, 24.0f, 16.0f, 38.0f,
-          "【★ VELVET 歌枠】母音だけに非対称三極管2次倍音と胸鳴りを加え、サ行を一切ザラつかせずに太く艶やかな主役ボーカルへ仕上げました。",
-          "[VELVET VOCAL] Voiced-gated triode 2nd harmonics and chest anchor for a rich, silky lead vocal without sibilant harshness." },
+        { 0.44f, 0.42f, 64.0f, 58.0f, 58.0f, 46.0f, 45.0f, 2.2f, 24.0f, 16.0f, 38.0f,
+          "【歌枠】声の厚みと芯を足す設定です。明るさ・圧縮・リバーブも合わせて変わります。原音と比べ、濁りやサ行が目立つ場合は量を下げてください。",
+          "[VELVET VOCAL] Adds vocal warmth and focus with coordinated tone, compression and reverb. Compare with the original and reduce the effects if mud or sibilance stands out." },
         // 1: ♥ ASMR ささやき (超近接・耳元ブレス)
-        { 0.28f, 0.14f, 76.0f, 72.0f, 18.0f, 58.0f, 1.4f, 28.0f, 5.0f, 20.0f,
-          "【♥ ASMR ささやき】135Hz胸声サブアンカーと小声で開く14kHzシルクエアを組み合わせ、すぐ耳元で囁いているような生々しい距離感を作りました。",
-          "[WHISPER ASMR] Combines sub-fundamental chest anchor and whisper-blooming 14kHz silk air for ultra-close intimacy." },
+        { 0.28f, 0.14f, 76.0f, 44.0f, 72.0f, 18.0f, 58.0f, 1.4f, 28.0f, 5.0f, 20.0f,
+          "【ささやき】残響を抑え、声の厚みと息の明るさを足す設定です。背景ノイズが目立つ場合は空気感を下げ、ノイズ除去は別に調整してください。",
+          "[WHISPER ASMR] Uses less reverb with added body and breath detail. Reduce air if background hiss becomes prominent; noise reduction remains a separate adjustment." },
         // 2: ✦ CRYSTAL ポップス (高抜け・ボカロ/POPS)
-        { 0.80f, 0.34f, 38.0f, 86.0f, 42.0f, 52.0f, 3.6f, 14.0f, 14.0f, 34.0f,
-          "【✦ CRYSTAL ポップス】クレスト保護つき14kHzシルクエアと子音ガードを最大化し、音数の多いオケの中でも耳に刺さらずスコーンと抜ける声にしました。",
-          "[CRYSTAL POP] Maximizes crest-protected 14kHz silk air and sibilance guard to cut through dense mixes without piercing." },
+        { 0.80f, 0.34f, 38.0f, 78.0f, 86.0f, 42.0f, 52.0f, 3.6f, 14.0f, 14.0f, 34.0f,
+          "【ポップス】声の芯と高音の明るさを強め、伴奏から聞き取りやすくする設定です。硬く感じたら声芯や空気感を下げてください。",
+          "[CRYSTAL POP] Emphasizes vocal focus and high-frequency air to stand out in accompaniment. Reduce Focus or Air if the voice sounds hard." },
         // 3: ◆ HALO バラード (3D立体ハロー空間)
-        { 0.54f, 0.84f, 60.0f, 66.0f, 86.0f, 42.0f, 2.0f, 22.0f, 26.0f, 56.0f,
-          "【◆ HALO バラード】直交オールパス拡散による3Dバイノーラル・ハローを展開。スマホのモノラル再生でも声が痩せず、ステレオでは光の輪のように空間が広がります。",
-          "[3D HALO STAGE] Engages quadrature all-pass binaural halo. 100% mono-compatible while wrapping the vocal in a 3D stage aura." }
+        { 0.54f, 0.84f, 60.0f, 52.0f, 66.0f, 86.0f, 42.0f, 2.0f, 22.0f, 26.0f, 56.0f,
+          "【バラード】左右の広がりとリバーブを多めにした設定です。ステレオで聴き比べ、言葉がぼやける場合は立体や残響を下げてください。",
+          "[HALO BALLAD] Adds stereo width and more reverb. Compare in stereo and reduce Halo or reverb if words become unclear." }
     };
 
     const auto& t = kTargets[idx];
@@ -122,6 +139,7 @@ void VocalGzzioContent::applyArgonVoiceTarget (int idx)
         }
     };
     setParam ("argon_velvet", t.velvet);
+    setParam ("argon_focus",  t.focus);
     setParam ("argon_silk",   t.silk);
     setParam ("argon_halo",   t.halo);
     setParam ("comp2",        t.comp2);
@@ -129,7 +147,6 @@ void VocalGzzioContent::applyArgonVoiceTarget (int idx)
     setParam ("drive",        t.drive);
     setParam ("revmix",       t.revmix);
     setParam ("revsize",      t.revsize);
-
     overviewHint = language->T (t.hintJa, t.hintEn);
     repaint();
 }
@@ -142,7 +159,7 @@ bool VocalGzzioContent::handleOverviewMouseDoubleClick (juce::Point<int> pt)
         argonOrbY = 0.50f;
         argonActiveTarget = -1;
         argonDragging = -1;
-        for (const char* id : { "argon_velvet", "argon_silk", "argon_halo" })
+        for (const char* id : { "argon_velvet", "argon_focus", "argon_silk", "argon_halo" })
         {
             if (auto* p = processor.apvts.getParameter (id))
             {
@@ -152,16 +169,16 @@ bool VocalGzzioContent::handleOverviewMouseDoubleClick (juce::Point<int> pt)
             }
         }
         overviewHint = language->T (
-            "【Argon 2D 重力場オーブ リセット】倍音(VELVET)・空気感(SILK)・立体ハロー(HALO)をニュートラル(0%)へリセットしました。",
-            "[Argon 2D Orb Reset] Velvet, Silk Air, and 3D Halo reset to neutral (0%).");
+            "【Argon 2D 重力場オーブ リセット】倍音(VELVET)・声芯(FOCUS)・空気感(SILK)・立体ハロー(HALO)をニュートラル(0%)へリセットしました。",
+            "[Argon 2D Orb Reset] Velvet, Focus, Silk Air, and 3D Halo reset to neutral (0%).");
         repaint();
         return true;
     }
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 4; ++i)
     {
-        if (! argonBarRects[(size_t) i].isEmpty() && argonBarRects[(size_t) i].expanded (0, 3).contains (pt))
+        if (! argonBarRects[(size_t) i].isEmpty() && argonBarRects[(size_t) i].expanded (0, 2).contains (pt))
         {
-            const char* ids[3] = { "argon_velvet", "argon_silk", "argon_halo" };
+            const char* ids[4] = { "argon_velvet", "argon_focus", "argon_silk", "argon_halo" };
             if (auto* p = processor.apvts.getParameter (ids[i]))
             {
                 p->beginChangeGesture();
@@ -186,13 +203,13 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         {
             setOverviewLayoutMode (i, true);
             const char* archHintsJa[4] = {
-                "【★ ARGON DECK】中央に2D声質重力場オーブとArgon倍音エンジンを据えた、画面遷移ゼロの次世代3ウイング・コックピット配置です。",
+                "【★ ARGON DECK】中央に2D声質重力場オーブと4軸Argon倍音エンジンを据えた、画面遷移ゼロの次世代3ウイング・コックピット配置です。",
                 "【♥ LIVER STAGE】上段に2D声キャラメイク＆ステージモニター、下段に12連マカロンリボンを並べた配信・Vライバー特化ステージ配置です。",
                 "【🎛 STUDIO RACK】左から右へ信号経路（PRE/CLEAN ➔ DYN/TONE ➔ ARGON MATRIX/RTA ➔ SPATIAL ➔ MASTER VU）が並ぶ5列ハードウェア・チャンネルストリップ配置です。",
                 "【◎ CLASSIC】上部に大型チューナー、下部に3枚のセクションカードを並べた従来の3カード配置です。"
             };
             const char* archHintsEn[4] = {
-                "[ARGON DECK] Next-gen 3-wing cockpit centered around the interactive 2D Voice Gravity Orb and Argon Velvet Engine.",
+                "[ARGON DECK] Next-gen 3-wing cockpit centered around the interactive 2D Voice Gravity Orb and 4-axis Argon Velvet Engine.",
                 "[LIVER STAGE] Streamer & V-Liver stage panorama with 2D Voice Make-up Pad and a 12-dial horizontal ribbon.",
                 "[STUDIO RACK] 5-column vertical hardware channel strip following strict left-to-right console signal flow.",
                 "[CLASSIC] Traditional 3-card overview layout."
@@ -206,6 +223,13 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
     if (! litePillRect.isEmpty() && litePillRect.contains (pt))
     {
         setLiteMode (! liteMode);
+        return true;
+    }
+
+    // 1c. Output boost trim. The visible button and this hit-test use the same action.
+    if (! levelBadgeRect.isEmpty() && levelBadgeRect.contains (pt))
+    {
+        trimOverviewOutputLevel();
         return true;
     }
 
@@ -227,10 +251,10 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
-    // 4. Argon Velvet Engine 3本のダイレクトバー (VELVET / SILK / HALO)
-    for (int i = 0; i < 3; ++i)
+    // 4. Argon Velvet Engine 4本のダイレクトバー (VELVET / FOCUS / SILK / HALO)
+    for (int i = 0; i < 4; ++i)
     {
-        if (! argonBarRects[(size_t) i].isEmpty() && argonBarRects[(size_t) i].expanded (0, 3).contains (pt))
+        if (! argonBarRects[(size_t) i].isEmpty() && argonBarRects[(size_t) i].expanded (0, 2).contains (pt))
         {
             argonDragging = i + 1;
             handleOverviewMouseDrag (pt);
@@ -249,14 +273,14 @@ void VocalGzzioContent::handleOverviewMouseDrag (juce::Point<int> pt)
         const float ny = (float) (pt.y - argonPadRect.getY()) / (float) juce::jmax (1, argonPadRect.getHeight());
         applyArgonOrbFromXY (nx, ny);
     }
-    else if (argonDragging >= 1 && argonDragging <= 3)
+    else if (argonDragging >= 1 && argonDragging <= 4)
     {
         const int idx = argonDragging - 1;
         const auto& r = argonBarRects[(size_t) idx];
         if (! r.isEmpty())
         {
             const float norm = juce::jlimit (0.0f, 1.0f, (float) (pt.x - r.getX()) / (float) juce::jmax (1, r.getWidth()));
-            const char* ids[3] = { "argon_velvet", "argon_silk", "argon_halo" };
+            const char* ids[4] = { "argon_velvet", "argon_focus", "argon_silk", "argon_halo" };
             if (auto* p = processor.apvts.getParameter (ids[idx]))
             {
                 p->beginChangeGesture();
@@ -313,16 +337,20 @@ void VocalGzzioContent::initialiseOverview()
         });
         finishPresetIndex = index;
         processor.apvts.state.setProperty ("finish_preset", index, nullptr);
+        syncArgonOrbFromParams();
         overviewHint = juce::String::fromUTF8 (language->english ? gzzio::kFinishPresets[index].descEn : gzzio::kFinishPresets[index].desc);
         repaint();
     };
     finishPresetIndex = (int) processor.apvts.state.getProperty ("finish_preset", -1);
-    for (auto* button : { &overviewDetails, &overviewReturn, &overviewPitch, &reverbPower })
+    for (auto* button : { &overviewDetails, &overviewReturn, &overviewPitch, &reverbPower, &overviewOutputTrim })
         styleButton (*button);
     overviewDetails.setComponentID ("openDetails");
     overviewReturn.setComponentID ("openOverview");
     overviewPitch.setComponentID ("openPitch");
     reverbPower.setComponentID ("reverbPower");
+    overviewOutputTrim.setComponentID ("trimOutputBoost");
+    overviewOutputTrim.getProperties().set ("fontH", 14.0);
+    overviewOutputTrim.onClick = [this] { trimOverviewOutputLevel(); };
     reverbPower.setClickingTogglesState (true);
     reverbPowerAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>
         (processor.apvts, "revon", reverbPower);
@@ -361,6 +389,7 @@ void VocalGzzioContent::initialiseOverview()
     overviewCompare.setComponentID ("compareOriginal");
     overviewCompare.onDown = [this] { processor.compareBypass.store (true); repaint(); };
     overviewCompare.onUp = [this] { processor.compareBypass.store (false); repaint(); };
+    syncArgonOrbFromParams();
     refreshOverviewText();
 }
 
@@ -385,7 +414,7 @@ void VocalGzzioContent::restoreOverviewVisibility()
     { k->slider.setEnabled (true); k->label.setAlpha (1.0f); }
     for (auto* c : std::initializer_list<juce::Component*> { &finishPresetBox, &overviewDetails, &overviewCompare,
                      &overviewNoiseStatus,
-                     &overviewPitch, &overviewMore[0], &overviewMore[1], &overviewMore[2],
+                     &overviewPitch, &overviewOutputTrim, &overviewMore[0], &overviewMore[1], &overviewMore[2],
                      &overviewSectionPower[0], &overviewSectionPower[1], &overviewSectionPower[2] })
         c->setVisible (false);
 }
@@ -401,7 +430,7 @@ void VocalGzzioContent::updateOverviewVisibility()
         if (dynamic_cast<juce::CallOutBox*> (c) == nullptr) c->setVisible (false);
     for (auto* c : { (juce::Component*) &finishPresetBox, (juce::Component*) &srcModeBox,
          (juce::Component*) &overviewDetails, (juce::Component*) &overviewCompare,
-         (juce::Component*) &overviewPitch, (juce::Component*) &sizePopBtn,
+         (juce::Component*) &overviewPitch, (juce::Component*) &overviewOutputTrim, (juce::Component*) &sizePopBtn,
          (juce::Component*) &checkupButton,
          (juce::Component*) &autoSetupButton, (juce::Component*) &songSetupButton,
          (juce::Component*) &resetButton,
@@ -430,6 +459,66 @@ void VocalGzzioContent::updateOverviewVisibility()
     updateOverviewState();
 }
 
+void VocalGzzioContent::trimOverviewOutputLevel()
+{
+    const float inLevel = processor.getInputLevel();
+    const float outLevel = processor.getOutputLevel();
+    const float curMakeup = processor.apvts.getRawParameterValue ("makeup")->load();
+    const float inDb = juce::Decibels::gainToDecibels (inLevel, -60.0f);
+    const float outDb = juce::Decibels::gainToDecibels (outLevel, -60.0f);
+    // This is a conservative trim of the existing boost, not a loudness meter or limiter.
+    if (! std::isfinite (inLevel) || ! std::isfinite (outLevel) || inDb <= -52.0f || outDb <= -52.0f)
+        overviewHint = language->T ("音を確認できないため、出力音量は変えていません。普段の大きさで声を出してから押してください。",
+                                    "No usable input was detected; output gain is unchanged. Sing or speak at your normal level, then press again.");
+    else if (outDb <= -14.0f)
+        overviewHint = language->T ("現在の出力ピークでは増幅を下げる必要がないため、音量は変えていません。小さな音を自動で持ち上げる機能ではありません。",
+                                    "The current output peak does not need less boost, so gain is unchanged. This control never raises quiet signals.");
+    else
+    {
+        const auto range = processor.apvts.getParameterRange ("makeup");
+        const float nextMakeup = range.snapToLegalValue (juce::jlimit (range.start, curMakeup, curMakeup - (outDb + 14.0f)));
+        if (auto* p = processor.apvts.getParameter ("makeup"))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (range.convertTo0to1 (nextMakeup));
+            p->endChangeGesture();
+        }
+        if (nextMakeup <= range.start + 0.05f)
+            overviewHint = language->T ("出力の追加増幅を0 dBまで下げました。それでも大きいときは入力音量を下げてください。音割れを防ぐリミッターではありません。",
+                                        "Output boost is at 0 dB. If the signal is still too loud, lower the input gain. This is not a clipping limiter.");
+        else
+            overviewHint = language->T ("現在のピークを目安に、出力の追加増幅だけを下げました。歌や会話を続けてメーターを確認してください。平均音量を測る機能ではありません。",
+                                        "Reduced output boost using the current peak as a guide. Keep singing or speaking and check the meter. This is not a loudness measurement.");
+    }
+    repaint();
+}
+
+juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
+{
+    if (argonPadRect.contains (pt))
+        return language->T ("丸を左へ動かすと温かく、右で明るく、下で広がる声になります。4本のバーも連動します。ダブルクリックで4つの効果を0%に戻します。",
+                            "Drag the orb left for warmth, right for air, and down for stereo space. The four bars follow it. Double-click resets the four effects to 0%.");
+    const char* ja[] = {
+        "声の温かさと厚みを足します。上げすぎて濁ったら下げます。左右にドラッグで量を調整し、ダブルクリックで0%に戻します。",
+        "言葉の芯を前に出します。伴奏に埋もれる声は少し上げ、硬く感じたら下げます。左右にドラッグで調整、ダブルクリックで0%に戻します。",
+        "声の高音に明るさを足します。サー音やサ行が目立つ場合は下げます。左右にドラッグで調整、ダブルクリックで0%に戻します。",
+        "声の左右への広がりを足します。ステレオで聴き比べてください。左右にドラッグで調整、ダブルクリックで0%に戻します。リバーブとは別の効果です。"
+    };
+    const char* en[] = {
+        "Adds vocal warmth and body. Reduce it if the voice gets muddy. Drag horizontally to adjust; double-click resets to 0%.",
+        "Brings vocal articulation forward. Raise gently to cut through accompaniment; reduce if it sounds hard. Drag to adjust; double-click resets to 0%.",
+        "Adds high-frequency air. Reduce it if hiss or sibilance becomes prominent. Drag to adjust; double-click resets to 0%.",
+        "Adds stereo width around the voice. Compare using stereo playback. Drag to adjust; double-click resets to 0%. This is separate from reverb."
+    };
+    for (size_t i = 0; i < argonBarRects.size(); ++i)
+        if (argonBarRects[i].contains (pt)) return language->T (ja[i], en[i]);
+    for (const auto& rect : argonTargetRects)
+        if (rect.contains (pt))
+            return language->T ("声の仕上がりをまとめて切り替えます。4つの効果と音色・圧縮・残響が変わります。入力音量とノイズ除去の設定は保ちます。",
+                                "Chooses a vocal character, changing the four effects, tone, compression and reverb. Input gain and noise reduction settings are preserved.");
+    return {};
+}
+
 void VocalGzzioContent::updateOverviewState()
 {
     auto active = [this] (const char* id) { return processor.apvts.getRawParameterValue (id)->load() > 0.5f; };
@@ -446,6 +535,10 @@ void VocalGzzioContent::updateOverviewState()
     overviewNoiseStatus.setColour (juce::Label::textColourId, ! enabled || amount == 0 ? Palette::yellow : Palette::inkSoft);
     const auto help = language->learn_tip() + "\n" + language->T ("測定だけでは除去量は変わりません。処理を入れ、ノイズ除去を20〜40%から上げて聴き比べてください。", "Learning does not change the amount. Enable processing, then start noise reduction at 20-40% and compare.");
     overviewNoiseStatus.setTooltip (help);
+    const bool canTrim = processor.getInputLevel() > juce::Decibels::decibelsToGain (-52.0f)
+                     && processor.getOutputLevel() > juce::Decibels::decibelsToGain (-14.0f)
+                     && processor.apvts.getRawParameterValue ("makeup")->load() > 0.05f;
+    overviewOutputTrim.setButtonText (canTrim ? language->T ("増幅を下げる", "Trim boost") : language->T ("音量確認", "Check level"));
     for (int i = 0; i < 3; ++i)
     {
         const auto modules = overviewModules (i);
@@ -488,6 +581,9 @@ void VocalGzzioContent::refreshOverviewText()
     overviewCompare.setTooltip (language->T ("押している間は処理前の音を聴けます。離すと元の設定に戻ります。音量の差だけで判断せず、声の輪郭や余韻を比べてください。", "Hold to hear the unprocessed input. Release to return. Compare the tone and tail as well as loudness."));
     reverbPower.setButtonText (language->T ("リバーブ 入／切", "Reverb ON / OFF"));
     reverbPower.setTooltip (language->rev_tip());
+    overviewOutputTrim.setButtonText (language->T ("音量確認", "Check level"));
+    overviewOutputTrim.setTooltip (language->T ("声を出しながら押すと、現在の出力ピークを目安に追加増幅だけを下げます。0 dBより下げることや、小さな音の自動増幅はできません。音割れが残るときは入力音量を下げてください。",
+                                               "While singing or speaking, press to reduce output boost using the current peak. It cannot go below 0 dB and never boosts quiet audio. Lower input gain if clipping remains."));
     reverbPower.setColour (juce::TextButton::buttonOnColourId, Palette::green);
     atOnButton.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
     jnOnButton.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
@@ -544,6 +640,7 @@ void VocalGzzioContent::resizedOverview()
     focusHeadArea = focusTipArea = focusFinishArea = focusSideArea = focusMeterArea = {};
     revTypeLabArea = crushReadArea = fxWarnArea = voiceStageArea = {};
     argonPadRect = {};
+    levelBadgeRect = {};
     for (auto& r : argonBarRects) r = {};
     for (auto& r : argonTargetRects) r = {};
 
@@ -599,7 +696,7 @@ void VocalGzzioContent::resizedOverview()
         // =========================================================================
         // ★ Architecture 0: ARGON COCKPIT (次世代3ウイング・コックピット配置)
         //   左ウイング: ピッチ＆クリーン (Tuner + 01 CLEAN)
-        //   中央コア  : 2D Voice Gravity Orb & Argon Velvet Engine + 4連横ストリップ (02 CORE TONE)
+        //   中央コア  : 2D Voice Gravity Orb & 4-Axis Argon Velvet Engine + 4連横ストリップ (02 CORE TONE)
         //   右ウイング: 5ch テレメトリ計器盤＆マスターI/O + 3D空間 (03 SPACE)
         // =========================================================================
         const int wingW = 456;
@@ -615,9 +712,9 @@ void VocalGzzioContent::resizedOverview()
         // 中央コア: 上=Argon 2D Gravity Core(344px), 下=Card 1(Character 4連横ストリップ)
         overviewMonitor = { centerX, top, centerW, 344 };
         argonPadRect    = { centerX + 16, top + 44, 316, 236 };
-        eqGraph.setBounds (centerX + 344, top + 44, centerW - 360, 102);
-        for (int b = 0; b < 3; ++b)
-            argonBarRects[(size_t) b] = { centerX + 344, top + 164 + b * 38, centerW - 360, 28 };
+        eqGraph.setBounds (centerX + 344, top + 44, centerW - 360, 100);
+        for (int b = 0; b < 4; ++b)
+            argonBarRects[(size_t) b] = { centerX + 344, top + 154 + b * 32, centerW - 360, 26 };
         const int targetW = (centerW - 32 - 18) / 4;
         for (int t = 0; t < 4; ++t)
             argonTargetRects[(size_t) t] = { centerX + 16 + t * (targetW + 6), top + 290, targetW, 40 };
@@ -656,9 +753,9 @@ void VocalGzzioContent::resizedOverview()
 
         overviewMonitor = { edge, top, monW, stageTopH };
         argonPadRect    = { overviewMonitor.getX() + 16, top + 42, 296, 204 };
-        eqGraph.setBounds (overviewMonitor.getX() + 324, top + 42, monW - 340, 86);
-        for (int b = 0; b < 3; ++b)
-            argonBarRects[(size_t) b] = { overviewMonitor.getX() + 324, top + 140 + b * 36, monW - 340, 26 };
+        eqGraph.setBounds (overviewMonitor.getX() + 324, top + 42, monW - 340, 84);
+        for (int b = 0; b < 4; ++b)
+            argonBarRects[(size_t) b] = { overviewMonitor.getX() + 324, top + 134 + b * 29, monW - 340, 24 };
         const int targetW = (monW - 32 - 18) / 4;
         for (int t = 0; t < 4; ++t)
             argonTargetRects[(size_t) t] = { overviewMonitor.getX() + 16 + t * (targetW + 6), top + 254, targetW, 40 };
@@ -711,8 +808,8 @@ void VocalGzzioContent::resizedOverview()
         // BAY 3 (中央縦ラック): 上=Argon Matrix & RTA(420px), 下=Rack Strobe Tuner(246px)
         overviewMonitor = { centerX, top, b3W, 420 };
         argonPadRect    = { centerX + 14, top + 42, 206, 198 };
-        for (int b = 0; b < 3; ++b)
-            argonBarRects[(size_t) b] = { centerX + 228, top + 56 + b * 54, b3W - 242, 32 };
+        for (int b = 0; b < 4; ++b)
+            argonBarRects[(size_t) b] = { centerX + 228, top + 44 + b * 48, b3W - 242, 34 };
         const int targetW = (b3W - 28 - 18) / 4;
         for (int t = 0; t < 4; ++t)
             argonTargetRects[(size_t) t] = { centerX + 14 + t * (targetW + 6), top + 248, targetW, 36 };
@@ -761,6 +858,10 @@ void VocalGzzioContent::resizedOverview()
         grid (overviewCards[1].reduced (16).withTrimmedTop (126), { &comp2K, &deessK, &presenceK, &warmthK }, 2);
         grid (overviewCards[2].reduced (16).withTrimmedTop (126), { &revMixK, &revSizeK, &delayK, &widthK }, 2);
     }
+
+    const int levelButtonWidth = overviewOutput.getWidth() < 240 ? 80 : 124;
+    levelBadgeRect = { overviewOutput.getRight() - levelButtonWidth - 10, overviewOutput.getY() + 10, levelButtonWidth, 24 };
+    overviewOutputTrim.setBounds (levelBadgeRect);
 
     // ---- 各セクションカード上段のダイレクトスイッチ群（全配置共通でカード上部に整列） ----
     // カード0（整える）上段2行: ノイズ測定・自動追従・状態表示
@@ -946,16 +1047,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             // ★ ARGON COCKPIT: 四隅のSFターゲットL字ブラケット＆テレメトリ目盛り
             g.setColour (accent.withAlpha (0.72f));
             const float bLen = 12.0f, bIn = 4.0f;
-            // 左上
             g.drawLine (rf.getX() + bIn, rf.getY() + bIn, rf.getX() + bIn + bLen, rf.getY() + bIn, 1.8f);
             g.drawLine (rf.getX() + bIn, rf.getY() + bIn, rf.getX() + bIn, rf.getY() + bIn + bLen, 1.8f);
-            // 右上
             g.drawLine (rf.getRight() - bIn - bLen, rf.getY() + bIn, rf.getRight() - bIn, rf.getY() + bIn, 1.8f);
             g.drawLine (rf.getRight() - bIn, rf.getY() + bIn, rf.getRight() - bIn, rf.getY() + bIn + bLen, 1.8f);
-            // 左下
             g.drawLine (rf.getX() + bIn, rf.getBottom() - bIn, rf.getX() + bIn + bLen, rf.getBottom() - bIn, 1.8f);
             g.drawLine (rf.getX() + bIn, rf.getBottom() - bIn - bLen, rf.getX() + bIn, rf.getBottom() - bIn, 1.8f);
-            // 右下
             g.drawLine (rf.getRight() - bIn - bLen, rf.getBottom() - bIn, rf.getRight() - bIn, rf.getBottom() - bIn, 1.8f);
             g.drawLine (rf.getRight() - bIn, rf.getBottom() - bIn - bLen, rf.getRight() - bIn, rf.getBottom() - bIn, 1.8f);
         }
@@ -1004,17 +1101,19 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     const juce::String monTitle = (overviewLayoutMode == 1)
         ? language->T ("声キャラメイク 2D ＆ 輪郭モニター", "KAWAII 2D VOICE PAD & SPECTRUM")
         : (overviewLayoutMode == 2)
-        ? language->T ("ARGON 倍音マトリクス ＆ スペクトラム RTA", "ARGON HARMONIC MATRIX & RTA")
+        ? language->T ("ARGON 4軸倍音マトリクス ＆ スペクトラム RTA", "ARGON 4-AXIS MATRIX & RTA")
         : (overviewLayoutMode == 0)
-        ? language->T ("ARGON 2D 声の重力場オーブ ＆ 倍音機関", "ARGON 2D VOICE GRAVITY & VELVET ENGINE")
+        ? language->T ("ARGON 2D 声の重力場オーブ ＆ 4軸倍音機関", "ARGON 2D VOICE GRAVITY & 4-AXIS ENGINE")
         : language->T ("音の輪郭", "SPECTRUM");
     fitText (g, monTitle, overviewMonitor.reduced (28, 8).withHeight (28), juce::Justification::centredLeft, 16.0f, true);
 
-    // ---- Argon 2D Voice Gravity Orb & Velvet Engine 描画 ----
+    // ---- Argon 2D Voice Gravity Orb & 4-Axis Velvet Engine 描画 ----
     const float vVal = processor.apvts.getRawParameterValue ("argon_velvet")->load();
+    const float fVal = processor.apvts.getRawParameterValue ("argon_focus")->load();
     const float sVal = processor.apvts.getRawParameterValue ("argon_silk")->load();
     const float hVal = processor.apvts.getRawParameterValue ("argon_halo")->load();
     const float vAct = processor.getArgonVelvetMeter();
+    const float fAct = processor.getArgonFocusMeter();
     const float sAct = processor.getArgonSilkMeter();
     const float hAct = processor.getArgonHaloMeter();
 
@@ -1032,7 +1131,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                                                      Palette::panel2.darker (0.18f), padF.getRight(), padF.getBottom(), false));
             g.fillRoundedRectangle (padF, 12.0f);
 
-            // 4象限の倍音カラーオーラ（左=VELVET紅、右=SILK氷、上=ASMR琥珀、下=HALO蒼）
+            // 4象限の倍音カラーオーラ（左=VELVET紅、右=SILK氷、上=FOCUS琥珀、下=HALO蒼）
             g.setGradientFill (juce::ColourGradient (Palette::salmon.withAlpha (0.14f), padF.getX() + 18.0f, padF.getCentreY(),
                                                      juce::Colours::transparentBlack, padF.getCentreX(), padF.getCentreY(), true));
             g.fillRoundedRectangle (padF, 12.0f);
@@ -1072,7 +1171,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         fitText (g, compactPad ? language->T ("シルク空気 ▶", "SILK >") : language->T ("シルク空気感 ▶", "SILK AIR >"),
                  argonPadRect.withX (argonPadRect.getRight() - (compactPad ? 94 : 124)).withWidth (compactPad ? 88 : 118).withHeight (20).translated (0, (int) (padF.getHeight() * 0.5f + 22.0f)),
                  juce::Justification::centredRight, 14.0f, false);
-        fitText (g, language->T ("▲ 耳元・近接ASMR", "^ UP-FRONT ASMR"),
+        fitText (g, language->T ("▲ 声芯フォーカス・近接", "^ FOCUS & ASMR"),
                  argonPadRect.withHeight (20).reduced (12, 0).translated (0, 4),
                  juce::Justification::centred, 14.0f, false);
         fitText (g, language->T ("▼ 3D立体ステージハロー", "v 3D STAGE HALO"),
@@ -1083,7 +1182,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         const float ox = padF.getX() + 16.0f + argonOrbX * (padF.getWidth() - 32.0f);
         const float oy = padF.getY() + 16.0f + argonOrbY * (padF.getHeight() - 32.0f);
         const float inLv = juce::jlimit (0.0f, 1.0f, processor.getInputLevel() * 3.5f);
-        const float pulseR = 16.0f + (vAct + sAct + hAct + inLv) * 14.0f;
+        const float pulseR = 16.0f + (vAct + fAct + sAct + hAct + inLv) * 12.0f;
 
         if (liteMode)
         {
@@ -1097,7 +1196,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         }
         else
         {
-            // 通常モード: 中心からのベジェ重力軌道＋声連動オーラ＋3基の倍音衛星オーブ (VELVET / SILK / HALO)
+            // 通常モード: 中心からのベジェ重力軌道＋声連動オーラ＋4基の倍音衛星オーブ (VELVET / FOCUS / SILK / HALO)
             juce::Path traj;
             traj.startNewSubPath (cx, cy);
             traj.quadraticTo ((cx + ox) * 0.5f, cy, ox, oy);
@@ -1111,12 +1210,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             g.setColour (Palette::salmon.withAlpha (0.55f));
             g.drawEllipse (ox - pulseR, oy - pulseR, pulseR * 2.0f, pulseR * 2.0f, 1.6f);
 
-            // 3基の倍音サテライトノード（オーブの周囲を各倍音成分の強さで軌道展開）
-            const float satVals[3] = { vVal, sVal, hVal };
-            const float satActs[3] = { vAct, sAct, hAct };
-            const juce::Colour satCols[3] = { Palette::salmon, Palette::ice, Palette::blue };
-            const float baseAngles[3] = { -2.35f, -0.55f, 1.57f };
-            for (int s = 0; s < 3; ++s)
+            // 4基の倍音サテライトノード（オーブの周囲を各倍音成分の強さで軌道展開）
+            const float satVals[4] = { vVal, fVal, sVal, hVal };
+            const float satActs[4] = { vAct, fAct, sAct, hAct };
+            const juce::Colour satCols[4] = { Palette::salmon, Palette::yellow, Palette::ice, Palette::blue };
+            const float baseAngles[4] = { -2.45f, -1.57f, -0.55f, 1.57f };
+            for (int s = 0; s < 4; ++s)
             {
                 const float satDist = 14.0f + satVals[s] * 0.14f + satActs[s] * 8.0f;
                 const float satAng  = baseAngles[s] + satActs[s] * 1.2f;
@@ -1142,26 +1241,26 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         }
     }
 
-    // ---- Argon Velvet Engine 3本のダイレクトバー (VELVET / SILK / HALO) ----
+    // ---- Argon Velvet Engine 4本のダイレクトバー (VELVET / FOCUS / SILK / HALO) ----
     if (! argonBarRects[0].isEmpty())
     {
-        const float vals[3] = { vVal, sVal, hVal };
-        const float acts[3] = { vAct, sAct, hAct };
-        const char* barJa[3] = { "倍音 VELVET", "空気 SILK", "立体 HALO" };
-        const char* barEn[3] = { "VELVET",      "SILK AIR",  "3D HALO" };
-        const juce::Colour barCols[3] = { Palette::salmon, Palette::ice, Palette::blue };
+        const float vals[4] = { vVal, fVal, sVal, hVal };
+        const float acts[4] = { vAct, fAct, sAct, hAct };
+        const char* barJa[4] = { "倍音 VELVET", "声芯 FOCUS", "空気 SILK",  "立体 HALO" };
+        const char* barEn[4] = { "VELVET",      "FOCUS",      "SILK AIR",   "3D HALO" };
+        const juce::Colour barCols[4] = { Palette::salmon, Palette::yellow, Palette::ice, Palette::blue };
 
-        for (int b = 0; b < 3; ++b)
+        for (int b = 0; b < 4; ++b)
         {
             const auto r = argonBarRects[(size_t) b];
             g.setColour (Palette::track.withAlpha (liteMode ? 1.0f : 0.75f));
-            g.fillRoundedRectangle (r.toFloat(), 7.0f);
+            g.fillRoundedRectangle (r.toFloat(), 6.0f);
             const float norm = juce::jlimit (0.0f, 1.0f, vals[b] * 0.01f);
             if (norm > 0.005f)
             {
                 const int fillW = juce::jmax (6, juce::roundToInt (r.getWidth() * norm));
                 g.setColour (barCols[b].withAlpha (liteMode ? 0.55f : 0.42f));
-                g.fillRoundedRectangle (r.withWidth (fillW).toFloat(), 7.0f);
+                g.fillRoundedRectangle (r.withWidth (fillW).toFloat(), 6.0f);
 
                 // 通常モードでは16セグメントのスタジオLEDスリットと実音倍音ピーク輝線を重ねる
                 if (! liteMode)
@@ -1178,7 +1277,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                 }
             }
             g.setColour (barCols[b].withAlpha (0.85f));
-            g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 7.0f, 1.2f);
+            g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 6.0f, 1.1f);
             g.setColour (Palette::ink);
             fitText (g, juce::String::fromUTF8 (language->english ? barEn[b] : barJa[b]),
                      r.reduced (8, 0).withTrimmedRight (48), juce::Justification::centredLeft, 14.0f, true);
@@ -1212,36 +1311,19 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
 
     card (overviewOutput, Palette::green);
     const bool compactOut = (overviewOutput.getWidth() < 240);
-    const int bw = compactOut ? 76 : 100;
+    const int bw = compactOut ? 80 : 124;
     fitText (g, compactOut ? language->T ("計器", "I/O") : language->T ("計器 ＆ 入出力", "TELEMETRY & I/O"),
              juce::Rectangle<int> (overviewOutput.getX() + 24, overviewOutput.getY() + 8, overviewOutput.getWidth() - bw - 36, 28),
              juce::Justification::centredLeft, 16.0f, true);
 
-    // ---- 5ch リアルタイム・テレメトリ計器盤 (IN / OUT / COMP / VELVET / HALO) ＋ 音量診断バッジ ----
+    // ---- 5ch リアルタイム・テレメトリ計器盤 (IN / OUT / COMP / VELV / FOCUS-HALO) ＋ ワンクリック適正音量バッジ ----
     {
         const float inDb  = juce::Decibels::gainToDecibels (processor.getInputLevel(),  -60.0f);
         const float outDb = juce::Decibels::gainToDecibels (processor.getOutputLevel(), -60.0f);
         const float grDb  = juce::jlimit (0.0f, 24.0f, processor.getGainReductionDb());
         const float vPct  = processor.apvts.getRawParameterValue ("argon_velvet")->load();
+        const float fPct  = processor.apvts.getRawParameterValue ("argon_focus")->load();
         const float hPct  = processor.apvts.getRawParameterValue ("argon_halo")->load();
-
-        const bool clipRisk = outDb > -1.0f;
-        const bool goodLvl  = outDb >= -20.0f && outDb <= -1.0f;
-        const bool quietLvl = outDb > -52.0f && outDb < -20.0f;
-        const juce::String statusTxt = clipRisk ? language->T ("音割れ注意", "HOT / CLIP")
-                                     : goodLvl  ? language->T ("適正音量", "GOOD LEVEL")
-                                     : quietLvl ? language->T ("少し小さい", "A BIT LOW")
-                                                : language->T ("待機中", "READY");
-        const juce::Colour statusCol = clipRisk ? Palette::salmon
-                                     : goodLvl  ? Palette::green
-                                     : quietLvl ? Palette::yellow
-                                                : Palette::inkSoft;
-        auto badgeR = juce::Rectangle<int> (overviewOutput.getRight() - bw - 10, overviewOutput.getY() + 10, bw, 24);
-        g.setColour (statusCol.withAlpha (0.18f));
-        g.fillRoundedRectangle (badgeR.toFloat(), 6.0f);
-        g.setColour (statusCol.withAlpha (0.65f));
-        g.drawRoundedRectangle (badgeR.toFloat().reduced (0.5f), 6.0f, 1.0f);
-        fitText (g, statusTxt, badgeR.reduced (4, 0), juce::Justification::centred, 14.0f, true);
 
         // メーター描画領域: Studio Rack(mode 2) と Classic(mode 3) は上部全幅、Argon(0) と Liver(1) は左半分
         const int meterW = (overviewLayoutMode == 0 || overviewLayoutMode == 1)
@@ -1251,6 +1333,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         const int rowStep = (overviewLayoutMode == 3) ? 18 : 32;
 
         struct MeterRow { juce::String name; float norm; juce::String valTxt; juce::Colour col; };
+        const float fhPct = juce::jmax (fPct, hPct);
         const MeterRow rows[5] = {
             { language->T ("入力", "IN"),
               juce::jlimit (0.0f, 1.0f, (inDb + 60.0f) / 60.0f),
@@ -1268,9 +1351,9 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
               juce::jlimit (0.0f, 1.0f, vPct * 0.01f),
               juce::String (juce::roundToInt (vPct)) + "%",
               Palette::salmon },
-            { language->T ("空間", "HALO"),
-              juce::jlimit (0.0f, 1.0f, hPct * 0.01f),
-              juce::String (juce::roundToInt (hPct)) + "%",
+            { language->T ("声芯", "FOC"),
+              juce::jlimit (0.0f, 1.0f, fhPct * 0.01f),
+              juce::String (juce::roundToInt (fhPct)) + "%",
               Palette::blue }
         };
         for (int i = 0; i < numRows; ++i)
@@ -1337,9 +1420,9 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     g.setColour (Palette::panelLn);
     g.drawRoundedRectangle (overviewHelp.toFloat().reduced (0.5f), 12.0f, 1.0f);
    #if VOCALGZZIO_TRIAL
-    const auto defaultHint = language->T ("体験版：60秒ごとに0.6秒だけ音量が下がります。中央の2D重力場オーブをドラッグすると、母音2次倍音・14kHzシルク空気感・3D立体ハローを直感的に成形できます。", "Trial: sound dips for 0.6s every 60s. Drag the 2D Voice Gravity Orb to sculpt Voiced Triode Velvet, 14kHz Silk Air, and 3D Binaural Halo.");
+    const auto defaultHint = language->T ("体験版：60秒ごとに0.6秒だけ音量が下がります。中央の丸や4本のバーで声の温かさ・芯・明るさ・広がりを調整できます。操作部にカーソルを合わせると説明が表示されます。", "Trial: sound dips for 0.6s every 60s. Use the orb or four bars for warmth, focus, air and stereo space. Hover over a control for help.");
    #else
-    const auto defaultHint = language->T ("【Argon 2D 重力場オーブ】中央のオーブをドラッグするか4つのターゲットを選ぶと、母音2次倍音(VELVET)・14kHz空気感(SILK)・モノ互換立体空間(HALO)を同時に成形できます。上部の [★ARGON / ♥LIVER / 🎛STUDIO] で画面構造、右隣の [⚡軽量] で省負荷エコ描画へ即座に切替できます。", "Drag the 2D Voice Gravity Orb or pick a target to sculpt Triode Velvet, 14kHz Silk Air and 3D Halo. Switch workspace architectures or toggle [LITE] eco mode in the top bar.");
+    const auto defaultHint = language->T ("中央の丸や4本のバーで、声の温かさ・芯・明るさ・広がりを調整できます。操作部にカーソルを合わせると使い方が表示されます。「押して原音と比較」で効果を聴き比べてください。", "Use the orb or four bars for warmth, focus, air and stereo space. Hover over a control for help, and hold Compare to hear the unprocessed input.");
    #endif
     const auto hint = dnMsgTicks > 0 && infoText.isNotEmpty() ? infoText
                     : overviewHint.isNotEmpty() ? overviewHint : defaultHint;
