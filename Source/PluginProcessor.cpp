@@ -857,8 +857,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     dnDryPhase1.setCutoffFrequency (250.0f);
     dnDryPhase2.setCutoffFrequency (1200.0f);
     dnDryPhase3.setCutoffFrequency (5000.0f);
-    dnDryPhaseBuffer.setSize (2, samplesPerBlock, false, false, true);
-    for (auto& b : bandBuf) b.setSize (2, samplesPerBlock, false, false, true);
+    const int maxCh = juce::jmax (2, getTotalNumInputChannels(), getTotalNumOutputChannels()); dnDryPhaseBuffer.setSize (maxCh, samplesPerBlock, false, false, true);
+    for (auto& b : bandBuf) b.setSize (maxCh, samplesPerBlock, false, false, true);
     dnEnvAtk    = 1.0f - std::exp (-1.0f / (0.002f * (float) sampleRate));
     dnEnvRel    = 1.0f - std::exp (-1.0f / (0.060f * (float) sampleRate));
     dnOpenCoef  = 1.0f - std::exp (-1.0f / (0.003f * (float) sampleRate));
@@ -1858,7 +1858,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
                     for (int ch = 0; ch < numCh; ++ch)
                         bandBuf[b].setSample (ch, n,
-                            bandBuf[b].getSample (juce::jmin (ch, 1), n) * dnGain[b]);
+                            bandBuf[b].getSample (ch, n) * dnGain[b]);
                 }
 
                 // 帯域ごとに間引くと1024の倍数が帯域0に偏り、残り3帯域が保存されない。
