@@ -2882,11 +2882,10 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     abB.setClickingTogglesState (false);
     abA.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
     abB.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
-    abA.setTooltip (language->T ("設定Aに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot A (compare two different sound setups)"));
-    abB.setTooltip (language->T ("設定Bに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot B (compare two different sound setups)"));
-    abCopy.setTooltip (language->T ("今のスロットの設定をもう一方のスロットへコピーします", "Copy the current slot's settings to the other slot"));
+    updateABButtons();
     // v2.1.0: A/Bはプロセッサ所有(MIDIスイッチからも切り替わるため、表示は
     // タイマーで abUiDirty を拾って追随する)
+   #if ! VOCALGZZIO_TRIAL
     abA.onClick    = [this] { processor.abSwitch (0); };
     abB.onClick    = [this] { processor.abSwitch (1); };
     abCopy.onClick = [this]
@@ -2896,6 +2895,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         juce::Component::SafePointer<VocalGzzioContent> safe (this);
         juce::Timer::callAfterDelay (450, [safe]() mutable { if (safe != nullptr) safe->updateABButtons(); });
     };
+   #endif
     saveButton.onClick = [this] { savePreset(); };
     loadButton.onClick = [this] { loadPreset(); };
    #if VOCALGZZIO_TRIAL
@@ -4773,12 +4773,27 @@ void VocalGzzioContent::applyScene()
 
 void VocalGzzioContent::updateABButtons()
 {
+   #if VOCALGZZIO_TRIAL
+    // A/B relies on state snapshots, which are unavailable in the trial edition.
+    // Keep the restriction and its translated explanation together for every refresh.
+    for (auto* button : { &abA, &abB, &abCopy })
+    {
+        button->setEnabled (false);
+        button->setToggleState (false, juce::dontSendNotification);
+        button->setTooltip (language->T ("A/B比較は製品版で利用できます", "A/B comparison is available in the full version."));
+    }
+    abCopy.setButtonText (juce::String ("A") + juce::String::fromUTF8 ("\xe2\x96\xb6") + "B");
+   #else
+    abA.setTooltip (language->T ("設定Aに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot A (compare two different sound setups)"));
+    abB.setTooltip (language->T ("設定Bに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot B (compare two different sound setups)"));
+    abCopy.setTooltip (language->T ("今のスロットの設定をもう一方のスロットへコピーします", "Copy the current slot's settings to the other slot"));
     const int cur = processor.getAbCurrent();   // v2.1.0: 状態はプロセッサが持つ
     abA.setToggleState (cur == 0, juce::dontSendNotification);
     abB.setToggleState (cur == 1, juce::dontSendNotification);
     abCopy.setButtonText (cur == 0
         ? juce::String ("A") + juce::String::fromUTF8 ("\xe2\x96\xb6") + "B"    // A▶B
         : juce::String ("B") + juce::String::fromUTF8 ("\xe2\x96\xb6") + "A");  // B▶A
+   #endif
 }
 
 void VocalGzzioContent::savePreset()
@@ -6471,9 +6486,7 @@ void VocalGzzioContent::refreshLanguage()
     megaTypeBox.setTooltip (language->mega_type_tip());
     atKeyBox.setTooltip (language->at_on_tip());
     resetButton.setTooltip (language->T ("全てのツマミを初期値に戻します", "Returns every knob to its default value") + "\n" + language->note_reset());
-    abA.setTooltip (language->T ("設定Aに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot A (compare two different sound setups)"));
-    abB.setTooltip (language->T ("設定Bに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot B (compare two different sound setups)"));
-    abCopy.setTooltip (language->T ("今のスロットの設定をもう一方のスロットへコピーします", "Copy the current slot's settings to the other slot"));
+    updateABButtons();
     for (auto* lamp : { &lampGate, &lampDn, &lampDbl, &lampDly, &lampDs, &lampRobo, &lampCho, &lampRev, &lampMega })
         lamp->btn.setTooltip (language->lamp_tip());
    #if VOCALGZZIO_TRIAL
