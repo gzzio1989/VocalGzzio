@@ -14,6 +14,7 @@ import tempfile
 
 import macos_signing as signing
 from validate_macos_au import validate_installer
+from macos_bundle_icon import verify_application_icon
 
 ROOT = Path(__file__).resolve().parent.parent
 ARCHITECTURES = {"arm64", "x86_64"}
@@ -66,6 +67,13 @@ def verify_bundle(bundle, edition, version):
         require(isinstance(info.get("NSMicrophoneUsageDescription"), str)
                 and info["NSMicrophoneUsageDescription"].strip(),
                 "単体アプリにマイクの使用許可説明がありません。")
+    icon = verify_application_icon(bundle, info)
+    if icon is not None and sys.platform == "darwin":
+        # 外枠だけでなく、Appleの変換ツールで実画像を読み出せることも確認する。
+        with tempfile.TemporaryDirectory(prefix="vocalgzzio-icon-") as temporary:
+            iconset = Path(temporary) / "App.iconset"
+            run("iconutil", "-c", "iconset", icon, "-o", iconset)
+            require(any(iconset.glob("*.png")), "単体アプリのアイコン画像を読み出せません。")
     require(set(run("lipo", "-archs", binary).split()) == ARCHITECTURES,
             f"{bundle.name} にApple Silicon版とIntel版の両方が必要です。")
     with tempfile.TemporaryDirectory(prefix="vocalgzzio-verify-") as temporary:

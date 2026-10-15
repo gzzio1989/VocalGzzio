@@ -7,6 +7,7 @@ import plistlib
 import subprocess
 import sys
 import time
+from macos_bundle_icon import verify_application_icon
 
 INSTALL_ROOT = Path("/")
 
@@ -82,11 +83,13 @@ def validate_installer(installer, edition, version):
         binary = target / "Contents/MacOS" / executable
         if not binary.is_file() or not os.access(binary, os.X_OK):
             raise ValueError("導入された本体の実行ファイル・実行権限がありません。")
+        verify_application_icon(target, info)
         if target.suffix == ".component":
             identity = validate_identity(info, edition, version)
     validate_registered_au(identity)
     print("インストーラーによる3形式の導入と、導入されたAUの読み込み検査に合格しました。")
     return {"installer_succeeded": True, "installed_formats": ["Standalone", "AU", "VST3"],
+            "standalone_icon_verified": True,
             "auval_native_architecture": "passed", "gatekeeper_download_tested": False,
             "logic_pro_tested": False, "microphone_hardware_tested": False}
 

@@ -8,6 +8,7 @@ import tempfile
 from unittest.mock import patch
 import validate_macos_au as validation
 from validate_macos_au import validate_identity
+from test_macos_bundle_icon import icon_bytes
 
 
 class AudioUnitIdentityTest(unittest.TestCase):
@@ -103,6 +104,10 @@ class AudioUnitIdentityTest(unittest.TestCase):
                                 binary.write_bytes(b"test-binary")
                                 binary.chmod(0o755)
                                 info = {**self.info(trial), "CFBundleExecutable": stem}
+                                if suffix == "app":
+                                    (contents / "Resources").mkdir()
+                                    (contents / "Resources/Icon.icns").write_bytes(icon_bytes())
+                                    info["CFBundleIconFile"] = "Icon.icns"
                                 if failure == "version":
                                     info["CFBundleShortVersionString"] = "4.2.1"
                                 (contents / "Info.plist").write_bytes(plistlib.dumps(info))

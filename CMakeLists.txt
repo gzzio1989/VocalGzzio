@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VocalGzzio VERSION 4.3.2 LANGUAGES C CXX)
+project(VocalGzzio VERSION 4.3.3 LANGUAGES C CXX)
 # ★2026-08-18: 3.0.0 → 3.1.0。v3.0.0 は 8/13 に GitHub でリリース済みのため、
 #  開発版の番号を1つ進めた（リリース済みの番号を開発で使い回さない）。
 
@@ -65,6 +65,7 @@ juce_add_plugin(VocalGzzio
     BUNDLE_ID                 "${GZ_BUNDLE}"
     FORMATS                   ${GZ_FORMATS}
     PRODUCT_NAME              "${GZ_PRODUCT}"
+    ICON_BIG                  Resources/app_icon.png
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "歌声や楽器を音声入力から取り込み、加工して再生します。"
     VST3_CATEGORIES           Fx Dynamics EQ

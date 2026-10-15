@@ -1,18 +1,18 @@
 # Mac配布物の作成と確認
 
-現行の4.3.1は開発元の正式署名・公証を行っていません。今回追加した正式配布の工程は、実際の証明書とMacでの検証が必要な準備段階です。自動検査が通っただけで、既存配布物が公証済みに変わることはありません。
+現行の4.3.3は開発元の正式署名・公証を行っていません。正式配布の工程は、実際の証明書とMacでの検証が必要な準備段階です。自動検査が通っただけで、既存配布物が公証済みに変わることはありません。
 
 ## 現行の未公証版を作る
 
 Macで製品版または体験版をビルドし、次を実行します。製品版を公開リポジトリの成果物に含めないでください。
 
 ```sh
-python3 tools/package_macos.py --build build/package --out release/macos --edition trial --version 4.3.2 --public-artifact
+python3 tools/package_macos.py --build build/package --out release/macos --edition trial --version 4.3.3 --public-artifact
 ```
 
 署名オプションをすべて省略した場合だけ、アドホック署名・未公証の方式になります。ZIP直下の「ここから始める.html」と説明書内の `mac-install.html` は、その版・インストーラー名に合わせて生成します。4.3.2からは両方式ともPKGでの導入に統一し、直接開いてしまう原因となる手動配置用の部品はZIPに含めません。`.component` や `.vst3` は録音ソフトから読み込みます。
 
-GitHubの使い捨てMac実行機では `--validate-install` を指定します。完成したPKGを実際に導入し、3形式の配置・版番号・実行権限を確認してから、導入されたAUをAppleの検証ホストで読み込みます。失敗した場合は配布ZIPを作りません。既存の同名製品は上書きせず、ローカルMacでの実行も拒否します。この検査はブラウザーからダウンロードした際の警告や、Logic Pro・実マイクの検査とは別です。
+GitHubの使い捨てMac実行機では `--validate-install` を指定します。完成したPKGを実際に導入し、3形式の配置・版番号・実行権限を確認してから、導入されたAUをAppleの検証ホストで読み込みます。4.3.3では単体アプリのアイコン参照・ICNS本体の同梱も配布前と導入後に検査し、配布前にはAppleのiconutilで実画像を取り出せることも確認します。失敗した場合は配布ZIPを作りません。既存の同名製品は上書きせず、ローカルMacでの実行も拒否します。この検査はブラウザーからダウンロードした際の警告や、Logic Pro・実マイクの検査とは別です。
 
 ## 正式署名・公証版を作る準備
 
@@ -21,7 +21,7 @@ Apple Developer Programの加入、Developer ID Application証明書、Developer
 ```sh
 python3 tools/package_macos.py \
   --build build/package --out release/macos-signed \
-  --edition product --version 4.3.2 \
+  --edition product --version 4.3.3 \
   --signing-identity 'Developer ID Application: 登録名 (TEAMID1234)' \
   --installer-identity 'Developer ID Installer: 登録名 (TEAMID1234)' \
   --team-id TEAMID1234 --notary-profile VocalGzzioNotary
