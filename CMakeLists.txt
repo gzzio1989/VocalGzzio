@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VocalGzzio VERSION 4.3.3 LANGUAGES C CXX)
+project(VocalGzzio VERSION 4.4.0 LANGUAGES C CXX)
+# ★2026-10-15: 4.3.3 → 4.4.0 (Gemini4Argon Edition: Argon Velvet Engine & 4 Workspace Architectures + Lite Mode)
 # ★2026-08-18: 3.0.0 → 3.1.0。v3.0.0 は 8/13 に GitHub でリリース済みのため、
 #  開発版の番号を1つ進めた（リリース済みの番号を開発で使い回さない）。
 

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
@@ -23,6 +23,7 @@ static constexpr int kRevTypeCount = kHeyaFirst + heya::kNumRooms;   // 13
 #include "Checkup.h"       // v2.10.0 点検(使われ方・名前ごとの設定・報告セット)
 #include "ModuleChain.h"   // v3.0   モジュールのON/OFF(OFF=完全素通し・10ms渡し)
 #include "Ornament.h"      // v2.7.0 こぶし(しゃくり・こぶし保護)
+#include "ArgonEngine.h"   // v4.4.0 Argon Velvet Engine (母音感応2次倍音・シルクエア・バイノーラルHalo)
 
 //==============================================================================
 // v2.10.0 #77/#78 音源モード — 同じツマミが「見る場所」を持ち替える
@@ -506,6 +507,10 @@ private:
     gz::ModuleChain mods;
 public:
     const gz::ModuleChain& moduleChain() const noexcept { return mods; }   // 画面から状態を読む
+    float getArgonVelvetMeter() const noexcept { return meterArgonVelvet.load (std::memory_order_relaxed); }
+    float getArgonSilkMeter()   const noexcept { return meterArgonSilk.load (std::memory_order_relaxed); }
+    float getArgonHaloMeter()   const noexcept { return meterArgonHalo.load (std::memory_order_relaxed); }
+    float getArgonVoicedRatio() const noexcept { return meterArgonVoiced.load (std::memory_order_relaxed); }
 
     // v3.0-c 順番の分岐（案C）。呼ぶ場所を2択にするために関数へ出した2つ。
     //  中身は切り出す前と1行も変えていない（既定の音は bit 一致）。
@@ -894,6 +899,8 @@ private:
 
     // Meters
     std::atomic<float> meterIn { 0 }, meterOut { 0 }, meterGR { 0 }, meterDS { 0 }, meterDN { 0 };
+    gz::argon::VelvetEngine argonEngine;
+    std::atomic<float> meterArgonVelvet { 0.0f }, meterArgonSilk { 0.0f }, meterArgonHalo { 0.0f }, meterArgonVoiced { 0.0f };
 
     void updateParameters();
 

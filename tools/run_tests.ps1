@@ -20,7 +20,7 @@ $BuildDirectory = [IO.Path]::GetFullPath($BuildDirectory)
 $logDirectory = Join-Path $BuildDirectory ('logs/' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 
-# 通常の PowerShell でも、Visual Studio 同梱の実行ファイルを見つける。
+# Visual Studio 同梱の CMake / CTest を自動検出する
 $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
 $cmake = if ($cmakeCommand) { $cmakeCommand.Source } else { $null }
 if (-not $cmake) {
@@ -33,24 +33,24 @@ if (-not $cmake) {
         }
     }
 }
-if (-not $cmake) { throw 'CMake と C++ ビルド環境が見つかりません。Visual Studio の C++ 開発機能を確認してください。' }
+if (-not $cmake) { throw "CMake and C++ build tools not found. Please check Visual Studio C++ workload." }
 $ctest = Join-Path (Split-Path -Parent $cmake) 'ctest.exe'
-if (-not (Test-Path -LiteralPath $ctest)) { throw 'CMake と同じフォルダーに試験実行プログラムがありません。' }
+if (-not (Test-Path -LiteralPath $ctest)) { throw "ctest.exe not found in CMake directory." }
 
 function Invoke-Logged {
     param([string]$Executable, [string[]]$Arguments, [string]$LogName)
     $logFile = Join-Path $logDirectory $LogName
-    # PowerShell 5.1 の NativeCommandError を避けつつ全出力を保存する。
+    # PowerShell 5.1 の NativeCommandError を避けつつ全出力を保存する
     $savedPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     & $Executable @Arguments 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $logFile
     $result = $LASTEXITCODE
     $ErrorActionPreference = $savedPreference
-    if ($result -ne 0) { throw "検証処理が終了コード $result で失敗しました。記録: $logFile" }
+    if ($result -ne 0) { throw "Validation failed with exit code $result. Log: $logFile" }
 }
 
-Write-Host "検証用の出力先: $BuildDirectory"
-Write-Host "今回の記録: $logDirectory"
+Write-Host "Build directory: $BuildDirectory"
+Write-Host "Log directory: $logDirectory"
 if (-not $SkipBuild) {
     $configure = @('-S', $repo, '-B', $BuildDirectory,
         '-DVOCALGZZIO_BUILD_TESTS=ON', ('-DCMAKE_BUILD_TYPE=' + $Configuration))
@@ -73,4 +73,4 @@ $testArguments = @('--test-dir', $BuildDirectory, '-C', $Configuration,
     '--output-on-failure', '--no-tests=error', '--output-junit', (Join-Path $logDirectory 'results.xml'))
 if ($TestPattern) { $testArguments += @('-R', $TestPattern) }
 Invoke-Logged $ctest $testArguments 'tests.log'
-Write-Host "検証が完了しました。記録: $logDirectory"
+Write-Host "Validation completed. Log: $logDirectory"

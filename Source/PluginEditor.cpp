@@ -14,6 +14,7 @@ namespace
 // v1.7.0 yuru-kawa: embedded rounded-font statics (shared by the static uiFont)
 juce::Typeface::Ptr GzzioLnF::s_kawaiiFace;
 bool                GzzioLnF::s_useKawaii = false;
+int                 GzzioLnF::s_knobStyle = 0;
 float               GzzioLnF::s_juicePhase = 0.0f;
 std::atomic<int>    GzzioLnF::s_instances { 0 };
 
@@ -771,8 +772,8 @@ void EQGraph::paint (juce::Graphics& g)
     g.setColour (Palette::bgTop);
     g.fillRoundedRectangle (full, 8.0f);
 
-    // inner plot area (leave a margin for axis labels)
-    plot = full.reduced (10.0f).withTrimmedBottom (18.0f).withTrimmedLeft (22.0f);
+    // inner plot area (leave a margin for axis labels so +18/+12 never truncate)
+    plot = full.reduced (10.0f).withTrimmedBottom (18.0f).withTrimmedLeft (26.0f);
 
     auto lf = GzzioLnF::uiFont;
 
@@ -806,6 +807,7 @@ void EQGraph::paint (juce::Graphics& g)
         }
 
         // horizontal grid: dB lines at 0 / +-6 / +-12 / +-18
+        const bool compactH = (plot.getHeight() < 92.0f);
         for (int db = -18; db <= 18; db += 6)
         {
             const float gy = dbToY ((float) db);
@@ -813,11 +815,14 @@ void EQGraph::paint (juce::Graphics& g)
             gg.setColour (zero ? Palette::panelLn.withAlpha (0.9f)
                                : Palette::panelLn.withAlpha (0.30f));
             gg.fillRect (plot.getX(), gy, plot.getWidth(), zero ? 1.4f : 1.0f);
-            gg.setColour (Palette::inkSoft.withAlpha (0.8f));
-            gg.setFont (lf (14.0f, false));
-            gg.drawText ((db > 0 ? "+" : "") + juce::String (db),
-                         juce::Rectangle<float> (full.getX() + 1, gy - 8, 21, 16),
-                         juce::Justification::centredLeft);
+            if (! compactH || db == -18 || db == 0 || db == 18)
+            {
+                gg.setColour (Palette::inkSoft.withAlpha (0.85f));
+                gg.setFont (lf (14.0f, false));
+                gg.drawText ((db > 0 ? "+" : "") + juce::String (db),
+                             juce::Rectangle<float> (full.getX() + 1, gy - 8, 25, 16),
+                             juce::Justification::centredLeft);
+            }
         }
     }
     g.drawImageAt (gridImage, 0, 0);
@@ -827,7 +832,8 @@ void EQGraph::paint (juce::Graphics& g)
 
     const int px = juce::jmax (2, (int) plot.getWidth());
 
-    // ---- output spectrum (behind curves) ----
+    // ---- output spectrum (behind curves): skipped in Lite Mode for zero FFT/GPU load ----
+    if (! liteMode)
     {
         const float floorDb = -78.0f;
         juce::Path line;
@@ -981,28 +987,32 @@ void EQGraph::paint (juce::Graphics& g)
 
     // legend (top-left inside the plot)
     {
-        struct Item { juce::Colour c; const char* utf8; };
+        const bool compactW = (plot.getWidth() < 260.0f);
+        struct Item { juce::Colour c; const char* utf8; const char* shortUtf8; };
         const Item items[3] =
         {
-            { Palette::green,  "\xe3\x82\xb9\xe3\x83\x9a\xe3\x82\xaf\xe3\x83\x88\xe3\x83\xa9\xe3\x83\xa0" },   // spectrum
-            { Palette::blue,   "\x45\x51\xe3\x82\xab\xe3\x83\xbc\xe3\x83\x96" },                               // EQ curve
-            { Palette::yellow, "\xe8\x87\xaa\xe5\x8b\x95\x45\x51\xe5\xbe\x8c" }                                // after auto EQ
+            { Palette::green,  "\xe3\x82\xb9\xe3\x83\x9a\xe3\x82\xaf\xe3\x83\x88\xe3\x83\xa9\xe3\x83\xa0", "RTA" },
+            { Palette::blue,   "\x45\x51\xe3\x82\xab\xe3\x83\xbc\xe3\x83\x96",                             "EQ" },
+            { Palette::yellow, "\xe8\x87\xaa\xe5\x8b\x95\x45\x51\xe5\xbe\x8c",                             "\xe8\x87\xaa\xe5\x8b\x95\x45\x51" }
         };
-        float lx = plot.getX() + 8.0f;
+        float lx = plot.getX() + (compactW ? 6.0f : 8.0f);
         const float ly = plot.getY() + 6.0f;
-        g.setFont (lf (14.5f, true));
+        g.setFont (lf (compactW ? 14.0f : 14.5f, true));
         int legendIndex = 0;
-        const char* englishLegend[] = { "Spectrum", "EQ curve", "After auto EQ" };
+        const char* englishLegend[]      = { "Spectrum", "EQ curve", "After auto EQ" };
+        const char* englishShortLegend[] = { "RTA",      "EQ",       "Auto EQ" };
         for (auto& it : items)
         {
             g.setColour (it.c);
-            g.fillRoundedRectangle (lx, ly + 3.0f, 12.0f, 12.0f, 3.0f);
-            const auto txt = language->T (it.utf8, englishLegend[legendIndex++]);
-            const float tw = (float) g.getCurrentFont().getStringWidth (txt) + 6.0f;
+            g.fillRoundedRectangle (lx, ly + 3.0f, 11.0f, 11.0f, 3.0f);
+            const auto txt = language->T (compactW ? it.shortUtf8 : it.utf8,
+                                          compactW ? englishShortLegend[legendIndex] : englishLegend[legendIndex]);
+            ++legendIndex;
+            const float tw = (float) g.getCurrentFont().getStringWidth (txt) + 4.0f;
             g.setColour (Palette::ink.withAlpha (0.92f));
-            g.drawText (txt, juce::Rectangle<float> (lx + 17.0f, ly, tw, 18.0f),
+            g.drawText (txt, juce::Rectangle<float> (lx + 14.0f, ly, tw, 18.0f),
                         juce::Justification::centredLeft);
-            lx += 17.0f + tw + 14.0f;
+            lx += 14.0f + tw + (compactW ? 8.0f : 14.0f);
         }
     }
 
@@ -2853,9 +2863,15 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         st.setProperty ("ui_mic_preset",   0, nullptr);
         st.setProperty ("ui_eq_preset",    0, nullptr);
         st.setProperty ("ui_char_preset",  0, nullptr);
+        st.setProperty ("finish_preset",   -1, nullptr);
+        finishPresetIndex = -1;
+        argonOrbX = 0.46f;
+        argonOrbY = 0.36f;
+        argonActiveTarget = -1;
         infoText.clear();
         fxInfoText.clear();
         autoSetupMsg.clear();
+        overviewHint = language->T ("すべての設定を初期状態に戻しました。", "All settings have been reset to defaults.");
         refreshPresetDisplays();
         repaint();
     };
@@ -2866,6 +2882,9 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     abB.setClickingTogglesState (false);
     abA.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
     abB.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+    abA.setTooltip (language->T ("設定Aに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot A (compare two different sound setups)"));
+    abB.setTooltip (language->T ("設定Bに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot B (compare two different sound setups)"));
+    abCopy.setTooltip (language->T ("今のスロットの設定をもう一方のスロットへコピーします", "Copy the current slot's settings to the other slot"));
     // v2.1.0: A/Bはプロセッサ所有(MIDIスイッチからも切り替わるため、表示は
     // タイマーで abUiDirty を拾って追随する)
     abA.onClick    = [this] { processor.abSwitch (0); };
@@ -2914,6 +2933,10 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     jnOnButton.setClickingTogglesState (true);
     vcOnButton.setButtonText (language->vc_on_label());
     jnOnButton.setButtonText (language->jn_on_label());
+    vcOnButton.setTooltip (language->vc_pitch_tip());
+    jnOnButton.setTooltip (language->jn_mix_tip());
+    styleButton (vcOnButton);
+    styleButton (jnOnButton);
     vcOnAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>
                      (processor.apvts, "vc_on", vcOnButton);
     jnOnAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>
@@ -3287,9 +3310,18 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 };
                 addAndMakeVisible (showAllBtn);
 
-                // ---- v2.12.0 テーマ6枚（ヘッダのチップから引っ越し）----
-                // ヘッダでは 58x21px・文字11.5px固定という、画面でいちばん
-                // 読みにくい札だった。ここでは 132x40px・文字16pxで置ける。
+                liteBtn.setButtonText (language->T ("⚡ 軽量モード (省負荷)", "Lite mode (low GPU)"));
+                liteBtn.setTooltip (language->T ("4096点FFTスペクトラム描画・背景アニメ・半透明ガラス合成を休止し、3D配信ソフトや重いゲーム併用時のGPU/CPU負荷を極小化します（音声DSPの音質は100%そのまま維持されます）。", "Pauses 4096-pt FFT spectrum, background animations, and glass overdraw to minimize GPU/CPU usage while keeping 100% full audio DSP quality."));
+                liteBtn.setClickingTogglesState (true);
+                liteBtn.setToggleState (ow.isLiteMode(), juce::dontSendNotification);
+                liteBtn.onClick = [this]
+                {
+                    ow.setLiteMode (liteBtn.getToggleState());
+                    refresh();
+                };
+                addAndMakeVisible (liteBtn);
+
+                // ---- v2.12.0 テーマ9枚（ヘッダのチップから引っ越し）----
                 labTheme.setText (language->hue_label(), juce::dontSendNotification);
                 labTheme.getProperties().set ("fontH", 17.0);
                 labTheme.getProperties().set ("bold", true);
@@ -3303,7 +3335,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (b);
                 }
                 refresh();
-                setSize (420, 306);   // v3.1「ぜんぶ表示」の1行ぶん高くした
+                setSize (420, 352);   // テーマ9種（3×3グリッド）＋下部2スイッチが収まる高さ
             }
 
             // テーマを変えると Palette が丸ごと入れ替わるので、色も名前も貼り直す。
@@ -3318,12 +3350,16 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     b->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
                     b->setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
                     b->setColour (juce::TextButton::textColourOffId,  Palette::ink);
-                    b->setColour (juce::TextButton::textColourOnId,   Palette::bgTop);
+                    b->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::yellow));
                 }
-                showAllBtn.setColour (juce::TextButton::buttonColourId,   Palette::panel2);
-                showAllBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
-                showAllBtn.setColour (juce::TextButton::textColourOffId,  Palette::ink);
-                showAllBtn.setColour (juce::TextButton::textColourOnId,   Palette::bgTop);
+                for (auto* tb : { &showAllBtn, &liteBtn })
+                {
+                    tb->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
+                    tb->setColour (juce::TextButton::buttonOnColourId, Palette::green);
+                    tb->setColour (juce::TextButton::textColourOffId,  Palette::ink);
+                    tb->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::green));
+                }
+                liteBtn.setToggleState (ow.isLiteMode(), juce::dontSendNotification);
                 for (auto* s : { &bigFont, &bigZoom })
                 {
                     s->setColour (juce::Slider::textBoxTextColourId, Palette::ink);
@@ -3347,27 +3383,23 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 bigFont.setBounds (104, 12, 284, 34);
                 labZoom.setBounds (10,  64, 88, 34);
                 bigZoom.setBounds (104, 64, 284, 34);
-                labTheme.setBounds (10, 128, 400, 24);
+                labTheme.setBounds (10, 126, 400, 24);
+                // 9テーマを3列×3段で整然と並べる（各130×38px、隙間5px）
                 for (int i = 0; i < themeBtns.size(); ++i)
                 {
-                    // v2.12.0: 軽量を外して5枚になった。3+2 で並べ、下段の2枚は
-                    //  幅を広げて余白を残さない（欠けた席が空いて見えるのを避ける）。
-                    const int n2 = kThemeCount - 3;                       // 下段の枚数
-                    if (i < 3) themeBtns[i]->setBounds (10 + i * 137, 158, 130, 40);
-                    else
-                    {
-                        const int w = (400 - (n2 - 1) * 7) / juce::jmax (1, n2);
-                        themeBtns[i]->setBounds (10 + (i - 3) * (w + 7), 206, w, 40);
-                    }
+                    const int col = i % 3;
+                    const int row = i / 3;
+                    themeBtns[i]->setBounds (10 + col * 135, 154 + row * 44, 130, 38);
                 }
-                showAllBtn.setBounds (10, 258, 400, 38);   // v3.1 テーマの下に1本
+                showAllBtn.setBounds (10,  294, 196, 38);
+                liteBtn   .setBounds (214, 294, 196, 38);
             }
         private:
             VocalGzzioContent& ow;
             juce::Slider bigFont, bigZoom;
             juce::Label  labFont, labZoom, labTheme;
             juce::OwnedArray<juce::TextButton> themeBtns;
-            juce::TextButton showAllBtn;                   // v3.1
+            juce::TextButton showAllBtn, liteBtn;
         };
         auto panel = std::make_unique<SizePanel> (*this, fontSlider, zoomSlider);
         // 親に this を渡す → GzzioLnF とテーマ色を継承する(nullptrだと素のJUCEの
@@ -3681,6 +3713,11 @@ void VocalGzzioContent::refreshPresetDisplays()
                                : language->micbox_tip() + "\n" + language->note_override());
     if (e > 0)
         eqPresetBox.setTooltip (eqItemDescription (language, e - 1));
+
+    const int fp = (int) st.getProperty ("finish_preset", -1);
+    finishPresetIndex = (fp >= 0 && fp < gzzio::kNumFinishPresets) ? fp : -1;
+    finishPresetBox.setSelectedId (finishPresetIndex >= 0 ? finishPresetIndex + 1 : 0,
+                                   juce::dontSendNotification);
 }
 
 // ====== v2.8.0 かんたんモードで見えないのに効いているエフェクトの検出 ======
@@ -4385,23 +4422,24 @@ void VocalGzzioContent::timerCallback()
 
     // v1.7.0 yuru-kawa: animate the juice knobs (rising bubbles + surface wobble)
     // v2.11.0: よる(8)でも同じように泡が上がる（配色が変わるだけの同じテーマなので）
-    if (pastelTheme())
+    if (juiceTheme())
     {
         GzzioLnF::bumpJuicePhase (0.22f);
         for (auto* ch : getChildren())
             if (dynamic_cast<juce::Slider*> (ch)) ch->repaint();
     }
 
-    // v1.8.0: seasons (自然) & idol stage (ジャニーズ) animate at ~10 fps.
-    const bool jnOnNow = processor.apvts.getRawParameterValue ("jn_on")->load() > 0.5f;
-    themePainter.jnActive = jnOnNow;
-    {   // 演出更新: 入力レベルとカーソルを渡す (落ち葉等はカーソルで押し流せる)
+    // v1.8.0: seasons (自然), aurora (4), V-Liver (5), Cyber Neon (6) & unison stage animate at ~10 fps (skipped in Lite Mode).
+    if (! liteMode)
+    {
+        const bool jnOnNow = processor.apvts.getRawParameterValue ("jn_on")->load() > 0.5f;
+        themePainter.jnActive = jnOnNow;
         const auto mp = getMouseXYRelative();
         themePainter.update (0.05f, mp.x, mp.y,
                              juce::jlimit (0.0f, 1.0f, processor.getInputLevel() * 2.2f));
+        if (themeMode == 2 || themeMode == 4 || themeMode == 5 || themeMode == 6 || jnOnNow)
+            if (((++themeAnimFrame) & 1) == 0) repaint();      // ~10fps
     }
-    if (themeMode == 2 || themeMode == 4 || jnOnNow)
-        if (((++themeAnimFrame) & 1) == 0) repaint();      // ~10fps
 
     const bool learning = processor.isDenoiseLearning();
     learnButton.setButtonText (learning ? language->T ("学習中…", "Learning…") : language->T ("ノイズを測る", "Learn noise"));
@@ -4434,7 +4472,7 @@ void VocalGzzioContent::timerCallback()
             }
             // 10秒おまかせの最中なら、いま出しても8秒後に上書きされる。取っておく。
             if (easyComboPhase != 0) dnLearnMsgPending = msg;
-            else                   { infoText = msg; dnMsgTicks = 100; }   // 5秒
+            else                   { infoText = msg; overviewHint = msg; dnMsgTicks = 100; }   // 5秒
             repaint();
         }
         if (dnMsgTicks > 0 && --dnMsgTicks == 0) repaint();
@@ -4508,12 +4546,15 @@ void VocalGzzioContent::timerCallback()
                 dnLearnMsgPending.clear();
             }
             infoText = autoSetupMsg;          // surface it in the graph info strip too
+            overviewHint = autoSetupMsg;
             // the auto result replaced whatever the presets had set, so show the
             // combos as unselected again (values live in the knobs now)
             auto& st2 = processor.apvts.state;
             st2.setProperty ("ui_voice_preset", 0, nullptr);
             st2.setProperty ("ui_mic_preset",   0, nullptr);
             st2.setProperty ("ui_eq_preset",    0, nullptr);
+            st2.setProperty ("finish_preset",   -1, nullptr);
+            finishPresetIndex = -1;
 
             // ★v3.0-c: 自分で選んだシーンがあるなら、その7つだけ**戻す**。
             //  うた自動は「声を測って作る」もので、
@@ -4524,6 +4565,7 @@ void VocalGzzioContent::timerCallback()
             {
                 applyScene();
                 autoSetupMsg += " " + language->scene_kept (currentScene);
+                overviewHint = autoSetupMsg;
             }
             refreshPresetDisplays();
         }
@@ -4970,9 +5012,8 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     {
         if (area.isEmpty()) return;      // v2.4.0 かんたんモードで使わないパネル
         auto r = area.toFloat();
-        // v1.8.5: 自然モードでは背景(四季)がパネル越しに透けるよう半透明に。
-        // ノブの視認性は保ちたいので、うっすら地色を残す程度(alpha 0.72)。
-        const float panelA = (themeMode == 2) ? 0.72f : 1.0f;
+        const float panelA = (themeMode == 2 || themeMode == 4 || themeMode == 5 || themeMode == 6) ? 0.78f
+                           : (themeMode == 9 ? 0.90f : 1.0f);
         g.setColour (Palette::panel.withMultipliedAlpha (panelA));
         g.fillRoundedRectangle (r, 14.0f);
         g.setColour (juce::Colours::white.withAlpha (0.04f));   // top elevation highlight
@@ -6348,7 +6389,14 @@ void VocalGzzioContent::applyThemeToKnobs()
     if (auto* l = dynamic_cast<GzzioLnF*> (&getLookAndFeel()))
     {
         l->setThemeArc (Palette::ice);
-        l->setUseKawaiiFont (pastelTheme());   // rounded font in the two yuru modes
+        l->setUseKawaiiFont (pastelTheme());   // rounded font in yuru & V-Liver modes
+        const int kStyle = liteMode        ? 5   // ⚡ 軽量モード: 超高速フラットベクターダイヤル
+                         : juiceTheme()    ? 1
+                         : themeMode == 5  ? 2   // V-Liver jewel/star dial
+                         : themeMode == 9  ? 3   // Studio Pro movement dial
+                         : themeMode == 6  ? 4   // Cyber Neon dual-ring dial
+                                           : 0;
+        l->setKnobStyle (kStyle);
     }
 
     // Label / Slider text colours are assigned once at construction, so after a
@@ -6418,11 +6466,17 @@ void VocalGzzioContent::refreshLanguage()
     megaTypeBox.setTooltip (language->mega_type_tip());
     atKeyBox.setTooltip (language->at_on_tip());
     resetButton.setTooltip (language->T ("全てのツマミを初期値に戻します", "Returns every knob to its default value") + "\n" + language->note_reset());
+    abA.setTooltip (language->T ("設定Aに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot A (compare two different sound setups)"));
+    abB.setTooltip (language->T ("設定Bに切り替えます（2つの音作りを聴き比べられます）", "Switch to slot B (compare two different sound setups)"));
+    abCopy.setTooltip (language->T ("今のスロットの設定をもう一方のスロットへコピーします", "Copy the current slot's settings to the other slot"));
     for (auto* lamp : { &lampGate, &lampDn, &lampDbl, &lampDly, &lampDs, &lampRobo, &lampCho, &lampRev, &lampMega })
         lamp->btn.setTooltip (language->lamp_tip());
    #if VOCALGZZIO_TRIAL
     saveButton.setTooltip (language->trial_nosave());
     loadButton.setTooltip (language->trial_nosave());
+   #else
+    saveButton.setTooltip (language->T ("今の設定をファイルに保存します", "Save current settings to a file"));
+    loadButton.setTooltip (language->T ("保存した設定ファイルを読み込みます", "Load settings from a saved file"));
    #endif
     // Transient messages belong to the old language; subsequent status updates repopulate them.
     infoText.clear();
@@ -6548,6 +6602,8 @@ void VocalGzzioContent::refreshLanguage()
     tabFxButton    .setButtonText (language->fx_tab_fx());
     vcOnButton.setButtonText (language->vc_on_label());
     jnOnButton.setButtonText (language->jn_on_label());
+    vcOnButton.setTooltip (language->vc_pitch_tip());
+    jnOnButton.setTooltip (language->jn_mix_tip());
 
     voiceBox   .setTextWhenNothingSelected (language->voice_placeholder());
     micBox     .setTextWhenNothingSelected (language->mic_placeholder());
@@ -6668,16 +6724,17 @@ void VocalGzzioContent::refreshLanguage()
 
 void VocalGzzioContent::setThemeMode (int m)
 {
-    // v2.4.0: オーロラ(4)はテーマ列の席をかんたんモードのスイッチに譲って廃止。
-    //         旧セーブデータの 4 / 6 はゆるふわ(1)へ寄せる(黒画面にしないため)。
-    if (m == 6 || m == 4) m = 1;
-    // v2.12.0: 軽量(5)を廃止。もともと配色は 0 を流用していたので、
-    //          軽量を選んでいた人は**見た目そのままで**ふつう(0)に着地する。
-    //          変わるのは「EQスペクトラムが出るようになる」の1点だけ。
-    if (m == 5) m = 0;
-    themeMode = juce::jlimit (0, 8, m);          // v2.11.0: 8 = ゆるふわ・よる
+    themeMode = juce::jlimit (0, 9, m);          // 0..9 全テーマ有効 (8=ゆるふわ・よる, 9=スタジオ)
     if (themeMode == 1 || themeMode == 8) yuruNight = (themeMode == 8);
     if (themeMode != 0) lastTheme = themeMode;   // 中央Nトグルの復帰先
+
+    // テーマ選択に連動して画面配置アーキテクチャ自体も最適化する（手動固定していない場合）
+    if (! overviewLayoutManual)
+    {
+        overviewLayoutMode = (themeMode == 5 || themeMode == 1 || themeMode == 8) ? 1  // V-Liver Stage
+                           : (themeMode == 9)                                     ? 2  // Studio Rack
+                                                                                  : 0; // Argon Cockpit
+    }
 
     Palette::applyTheme (themeMode);             // 7=色覚CUD もそのまま 1:1
     // v1.9.0: ポップアップ/ツールチップ/ボタンの色をテーマに追随させる
@@ -6702,14 +6759,18 @@ void VocalGzzioContent::setThemeMode (int m)
     // という2つが起きていた。タブ表示の判定と同じ式にそろえる。
     eqGraph.setVisible (isOverview() || (advancedMode && currentTab != 1));
     refreshOverviewText();
-    if (isOverview()) updateOverviewVisibility();
+    if (isOverview())
+    {
+        updateOverviewVisibility();
+        resizedOverview();
+    }
     if (onUiStateChange) onUiStateChange ("ui_theme", themeMode);
     repaint();
 }
 
 void VocalGzzioContent::drawJuiceServer (juce::Graphics& g)
 {
-    if (! pastelTheme()) return;
+    if (! juiceTheme()) return;
 
     const float w = 64.0f, h = 94.0f;
     const float x = (float) getWidth()  - w - 12.0f;
@@ -6792,7 +6853,11 @@ juce::String VocalGzzioContent::themeArmName (int i) const
                      : language->T ("\xe3\x82\x86\xe3\x82\x8b\xe3\x81\xb5\xe3\x82\x8f", "Yuru");
         case 2:  return language->T ("\xe8\x87\xaa\xe7\x84\xb6", "Nature");
         case 3:  return language->T ("\xe3\x83\x96\xe3\x83\xa9\xe3\x83\xb3\xe3\x83\x89", "Brand");
-        default: return language->T ("\xe8\x89\xb2\xe8\xa6\x9a", "CUD");   // 4
+        case 4:  return language->T ("\xe3\x82\xa9\xe3\x83\xbc\xe3\x83\xad\xe3\x83\xa9", "Aurora");
+        case 5:  return language->T ("\xe3\x83\xa9\xe3\x82\xa4\xe3\x83\x90\xe3\x83\xbc", "V-Liver");
+        case 6:  return language->T ("\xe3\x82\xb9\xe3\x82\xbf\xe3\x82\xb8\xe3\x82\xaa", "Studio");
+        case 7:  return language->T ("\xe3\x83\x8d\xe3\x82\xaa\xe3\x83\xb3", "Neon");
+        default: return language->T ("\xe8\x89\xb2\xe8\xa6\x9a", "CUD");   // 8
     }
 }
 
@@ -6868,11 +6933,31 @@ void VocalGzzioContent::drawThemeCross (juce::Graphics& g)
 
 void VocalGzzioContent::mouseDown (const juce::MouseEvent& e)
 {
+    if (isOverview() && handleOverviewMouseDown (e.getPosition()))
+        return;
+
     // v2.12.0: テーマチップ(0..5)は「文字・見た目」の吹き出しへ引っ越したので、
     //          ここに残っているのは 6 =「かんたんモード」スイッチだけ。
     if (crossArea.isEmpty()) return;
     if (crossHit (6).contains (e.getPosition()))
         setAdvanced (! advancedMode);
+}
+
+void VocalGzzioContent::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    if (isOverview())
+        handleOverviewMouseDoubleClick (e.getPosition());
+}
+
+void VocalGzzioContent::mouseDrag (const juce::MouseEvent& e)
+{
+    if (isOverview() && argonDragging >= 0)
+        handleOverviewMouseDrag (e.getPosition());
+}
+
+void VocalGzzioContent::mouseUp (const juce::MouseEvent&)
+{
+    argonDragging = -1;
 }
 
 void VocalGzzioContent::mouseMove (const juce::MouseEvent& e)
@@ -6889,13 +6974,14 @@ void VocalGzzioContent::mouseExit (const juce::MouseEvent&)
 
 void VocalGzzioContent::paintOverChildren (juce::Graphics& g)
 {
-    if (isOverview()) return;
-    // v1.8.0: scatter theme decorations OVER the panels (translucent)
-    themePainter.paintForeground (g);
+    if (! liteMode)
+    {
+        themePainter.setBounds (getLocalBounds());
+        // 総合画面・詳細画面ともテーマ前景オーバーレイ（桜・雪・ブランド紋章・キラキラ星・ペンライト等）を表示
+        themePainter.paintForeground (g);
+    }
 
-    // v2.12.0: 「スペクトラム非表示 (軽量)」の注記は、軽量テーマごと廃止した。
-    //  スペクトラムを止めたいときは エフェクトタブ か かんたんモードへ。
-    //  どちらもグラフが隠れた時点で 30Hz のタイマーが止まる(visibilityChanged)。
+    if (isOverview()) return;
 
     drawThemeCross (g);
 }
@@ -6984,6 +7070,14 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         if (const char* av = std::getenv ("GZ_ADV"))     // test hook: force advanced mode
             advQ = juce::String (av).getIntValue();
         content.restoreUiState (advQ, tabQ, rail, theme);
+        if (std::getenv ("GZ_THEME") == nullptr && prefs != nullptr && prefs->containsKey ("ui_arch"))
+            content.setOverviewLayoutMode (prefs->getIntValue ("ui_arch", 0), true);
+        if (const char* ar = std::getenv ("GZ_ARCH"))
+            content.setOverviewLayoutMode (juce::String (ar).getIntValue(), true);
+        if (prefs != nullptr && prefs->getBoolValue ("ui_lite", false))
+            content.setLiteMode (true);
+        if (const char* lt = std::getenv ("GZ_LITE"))
+            content.setLiteMode (juce::String (lt).getIntValue() != 0);
         content.setFocusedEditing (! revised && prefs->getBoolValue ("ui_focus", false));
         content.setOverview (revised || prefs->getBoolValue ("ui_overview", true));
         if (prefs != nullptr && revised)

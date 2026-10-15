@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Macへの導入と起動警告について | VocalGzzio</title>
+  <meta name="description" content="VocalGzzioのMac導入手順。インストーラー・単体アプリ・Logic Pro用AUの違いと、現在の起動警告への対応状況を案内します。">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    main{max-width:1060px}.lead{max-width:900px}.status{border-color:#f2c879}.status strong{color:#f2d998}.status p:last-child{margin-bottom:0}.file-kind{display:block;color:var(--accent);font-size:30px;font-weight:750;line-height:1.3;margin-bottom:16px}.file-cards h3{font-size:22px}.file-cards p{color:var(--ink)}.file-cards .detail{font-size:17px;color:var(--muted)}.steps{padding-left:1.6em}.steps>li{padding-left:.3em;margin:20px 0}.steps strong{display:block}details{border-bottom:1px solid var(--line);padding-bottom:12px}details summary{font-size:21px}.help-path{display:block;padding:12px 16px;background:var(--bg);border:1px solid var(--line);border-radius:8px;margin:12px 0;font-size:17px;white-space:normal;overflow-wrap:anywhere}.small{color:var(--muted);font-size:17px}.toc{gap:12px 24px}.skip{position:absolute;left:16px;top:-100px;padding:10px 18px;background:var(--accent);color:var(--bg);z-index:5}.skip:focus{top:12px}@media(max-width:650px){h1{font-size:36px}.grid{grid-template-columns:1fr}.card{padding:22px}.note{padding:16px 18px}.file-kind{font-size:28px}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#content">本文へ進む</a>
+<header><nav aria-label="主なページ"><strong>VocalGzzio</strong><a href="https://gzzio1989.github.io/apps/vocalgzzio/">製品紹介</a><a href="manual.html">使い方</a><a href="https://gzzio.booth.pm/items/8764003">配布・お問い合わせ</a></nav></header>
+<main id="content">
+  <p class="eyebrow">Macへの導入ガイド · 2026年10月15日更新</p>
+  <h1>使う場所に合わせて、<br>開くファイルを選びます。</h1>
+  <p class="lead"><code>.component</code> はLogic Proなどが読み込む部品です。Finderで直接起動するアプリではありません。導入には <code>.pkg</code>、単体で使うときは導入済みの <code>.app</code> を開きます。</p>
+
+  <aside class="note status" aria-label="現在のMac版の対応状況">
+    <strong>Mac版4.4.0の起動警告に対応中です。</strong>
+    <p>現在の配布物はAppleの開発元証明書による署名・公証を受けていません。Macの保護機能によって導入や読み込みが拒否される場合があります。下の手順で開く対象を直しても、警告が解消するとは限りません。</p>
+    <p>Mac実機での導入・マイク入力・Logic Proでの試奏も未確認です。<strong>Macでの利用を目的に購入する前に、無料体験版で導入から音声処理までお確かめください。</strong>購入済みの方は、同じ購入履歴からWindows版・Mac版の両方を追加料金なしで取得できます。</p>
+  </aside>
+
+  <nav class="toc" aria-label="このページの目次"><a href="#files">ファイルの違い</a><a href="#install">導入する</a><a href="#warning">警告が出たら</a><a href="#logic">Logic Proで使う</a><a href="#help">問い合わせる</a></nav>
+
+  <h2 id="files">まず、この３つを見分けます。</h2>
+  <div class="grid file-cards">
+    <section class="card"><span class="file-kind">.pkg</span><h3>Macに導入する</h3><p>プラグインと単体アプリを、使う場所へ配置するインストーラーです。</p><p class="detail">4.4.0では、名前が「未公証.pkg」で終わるファイルを使います。</p></section>
+    <section class="card"><span class="file-kind">.app</span><h3>単体で起動する</h3><p>録音ソフトを使わずにVocalGzzioを開くアプリです。</p><p class="detail">導入後、「アプリケーション」にあるVocalGzzioを開きます。</p></section>
+    <section class="card"><span class="file-kind">.component</span><h3>Logic Proなどで使う</h3><p>AU形式のプラグインです。導入後、録音ソフトの中で選んで読み込みます。</p><p class="detail">このファイル自体をダブルクリックして起動しません。</p></section>
+  </div>
+  <p><code>.vst3</code> も録音ソフト用のプラグインです。VST3に対応したソフトの中で選びます。Logic ProではAU形式を使ってください。体験版の名前には「Trial」が付きます。</p>
+
+  <h2 id="install">インストーラーで導入する</h2>
+  <ol class="steps">
+    <li><strong>公式の配布物を用意する</strong><a href="https://gzzio.booth.pm/items/8764003">BOOTHの商品ページ</a>の無料体験版、または購入履歴からMac版をダウンロードし、ZIPを展開します。対応するのはmacOS 11以降のAppleシリコン・Intel搭載Macです。</li>
+    <li><strong>録音ソフトとVocalGzzioを終了する</strong>作業中の録音や設定を保存してから終了します。</li>
+    <li><strong>「未公証.pkg」を開く</strong>内容を確認して導入します。管理者の認証が必要です。開発元確認の警告が出た場合は、次の「警告が出たら」を参照してください。</li>
+    <li><strong>使う場所から開く</strong>単体なら「アプリケーション」のVocalGzzio、Logic Proなら録音ソフト内のAUプラグインから開きます。単体アプリでは、マイクの使用許可と入出力機器も確認します。</li>
+  </ol>
+  <details>
+    <summary>配置先を確認する・手動で導入する</summary>
+    <p>インストーラーはAUを <code>/Library/Audio/Plug-Ins/Components/</code>、VST3を <code>/Library/Audio/Plug-Ins/VST3/</code>、単体アプリを <code>/Applications/</code> に配置します。</p>
+    <p>自分の利用者アカウントだけに手動で入れる場合は、「手動インストール」フォルダーから次の場所へコピーします。<code>.component</code>・<code>.vst3</code>・<code>.app</code> は、中身を取り出さず丸ごとコピーしてください。</p>
+    <p>AUの配置先<code class="help-path">~/Library/Audio/Plug-Ins/Components/</code>VST3の配置先<code class="help-path">~/Library/Audio/Plug-Ins/VST3/</code>単体アプリの配置先<code class="help-path">~/Applications/</code></p>
+    <p><code>~</code> は自分のホームフォルダーです。Finderの「移動」→「フォルダへ移動」で配置先を入力できます。フォルダーがない場合は作成します。インストーラーと手動導入のどちらか一方で十分です。同じ製品版を両方の場所へ重複して入れないでください。</p>
+    <p>手動導入でも、開発元確認の警告が出る場合があります。</p>
+  </details>
+
+  <h2 id="warning">「検証できません」と表示されたら</h2>
+  <p>「マルウェアが含まれていないことを検証できません」という警告は、Appleによる確認が取れないことを示します。この画面だけでマルウェアが検出されたとは判断できませんが、安全性の確認が済んだことを示すものでもありません。詳しくは<a href="https://support.apple.com/ja-jp/102445">Appleの警告についての説明</a>をご覧ください。</p>
+  <ol class="steps">
+    <li><strong>まず「完了」で閉じる</strong><code>.component</code> を直接開いていた場合は、上の導入手順に戻り、録音ソフトの中から読み込みます。</li>
+    <li><strong>入手元を確かめる</strong>公式BOOTHの商品ページ・購入履歴から取得したファイルか確認します。入手元や改変の有無に確信がない場合は開かず、お問い合わせください。</li>
+    <li><strong>対象の許可を、ご自身で判断する</strong>内容を確認し、開くと判断した場合に限り、下のAppleが案内する操作を検討してください。利用を続けず、正式な署名・公証への対応を待つこともできます。</li>
+  </ol>
+  <details>
+    <summary>確認したファイルだけ「このまま開く」を選ぶ場合</summary>
+    <p>必ず解決する手順ではありません。対象の許可ボタンが表示されない場合もあります。</p>
+    <ol class="steps">
+      <li>導入時は <code>.pkg</code>、単体起動時は導入済みの <code>.app</code> を開いた際の警告を確認します。AUは導入してから録音ソフトで読み込みます。許可のために <code>.component</code> を直接開く操作は行いません。</li>
+      <li>「システム設定」→「プライバシーとセキュリティ」を開きます。古いmacOSでは「システム環境設定」→「セキュリティとプライバシー」です。</li>
+      <li>VocalGzzioの該当ファイル名を確認し、その対象の「このまま開く」が表示される場合だけ選びます。確認画面でも、開く意思がある場合に「開く」を選びます。</li>
+      <li>プラグインの場合は録音ソフトを再起動し、必要に応じてVocalGzzioだけを再スキャンします。</li>
+    </ol>
+    <p>画面や操作の詳細は<a href="https://support.apple.com/ja-jp/102445">Appleの案内</a>をご確認ください。管理されたMacでは設定を変更できない場合があります。</p>
+  </details>
+  <aside class="note"><strong>異なる警告が出たときは、操作を止めてください。</strong><br>「破損している」「コンピュータに損害を与える」などの表示は、上の「検証できません」と異なります。警告を回避せず使用を中止してください。「このまま開く」がない場合や許可後も読み込めない場合も、繰り返し操作せずお問い合わせください。</aside>
+
+  <h2 id="logic">Logic Proに表示されないとき</h2>
+  <ol class="steps">
+    <li><code>.component</code> が上記の配置先に丸ごと入っているか確認します。</li>
+    <li>作業を保存してLogic Proを終了し、Macを再起動します。</li>
+    <li>Logic Proの「設定」（旧版は「環境設定」）→「プラグインマネージャ」でVocalGzzioを探します。</li>
+    <li>表示されていて検証に失敗している場合は、VocalGzzioだけを選び「選択項目をリセットして再スキャン」を実行します。</li>
+  </ol>
+  <p>開発元確認の警告が残っている場合、再スキャンだけでは解決しないことがあります。対象が見つからない場合や再び失敗する場合は、他のプラグインの設定を変更せず、お問い合わせください。<a href="https://support.apple.com/ja-jp/122179">AppleのLogic Pro向け手順</a>も参照できます。</p>
+
+  <h2 id="help">うまくいかないときは</h2>
+  <p>分かる範囲で次の情報を添え、<a href="https://gzzio.booth.pm/items/8764003">BOOTHの商品ページからショップへお問い合わせ</a>ください。</p>
+  <ul><li>Macの機種とmacOSの版番号</li><li>録音ソフトの名前・版番号、または単体アプリでの利用か</li><li>VocalGzzioの版番号と、製品版・体験版のどちらか</li><li>警告の画像と、警告が出たときの操作</li><li>インストーラーと手動導入のどちらを使ったか</li></ul>
+  <p class="small">体験版は60秒ごとに0.6秒間音量が下がり、設定・プリセットの保存と復元が制限されます。製品版とは別の名前で導入されます。版番号は同梱の「配布情報.json」でも確認できます。</p>
+  <div class="actions"><a class="button" href="https://gzzio.booth.pm/items/8764003">配布・お問い合わせ</a><a class="button secondary" href="manual.html">音づくりの使い方へ</a></div>
+</main>
+<footer>VocalGzzio 4.4.0 · Mac導入案内 · <a href="https://gzzio1989.github.io/apps/vocalgzzio/">製品紹介</a></footer>
+</body>
+</html>

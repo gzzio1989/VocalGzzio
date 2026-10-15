@@ -326,6 +326,13 @@ VocalGzzioProcessor::createParameterLayout()
     layout.add (std::make_unique<juce::AudioParameterBool>(
         pid ("lift_legacy"), "Legacy: Lift Needs Character", false));
 
+    // ---- v4.4.0 Argon Velvet Engine (母音感応2次倍音・シルク空気感・モノラル互換バイノーラルHalo) ----
+    // 既定値は 0% ＝ 既存のプリセットや回帰検査はビット単位で完全に同じ音を保つ。
+    // 2D Voice Gravity Orb や Argon Target を動かしたときに滑らかに働く。
+    layout.add (std::make_unique<P>(pid ("argon_velvet"), "Argon Velvet",   R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
+    layout.add (std::make_unique<P>(pid ("argon_silk"),   "Argon Silk Air", R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
+    layout.add (std::make_unique<P>(pid ("argon_halo"),   "Argon 3D Halo",  R (0.0f, 100.0f, 1.0f), 0.0f, unit ("%")));
+
     return layout;
 }
 
@@ -1005,6 +1012,9 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // doubler buffer (max ~40 ms)
     dblBuf.assign ((size_t) ((int) (0.045 * sampleRate) + 8), 0.0f);
     dblWrite = 0; dblLfoPhase = 0;
+    argonEngine.prepare (sampleRate);
+    meterArgonVelvet.store (0.0f); meterArgonSilk.store (0.0f);
+    meterArgonHalo.store (0.0f);   meterArgonVoiced.store (0.0f);
 
     // delay buffer (up to ~2 s for slow-tempo dotted notes)
     const int dlyLen = (int) (2.05 * sampleRate) + 8;
@@ -1879,17 +1889,31 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     //  部屋のノイズは定常なので開きは小さい。声・息・イスが入ると開く。
                     float medDb[4] = { -120.0f, -120.0f, -120.0f, -120.0f };
                     float p95Db[4] = { -120.0f, -120.0f, -120.0f, -120.0f };
+                    const int q25  = juce::jmax (1, dnHistCount / 4);
+                    const int q75  = juce::jmax (q25, (dnHistCount * 3) / 4);
                     const int half = juce::jmax (1, dnHistCount / 2);
                     const int p95  = juce::jmax (1, (dnHistCount * 95) / 100);
                     for (int b = 0; b < 4; ++b)
                     {
                         int acc = 0; bool haveMed = false;
+                        double iqrSum = 0.0; int iqrWeight = 0;
                         for (int i = 0; i < dnHistBins; ++i)
                         {
+                            const int prevAcc = acc;
                             acc += dnHist[b][i];
+                            // 四分位範囲(25%〜75%)の重み付き平均で1dB刻みの量子化揺れを抑える
+                            const int lo = juce::jmax (prevAcc, q25 - 1);
+                            const int hi = juce::jmin (acc, q75);
+                            if (hi > lo)
+                            {
+                                iqrSum    += (double) (hi - lo) * (double) (i - 120);
+                                iqrWeight += (hi - lo);
+                            }
                             if (! haveMed && acc >= half) { medDb[b] = (float) (i - 120); haveMed = true; }
                             if (acc >= p95) { p95Db[b] = (float) (i - 120); break; }
                         }
+                        if (iqrWeight > 0)
+                            medDb[b] = (float) (iqrSum / (double) iqrWeight);
                     }
                     // 帯域をまたいだ代表値（いちばん大きい帯域で見る＝いちばん危ない側）
                     float loudestMed = -120.0f, widestSpread = 0.0f;
@@ -2794,7 +2818,21 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             }
         }
     }
-    if (neiroRun) mods.restore (gz::ModuleChain::Neiro, buffer);
+    if (neiroRun)
+    {
+        const float arVelvet = apvts.getRawParameterValue ("argon_velvet")->load() * 0.01f;
+        const float arSilk   = apvts.getRawParameterValue ("argon_silk")->load()   * 0.01f;
+        const float arHalo   = apvts.getRawParameterValue ("argon_halo")->load()   * 0.01f;
+        argonEngine.setParams (arVelvet, arSilk, arHalo, crushCg, srcVoiceOnly);
+        argonEngine.process (buffer.getWritePointer (0),
+                             numCh > 1 ? buffer.getWritePointer (1) : nullptr,
+                             numSamples);
+        meterArgonVelvet.store (argonEngine.velvetActivity(), std::memory_order_relaxed);
+        meterArgonSilk.store   (argonEngine.silkActivity(),   std::memory_order_relaxed);
+        meterArgonHalo.store   (argonEngine.haloActivity(),   std::memory_order_relaxed);
+        meterArgonVoiced.store (argonEngine.voicedRatioNow(), std::memory_order_relaxed);
+        mods.restore (gz::ModuleChain::Neiro, buffer);
+    }
     // ===== モジュール6「音色づくり」ここまで =====
 
     // ---- Mix(原音の混ぜ戻し) ---- ★モジュールに属さない全体設定

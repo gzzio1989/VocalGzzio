@@ -9,7 +9,8 @@
 #include <vector>
 
 #if ! VOCALGZZIO_TESTING
- #error この検査は設定を隔離した検証用ビルドで実行してください。
+ // この検査は設定を隔離した検証用ビルドで実行してください。
+ #error "VOCALGZZIO_TESTING must be enabled for this test build."
 #endif
 
 namespace
