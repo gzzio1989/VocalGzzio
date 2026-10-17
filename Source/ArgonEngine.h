@@ -87,6 +87,24 @@ public:
         reset();
     }
 
+    // 1次 ADAA (Antiderivative Anti-Aliasing) tanh:
+    // F1(u) = ln(cosh(u)) = |u| + ln(1 + exp(-2|u|)) - ln(2) により折り返し歪みをゼロ遅延で抑制
+    static inline float adaaTanhF1 (float u) noexcept
+    {
+        const float au = std::abs (u);
+        return au + std::log (1.0f + std::exp (-2.0f * au)) - 0.69314718f;
+    }
+
+    static inline float adaaTanh (float u, float& uPrev) noexcept
+    {
+        const float du = u - uPrev;
+        const float y = (std::abs (du) > 1.0e-4f)
+            ? ((adaaTanhF1 (u) - adaaTanhF1 (uPrev)) / du)
+            : std::tanh (0.5f * (u + uPrev));
+        uPrev = u;
+        return y;
+    }
+
     void reset() noexcept
     {
         vLp = vHp = sHp = 0.0f;
@@ -95,6 +113,7 @@ public:
         {
             chestHp[ch] = chestLp[ch] = chestDc[ch] = 0.0f;
             triLp[ch] = triDc[ch] = 0.0f;
+            triPrevU[ch] = 0.24f;
             focHp[ch] = focLp[ch] = 0.0f;
             airHp1[ch] = airHp2[ch] = 0.0f;
         }
@@ -191,10 +210,10 @@ public:
                     chestDc[ch] += cChestDc * (evenRect - chestDc[ch]);
                     const float chestHarm = (evenRect - chestDc[ch]) * (0.42f * effVelvet);
 
-                    // Mid-band asymmetric triode 2nd harmonic
+                    // Mid-band asymmetric triode 2nd harmonic (1st-order ADAA anti-aliased)
                     triLp[ch] += cTriodeLp * (x - triLp[ch]);
                     const float mid = triLp[ch];
-                    const float tri = (std::tanh (mid * drive + bias) - tanhBias) / drive;
+                    const float tri = (adaaTanh (mid * drive + bias, triPrevU[ch]) - tanhBias) / drive;
                     triDc[ch] += cTriodeDc * (tri - triDc[ch]);
                     const float triClean = tri - triDc[ch];
 
@@ -356,7 +375,7 @@ private:
     float vLp = 0.0f, vHp = 0.0f, sHp = 0.0f;
     float vEnv = 0.0f, sEnv = 0.0f, fEnv = 0.0f, voicedRatio = 0.0f;
     float chestHp[2] {}, chestLp[2] {}, chestDc[2] {};
-    float triLp[2] {}, triDc[2] {};
+    float triLp[2] {}, triDc[2] {}, triPrevU[2] { 0.24f, 0.24f };
     float focHp[2] {}, focLp[2] {};
     float airHp1[2] {}, airHp2[2] {};
 

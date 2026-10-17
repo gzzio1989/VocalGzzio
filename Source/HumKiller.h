@@ -266,7 +266,7 @@ private:
     //   (3) 絶対値の下限: 聞こえないほど小さいものは触らない。
     void updateDetect() noexcept
     {
-        constexpr float kFloor = 2.0e-4f;    // ≒ -74dBFS。これ未満は相手にしない
+        constexpr float kFloor = 5.0e-5f;    // ≒ -86dBFS。FireFace UC等の低ノイズI/Fに乗る微弱な50/60Hzハム(-81dBFS前後)も捕捉する
         constexpr float kCoh   = 0.70f;      // 一貫性
         constexpr float kDom   = 2.2f;       // 相手に対する優位
 

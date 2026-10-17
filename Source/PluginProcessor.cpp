@@ -1,4 +1,5 @@
 #include <cmath>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -946,6 +947,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     susEnvAtk = 1.0f - std::exp (-1.0f / (0.005f * (float) sampleRate));
     susEnvRel = 1.0f - std::exp (-1.0f / (0.180f * (float) sampleRate));
     susEnv = 0; susLift = 0;
+    warmPrevU[0] = warmPrevU[1] = 0.0f;
+    susPrevU[0] = susPrevU[1] = 0.0f;
 
     // ---- v2.0.0 エモート ----
     {
@@ -1349,11 +1352,13 @@ static inline bool gzBlockFinite (const float* p, int n) noexcept
     return std::isfinite (acc);
 }
 
-void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
-    const int numCh = buffer.getNumChannels();
-    const int numSamples = buffer.getNumSamples();
+    const int totalCh = fullBuffer.getNumChannels();
+    const int numCh = juce::jmin (totalCh, 2);
+    const int numSamples = fullBuffer.getNumSamples();
+    juce::AudioBuffer<float> buffer (fullBuffer.getArrayOfWritePointers(), numCh, numSamples);
 
     // ---- v3.0 モジュールのON/OFF ----
     // ここでこのブロックぶんの「渡し具合」を決めてしまう。以降の save/restore は
@@ -1382,12 +1387,91 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     // ホストや他のプラグインから NaN/Inf が一度でも流れ込むと、内部の再帰状態
     // (フィルタ・コンプの包絡・ピッチシフタの位相メモリ)が汚染されて自然には
     // 戻らず、「最初しか音が出ない」状態になる。入口で見つけて 0 に置き換える。
-    for (int ch = 0; ch < numCh; ++ch)
+    for (int ch = 0; ch < totalCh; ++ch)
     {
-        float* p = buffer.getWritePointer (ch);
+        float* p = fullBuffer.getWritePointer (ch);
         if (! gzBlockFinite (p, numSamples))
             for (int i = 0; i < numSamples; ++i)
                 if (! std::isfinite (p[i])) p[i] = 0.0f;
+    }
+
+    // ---- v4.6.0 マイク入力の中央寄せルーティング（片耳問題を入口で根治） ----
+    // Roland Rubix 44 や RME Fireface UC 等を単体起動版(Standalone)で使うと、
+    // 入力1+2の片側（Mic 1 = 左 / Mic 2 = 右）だけにマイクが繋がっているため、
+    // そのまま出力1+2へ流すと「左耳（または右耳）からしか自分の声が聴こえない」
+    // かつ「空いている反対chのプリアンプ熱雑音がそのまま混ざる」現象が起きる。
+    // 原音コピー(dryBuffer)・ハム除去・ノイズ除去・チューナーより手前の入口で
+    // 有効なマイク入力を両耳の中央(L=R)へ揃えることで、原音比較中も配信出力も
+    // 常に中央定位になり、未接続chのノイズ混入も同時に遮断する。
+    if (numCh >= 2 && ! selfTestRunning.load (std::memory_order_relaxed))
+    {
+        if (getTotalNumInputChannels() == 1)
+        {
+            juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
+        }
+        else
+        {
+            const int routeMode = inputRouteMode.load (std::memory_order_relaxed);
+            if (routeMode == 1)
+            {
+                autoCenterCh.store (0, std::memory_order_relaxed);
+                juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
+            }
+            else if (routeMode == 2)
+            {
+                autoCenterCh.store (1, std::memory_order_relaxed);
+                juce::FloatVectorOperations::copy (buffer.getWritePointer (0), buffer.getReadPointer (1), numSamples);
+            }
+            else if (routeMode == 3)
+            {
+                float* L = buffer.getWritePointer (0);
+                float* R = buffer.getWritePointer (1);
+                double e0 = 0.0, e1 = 0.0;
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    e0 += (double) L[i] * L[i];
+                    e1 += (double) R[i] * R[i];
+                }
+                // 片側しか信号が来ていない場合は -6dB 減衰させず等倍で合成する
+                const float mixScale = (e0 > e1 * 16.0 || e1 > e0 * 16.0) ? 1.0f : 0.5f;
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    const float m = (L[i] + R[i]) * mixScale;
+                    L[i] = m;
+                    R[i] = m;
+                }
+            }
+            else if (routeMode == 0 && (isStandalone() || outputMonoMode.load (std::memory_order_relaxed)))
+            {
+                const float* r0 = buffer.getReadPointer (0);
+                const float* r1 = buffer.getReadPointer (1);
+                double e0 = 0.0, e1 = 0.0;
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    e0 += (double) r0[i] * r0[i];
+                    e1 += (double) r1[i] * r1[i];
+                }
+                e0 /= juce::jmax (1, numSamples);
+                e1 /= juce::jmax (1, numSamples);
+                const double alpha = 1.0 - std::exp (-numSamples / (0.025 * juce::jmax (8000.0, currentSampleRate)));
+                inRouteEnergy[0] += alpha * (e0 - inRouteEnergy[0]);
+                inRouteEnergy[1] += alpha * (e1 - inRouteEnergy[1]);
+
+                int activeCh = autoCenterCh.load (std::memory_order_relaxed);
+                if (e0 > 1.0e-7 || e1 > 1.0e-7)
+                {
+                    if (activeCh == 0 && e1 > e0 * 4.0 && inRouteEnergy[1] > inRouteEnergy[0] * 2.5)
+                        activeCh = 1;
+                    else if (activeCh == 1 && e0 > e1 * 4.0 && inRouteEnergy[0] > inRouteEnergy[1] * 2.5)
+                        activeCh = 0;
+                    autoCenterCh.store (activeCh, std::memory_order_relaxed);
+                }
+                if (activeCh == 0)
+                    juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
+                else
+                    juce::FloatVectorOperations::copy (buffer.getWritePointer (0), buffer.getReadPointer (1), numSamples);
+            }
+        }
     }
 
     // ---- v2.6.0 ジー音(電源ハム)の自動除去 ----
@@ -1860,8 +1944,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     const bool protectBand = b == 3 ? dnHfVoiceHold > 0 : voiceOpen;
                     const float below = juce::jlimit (0.0f, 1.0f,
                                           (openThr - dnEnv[b]) / juce::jmax (openThr - dnFloor[b] * 0.5f, 1e-9f));
+                    // v4.6.0 深層フロア抑制: 低〜中高域(b < 3: 0〜4500Hz)の包絡が学習床(dnFloor)以下に沈んでいる
+                    // 定常ノイズ区間では追加の深掘り減衰(最大+18dB)を滑らかに重ね、I/F固有の複合ノイズ(-68dBFS)を
+                    // 無音域まで沈める。高域(b == 3)は母音漏れによるポンピングを防ぐため従来カーブを維持する。
+                    const float deepFloor = (b < 3)
+                        ? juce::jlimit (0.0f, 1.0f, (dnFloor[b] * 1.25f - dnEnv[b]) / juce::jmax (dnFloor[b] * 0.50f, 1e-9f))
+                        : 0.0f;
+                    const float attenDb = maxAttenDb * below + (dnOn ? 18.0f * amount * deepFloor : 0.0f);
                     const float targetGain = protectBand ? 1.0f
-                        : juce::Decibels::decibelsToGain (-maxAttenDb * below);
+                        : juce::Decibels::decibelsToGain (-attenDb);
                     const bool bandHasSignal = dnEnv[b] > dnFloor[b] * 1.6f;
                     const float upCoef = protectBand ? dnFastOpen
                                        : (bandHasSignal ? dnOpenCoef : dnSoftOpen);
@@ -2330,8 +2421,11 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     // 瞬間に古い音が飛び出さないようにする)。2声になった分は+3dB。
                     const float g  = (skipUnisonPair && v < 2) ? 0.0f
                                    : (skipUnisonPair ? 0.64f : 0.45f) * jmix;
-                    const float gL = g * 0.5f * (1.0f - pan[v]);
-                    const float gR = g * 0.5f * (1.0f + pan[v]);
+                    const bool monoOpt = outputMonoMode.load (std::memory_order_relaxed)
+                                      && ! selfTestRunning.load (std::memory_order_relaxed);
+                    const float panV = monoOpt ? 0.0f : pan[v];
+                    const float gL = g * 0.5f * (1.0f - panV);
+                    const float gR = g * 0.5f * (1.0f + panV);
                     float* dl = unDelay[v]; int w = unDelayW[v]; const int d = unDelaySmp[v];
                     for (int i = 0; i < n; ++i)
                     {
@@ -2792,8 +2886,11 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         for (int ch = 0; ch < numCh; ++ch)
         {
             float x = buffer.getSample (ch, n);
+            const int chIdx = juce::jlimit (0, 1, ch);
             if (driveAmt > 0.001f)
-                x = std::tanh (x * k) / k;
+                x = gz::argon::VelvetEngine::adaaTanh (x * k, warmPrevU[chIdx]) / k;
+            else
+                warmPrevU[chIdx] = x * k;
             buffer.setSample (ch, n, x);
             pk = juce::jmax (pk, std::abs (x));
         }
@@ -2813,21 +2910,30 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
             const float lg = juce::Decibels::decibelsToGain (susLift);
             const float bias = 0.35f * susAmt;
+            const float tanhBias = std::tanh (bias);
             for (int ch = 0; ch < numCh; ++ch)
             {
                 const float x = buffer.getSample (ch, n);
-                const float sat  = std::tanh (x * lg * (1.0f + susAmt) + bias) - std::tanh (bias);
+                const int chIdx = juce::jlimit (0, 1, ch);
+                const float u = x * lg * (1.0f + susAmt) + bias;
+                const float sat  = gz::argon::VelvetEngine::adaaTanh (u, susPrevU[chIdx]) - tanhBias;
                 buffer.setSample (ch, n, x * (1.0f - 0.5f * susAmt)
                     + sat * 0.5f * susAmt + x * (lg - 1.0f) * 0.6f);
             }
         }
+        else
+        {
+            susPrevU[0] = susPrevU[1] = 0.0f;
+        }
     }
     if (neiroRun)
     {
+        const bool monoOpt = outputMonoMode.load (std::memory_order_relaxed)
+                          && ! selfTestRunning.load (std::memory_order_relaxed);
         const float arVelvet = apvts.getRawParameterValue ("argon_velvet")->load() * 0.01f;
         const float arFocus  = apvts.getRawParameterValue ("argon_focus")->load()  * 0.01f;
         const float arSilk   = apvts.getRawParameterValue ("argon_silk")->load()   * 0.01f;
-        const float arHalo   = apvts.getRawParameterValue ("argon_halo")->load()   * 0.01f;
+        const float arHalo   = monoOpt ? 0.0f : apvts.getRawParameterValue ("argon_halo")->load() * 0.01f;
         argonEngine.setParams (arVelvet, arSilk, arHalo, crushCg, srcVoiceOnly, arFocus);
         argonEngine.process (buffer.getWritePointer (0),
                              numCh > 1 ? buffer.getWritePointer (1) : nullptr,
@@ -2888,11 +2994,13 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     // ---- Doubler (modulated short delay, mono-safe L/R inversion) + Width ----
     if (spaceRun)
     {
+        const bool monoOpt = outputMonoMode.load (std::memory_order_relaxed)
+                          && ! selfTestRunning.load (std::memory_order_relaxed);
         const bool  dblOn    = apvts.getRawParameterValue ("dbl_on")->load() > 0.5f;
         const float dblAmt   = juce::jlimit (0.0f, 1.0f,
                                    (dblOn ? apvts.getRawParameterValue ("doubler")->load() * 0.01f : 0.0f)
                                    * (1.0f + 0.35f * liftNow));
-        const float widthAmt = juce::jlimit (0.0f, 1.0f,
+        const float widthAmt = monoOpt ? 0.0f : juce::jlimit (0.0f, 1.0f,
                                    apvts.getRawParameterValue ("width")->load() * 0.01f
                                    * (1.0f + 0.30f * emoBloomNow + 0.45f * liftNow)
                                    + 0.06f * emoBloomNow + 0.08f * liftNow);
@@ -2928,14 +3036,23 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
                 dblWrite = (dblWrite + 1) % sz;
 
-                // v2.8.0: もとの左右差(side0)を捨てないようにした。以前は mid だけを
-                // 使って書き戻していたので、ひろがり／かさねを少しでも上げた瞬間に
-                // **それより前で作ったステレオが全部モノラルに潰れて**いた
-                // (5人ユニゾンの左右の広がりが消えるのがいちばん分かりやすい)。
-                const float side0 = 0.5f * (L[n] - R[n]);
-                const float side  = dblAmt * 0.5f * tap + widthAmt * 0.8f * wtap;
-                L[n] = mid + side0 + side;
-                R[n] = mid - side0 - side;
+                if (monoOpt)
+                {
+                    // cluster / VRChat 等のモノラル最適化モード:
+                    // 逆相(±side)によるコムフィルタ干渉や L+R 加算時の消失を防ぎ、
+                    // 同相センターの揺らぎダブリングとして L/R 両方へ同一波形を重ねる。
+                    const float m = mid + dblAmt * 0.25f * tap;
+                    L[n] = m;
+                    R[n] = m;
+                }
+                else
+                {
+                    // v2.8.0: もとの左右差(side0)を捨てないようにした。
+                    const float side0 = 0.5f * (L[n] - R[n]);
+                    const float side  = dblAmt * 0.5f * tap + widthAmt * 0.8f * wtap;
+                    L[n] = mid + side0 + side;
+                    R[n] = mid - side0 - side;
+                }
             }
         }
     }
@@ -3288,6 +3405,33 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     {
         crushHeadDb = 0.0f;
         crushMeterDb.store (0.0f);
+    }
+
+    // ---- v4.6.0 最終モノラル出力 (MONO OUT) ＆ マルチ出力ミラーリング ----
+    // 1) outputMonoMode が ON のときは、リバーブ・コーラス・3D Halo 等のステレオ空間成分も含めて
+    //    最終出口で L=R=0.5*(L+R) の完全センター・デュアルモノラルへまとめる。
+    // 2) Rubix 44 (Out 3+4) や Fireface UC (Out 3..8) 等で 3ch 以上の出力が開かれている場合、
+    //    Out 1+2 の仕上がった音を全出力ペアへミラーリングしてどの端子でもモニタリングできるようにする。
+    if (! selfTestRunning.load (std::memory_order_relaxed))
+    {
+        if (outputMonoMode.load (std::memory_order_relaxed) && numCh >= 2)
+        {
+            float* L = buffer.getWritePointer (0);
+            float* R = buffer.getWritePointer (1);
+            for (int n = 0; n < numSamples; ++n)
+            {
+                const float m = 0.5f * (L[n] + R[n]);
+                L[n] = m;
+                R[n] = m;
+            }
+        }
+        if (totalCh > 2 && numCh >= 2)
+        {
+            const float* L = fullBuffer.getReadPointer (0);
+            const float* R = fullBuffer.getReadPointer (1);
+            for (int ch = 2; ch < totalCh; ++ch)
+                juce::FloatVectorOperations::copy (fullBuffer.getWritePointer (ch), (ch & 1) == 0 ? L : R, numSamples);
+        }
     }
 
     // output meter (peak + smoothed RMS for the stream-loudness display)
@@ -3999,10 +4143,13 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
     for (int b = 0; b < 4; ++b)
         d->setAttribute ("f" + juce::String (b), (double) dnFloorShared[b].load());
 
-    // v2.2.0 配信出力の設定(単体起動版の機材設定。プラグイン版では使わない)
+    // v2.2.0/v4.6.0 配信出力 ＆ 入出力ルーティングの設定
     auto* so = root->createNewChildElement ("STREAMOUT");
     so->setAttribute ("on", streamWanted ? 1 : 0);
     so->setAttribute ("dev", streamDevWanted);
+    so->setAttribute ("route", inputRouteMode.load (std::memory_order_relaxed));
+    so->setAttribute ("mono", outputMonoMode.load (std::memory_order_relaxed) ? 1 : 0);
+    so->setAttribute ("smono", streamOut.isForceMono() ? 1 : 0);
 
     // v2.8.0 ★A/Bのもう片方を保存する。
     // これまで abSlot[] はメモリの中だけにあり、保存していなかった。そのため
@@ -4027,6 +4174,14 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         e->setAttribute ("type", midiMap[s].type.load());
         e->setAttribute ("num",  midiMap[s].num.load());
         e->setAttribute ("ch",   midiMap[s].ch.load());
+    }
+
+    // v4.6.0 へやカスタムIRパス保存
+    const auto irPath = getCustomIrPath();
+    if (hasCustomIr() && irPath.isNotEmpty())
+    {
+        auto* h = root->createNewChildElement ("HEYA");
+        h->setAttribute ("customIr", irPath);
     }
     return root;
 }
@@ -4131,6 +4286,9 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
         {
             streamDevWanted = so->getStringAttribute ("dev");
             streamWanted    = so->getIntAttribute ("on", 0) != 0;
+            inputRouteMode.store (juce::jlimit (0, 4, so->getIntAttribute ("route", 0)), std::memory_order_relaxed);
+            outputMonoMode.store (so->getIntAttribute ("mono", 0) != 0, std::memory_order_relaxed);
+            streamOut.setForceMono (so->getIntAttribute ("smono", 0) != 0);
             // 単体起動版のときだけ、保存されていた配信先を開き直す
             if (isStandalone())
             {
@@ -4154,12 +4312,134 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
             }
             midiUiDirty.fetch_add (1);
         }
+        if (! suppressDeviceRestore)
+        {
+            if (auto* h = xml.getChildByName ("HEYA"))
+            {
+                const auto irPath = h->getStringAttribute ("customIr");
+                if (irPath.isNotEmpty())
+                    loadCustomIrFile (juce::File (irPath));
+                else
+                    clearCustomIrFile();
+            }
+            else
+            {
+                clearCustomIrFile();
+            }
+        }
     }
     else if (xml.hasTagName (apvts.state.getType()))   // legacy v1.4.x chunk
     {
         swapParams (xml);
     }
     restoringState = false;
+}
+
+bool VocalGzzioProcessor::loadCustomIrFile (const juce::File& file)
+{
+    if (! file.existsAsFile()) return false;
+    juce::AudioFormatManager fm;
+    fm.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader (fm.createReaderFor (file));
+    if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0)
+        return false;
+
+    const double targetSr = (currentSampleRate > 8000.0) ? currentSampleRate : 48000.0;
+    const int maxReadSamples = (int) std::min<int64_t> (reader->lengthInSamples,
+                                                        (int64_t) std::lround (4.0 * reader->sampleRate));
+    if (maxReadSamples <= 0) return false;
+
+    juce::AudioBuffer<float> rawBuf ((int) juce::jmin (2u, reader->numChannels), maxReadSamples);
+    if (! reader->read (&rawBuf, 0, maxReadSamples, 0, true, true))
+        return false;
+
+    const float* inL = rawBuf.getReadPointer (0);
+    const float* inR = rawBuf.getReadPointer (rawBuf.getNumChannels() > 1 ? 1 : 0);
+
+    const double ratio = reader->sampleRate / targetSr;
+    const int outLen = std::max (64, std::min ((int) std::lround (3.0 * targetSr),
+                                               (int) std::lround ((double) maxReadSamples / ratio)));
+    std::vector<float> resL ((size_t) outLen, 0.0f), resR ((size_t) outLen, 0.0f);
+
+    for (int i = 0; i < outLen; ++i)
+    {
+        const double srcPos = (double) i * ratio;
+        const int i0 = juce::jlimit (0, maxReadSamples - 1, (int) srcPos);
+        const int i1 = juce::jlimit (0, maxReadSamples - 1, i0 + 1);
+        const float frac = (float) (srcPos - (double) i0);
+        resL[(size_t) i] = inL[i0] * (1.0f - frac) + inL[i1] * frac;
+        resR[(size_t) i] = inR[i0] * (1.0f - frac) + inR[i1] * frac;
+    }
+
+    // 65Hz ハイパスで外部IRのDCオフセットと超低域の濁りを除去＋末尾20msフェードアウト
+    heya::GenBiquad hpL, hpR;
+    hpL.highpass (65.0, 0.707, targetSr);
+    hpR.highpass (65.0, 0.707, targetSr);
+    const int fadeLen = std::min (outLen / 4, std::max (16, (int) (0.020 * targetSr)));
+    for (int i = 0; i < outLen; ++i)
+    {
+        float w = 1.0f;
+        if (i >= outLen - fadeLen)
+            w = (float) (outLen - 1 - i) / (float) std::max (1, fadeLen);
+        resL[(size_t) i] = hpL.tick (resL[(size_t) i]) * w;
+        resR[(size_t) i] = hpR.tick (resR[(size_t) i]) * w;
+    }
+
+    if (! heyaRev.loadCustomIr (resL.data(), resR.data(), outLen))
+        return false;
+
+    {
+        const juce::ScopedLock sl (customIrLock);
+        customIrPath = file.getFullPathName();
+        customIrName = file.getFileNameWithoutExtension();
+    }
+
+    if (! restoringState)
+    {
+        const int curType = (int) apvts.getRawParameterValue ("rev_type")->load();
+        if (curType < kHeyaFirst)
+        {
+            if (auto* p = apvts.getParameter ("rev_type"))
+                p->setValueNotifyingHost (p->convertTo0to1 ((float) (kHeyaFirst + 2)));
+        }
+        if (auto* pOn = apvts.getParameter ("revon"))
+            if (apvts.getRawParameterValue ("revon")->load() < 0.5f)
+                pOn->setValueNotifyingHost (1.0f);
+        markStateDirty();
+    }
+    return true;
+}
+
+void VocalGzzioProcessor::clearCustomIrFile()
+{
+    heyaRev.clearCustomIr();
+    {
+        const juce::ScopedLock sl (customIrLock);
+        customIrPath.clear();
+        customIrName.clear();
+    }
+    if (! restoringState)
+        markStateDirty();
+}
+
+juce::String VocalGzzioProcessor::getCustomIrName() const
+{
+    const juce::ScopedLock sl (customIrLock);
+    return customIrName;
+}
+
+juce::String VocalGzzioProcessor::getCustomIrPath() const
+{
+    const juce::ScopedLock sl (customIrLock);
+    return customIrPath;
+}
+
+void VocalGzzioProcessor::getReverbIrCurve (float* dest, int nPoints) const noexcept
+{
+    if (dest == nullptr || nPoints <= 0) return;
+    const int rtype = (int) apvts.getRawParameterValue ("rev_type")->load();
+    const int room = (rtype >= kHeyaFirst) ? (rtype - kHeyaFirst) : 2;
+    heyaRev.getDecayCurve (room, dest, nPoints);
 }
 
 // v2.10.0 #74 報告セット: 版・環境・いまの設定・使われ方を1枚にまとめる。

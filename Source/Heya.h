@@ -257,36 +257,42 @@ inline void generateRoomIr (int roomIndex, double sr, GeneratedIr& out)
                 if (tSec > erWindowSec) continue;
                 const int   idx = (int) std::lround (tSec * sr);
                 if (idx <= 0 || idx >= N) continue;
-                // 距離減衰 1/r と、壁で跳ねるたびの吸収
+                // 距離減衰 1/r と、壁で跳ねるたびの吸収 + 両耳間の頭部遮蔽(ILD/耳介減衰)
                 const float wall = std::pow (1.0f - spec.absorb, (float) bounces);
-                const float g = spec.erGain * wall / std::max (0.6f, dist);
-                // 高次ほど高域が死ぬ→サンプル1本でなく2本に割ってなまらせる
+                const float earSign = (ear == 0) ? -1.0f : 1.0f;
+                const float latCos  = dx / std::max (0.6f, dist);
+                const float shadow  = (latCos * earSign < 0.0f) ? (1.0f - 0.14f * std::abs (latCos)) : 1.0f;
+                const float g = spec.erGain * wall * shadow / std::max (0.6f, dist);
+                // 高次ほど高域が死ぬ→サンプル1本でなく2本に割ってなまらせる（反対耳は頭部遮蔽でさらに丸める）
                 std::vector<float>& ch = (ear == 0 ? out.L : out.R);
-                const float soft = std::min (0.85f, 0.12f * (float) bounces);
+                const float pinnaSoft = (latCos * earSign < 0.0f) ? 0.08f * std::abs (latCos) : 0.0f;
+                const float soft = std::min (0.88f, 0.12f * (float) bounces + pinnaSoft);
                 ch[(size_t) idx] += g * (1.0f - soft);
                 if (idx + 1 < N) ch[(size_t) idx + 1] += g * soft;
             }
         }
     }
 
-    // ---- 2) 帯域別に減衰するノイズテール ------------------------------------
+    // ---- 2) 帯域別に減衰するノイズテール（8kHz シルク空気帯域を含む7帯域） --
     {
-        static const double bandHz[6] = { 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0 };
+        static const double bandHz[7] = { 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0 };
         const int tailStart = isPlate ? (int) (0.004 * sr)
                                       : (int) (std::min (0.030f, spec.tailSec * 0.25f) * sr);
-        for (int band = 0; band < 6; ++band)
+        for (int band = 0; band < 7; ++band)
         {
             GenBiquad bpL, bpR;
-            const double q = 0.9;
+            const double q = (band == 6) ? 0.85 : 0.9;
             bpL.bandpass (bandHz[band], q, sr);
             bpR.bandpass (bandHz[band], q, sr);
             Rng rngL ((uint32_t) (roomIndex * 7919 + band * 131 + 17));
             Rng rngR ((uint32_t) (roomIndex * 7919 + band * 131 + 9173));
 
-            // RT60 → 1サンプルごとの減衰
-            const double rt = std::max (0.05f, spec.rt60[band]);
+            // RT60 → 1サンプルごとの減衰（8kHz帯は空気吸収により4kHz帯の0.78倍で自然減衰）
+            const float rtSpec = (band < 6) ? spec.rt60[band] : (spec.rt60[5] * 0.78f);
+            const double rt = std::max (0.05f, rtSpec);
             const double decay = std::pow (10.0, -3.0 / (rt * sr));
-            double envL = 1.0, envR = 1.0;
+            double envL = (band == 6) ? 0.55 : 1.0;
+            double envR = (band == 6) ? 0.55 : 1.0;
 
             // 密度の立ち上がり（部屋は徐々に密になる。プレートは最初から密）
             const double densRamp = isPlate ? 0.002 : 0.020;
@@ -298,7 +304,7 @@ inline void generateRoomIr (int roomIndex, double sr, GeneratedIr& out)
                 float wL = bpL.tick (rngL.gauss());
                 float wR0 = bpR.tick (rngR.gauss());
                 // 低音側は左右を混ぜて自然な相関を残す
-                const float mixCorr = spec.lowCorr * (band < 2 ? 1.0f : (band == 2 ? 0.5f : 0.15f));
+                const float mixCorr = spec.lowCorr * (band < 2 ? 1.0f : (band == 2 ? 0.5f : (band < 6 ? 0.15f : 0.05f)));
                 const float wR = wR0 * (1.0f - mixCorr) + wL * mixCorr;
                 out.L[(size_t) n] += (float) (wL * envL * ramp);
                 out.R[(size_t) n] += (float) (wR * envR * ramp);
@@ -351,7 +357,7 @@ inline void generateRoomIr (int roomIndex, double sr, GeneratedIr& out)
         const double cap = 3.5;   // ≈ +10.9dB
         if (hMax > cap)
         {
-            const float g2 = (float) (cap / hMax);
+            const float g2 = std::max (0.64f, (float) (cap / hMax));
             for (int n = 0; n < N; ++n) { out.L[(size_t) n] *= g2; out.R[(size_t) n] *= g2; }
         }
     }
@@ -377,6 +383,8 @@ public:
     //   上半分は「書いているが誰も読まない」死んだメモリだった。
     //   257/512 に詰めて、記憶容量をほぼ半分にする。音は1サンプルも変わらない。
     static constexpr int NBINS = NFFT / 2 + 1;   // 257
+    static constexpr int kCustomSlotA = kNumRooms;
+    static constexpr int kCustomSlotB = kNumRooms + 1;
 
     // 全部屋ぶんのスペクトルを prepare で作り置き。実行時の切替は瞬間・確保ゼロ。
     void prepare (double sampleRate, int /*maxBlock*/)
@@ -390,53 +398,25 @@ public:
         fft.prepare (FFT_ORDER);
 
         roomData.clear();
-        roomData.resize (kNumRooms);
-        maxParts = 0;
+        roomData.resize (kNumRooms + 2);
+        maxParts = std::max (1, ((int) std::lround (3.0 * sr) - B + B - 1) / B);
 
         GeneratedIr ir;
-        std::vector<float> re ((size_t) NFFT), im ((size_t) NFFT);
         for (int room = 0; room < kNumRooms; ++room)
         {
             generateRoomIr (room, sr, ir);
-            RoomData& rd = roomData[(size_t) room];
+            buildRoomSlot (roomData[(size_t) room], ir.L.data(), ir.R.data(), ir.lengthSamples);
+            maxParts = std::max (maxParts, roomData[(size_t) room].numParts);
+        }
 
-            // 先頭 B サンプル = 直接FIR（ゼロ遅延の要）。
-            // ★逆順で持つ: y = Σ h[t]·x[n-t] を「前向き×前向き」の内積にして
-            //   コンパイラの自動ベクトル化(SIMD)に乗せる。
-            rd.headRevL.assign ((size_t) B, 0.0f);
-            rd.headRevR.assign ((size_t) B, 0.0f);
-            for (int n = 0; n < B && n < ir.lengthSamples; ++n)
-            {
-                rd.headRevL[(size_t) (B - 1 - n)] = ir.L[(size_t) n];
-                rd.headRevR[(size_t) (B - 1 - n)] = ir.R[(size_t) n];
-            }
-
-            // 残り = B ごとのパーティションを周波数領域へ
-            const int tail = std::max (0, ir.lengthSamples - B);
-            rd.numParts = (tail + B - 1) / B;
-            rd.spec.assign ((size_t) std::max (1, rd.numParts) * NBINS * 4, 0.0f);
-            for (int p = 0; p < rd.numParts; ++p)
-            {
-                for (int chn = 0; chn < 2; ++chn)
-                {
-                    const std::vector<float>& src = (chn == 0 ? ir.L : ir.R);
-                    std::fill (re.begin(), re.end(), 0.0f);
-                    std::fill (im.begin(), im.end(), 0.0f);
-                    for (int n = 0; n < B; ++n)
-                    {
-                        const int k = B + p * B + n;
-                        if (k < ir.lengthSamples) re[(size_t) n] = src[(size_t) k];
-                    }
-                    fft.run (re.data(), im.data(), false);
-                    float* dst = rd.spec.data() + ((size_t) p * NBINS * 4) + (size_t) chn * NBINS * 2;
-                    for (int k2 = 0; k2 < NBINS; ++k2)
-                    {
-                        dst[(size_t) (2 * k2)]     = re[(size_t) k2];
-                        dst[(size_t) (2 * k2) + 1] = im[(size_t) k2];
-                    }
-                }
-            }
-            maxParts = std::max (maxParts, rd.numParts);
+        // カスタムIR用ダブルバッファ・スロットも事前確保（実行時の再確保を防ぐ）
+        for (int s = kCustomSlotA; s <= kCustomSlotB; ++s)
+        {
+            RoomData& crd = roomData[(size_t) s];
+            crd.headRevL.assign ((size_t) B, 0.0f);
+            crd.headRevR.assign ((size_t) B, 0.0f);
+            crd.numParts = 1;
+            crd.spec.assign ((size_t) std::max (1, maxParts) * NBINS * 4, 0.0f);
         }
 
         // 実行時バッファ（最大の部屋に合わせて1回だけ確保）
@@ -453,7 +433,20 @@ public:
         histL.assign ((size_t) (2 * B), 0.0f); histR.assign ((size_t) (2 * B), 0.0f);
         hopL.assign ((size_t) (2 * B), 0.0f);  hopR.assign ((size_t) (2 * B), 0.0f);
         tailL.assign ((size_t) B, 0.0f);       tailR.assign ((size_t) B, 0.0f);
-        curRoom = 0; pendingRoom = 0; sizeAmt = 1.0f; sizeDirty = true;
+
+        if (hasCustom && ! savedCustomL.empty())
+        {
+            buildRoomSlot (roomData[(size_t) activeCustomSlot],
+                           savedCustomL.data(), savedCustomR.data(), (int) savedCustomL.size());
+            curRoom = activeCustomSlot;
+            pendingRoom = activeCustomSlot;
+        }
+        else
+        {
+            curRoom = lastBuiltInRoom;
+            pendingRoom = lastBuiltInRoom;
+        }
+        sizeAmt = 1.0f; sizeDirty = true;
         reset();
     }
 
@@ -476,13 +469,6 @@ public:
         histPos = 0; hopPos = 0; fdlPos = 0; spreadPart = 1;
 
         // ★入れ替え途中だったら、ここで**やりきる**こと。
-        //   reset() は fadeTarget を 1 に戻すので、pendingRoom != curRoom のまま
-        //   放っておくと「入れ替え待ちなのにフェードは戻ってしまった」状態で固まり、
-        //   同じ部屋を setRoom し直しても（room == pendingRoom なので）どちらの
-        //   分岐にも入らず、**その部屋には一生切り替わらない**。
-        //   prepareToPlay が切替の最中に呼ばれると実際にこれが起きる
-        //   （ホストの再prepare・レート変更・再生開始）。
-        //   履歴を全部ゼロにする場所なので、ここで即座に替えてもプチッと言わない。
         curRoom = pendingRoom;
         fadeGain = 1.0f; fadeTarget = 1.0f;
         if (! partGain.empty()) updatePartGains (true);
@@ -491,10 +477,62 @@ public:
     /** 部屋を選ぶ(0..5)。鳴っている最中でも安全（10msフェードで入れ替え）。 */
     void setRoom (int room) noexcept
     {
-        room = std::min (kNumRooms - 1, std::max (0, room));
-        if (room != curRoom && room != pendingRoom) { pendingRoom = room; fadeTarget = 0.0f; }
-        else if (room == curRoom && pendingRoom != curRoom) { pendingRoom = curRoom; fadeTarget = 1.0f; }
+        lastBuiltInRoom = std::min (kNumRooms - 1, std::max (0, room));
+        const int target = hasCustom ? activeCustomSlot : lastBuiltInRoom;
+        if (target != curRoom && target != pendingRoom) { pendingRoom = target; fadeTarget = 0.0f; }
+        else if (target == curRoom && pendingRoom != curRoom) { pendingRoom = curRoom; fadeTarget = 1.0f; }
     }
+
+    /** 外部ファイル等のカスタム応答波形を読み込み、10msフェードで安全に切り替える。 */
+    bool loadCustomIr (const float* irL, const float* irR, int numSamples)
+    {
+        if (irL == nullptr || numSamples <= 0) return false;
+        const float* srcR = (irR != nullptr) ? irR : irL;
+        const double useSr = (sr > 8000.0) ? sr : 48000.0;
+        const int maxLen = std::max (B * 2, (int) std::lround (3.0 * useSr));
+        const int N = std::min (numSamples, maxLen);
+
+        savedCustomL.assign (irL, irL + N);
+        savedCustomR.assign (srcR, srcR + N);
+
+        // エネルギー正規化（内蔵の部屋と音量感を揃えて耳を守る）
+        double e = 0.0;
+        for (int n = 0; n < N; ++n)
+            e += (double) savedCustomL[(size_t) n] * savedCustomL[(size_t) n]
+               + (double) savedCustomR[(size_t) n] * savedCustomR[(size_t) n];
+        const float normG = (e > 1e-12) ? (float) (0.72 / std::sqrt (e * 0.5)) : 1.0f;
+        for (int n = 0; n < N; ++n)
+        {
+            savedCustomL[(size_t) n] *= normG;
+            savedCustomR[(size_t) n] *= normG;
+        }
+
+        if (roomData.size() >= (size_t) (kCustomSlotB + 1))
+        {
+            const int nextSlot = (curRoom == kCustomSlotA || pendingRoom == kCustomSlotA)
+                ? kCustomSlotB : kCustomSlotA;
+            buildRoomSlot (roomData[(size_t) nextSlot], savedCustomL.data(), savedCustomR.data(), N);
+            activeCustomSlot = nextSlot;
+            hasCustom = true;
+            pendingRoom = activeCustomSlot;
+            fadeTarget = 0.0f;
+        }
+        else
+        {
+            hasCustom = true;
+        }
+        return true;
+    }
+
+    /** カスタム応答を解除し、内蔵の部屋へフェード復帰する。 */
+    void clearCustomIr() noexcept
+    {
+        if (! hasCustom) return;
+        hasCustom = false;
+        setRoom (lastBuiltInRoom);
+    }
+
+    bool isCustomIrActive() const noexcept { return hasCustom; }
 
     /** 部屋の広さ 0..1（revsize をそのまま渡す）。テールの長さを実時間で変える。 */
     void setSize (float amt01) noexcept
@@ -503,29 +541,54 @@ public:
         if (std::abs (a - sizeAmt) > 0.002f) { sizeAmt = a; sizeDirty = true; }
     }
 
-    int  currentRoom() const noexcept { return curRoom; }
+    int  currentRoom() const noexcept { return hasCustom ? lastBuiltInRoom : std::min (kNumRooms - 1, curRoom); }
 
     /** 部屋の減衰カーブ（画面用）。0..1 の縦値を nPoints ぶん詰める。 */
     void getDecayCurve (int room, float* dest, int nPoints) const
     {
-        room = std::min (kNumRooms - 1, std::max (0, room));
-        if (roomData.empty() || nPoints <= 0) return;
-        const RoomData& rd = roomData[(size_t) room];
+        if (dest == nullptr || nPoints <= 0) return;
+        const int rClamped = std::min (kNumRooms - 1, std::max (0, room));
+        if (roomData.empty())
+        {
+            const RoomSpec& sp = rooms()[(size_t) rClamped];
+            const float rt = std::max (0.12f, 0.5f * (sp.rt60[2] + sp.rt60[3]) * (0.25f + 0.75f * sizeAmt));
+            for (int i = 0; i < nPoints; ++i)
+            {
+                const float t = (float) i / (float) std::max (1, nPoints - 1) * sp.tailSec;
+                dest[(size_t) i] = std::exp (-3.45f * t / rt);
+            }
+            return;
+        }
+        const int idx = (hasCustom && activeCustomSlot < (int) roomData.size() && roomData[(size_t) activeCustomSlot].numParts > 0)
+            ? activeCustomSlot
+            : rClamped;
+        const RoomData& rd = roomData[(size_t) idx];
+        if (rd.numParts <= 0)
+        {
+            for (int i = 0; i < nPoints; ++i) dest[(size_t) i] = 0.0f;
+            return;
+        }
+        const float shrink = 1.0f - sizeAmt;
+        const float perPart = shrink * shrink * 0.55f * (float) (48000.0 / std::max (8000.0, sr));
         for (int i = 0; i < nPoints; ++i)
         {
             const int p0 = (int) ((int64_t) i * rd.numParts / std::max (1, nPoints));
             float e = 0.0f;
             if (p0 < rd.numParts)
             {
+                const float g = std::exp (-perPart * (float) p0);
                 const float* sp = rd.spec.data() + (size_t) p0 * NBINS * 4;
-                for (int k = 0; k < NBINS * 2; k += 16) e += sp[(size_t) k] * sp[(size_t) k];
+                for (int k = 0; k < NBINS * 2; k += 8) e += sp[(size_t) k] * sp[(size_t) k];
+                e *= (g * g);
             }
-            dest[(size_t) i] = e;
+            dest[(size_t) i] = std::sqrt (std::max (0.0f, e));
         }
+        for (int i = nPoints - 2; i >= 0; --i)
+            dest[(size_t) i] = std::max (dest[(size_t) i], dest[(size_t) (i + 1)] * 0.96f);
         float mx = 1e-12f;
         for (int i = 0; i < nPoints; ++i) mx = std::max (mx, dest[(size_t) i]);
         for (int i = 0; i < nPoints; ++i)
-            dest[(size_t) i] = std::sqrt (dest[(size_t) i] / mx);
+            dest[(size_t) i] = dest[(size_t) i] / mx;
     }
 
     /** wet インプレース処理。L/R は同じ長さ n。★この中で確保しない。 */
@@ -627,6 +690,52 @@ private:
         std::vector<float> spec;   // numParts × [L(re,im)×NFFT | R(re,im)×NFFT]
         int numParts = 0;
     };
+
+    void buildRoomSlot (RoomData& rd, const float* srcL, const float* srcR, int lengthSamples)
+    {
+        rd.headRevL.assign ((size_t) B, 0.0f);
+        rd.headRevR.assign ((size_t) B, 0.0f);
+        for (int n = 0; n < B && n < lengthSamples; ++n)
+        {
+            rd.headRevL[(size_t) (B - 1 - n)] = srcL[n];
+            rd.headRevR[(size_t) (B - 1 - n)] = srcR[n];
+        }
+
+        const int tail = std::max (0, lengthSamples - B);
+        int np = (tail + B - 1) / B;
+        if (maxParts > 0) np = std::min (np, maxParts);
+        rd.numParts = np;
+        const size_t needed = (size_t) std::max (1, np) * NBINS * 4;
+        if (rd.spec.size() < needed)
+            rd.spec.assign (needed, 0.0f);
+        else
+            std::fill (rd.spec.begin(), rd.spec.begin() + (ptrdiff_t) needed, 0.0f);
+
+        std::vector<float> re ((size_t) NFFT, 0.0f), im ((size_t) NFFT, 0.0f);
+        Fft localFft;
+        localFft.prepare (FFT_ORDER);
+        for (int p = 0; p < rd.numParts; ++p)
+        {
+            for (int chn = 0; chn < 2; ++chn)
+            {
+                const float* src = (chn == 0 ? srcL : srcR);
+                std::fill (re.begin(), re.end(), 0.0f);
+                std::fill (im.begin(), im.end(), 0.0f);
+                for (int n = 0; n < B; ++n)
+                {
+                    const int k = B + p * B + n;
+                    if (k < lengthSamples) re[(size_t) n] = src[k];
+                }
+                localFft.run (re.data(), im.data(), false);
+                float* dst = rd.spec.data() + ((size_t) p * NBINS * 4) + (size_t) chn * NBINS * 2;
+                for (int k2 = 0; k2 < NBINS; ++k2)
+                {
+                    dst[(size_t) (2 * k2)]     = re[(size_t) k2];
+                    dst[(size_t) (2 * k2) + 1] = im[(size_t) k2];
+                }
+            }
+        }
+    }
 
     // 広さツマミ → パーティションごとの目標ゲイン。
     // ★即時に飛ばすとテールが段差でプチッと言う（実測0.62）。ホップごとに
@@ -750,6 +859,7 @@ private:
     Fft fft;
     std::vector<RoomData> roomData;
     int maxParts = 0;
+    std::vector<float> savedCustomL, savedCustomR;
 
     std::vector<float> fdlRe, fdlIm, fdlReR, fdlImR;
     std::vector<float> accRe, accIm, accReR, accImR;
@@ -761,6 +871,9 @@ private:
 
     int histPos = 0, hopPos = 0, fdlPos = 0, spreadPart = 1;
     int curRoom = 0, pendingRoom = 0;
+    int lastBuiltInRoom = 0;
+    int activeCustomSlot = kCustomSlotA;
+    bool hasCustom = false;
     float sizeAmt = 1.0f;
     bool  sizeDirty = true;
     float fadeGain = 1.0f, fadeTarget = 1.0f;

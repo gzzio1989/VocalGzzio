@@ -43,19 +43,49 @@ public:
 
     //== メッセージスレッド ==================================================
 
+    static bool isVirtualLoopbackName (const juce::String& n) noexcept
+    {
+        return n.containsIgnoreCase ("SYNCROOM")
+            || n.containsIgnoreCase ("VB-Audio")
+            || n.containsIgnoreCase ("CABLE")
+            || n.containsIgnoreCase ("VoiceMeeter")
+            || n.containsIgnoreCase ("Virtual")
+            || n.containsIgnoreCase ("Loopback")
+            || n.containsIgnoreCase ("BlackHole");
+    }
+
     // 選べる出力先の一覧。ASIO は他アプリと排他になりやすく、メイン出力と
     // 取り合いになるので、ここでは出さない(仮想ケーブルは WASAPI 等に出る)。
+    // v4.6.0: Yamaha SYNCROOM Driver や VB-CABLE 等の仮想ドライバを先頭へ優先配置する。
     juce::StringArray getOutputDeviceNames()
     {
-        juce::StringArray names;
+        juce::StringArray virtualNames, otherNames;
         for (auto* t : adm().getAvailableDeviceTypes())
         {
             if (t->getTypeName().containsIgnoreCase ("ASIO")) continue;
             t->scanForDevices();
             for (const auto& n : t->getDeviceNames (false))     // false = 出力側
-                if (n.isNotEmpty() && ! names.contains (n)) names.add (n);
+            {
+                if (n.isEmpty() || virtualNames.contains (n) || otherNames.contains (n))
+                    continue;
+                if (isVirtualLoopbackName (n))
+                    virtualNames.add (n);
+                else
+                    otherNames.add (n);
+            }
         }
-        return names;
+        virtualNames.addArray (otherNames);
+        return virtualNames;
+    }
+
+    juce::String findPreferredVirtualDevice()
+    {
+        const auto names = getOutputDeviceNames();
+        for (const auto& n : names)
+            if (n.containsIgnoreCase ("SYNCROOM")) return n;
+        for (const auto& n : names)
+            if (isVirtualLoopbackName (n)) return n;
+        return {};
     }
 
     bool start (const juce::String& deviceName, double hostSampleRate)
@@ -121,6 +151,8 @@ public:
     juce::String getLastError() const        { return lastError; }
     double getDeviceSampleRate() const noexcept { return devSr; }
     int  getUnderrunCount() const noexcept   { return underruns.load(); }
+    bool isForceMono() const noexcept        { return forceMono.load (std::memory_order_relaxed); }
+    void setForceMono (bool b) noexcept      { forceMono.store (b, std::memory_order_relaxed); }
 
     void setHostSampleRate (double sr) noexcept { if (sr > 0.0) hostSr = sr; }
 
@@ -194,6 +226,18 @@ private:
             if (sz2 > 0) juce::FloatVectorOperations::copy (dst + sz1, ring.getReadPointer (ch, s2), sz2);
         }
 
+        if (forceMono.load (std::memory_order_relaxed))
+        {
+            auto* a = temp.getWritePointer (0);
+            auto* b = temp.getWritePointer (1);
+            for (int i = 0; i < numIn; ++i)
+            {
+                const float m = 0.5f * (a[i] + b[i]);
+                a[i] = m;
+                b[i] = m;
+            }
+        }
+
         int used = 0;
         if (numOut == 1)
         {
@@ -228,6 +272,7 @@ private:
     juce::LagrangeInterpolator interp[2];
 
     std::atomic<bool> active { false };
+    std::atomic<bool> forceMono { false };
     std::atomic<int>  underruns { 0 };
     double hostSr = 48000.0, devSr = 48000.0, ratioSm = 1.0;
     int    target = 2880;

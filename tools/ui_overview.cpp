@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "PresetDefs.h"
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <cstdio>
 
 static bool containsJapanese (const juce::String& text)
@@ -54,6 +55,7 @@ int main()
     auto setParameter = [&] (const char* id, float value)
     {
         auto* p = processor->apvts.getParameter (id);
+        if (p == nullptr) return;
         p->setValueNotifyingHost (processor->apvts.getParameterRange (id).convertTo0to1 (value));
         view.setOverview (true);
     };
@@ -101,7 +103,7 @@ int main()
            && ! clearNoise->getBounds().intersects (noiseStatus->getBounds()), "learned reset has a dedicated position beside its state");
     std::vector<float> soundSettings;
     for (auto* parameter : processor->getParameters()) soundSettings.push_back (parameter->getValue());
-    for (int theme : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 })
+    for (int theme : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 })
         for (float size : { 1.5f, 1.875f, 2.25f })
         {
             look.setFontScale (size); view.setFontScale (size); view.setThemeMode (theme);
@@ -477,6 +479,153 @@ int main()
                    "bypassing the tone module clears all Argon activity meters");
             proc.releaseResources();
             restored.releaseResources();
+        }
+    }
+    // Verify v4.6.0: Header pills (Center/Mono routing & SYNCROOM external output), Input Centering, Output Mono, and Virtual Device detection
+    {
+        view.setOverview (true);
+        check (view.overviewHelpAt ({ 590, 30 }).isNotEmpty(), "route pill has hover help");
+        check (view.overviewHelpAt ({ 670, 30 }).isNotEmpty(), "stream pill has hover help");
+        const int prevRoute = processor->getInputRouteMode();
+        check (view.handleOverviewMouseDown ({ 590, 30 }), "clicking route pill is handled");
+        check (processor->getInputRouteMode() == (prevRoute + 1) % 5, "headless click on route pill cycles inputRouteMode");
+        processor->setInputRouteMode (0);
+        check (view.handleOverviewMouseDown ({ 670, 30 }), "clicking stream pill is handled");
+
+        // Verify virtual audio driver recognition (Yamaha SYNCROOM Driver, VB-CABLE, VoiceMeeter)
+        check (gz::StreamOut::isVirtualLoopbackName (juce::String::fromUTF8 ("ライン (Yamaha SYNCROOM Driver (WDM))")),
+               "Yamaha SYNCROOM Driver (WDM) is recognized as a preferred virtual audio device");
+        check (gz::StreamOut::isVirtualLoopbackName ("CABLE Input (VB-Audio Virtual Cable)"),
+               "VB-CABLE is recognized as a preferred virtual audio device");
+
+       #if JUCE_WINDOWS
+        {
+            juce::AudioDeviceManager adm;
+            bool hasAsio = false;
+            for (auto* t : adm.getAvailableDeviceTypes())
+                if (t->getTypeName().containsIgnoreCase ("ASIO")) hasAsio = true;
+            check (hasAsio, "Windows Standalone AudioDeviceManager includes ASIO device type");
+        }
+       #endif
+
+        // Verify Input 1 -> Center (L+R) and VST3 Mono Optimization Mode (cluster / VRChat) + 4-channel mirroring
+        auto routeProc = std::make_unique<VocalGzzioProcessor>();
+        routeProc->setPlayConfigDetails (2, 2, 48000.0, 256);
+        routeProc->prepareToPlay (48000.0, 256);
+        routeProc->setInputRouteMode (0); // Auto route in VST3 mode
+        routeProc->setOutputMonoMode (true); // Mono Optimization Mode ON
+        if (auto* p = routeProc->apvts.getParameter ("doubler"))
+            p->setValueNotifyingHost (routeProc->apvts.getParameterRange ("doubler").convertTo0to1 (80.0f));
+        if (auto* p = routeProc->apvts.getParameter ("width"))
+            p->setValueNotifyingHost (routeProc->apvts.getParameterRange ("width").convertTo0to1 (100.0f));
+        if (auto* p = routeProc->apvts.getParameter ("argon_halo"))
+            p->setValueNotifyingHost (routeProc->apvts.getParameterRange ("argon_halo").convertTo0to1 (85.0f));
+        juce::AudioBuffer<float> buf4 (4, 256);
+        juce::MidiBuffer routeMidi;
+        for (int b = 0; b < 10; ++b)
+        {
+            buf4.clear();
+            for (int i = 0; i < 256; ++i)
+                buf4.setSample (0, i, 0.25f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * (float) (b * 256 + i) / 48000.0f));
+            routeProc->processBlock (buf4, routeMidi);
+        }
+        float rms0 = buf4.getRMSLevel (0, 0, 256);
+        float rms1 = buf4.getRMSLevel (1, 0, 256);
+        float rms2 = buf4.getRMSLevel (2, 0, 256);
+        float rms3 = buf4.getRMSLevel (3, 0, 256);
+        check (rms0 > 0.05f && std::abs (rms0 - rms1) < 1.0e-5f,
+               "VST3 Mono Optimization Mode auto-centers single-sided mic and outputs identical L/R with Doubler/Width/Halo active");
+        check (std::abs (rms0 - rms2) < 1.0e-5f && std::abs (rms1 - rms3) < 1.0e-5f,
+               "Centered output is mirrored to extra multi-channel outputs (Out 3/4)");
+        routeProc->releaseResources();
+    }
+    // Verify IR Reverb Acoustic Decay Curve Visualizer, Custom IR WAV Loader, and 1st-Order ADAA saturation
+    {
+        view.setOverview (true);
+        view.setOverviewLayoutMode (0);
+        // In Argon Cockpit (mode 0), overviewCards[2] is at rightX=1102, y=360, spaceRow2 is at y=360+12+88=460, right side around x=1450..1530
+        const juce::Point<int> irPt (1480, 475);
+        check (view.overviewHelpAt (irPt).isNotEmpty(), "IR Reverb capsule in 03 SPACE has hover help");
+        setParameter ("rev_type", 0.0f);
+        check (view.handleOverviewMouseDown (irPt), "clicking IR Reverb capsule in 03 SPACE is handled");
+        check ((int) processor->apvts.getRawParameterValue ("rev_type")->load() >= kHeyaFirst,
+               "clicking IR Reverb capsule switches reverb type to Heya IR room");
+
+        float curve[24] {};
+        processor->getReverbIrCurve (curve, 24);
+        check (curve[0] > 0.1f && curve[0] >= curve[23], "getReverbIrCurve returns a valid acoustic decay envelope");
+
+        // Synthesize a temporary stereo IR WAV file and verify loadCustomIrFile + audio convolution + state persistence
+        auto tmpIrFile = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                             .getChildFile ("vocalgzzio_test_custom_ir.wav");
+        tmpIrFile.deleteFile();
+        {
+            juce::WavAudioFormat wavFormat;
+            std::unique_ptr<juce::FileOutputStream> outStream (tmpIrFile.createOutputStream());
+            if (outStream != nullptr)
+            {
+                std::unique_ptr<juce::AudioFormatWriter> writer (
+                    wavFormat.createWriterFor (outStream.get(), 48000.0, 2, 16, {}, 0));
+                if (writer != nullptr)
+                {
+                    outStream.release();
+                    juce::AudioBuffer<float> irBuf (2, 12000);
+                    unsigned rng = 9001u;
+                    for (int i = 0; i < 12000; ++i)
+                    {
+                        const float env = std::exp (-4.5f * (float) i / 12000.0f);
+                        rng = rng * 1664525u + 1013904223u;
+                        const float nL = ((float) (rng >> 8) / 8388608.0f - 1.0f) * env;
+                        rng = rng * 1664525u + 1013904223u;
+                        const float nR = ((float) (rng >> 8) / 8388608.0f - 1.0f) * env;
+                        irBuf.setSample (0, i, (i == 0 ? 0.8f : 0.0f) + 0.25f * nL);
+                        irBuf.setSample (1, i, (i == 0 ? 0.8f : 0.0f) + 0.25f * nR);
+                    }
+                    writer->writeFromAudioSampleBuffer (irBuf, 0, irBuf.getNumSamples());
+                }
+            }
+        }
+        check (processor->loadCustomIrFile (tmpIrFile), "loadCustomIrFile loads external stereo WAV IR file");
+        check (processor->hasCustomIr() && processor->getCustomIrName().contains ("vocalgzzio_test_custom_ir"),
+               "processor reports active custom IR file name");
+        float customCurve[24] {};
+        processor->getReverbIrCurve (customCurve, 24);
+        check (customCurve[0] > 0.1f, "getReverbIrCurve reflects loaded custom IR envelope");
+
+        // Verify state save/restore persists custom IR
+        juce::MemoryBlock irState;
+        processor->getStateInformation (irState);
+        processor->clearCustomIrFile();
+        check (! processor->hasCustomIr(), "clearCustomIrFile clears custom IR");
+        processor->setStateInformation (irState.getData(), (int) irState.getSize());
+        check (processor->hasCustomIr(), "setStateInformation restores custom IR from saved file path");
+        processor->clearCustomIrFile();
+        tmpIrFile.deleteFile();
+
+        // Verify 1st-Order ADAA saturation (adaaTanh) smoothness & finite output
+        float prevU = 0.0f;
+        bool adaaFinite = true;
+        for (int i = 0; i < 200; ++i)
+        {
+            const float u = 2.5f * std::sin (2.0f * juce::MathConstants<float>::pi * 3100.0f * (float) i / 48000.0f);
+            const float y = gz::argon::VelvetEngine::adaaTanh (u, prevU);
+            if (! std::isfinite (y) || std::abs (y) > 1.001f) adaaFinite = false;
+        }
+        check (adaaFinite, "1st-Order ADAA tanh saturation is bounded and finite across rapid high-frequency swings");
+    }
+    // Verify 5 Couture Cosmetics Colorways (01 Rose, 02 Lilac, 03 Noir, 04 Mint, 05 Peach) one-click switching & cycling
+    {
+        view.setOverview (true);
+        view.setOverviewLayoutMode (1); // V-LIVER STAGE
+        view.setThemeMode (5);
+        check (Palette::isCoutureTheme (view.getThemeMode()) && Palette::coutureIndex (view.getThemeMode()) == 0,
+               "Couture theme 01 Rose starts at index 0");
+        // Clicking ♥LIVER pill ({236 + 1*68 + 20, 30} = {324, 30}) when already in layout 1 cycles through 5 -> 10 -> 11 -> 12 -> 13 -> 5
+        const int expectedCycle[5] = { 10, 11, 12, 13, 5 };
+        for (int step = 0; step < 5; ++step)
+        {
+            check (view.handleOverviewMouseDown ({ 324, 30 }), "clicking ♥LIVER pill in layout 1 is handled");
+            check (view.getThemeMode() == expectedCycle[step], "clicking ♥LIVER pill cycles through all 5 Couture colorways");
         }
     }
     view.setLookAndFeel (nullptr);

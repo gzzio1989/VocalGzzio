@@ -25,8 +25,14 @@ void VocalTuner::refreshLanguage()
 {
     railToggle .setButtonText (language->T ("音程の履歴", "Pitch history"));
     railToggle .setTooltip    (language->rail_tip());
+    railToggle .setColour     (juce::TextButton::buttonColourId,   Palette::panel2);
+    railToggle .setColour     (juce::TextButton::buttonOnColourId, Palette::ice);
+    railToggle .setColour     (juce::TextButton::textColourOffId,  Palette::ink);
+    railToggle .setColour     (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::ice));
     rangeButton.setButtonText (language->range_label());
-    rangeButton.setTooltip (language->range_tip());
+    rangeButton.setTooltip    (language->range_tip());
+    rangeButton.setColour     (juce::TextButton::buttonColourId,   rangeChecking ? Palette::salmon : Palette::panel2);
+    rangeButton.setColour     (juce::TextButton::textColourOffId,  Palette::ink);
     const int reference = refPitchBox.getSelectedId();
     refPitchBox.clear (juce::dontSendNotification);
     for (int hz = 415; hz <= 445; ++hz)
@@ -512,10 +518,24 @@ void VocalTuner::timerCallback()
 void VocalTuner::paint (juce::Graphics& g)
 {
     const auto full = getLocalBounds().toFloat();
-    g.setColour (Palette::panel);
-    g.fillRoundedRectangle (full, 14.0f);
-    g.setColour (Palette::panelLn);
-    g.drawRoundedRectangle (full.reduced (0.5f), 14.0f, 1.0f);
+    const bool lightTheme = Palette::panel.getPerceivedBrightness() > 0.55f;
+    if (lightTheme)
+    {
+        g.setGradientFill (juce::ColourGradient (Palette::panel, 0.0f, full.getY(),
+                                                 Palette::panel2.interpolatedWith (Palette::panel, 0.45f), 0.0f, full.getBottom(), false));
+        g.fillRoundedRectangle (full, 14.0f);
+        g.setColour (Palette::panelLn.darker (0.08f));
+        g.drawRoundedRectangle (full.reduced (0.8f), 14.0f, 1.5f);
+        g.setColour (juce::Colours::white.withAlpha (0.85f));
+        g.drawRoundedRectangle (full.reduced (2.4f), 12.5f, 1.0f);
+    }
+    else
+    {
+        g.setColour (Palette::panel);
+        g.fillRoundedRectangle (full, 14.0f);
+        g.setColour (Palette::panelLn);
+        g.drawRoundedRectangle (full.reduced (0.5f), 14.0f, 1.0f);
+    }
 
     float fs = 1.0f;
     if (auto* look = dynamic_cast<GzzioLnF*> (&getLookAndFeel()))
@@ -1611,9 +1631,9 @@ private:
 };
 
 //==============================================================================
-// v2.2.0 配信出力パネル(単体起動版のみ)。処理後の音を「もう1つの出力先」へ
-// 同時に流し、OBS 等で拾えるようにする。仮想オーディオデバイス(VB-CABLE 等)を
-// 選ぶ想定。ASIO は他アプリと排他になりやすいので一覧に出していない。
+// v2.2.0 / v4.6.0 外部出力ブリッジパネル(SYNCROOM / VB-CABLE / OBS 同時出力)。
+// 処理後の音を「もう1つの出力先(Yamaha SYNCROOM Driver や VB-CABLE 等)」へ
+// 同時に流し、ASIO でインターフェースを掴んだまま SYNCROOM や OBS へ音を渡す。
 class StreamOutPanel : public juce::Component, private juce::Timer
 {
     std::shared_ptr<tip::Language> language;
@@ -1630,6 +1650,16 @@ public:
         onButton.onClick = [this] { apply(); };
         addAndMakeVisible (onButton);
 
+        monoButton.setClickingTogglesState (true);
+        monoButton.setButtonText (language->T ("中央寄せ(モノラル)で送る", "Send centered mono"));
+        monoButton.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+        monoButton.setToggleState (processor.getStreamOut().isForceMono(), juce::dontSendNotification);
+        monoButton.onClick = [this]
+        {
+            processor.getStreamOut().setForceMono (monoButton.getToggleState());
+        };
+        addAndMakeVisible (monoButton);
+
         devLabel.setText (language->so_dev(), juce::dontSendNotification);
         devLabel.setColour (juce::Label::textColourId, Palette::ink);
         addAndMakeVisible (devLabel);
@@ -1638,7 +1668,9 @@ public:
         for (int i = 0; i < names.size(); ++i) devBox.addItem (names[i], i + 1);
         if (names.isEmpty()) { devBox.addItem (language->so_none(), 1); devBox.setEnabled (false); onButton.setEnabled (false); }
         {
-            const auto wanted = processor.getStreamDeviceWanted();
+            auto wanted = processor.getStreamDeviceWanted();
+            if (wanted.isEmpty())
+                wanted = processor.getStreamOut().findPreferredVirtualDevice();
             const int idx = names.indexOf (wanted);
             devBox.setSelectedId (idx >= 0 ? idx + 1 : 1, juce::dontSendNotification);
         }
@@ -1649,11 +1681,17 @@ public:
         status.setColour (juce::Label::textColourId, Palette::inkSoft);
         addAndMakeVisible (status);
 
-        hint.setText (language->so_hint(), juce::dontSendNotification);
+        hint.setText (language->T (
+            "出力先に「Yamaha SYNCROOM Driver (WDM)」や「CABLE Input (VB-CABLE)」を選ぶと、\n"
+            "メインのオーディオインターフェース(ASIO)で自分の声を聴きながら、SYNCROOM・OBS・Discord 等の\n"
+            "マイク入力へ処理後の声を直接流し込めます（SYNCROOM や VB-CABLE が入っていればすぐ使えます）。",
+            "Select 'Yamaha SYNCROOM Driver (WDM)' or 'CABLE Input (VB-CABLE)' to bridge processed audio\n"
+            "directly into SYNCROOM, OBS, or Discord while keeping your main interface on low-latency ASIO."),
+            juce::dontSendNotification);
         hint.setColour (juce::Label::textColourId, Palette::inkSoft);
         addAndMakeVisible (hint);
 
-        setSize (520, 150);
+        setSize (540, 194);
         refresh();
         startTimerHz (4);
     }
@@ -1672,8 +1710,10 @@ public:
     {
         auto b = getLocalBounds().reduced (10);
         auto row1 = b.removeFromTop (30);
-        onButton.setBounds (row1.removeFromLeft (150));
-        row1.removeFromLeft (10);
+        onButton.setBounds (row1.removeFromLeft (140));
+        row1.removeFromLeft (8);
+        monoButton.setBounds (row1.removeFromLeft (186));
+        row1.removeFromLeft (8);
         status.setBounds (row1);
         b.removeFromTop (8);
         auto row2 = b.removeFromTop (28);
@@ -1709,11 +1749,162 @@ private:
 
     GzzioLnF ownLnf;                        // 子より後に破棄されるよう先頭に置く
     VocalGzzioProcessor& processor;
-    juce::TextButton onButton;
+    juce::TextButton onButton, monoButton;
     juce::Label devLabel, status, hint;
     juce::ComboBox devBox;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StreamOutPanel)
+};
+
+//==============================================================================
+// v4.6.0 モノラル最適化モード（cluster / VRChat 対応・VST3＆単体共通）＋ マイク中央寄せパネル
+class RouteOutPanel : public juce::Component, private juce::Timer
+{
+    std::shared_ptr<tip::Language> language;
+public:
+    explicit RouteOutPanel (VocalGzzioProcessor& p, std::shared_ptr<tip::Language> value)
+        : language (std::move (value)), processor (p)
+    {
+        ownLnf.refreshPaletteColours();
+        setLookAndFeel (&ownLnf);
+
+        titleLabel.setText (language->T ("🎯 モノラル最適化モード (cluster / VRChat 対応) ＆ マイク中央寄せ設定",
+                                         "Mono Optimization Mode (cluster / VRChat) & Mic Input Centering"),
+                            juce::dontSendNotification);
+        titleLabel.setColour (juce::Label::textColourId, Palette::ink);
+        addAndMakeVisible (titleLabel);
+
+        outMonoBtn.setClickingTogglesState (true);
+        outMonoBtn.setButtonText (language->T ("🌐 モノラル最適化モード ON/OFF（cluster・VRChat・通話用 ／ VST3・単体共通）",
+                                               "Mono Optimization Mode ON/OFF (for cluster / VRChat / Mono Apps - VST3 & Standalone)"));
+        outMonoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+        outMonoBtn.setToggleState (processor.getOutputMonoMode(), juce::dontSendNotification);
+        outMonoBtn.onClick = [this]
+        {
+            processor.setOutputMonoMode (outMonoBtn.getToggleState());
+            refresh();
+        };
+        addAndMakeVisible (outMonoBtn);
+
+        monoDescLabel.setText (language->T (
+            "※ONにすると: ①VST3版でも片耳マイクを自動中央寄せ ②逆相の広がり(Width/Halo)による位相干渉(シュワシュワ感)を自動カット\n"
+            "③かさね(Doubler)・ハモリを同相センター化してモノラルでも太く明瞭に ④出力1/2(および3/4)へ完全同一のモノラル波形を出力します。",
+            "When ON: (1) Auto-centers single-sided mic in VST3 & Standalone, (2) Eliminates Haas stereo comb-filtering,\n"
+            "(3) Centers Doubler & Harmony in-phase for thick mono vocals, (4) Outputs identical dual-mono on all output pairs."),
+            juce::dontSendNotification);
+        monoDescLabel.setColour (juce::Label::textColourId, Palette::inkSoft);
+        addAndMakeVisible (monoDescLabel);
+
+        const char* ja[5] = {
+            "マイク入力: 自動（片耳マイクを自動で中央 L+R へ）",
+            "マイク入力: 入力1 (左・Mic 1) を中央 (L+R) へ固定",
+            "マイク入力: 入力2 (右・Mic 2) を中央 (L+R) へ固定",
+            "マイク入力: 入力1 + 入力2 を合成して中央 (L+R) へ配置",
+            "マイク入力: そのまま（ステレオ 1+2 分離）"
+        };
+        const char* en[5] = {
+            "Mic Input: Auto (Center active single-sided mic to L+R)",
+            "Mic Input: Center Input 1 (Left / Mic 1) to L+R",
+            "Mic Input: Center Input 2 (Right / Mic 2) to L+R",
+            "Mic Input: Sum Input 1 + Input 2 to Center (L+R)",
+            "Mic Input: Stereo 1+2 (Keep L/R separate)"
+        };
+        for (int i = 0; i < 5; ++i)
+        {
+            auto& b = routeBtns[(size_t) i];
+            b.setClickingTogglesState (true);
+            b.setRadioGroupId (4601);
+            b.setButtonText (language->T (ja[i], en[i]));
+            b.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+            b.setToggleState (processor.getInputRouteMode() == i, juce::dontSendNotification);
+            b.onClick = [this, i]
+            {
+                if (routeBtns[(size_t) i].getToggleState())
+                {
+                    processor.setInputRouteMode (i);
+                    refresh();
+                }
+            };
+            addAndMakeVisible (b);
+        }
+
+        statusLabel.setColour (juce::Label::textColourId, Palette::inkSoft);
+        addAndMakeVisible (statusLabel);
+
+        setSize (560, 310);
+        refresh();
+        startTimerHz (5);
+    }
+
+    ~RouteOutPanel() override { setLookAndFeel (nullptr); }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.setColour (Palette::panel);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), 6.0f);
+        g.setColour (Palette::panelLn);
+        g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 6.0f, 1.0f);
+    }
+
+    void resized() override
+    {
+        auto b = getLocalBounds().reduced (10);
+        titleLabel.setBounds (b.removeFromTop (24));
+        b.removeFromTop (4);
+        outMonoBtn.setBounds (b.removeFromTop (32));
+        b.removeFromTop (2);
+        monoDescLabel.setBounds (b.removeFromTop (38));
+        b.removeFromTop (6);
+        for (int i = 0; i < 5; ++i)
+        {
+            routeBtns[(size_t) i].setBounds (b.removeFromTop (28));
+            b.removeFromTop (4);
+        }
+        b.removeFromTop (2);
+        statusLabel.setBounds (b);
+    }
+
+private:
+    void timerCallback() override { refresh(); }
+
+    void refresh()
+    {
+        const int mode = processor.getInputRouteMode();
+        const int autoCh = processor.getAutoCenterChannel();
+        juce::String st;
+        if (mode == 0)
+        {
+            if (autoCh == 0)
+                st = language->T ("状態: 自動検出により 入力1(左) のマイクを両耳(中央 L+R)へ出力中",
+                                  "Status: Auto-centering Input 1 (Left) to both L+R");
+            else if (autoCh == 1)
+                st = language->T ("状態: 自動検出により 入力2(右) のマイクを両耳(中央 L+R)へ出力中",
+                                  "Status: Auto-centering Input 2 (Right) to both L+R");
+            else
+                st = language->T ("状態: 自動（片耳だけマイクが来たら自動で中央 L+R に寄せます）",
+                                  "Status: Auto (Centers single-sided mic to L+R automatically)");
+        }
+        else if (mode == 1)
+            st = language->T ("状態: 入力1 (Mic 1) を常に両耳(中央 L+R)へ出力中", "Status: Always centering Input 1 to L+R");
+        else if (mode == 2)
+            st = language->T ("状態: 入力2 (Mic 2) を常に両耳(中央 L+R)へ出力中", "Status: Always centering Input 2 to L+R");
+        else if (mode == 3)
+            st = language->T ("状態: 入力1+2 を合成して両耳(中央 L+R)へ出力中", "Status: Summing Input 1+2 to Center L+R");
+        else
+            st = language->T ("状態: ステレオ 1+2 分離（左右そのまま）", "Status: Stereo 1+2 (Unchanged)");
+
+        if (processor.getOutputMonoMode())
+            st += language->T (" ／ 🌐モノラル最適化(cluster対応): ON", " / Mono Opt (cluster): ON");
+        statusLabel.setText (st, juce::dontSendNotification);
+    }
+
+    GzzioLnF ownLnf;
+    VocalGzzioProcessor& processor;
+    juce::Label titleLabel, monoDescLabel, statusLabel;
+    std::array<juce::TextButton, 5> routeBtns;
+    juce::TextButton outMonoBtn;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RouteOutPanel)
 };
 
 //==============================================================================
@@ -2868,6 +3059,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         argonOrbX = 0.46f;
         argonOrbY = 0.36f;
         argonActiveTarget = -1;
+        processor.clearCustomIrFile();
         infoText.clear();
         fxInfoText.clear();
         autoSetupMsg.clear();
@@ -3334,8 +3526,27 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     b->onClick = [this, i] { ow.chooseTheme (i); refresh(); };
                     addAndMakeVisible (b);
                 }
+
+                // ---- 💄 クチュール・コスメ 5色ワンタッチ切替パレット ----
+                labCouture.setText (language->T ("💄 ライバー・コスメ配色 (ワンタッチ切替)", "💄 Couture Cosmetics Colorways (1-Click)"),
+                                    juce::dontSendNotification);
+                labCouture.getProperties().set ("fontH", 15.5);
+                labCouture.getProperties().set ("bold", true);
+                addAndMakeVisible (labCouture);
+                static const char* const kCoutureJa[5] = { "01 ロゼ", "02 氷紫", "03 黒薔薇", "04 ミント", "05 白桃" };
+                static const char* const kCoutureEn[5] = { "01 Rose", "02 Lilac", "03 Noir", "04 Mint", "05 Peach" };
+                for (int c = 0; c < 5; ++c)
+                {
+                    const int modeId = Palette::themeOfCouture (c);
+                    auto* cb = coutureBtns.add (new juce::TextButton (language->T (kCoutureJa[c], kCoutureEn[c])));
+                    cb->setClickingTogglesState (true);
+                    cb->setRadioGroupId (7802);
+                    cb->onClick = [this, modeId] { ow.setThemeMode (modeId); refresh(); };
+                    addAndMakeVisible (cb);
+                }
+
                 refresh();
-                setSize (420, 352);   // テーマ9種（3×3グリッド）＋下部2スイッチが収まる高さ
+                setSize (420, 428);   // テーマ9種＋クチュール5色パレット＋下部2スイッチが収まる高さ
             }
 
             // テーマを変えると Palette が丸ごと入れ替わるので、色も名前も貼り直す。
@@ -3352,6 +3563,26 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     b->setColour (juce::TextButton::textColourOffId,  Palette::ink);
                     b->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::yellow));
                 }
+                static const char* const kCoutureJa[5] = { "01 ロゼ", "02 氷紫", "03 黒薔薇", "04 ミント", "05 白桃" };
+                static const char* const kCoutureEn[5] = { "01 Rose", "02 Lilac", "03 Noir", "04 Mint", "05 Peach" };
+                static const juce::uint32 kCoutureAccent[5] = {
+                    0xffdc567e, 0xff7b6ee8, 0xffef5c96, 0xff26a48c, 0xffe67834
+                };
+                for (int c = 0; c < coutureBtns.size(); ++c)
+                {
+                    auto* cb = coutureBtns[c];
+                    const int modeId = Palette::themeOfCouture (c);
+                    const juce::Colour swCol (kCoutureAccent[c]);
+                    cb->setButtonText (language->T (kCoutureJa[c], kCoutureEn[c]));
+                    cb->setToggleState (ow.getThemeMode() == modeId, juce::dontSendNotification);
+                    cb->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
+                    cb->setColour (juce::TextButton::buttonOnColourId, swCol);
+                    cb->setColour (juce::TextButton::textColourOffId,  Palette::ink);
+                    cb->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (swCol));
+                }
+                labCouture.setText (language->T ("💄 ライバー・コスメ配色 (ワンタッチ切替)", "💄 Couture Cosmetics Colorways (1-Click)"),
+                                    juce::dontSendNotification);
+                labCouture.setColour (juce::Label::textColourId, Palette::ink);
                 for (auto* tb : { &showAllBtn, &liteBtn })
                 {
                     tb->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
@@ -3376,6 +3607,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 g.fillAll (Palette::panel);
                 g.setColour (Palette::panelLn.withAlpha (0.6f));
                 g.drawLine (10.0f, 118.0f, 410.0f, 118.0f, 1.0f);
+                g.drawLine (10.0f, 290.0f, 410.0f, 290.0f, 1.0f);
             }
             void resized() override
             {
@@ -3391,14 +3623,17 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     const int row = i / 3;
                     themeBtns[i]->setBounds (10 + col * 135, 154 + row * 44, 130, 38);
                 }
-                showAllBtn.setBounds (10,  294, 196, 38);
-                liteBtn   .setBounds (214, 294, 196, 38);
+                labCouture.setBounds (10, 296, 400, 22);
+                for (int c = 0; c < coutureBtns.size(); ++c)
+                    coutureBtns[c]->setBounds (10 + c * 81, 322, 76, 36);
+                showAllBtn.setBounds (10,  372, 196, 38);
+                liteBtn   .setBounds (214, 372, 196, 38);
             }
         private:
             VocalGzzioContent& ow;
             juce::Slider bigFont, bigZoom;
-            juce::Label  labFont, labZoom, labTheme;
-            juce::OwnedArray<juce::TextButton> themeBtns;
+            juce::Label  labFont, labZoom, labTheme, labCouture;
+            juce::OwnedArray<juce::TextButton> themeBtns, coutureBtns;
             juce::TextButton showAllBtn, liteBtn;
         };
         auto panel = std::make_unique<SizePanel> (*this, fontSlider, zoomSlider);
@@ -6412,12 +6647,67 @@ void VocalGzzioContent::applyThemeToKnobs()
         l->setUseKawaiiFont (pastelTheme());   // rounded font in yuru & V-Liver modes
         const int kStyle = liteMode        ? 5   // ⚡ 軽量モード: 超高速フラットベクターダイヤル
                          : juiceTheme()    ? 1
-                         : themeMode == 5  ? 2   // V-Liver jewel/star dial
+                         : liverTheme()    ? 2   // V-Liver (Couture Cosmetics) jewel/star dial
                          : themeMode == 9  ? 3   // Studio Pro movement dial
                          : themeMode == 6  ? 4   // Cyber Neon dual-ring dial
                                            : 0;
         l->setKnobStyle (kStyle);
     }
+
+    // ★ テーマ切替時に、コンストラクタで固定されていた全ボタンの配色も現在の Palette で一斉更新する
+    //   （これが抜けていたため、うた自動の蛍光ライム色やトーク自動の暗緑色がライバー・ゆるふわ画面に残っていた）
+    const bool lightTheme = Palette::panel.getPerceivedBrightness() > 0.55f;
+    for (auto* ch : getChildren())
+    {
+        if (auto* btn = dynamic_cast<juce::TextButton*> (ch))
+        {
+            btn->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
+            btn->setColour (juce::TextButton::buttonOnColourId, Palette::green);
+            btn->setColour (juce::TextButton::textColourOffId,  Palette::ink);
+            btn->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::green));
+        }
+    }
+
+    songSetupButton.setColour (juce::TextButton::buttonColourId,  Palette::yellow);
+    songSetupButton.setColour (juce::TextButton::textColourOffId, Palette::readableOn (Palette::yellow));
+    autoSetupButton.setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::ice.withAlpha (0.22f));
+    autoSetupButton.setColour (juce::TextButton::textColourOffId, Palette::ink);
+    checkupButton  .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::ice.withAlpha (0.20f));
+    checkupButton  .setColour (juce::TextButton::textColourOffId, Palette::ink);
+    resetButton    .setColour (juce::TextButton::buttonColourId,  Palette::salmon);
+    resetButton    .setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    abA            .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+    abA            .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::yellow));
+    abB            .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+    abB            .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::yellow));
+    sceneSolo      .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+    sceneTalk      .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+    sceneBand      .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+    learnButton    .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::green.withAlpha (0.18f));
+    learnButton    .setColour (juce::TextButton::textColourOffId, Palette::ink);
+    relearnBtn     .setColour (juce::TextButton::buttonOnColourId, Palette::green);
+    crushBtn       .setColour (juce::TextButton::buttonOnColourId, Palette::green);
+    sessionButton  .setColour (juce::TextButton::buttonOnColourId, Palette::green);
+    sessionButton  .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::green));
+    reverbPower    .setColour (juce::TextButton::buttonOnColourId, Palette::green);
+    atOnButton     .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+    jnOnButton     .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+    vcOnButton     .setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+    tabEqButton    .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+    tabFxButton    .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+    tempoFitButton .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
+    keyScaleButton .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::ice.withAlpha (0.18f));
+    analyzeButton  .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
+    midiButton     .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::green.withAlpha (0.18f));
+    streamButton   .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::salmon.withAlpha (0.18f));
+    tapButton      .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
+    for (auto& power : overviewSectionPower)
+    {
+        power.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        power.setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::green));
+    }
+    tuner.refreshLanguage();
+    updateOverviewState();
 
     // Label / Slider text colours are assigned once at construction, so after a
     // theme switch they keep the OLD theme's ink and vanish (e.g. light text on
@@ -6430,7 +6720,7 @@ void VocalGzzioContent::applyThemeToKnobs()
         {
             sl->setColour (juce::Slider::textBoxTextColourId,       Palette::ink);
             sl->setColour (juce::Slider::textBoxOutlineColourId,    Palette::panelLn);
-            sl->setColour (juce::Slider::textBoxBackgroundColourId, Palette::track.withAlpha (0.35f));
+            sl->setColour (juce::Slider::textBoxBackgroundColourId, lightTheme ? juce::Colours::white.withAlpha (0.82f) : Palette::track.withAlpha (0.35f));
         }
         ch->repaint();
     }
@@ -6742,21 +7032,23 @@ void VocalGzzioContent::refreshLanguage()
 
 void VocalGzzioContent::setThemeMode (int m)
 {
-    themeMode = juce::jlimit (0, 9, m);          // 0..9 全テーマ有効 (8=ゆるふわ・よる, 9=スタジオ)
+    themeMode = juce::jlimit (0, 13, m);         // 0..9 + 10..13 (クチュール・コスメ5色展開)
     if (themeMode == 1 || themeMode == 8) yuruNight = (themeMode == 8);
+    if (Palette::isCoutureTheme (themeMode)) lastCoutureTheme = themeMode;
     if (themeMode != 0) lastTheme = themeMode;   // 中央Nトグルの復帰先
 
     // テーマ選択に連動して画面配置アーキテクチャ自体も最適化する（手動固定していない場合）
     if (! overviewLayoutManual)
     {
-        overviewLayoutMode = (themeMode == 5 || themeMode == 1 || themeMode == 8) ? 1  // V-Liver Stage
-                           : (themeMode == 9)                                     ? 2  // Studio Rack
-                                                                                  : 0; // Argon Cockpit
+        overviewLayoutMode = (liverTheme() || themeMode == 1 || themeMode == 8) ? 1  // V-Liver Stage
+                           : (themeMode == 9)                                   ? 2  // Studio Rack
+                                                                                : 0; // Argon Cockpit
     }
 
     Palette::applyTheme (themeMode);             // 7=色覚CUD もそのまま 1:1
-    // v1.9.0: ポップアップ/ツールチップ/ボタンの色をテーマに追随させる
+    // v1.9.0: ポップアップ/ツールチップ/ボタン/コンボボックス内部ラベルの色をテーマに追随させる
     if (auto* g = dynamic_cast<GzzioLnF*> (&getLookAndFeel())) g->refreshPaletteColours();
+    sendLookAndFeelChange();
 
     // ブランド(3)で全UI英語化
     const bool wantEnglish = themeMode == 3;
@@ -6764,6 +7056,7 @@ void VocalGzzioContent::setThemeMode (int m)
 
     themePainter.setMode (themeMode, getLocalBounds());
     applyThemeToKnobs();
+    eqGraph.resized(); // テーマ変更時にスペクトラムグリッド色キャッシュも更新
     // v3.0-c 常設列の色もここで取り直す（スクロールバーも地の色に合わせる）
     pathRail.refreshColours();
     railView.getVerticalScrollBar().setColour (juce::ScrollBar::thumbColourId,
@@ -6881,7 +7174,8 @@ juce::String VocalGzzioContent::themeArmName (int i) const
 
 bool VocalGzzioContent::themeArmSelected (int i) const
 {
-    // ゆるふわの席は ひる(1) と よる(8) のどちらでも「選択中」
+    // ゆるふわの席は ひる(1) と よる(8) のどちらでも「選択中」、ライバーの席はクチュール5色すべてで「選択中」
+    if (i == 5) return liverTheme();
     return (themeMode == kThemeOfChip[i]) || (i == 1 && themeMode == 8);
 }
 
@@ -6895,6 +7189,13 @@ void VocalGzzioContent::chooseTheme (int i)
         const bool inYuru = (themeMode == 1 || themeMode == 8);
         if (inYuru) yuruNight = ! yuruNight;
         setThemeMode (yuruNight ? 8 : 1);
+    }
+    else if (i == 5)
+    {
+        if (liverTheme())
+            setThemeMode (Palette::themeOfCouture ((Palette::coutureIndex (themeMode) + 1) % 5));
+        else
+            setThemeMode (lastCoutureTheme);
     }
     else if (i >= 0 && i < kThemeCount) setThemeMode (kThemeOfChip[i]);
 }
@@ -6954,6 +7255,12 @@ void VocalGzzioContent::mouseDown (const juce::MouseEvent& e)
     if (isOverview() && handleOverviewMouseDown (e.getPosition()))
         return;
 
+    if (! isOverview() && ! revTypeLabArea.isEmpty() && revTypeLabArea.contains (e.getPosition()))
+    {
+        openIrSelectorMenu (localAreaToGlobal (revTypeLabArea));
+        return;
+    }
+
     // v2.12.0: テーマチップ(0..5)は「文字・見た目」の吹き出しへ引っ越したので、
     //          ここに残っているのは 6 =「かんたんモード」スイッチだけ。
     if (crossArea.isEmpty()) return;
@@ -7002,6 +7309,125 @@ void VocalGzzioContent::paintOverChildren (juce::Graphics& g)
     if (isOverview()) return;
 
     drawThemeCross (g);
+}
+
+void VocalGzzioContent::openRoutePopup (juce::Rectangle<int> anchorScreenBounds)
+{
+    if (isShowing())
+    {
+        auto panel = std::make_unique<RouteOutPanel> (processor, language);
+        juce::CallOutBox::launchAsynchronously (std::move (panel), anchorScreenBounds, nullptr);
+    }
+    else
+    {
+        processor.setInputRouteMode ((processor.getInputRouteMode() + 1) % 5);
+    }
+    repaint();
+}
+
+void VocalGzzioContent::openStreamOutPopup (juce::Rectangle<int> anchorScreenBounds)
+{
+    if (isShowing())
+    {
+        auto panel = std::make_unique<StreamOutPanel> (processor, language);
+        juce::CallOutBox::launchAsynchronously (std::move (panel), anchorScreenBounds, nullptr);
+    }
+    repaint();
+}
+
+void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds)
+{
+    auto setRevType = [this] (int idx)
+    {
+        if (auto* p = processor.apvts.getParameter ("rev_type"))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (processor.apvts.getParameterRange ("rev_type").convertTo0to1 ((float) idx));
+            p->endChangeGesture();
+        }
+        if (auto* pOn = processor.apvts.getParameter ("revon"))
+        {
+            if (pOn->getValue() < 0.5f)
+            {
+                pOn->beginChangeGesture();
+                pOn->setValueNotifyingHost (1.0f);
+                pOn->endChangeGesture();
+            }
+        }
+    };
+
+    if (! isShowing())
+    {
+        const int cur = (int) processor.apvts.getRawParameterValue ("rev_type")->load();
+        const int next = (cur < kHeyaFirst) ? (kHeyaFirst + 2)
+                       : (kHeyaFirst + ((cur - kHeyaFirst + 1) % heya::kNumRooms));
+        setRevType (next);
+        repaint();
+        return;
+    }
+
+    juce::PopupMenu menu;
+    menu.addSectionHeader (language->T ("内蔵IR（インパルス応答）空間モデル（6部屋）", "Built-in IR Spaces (6 Rooms)"));
+    const int curType = (int) processor.apvts.getRawParameterValue ("rev_type")->load();
+    for (int r = 0; r < heya::kNumRooms; ++r)
+    {
+        const int idx = kHeyaFirst + r;
+        const bool active = (! processor.hasCustomIr()) && (curType == idx);
+        const juce::String name = juce::String::fromUTF8 (language->english ? heya::rooms()[(size_t) r].nameEn : heya::rooms()[(size_t) r].nameJa);
+        menu.addItem (100 + r, name, true, active);
+    }
+    menu.addSeparator();
+    menu.addSectionHeader (language->T ("外部カスタムIRファイル (.wav / .aiff / .flac)", "External Custom IR File (.wav / .aiff / .flac)"));
+    if (processor.hasCustomIr())
+    {
+        menu.addItem (201, language->T ("使用中の外部IR: ", "Active Custom IR: ") + processor.getCustomIrName(), false, true);
+        menu.addItem (202, language->T ("外部IRを解除して内蔵の部屋へ戻す", "Clear Custom IR & Restore Built-in Room"));
+    }
+    menu.addItem (200, language->T ("外部IR音声ファイルを読み込む...", "Load Custom IR Audio File..."));
+
+    juce::Component::SafePointer<VocalGzzioContent> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (anchorScreenBounds),
+                        [safe, setRevType] (int res)
+    {
+        if (safe == nullptr || res == 0) return;
+        if (res >= 100 && res < 100 + heya::kNumRooms)
+        {
+            safe->processor.clearCustomIrFile();
+            setRevType (kHeyaFirst + (res - 100));
+            safe->repaint();
+        }
+        else if (res == 202)
+        {
+            safe->processor.clearCustomIrFile();
+            safe->overviewHint = safe->language->T ("外部IRを解除し、内蔵IR空間モデルに戻しました。", "Cleared custom IR and restored built-in IR room.");
+            safe->repaint();
+        }
+        else if (res == 200)
+        {
+            safe->chooser = std::make_unique<juce::FileChooser> (
+                safe->language->T ("リバーブ用のIR音声ファイルを選択 (.wav/.aiff/.flac)", "Select Impulse Response Audio File (.wav/.aiff/.flac)"),
+                juce::File(), "*.wav;*.aif;*.aiff;*.flac");
+            const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+            safe->chooser->launchAsync (flags, [safe] (const juce::FileChooser& fc)
+            {
+                if (safe == nullptr) return;
+                const auto f = fc.getResult();
+                if (f.existsAsFile())
+                {
+                    if (safe->processor.loadCustomIrFile (f))
+                    {
+                        safe->overviewHint = safe->language->T ("外部IRファイルを読み込みました: ", "Loaded custom IR file: ") + safe->processor.getCustomIrName();
+                        safe->infoText = safe->overviewHint;
+                    }
+                    else
+                    {
+                        safe->overviewHint = safe->language->T ("IRファイルの読み込みに失敗しました（対応形式: WAV / AIFF / FLAC）。", "Failed to load IR file (supported: WAV / AIFF / FLAC).");
+                    }
+                    safe->repaint();
+                }
+            });
+        }
+    });
 }
 
 //==============================================================================

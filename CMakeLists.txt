@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VocalGzzio VERSION 4.5.0 LANGUAGES C CXX)
+project(VocalGzzio VERSION 4.6.0 LANGUAGES C CXX)
+# 4.6.0: 深層ノイズ＆微弱ハム徹底除去、スタンドアロン片耳マイク自動センター＆モノラル出力、SYNCROOM等の外部仮想デバイス同時出力ブリッジを総合画面へ搭載。
 # 4.5.0: 声芯の調整、自動設定との連携、操作の安全性と配布整合性を改善。
 # ★2026-10-15: 4.3.3 → 4.4.0 (Gemini4Argon Edition: Argon Velvet Engine & 4 Workspace Architectures + Lite Mode)
 # ★2026-08-18: 3.0.0 → 3.1.0。v3.0.0 は 8/13 に GitHub でリリース済みのため、
@@ -164,6 +165,9 @@ target_compile_definitions(VocalGzzio PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0)
+if (WIN32)
+    target_compile_definitions(VocalGzzio PUBLIC JUCE_ASIO=1)
+endif()
 
 option(VOCALGZZIO_BUILD_TESTS "Build the regression checks with CTest" OFF)
 target_link_libraries(VocalGzzio PRIVATE

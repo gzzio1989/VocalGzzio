@@ -364,6 +364,15 @@ public:
         markStateDirty();
     }
 
+    //== v4.6.0 マイク入力の中央寄せルーティング ＆ モノラル出力 ==
+    // route: 0=自動センター(単体起動時)/ステレオ, 1=入力1(左/Mic1)➔中央, 2=入力2(右/Mic2)➔中央,
+    //        3=入力1+2合成➔中央, 4=ステレオ固定(左右独立)
+    int  getInputRouteMode() const noexcept    { return inputRouteMode.load (std::memory_order_relaxed); }
+    void setInputRouteMode (int m) noexcept    { inputRouteMode.store (juce::jlimit (0, 4, m), std::memory_order_relaxed); markStateDirty(); }
+    bool getOutputMonoMode() const noexcept    { return outputMonoMode.load (std::memory_order_relaxed); }
+    void setOutputMonoMode (bool b) noexcept   { outputMonoMode.store (b, std::memory_order_relaxed); markStateDirty(); }
+    int  getAutoCenterChannel() const noexcept { return autoCenterCh.load (std::memory_order_relaxed); }
+
 
     //== v2.10.0 点検 =========================================================
     // ★ここから下はどれも音を作らない。音声スレッドからは呼ばない。
@@ -512,6 +521,14 @@ public:
     float getArgonSilkMeter()   const noexcept { return meterArgonSilk.load (std::memory_order_relaxed); }
     float getArgonHaloMeter()   const noexcept { return meterArgonHalo.load (std::memory_order_relaxed); }
     float getArgonVoicedRatio() const noexcept { return meterArgonVoiced.load (std::memory_order_relaxed); }
+
+    // v4.6.0 へや IRリバーブ: 減衰カーブ取得 & 外部カスタムIR読込
+    bool loadCustomIrFile (const juce::File& file);
+    void clearCustomIrFile();
+    bool hasCustomIr() const noexcept { return heyaRev.isCustomIrActive(); }
+    juce::String getCustomIrName() const;
+    juce::String getCustomIrPath() const;
+    void getReverbIrCurve (float* dest, int nPoints) const noexcept;
 
     // v3.0-c 順番の分岐（案C）。呼ぶ場所を2択にするために関数へ出した2つ。
     //  中身は切り出す前と1行も変えていない（既定の音は bit 一致）。
@@ -684,6 +701,8 @@ private:
     float susEnv = 0.0f;
     float susEnvAtk = 0, susEnvRel = 0;
     float susLift = 0.0f;           // smoothed lift gain (dB)
+    float warmPrevU[2] {};          // 1st-Order ADAA state for Warmth saturation
+    float susPrevU[2] { 0.35f, 0.35f }; // 1st-Order ADAA state for Sustain tube stage
 
     // ---- v2.3.0 ポップ(破裂音) / リップ(口の粘着音) 除去 ----
     // どちらも「平行して走らせたフィルタへ、必要な瞬間だけ滑らかに寄せる」方式。
@@ -924,11 +943,15 @@ private:
     std::atomic<juce::uint32> lastDirtyMs { 0 };
     bool restoringState = false;   // message-thread guard: ignore dirty marks mid-restore
 
-    // ---- v2.2.0 配信出力 ----
+    // ---- v2.2.0 配信出力 ＆ v4.6.0 入出力ルーティング ----
     gz::StreamOut streamOut;
     juce::String  streamDevWanted;
     bool          streamWanted = false;
     bool          suppressDeviceRestore = false;   // A/B切替中は配信先を触らない
+    std::atomic<int>  inputRouteMode { 0 };        // 0=自動センター(単体)/ステレオ, 1=IN1➔中央, 2=IN2➔中央, 3=IN1+2➔中央, 4=ステレオ固定
+    std::atomic<bool> outputMonoMode { false };    // 最終出力も完全モノラル化(L=R=(L+R)/2)
+    std::atomic<int>  autoCenterCh   { 0 };        // 単体起動時の自動センターが現在掴んでいる入力ch (0 or 1)
+    double            inRouteEnergy[2] {};         // 自動センター判定用の平滑エネルギー
     // v2.8.0: A/Bスロット自体を保存するとき、その中にまたA/Bを入れないための札。
     // 入れてしまうと保存が入れ子に増殖して、プロジェクトが開けなくなる。
     bool          omitAbInState = false;
@@ -943,6 +966,9 @@ private:
     // 使わない人にまで毎回払わせないよう、**初めて選ばれたときに1回だけ**用意する。
     // 用意が済むまでは従来のタンク式リバーブが鳴る（無音にはならない）。
     std::atomic<bool> heyaReady  { false };
+    mutable juce::CriticalSection customIrLock;
+    juce::String customIrPath;
+    juce::String customIrName;
     void processMidiSwitches (juce::MidiBuffer& midi);
     void handleAsyncUpdate() override;           // 切替の実行(メッセージスレッド)
 
