@@ -5,6 +5,10 @@
 #include "Tooltips.h"
 #include <cmath>
 #include <cstdlib>   // v1.7.0: std::getenv for the GZ_THEME test hook
+#if JucePlugin_Build_Standalone
+ #include <juce_audio_utils/juce_audio_utils.h>
+ #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#endif
 
 namespace
 {
@@ -1630,10 +1634,11 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
 };
 
+static void launchStandaloneAudioMonoDialog (VocalGzzioProcessor& processor, std::shared_ptr<tip::Language> language);
+
 //==============================================================================
-// v2.2.0 / v4.6.0 外部出力ブリッジパネル(SYNCROOM / VB-CABLE / OBS 同時出力)。
-// 処理後の音を「もう1つの出力先(専用ドライバ VocalGzzio Driver (WDM) 等)」へ
-// 同時に流し、ASIO でインターフェースを掴んだまま OBS・Discord・VRChat・SYNCROOM へ音を渡す。
+// v2.2.0 / v4.6.0 / v4.7.0 外部出力ブリッジパネル(VocalGzzio Driver (WDM) / SYNCROOM / VB-CABLE 同時出力)
+// ＋ 入力・出力のモノラル／ステレオ直結スイッチ＆音声デバイス設定ボタン
 class StreamOutPanel : public juce::Component, private juce::Timer
 {
     std::shared_ptr<tip::Language> language;
@@ -1651,7 +1656,7 @@ public:
         addAndMakeVisible (onButton);
 
         monoButton.setClickingTogglesState (true);
-        monoButton.setButtonText (language->T ("中央寄せ(モノラル)で送る", "Send centered mono"));
+        monoButton.setButtonText (language->T ("配信送出: モノラル", "Stream: Mono"));
         monoButton.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
         monoButton.setToggleState (processor.getStreamOut().isForceMono(), juce::dontSendNotification);
         monoButton.onClick = [this]
@@ -1675,6 +1680,32 @@ public:
         addAndMakeVisible (installDrvButton);
        #endif
 
+        inRouteBtn.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.22f));
+        inRouteBtn.onClick = [this]
+        {
+            processor.setInputRouteMode ((processor.getInputRouteMode() + 1) % 5);
+            refresh();
+        };
+        addAndMakeVisible (inRouteBtn);
+
+        mainOutMonoBtn.setClickingTogglesState (true);
+        mainOutMonoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+        mainOutMonoBtn.setToggleState (processor.getOutputMonoMode(), juce::dontSendNotification);
+        mainOutMonoBtn.onClick = [this]
+        {
+            processor.setOutputMonoMode (mainOutMonoBtn.getToggleState());
+            refresh();
+        };
+        addAndMakeVisible (mainOutMonoBtn);
+
+        audioDevBtn.setButtonText (language->T ("⚙ 音声デバイス・チャンネル設定", "⚙ Audio Device & Channels"));
+        audioDevBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.22f));
+        audioDevBtn.onClick = [this]
+        {
+            launchStandaloneAudioMonoDialog (processor, language);
+        };
+        addAndMakeVisible (audioDevBtn);
+
         devLabel.setText (language->so_dev(), juce::dontSendNotification);
         devLabel.setColour (juce::Label::textColourId, Palette::ink);
         addAndMakeVisible (devLabel);
@@ -1697,7 +1728,7 @@ public:
         hint.setColour (juce::Label::textColourId, Palette::inkSoft);
         addAndMakeVisible (hint);
 
-        setSize (580, 198);
+        setSize (620, 238);
         refresh();
         startTimerHz (4);
     }
@@ -1718,10 +1749,10 @@ public:
         auto row1 = b.removeFromTop (30);
         onButton.setBounds (row1.removeFromLeft (128));
         row1.removeFromLeft (6);
-        monoButton.setBounds (row1.removeFromLeft (176));
+        monoButton.setBounds (row1.removeFromLeft (164));
         row1.removeFromLeft (6);
         status.setBounds (row1);
-        b.removeFromTop (8);
+        b.removeFromTop (6);
         auto row2 = b.removeFromTop (28);
         devLabel.setBounds (row2.removeFromLeft (64));
        #if JUCE_WINDOWS
@@ -1729,6 +1760,13 @@ public:
         row2.removeFromRight (6);
        #endif
         devBox.setBounds (row2);
+        b.removeFromTop (6);
+        auto row3 = b.removeFromTop (30);
+        inRouteBtn.setBounds (row3.removeFromLeft (206));
+        row3.removeFromLeft (6);
+        mainOutMonoBtn.setBounds (row3.removeFromLeft (182));
+        row3.removeFromLeft (6);
+        audioDevBtn.setBounds (row3);
         b.removeFromTop (6);
         hint.setBounds (b);
     }
@@ -1777,11 +1815,34 @@ private:
         if (status.getText() != t) status.setText (t, juce::dontSendNotification);
         if (onButton.getToggleState() != so.isRunning() && ! onButton.getToggleState())
             onButton.setToggleState (so.isRunning(), juce::dontSendNotification);
+
+        const int rMode = juce::jlimit (0, 4, processor.getInputRouteMode());
+        const char* inJa[5] = {
+            "🎤 入力: 自動モノラル (クリックで切替)",
+            "🎤 入力: IN1(左)モノラル (クリックで切替)",
+            "🎤 入力: IN2(右)モノラル (クリックで切替)",
+            "🎤 入力: 1+2合成モノラル (クリックで切替)",
+            "🎤 入力: ステレオ1+2 (クリックで切替)"
+        };
+        const char* inEn[5] = {
+            "Mic In: Auto Mono",
+            "Mic In: Input 1 Mono",
+            "Mic In: Input 2 Mono",
+            "Mic In: 1+2 Sum Mono",
+            "Mic In: Stereo 1+2"
+        };
+        inRouteBtn.setButtonText (language->T (inJa[rMode], inEn[rMode]));
+
+        const bool outM = processor.getOutputMonoMode();
+        mainOutMonoBtn.setToggleState (outM, juce::dontSendNotification);
+        mainOutMonoBtn.setButtonText (outM
+            ? language->T ("🔊 本体出力: モノラル (ON)", "Main Out: Mono (ON)")
+            : language->T ("🔊 本体出力: ステレオ (クリックでモノ化)", "Main Out: Stereo (Click for Mono)"));
     }
 
     GzzioLnF ownLnf;                        // 子より後に破棄されるよう先頭に置く
     VocalGzzioProcessor& processor;
-    juce::TextButton onButton, monoButton, installDrvButton;
+    juce::TextButton onButton, monoButton, installDrvButton, inRouteBtn, mainOutMonoBtn, audioDevBtn;
     juce::Label devLabel, status, hint;
     juce::ComboBox devBox;
 
@@ -1789,56 +1850,77 @@ private:
 };
 
 //==============================================================================
-// v4.6.0 モノラル最適化モード（cluster / VRChat 対応・VST3＆単体共通）＋ マイク中央寄せパネル
+// v4.6.0 / v4.7.0 入力・出力 モノラル／ステレオ切替 ＆ マイク中央寄せパネル
 class RouteOutPanel : public juce::Component, private juce::Timer
 {
     std::shared_ptr<tip::Language> language;
 public:
-    explicit RouteOutPanel (VocalGzzioProcessor& p, std::shared_ptr<tip::Language> value)
-        : language (std::move (value)), processor (p)
+    explicit RouteOutPanel (VocalGzzioProcessor& p, std::shared_ptr<tip::Language> value, bool embeddedInDialog = false)
+        : language (std::move (value)), processor (p), isEmbedded (embeddedInDialog)
     {
         ownLnf.refreshPaletteColours();
         setLookAndFeel (&ownLnf);
 
-        titleLabel.setText (language->T ("🎯 モノラル最適化モード (cluster / VRChat 対応) ＆ マイク中央寄せ設定",
-                                         "Mono Optimization Mode (cluster / VRChat) & Mic Input Centering"),
+        titleLabel.setText (language->T ("🎯 入力・出力のモノラル／ステレオ切替 ＆ マイク設定",
+                                         "Input / Output Mono & Stereo Switch & Mic Routing"),
                             juce::dontSendNotification);
         titleLabel.setColour (juce::Label::textColourId, Palette::ink);
         addAndMakeVisible (titleLabel);
 
+        outSectionLabel.setText (language->T ("■ 出力（スピーカー／ヘッドホン／配信出力）のモノラル・ステレオ切替",
+                                              "Output (Speakers / Headphones / Stream) Mono & Stereo"),
+                                 juce::dontSendNotification);
+        outSectionLabel.setColour (juce::Label::textColourId, Palette::ink);
+        addAndMakeVisible (outSectionLabel);
+
+        outStereoBtn.setClickingTogglesState (true);
+        outStereoBtn.setRadioGroupId (4602);
+        outStereoBtn.setButtonText (language->T ("🔊 出力: ステレオ（通常の立体音響・広がりあり）",
+                                                 "Output: Stereo (Normal 3D spatial stereo)"));
+        outStereoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        outStereoBtn.onClick = [this]
+        {
+            if (outStereoBtn.getToggleState())
+            {
+                processor.setOutputMonoMode (false);
+                refresh();
+            }
+        };
+        addAndMakeVisible (outStereoBtn);
+
         outMonoBtn.setClickingTogglesState (true);
-        outMonoBtn.setButtonText (language->T ("🌐 モノラル最適化モード ON/OFF（cluster・VRChat・通話用 ／ VST3・単体共通）",
-                                               "Mono Optimization Mode ON/OFF (for cluster / VRChat / Mono Apps - VST3 & Standalone)"));
+        outMonoBtn.setRadioGroupId (4602);
+        outMonoBtn.setButtonText (language->T ("🔊 出力: モノラル（左右同一 L=R ／ 通話・cluster・VRChat最適）",
+                                               "Output: Mono (Identical L=R / Best for mono apps)"));
         outMonoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
-        outMonoBtn.setToggleState (processor.getOutputMonoMode(), juce::dontSendNotification);
         outMonoBtn.onClick = [this]
         {
-            processor.setOutputMonoMode (outMonoBtn.getToggleState());
-            refresh();
+            if (outMonoBtn.getToggleState())
+            {
+                processor.setOutputMonoMode (true);
+                refresh();
+            }
         };
         addAndMakeVisible (outMonoBtn);
 
-        monoDescLabel.setText (language->T (
-            "※ONにすると: ①VST3版でも片耳マイクを自動中央寄せ ②逆相の広がり(Width/Halo)による位相干渉(シュワシュワ感)を自動カット\n"
-            "③かさね(Doubler)・ハモリを同相センター化してモノラルでも太く明瞭に ④出力1/2(および3/4)へ完全同一のモノラル波形を出力します。",
-            "When ON: (1) Auto-centers single-sided mic in VST3 & Standalone, (2) Eliminates Haas stereo comb-filtering,\n"
-            "(3) Centers Doubler & Harmony in-phase for thick mono vocals, (4) Outputs identical dual-mono on all output pairs."),
-            juce::dontSendNotification);
-        monoDescLabel.setColour (juce::Label::textColourId, Palette::inkSoft);
-        addAndMakeVisible (monoDescLabel);
+        inSectionLabel.setText (language->T ("■ 入力（マイク）のモノラル・ステレオ切替",
+                                             "Input (Microphone) Mono & Stereo Routing"),
+                                juce::dontSendNotification);
+        inSectionLabel.setColour (juce::Label::textColourId, Palette::ink);
+        addAndMakeVisible (inSectionLabel);
 
         const char* ja[5] = {
-            "マイク入力: 自動（片耳マイクを自動で中央 L+R へ）",
-            "マイク入力: 入力1 (左・Mic 1) を中央 (L+R) へ固定",
-            "マイク入力: 入力2 (右・Mic 2) を中央 (L+R) へ固定",
-            "マイク入力: 入力1 + 入力2 を合成して中央 (L+R) へ配置",
-            "マイク入力: そのまま（ステレオ 1+2 分離）"
+            "🎤 マイク入力: 自動モノラル（片耳マイクを自動検出して両耳中央 L+R へ）",
+            "🎤 マイク入力: 入力1 (左・Mic 1) をモノラル (L+R) へ固定",
+            "🎤 マイク入力: 入力2 (右・Mic 2) をモノラル (L+R) へ固定",
+            "🎤 マイク入力: 入力1 + 入力2 を合成してモノラル (L+R) へ配置",
+            "🎤 マイク入力: ステレオ（入力1=左 / 入力2=右 のまま分離）"
         };
         const char* en[5] = {
-            "Mic Input: Auto (Center active single-sided mic to L+R)",
-            "Mic Input: Center Input 1 (Left / Mic 1) to L+R",
-            "Mic Input: Center Input 2 (Right / Mic 2) to L+R",
-            "Mic Input: Sum Input 1 + Input 2 to Center (L+R)",
+            "Mic Input: Auto Mono (Center active single-sided mic to L+R)",
+            "Mic Input: Input 1 Mono (Center Left / Mic 1 to L+R)",
+            "Mic Input: Input 2 Mono (Center Right / Mic 2 to L+R)",
+            "Mic Input: Sum Input 1 + Input 2 to Mono (L+R)",
             "Mic Input: Stereo 1+2 (Keep L/R separate)"
         };
         for (int i = 0; i < 5; ++i)
@@ -1860,10 +1942,22 @@ public:
             addAndMakeVisible (b);
         }
 
+        if (processor.isStandalone() && ! isEmbedded)
+        {
+            openDevBtn.setButtonText (language->T ("⚙ スタンドアロン 音声デバイス・入出力チャンネル個別設定を開く",
+                                                   "⚙ Open Standalone Audio Device & Individual Channel Settings"));
+            openDevBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.25f));
+            openDevBtn.onClick = [this]
+            {
+                launchStandaloneAudioMonoDialog (processor, language);
+            };
+            addAndMakeVisible (openDevBtn);
+        }
+
         statusLabel.setColour (juce::Label::textColourId, Palette::inkSoft);
         addAndMakeVisible (statusLabel);
 
-        setSize (560, 310);
+        setSize (590, (processor.isStandalone() && ! isEmbedded) ? 356 : 316);
         refresh();
         startTimerHz (5);
     }
@@ -1881,16 +1975,27 @@ public:
     void resized() override
     {
         auto b = getLocalBounds().reduced (10);
-        titleLabel.setBounds (b.removeFromTop (24));
+        titleLabel.setBounds (b.removeFromTop (22));
         b.removeFromTop (4);
-        outMonoBtn.setBounds (b.removeFromTop (32));
+        outSectionLabel.setBounds (b.removeFromTop (20));
         b.removeFromTop (2);
-        monoDescLabel.setBounds (b.removeFromTop (38));
-        b.removeFromTop (6);
+        auto outRow = b.removeFromTop (32);
+        const int halfW = (outRow.getWidth() - 8) / 2;
+        outMonoBtn.setBounds (outRow.removeFromLeft (halfW));
+        outRow.removeFromLeft (8);
+        outStereoBtn.setBounds (outRow);
+        b.removeFromTop (8);
+        inSectionLabel.setBounds (b.removeFromTop (20));
+        b.removeFromTop (2);
         for (int i = 0; i < 5; ++i)
         {
             routeBtns[(size_t) i].setBounds (b.removeFromTop (28));
+            b.removeFromTop (3);
+        }
+        if (processor.isStandalone() && ! isEmbedded)
+        {
             b.removeFromTop (4);
+            openDevBtn.setBounds (b.removeFromTop (32));
         }
         b.removeFromTop (2);
         statusLabel.setBounds (b);
@@ -1903,41 +2008,134 @@ private:
     {
         const int mode = processor.getInputRouteMode();
         const int autoCh = processor.getAutoCenterChannel();
+        const bool outMono = processor.getOutputMonoMode();
+        outMonoBtn.setToggleState (outMono, juce::dontSendNotification);
+        outStereoBtn.setToggleState (! outMono, juce::dontSendNotification);
+        for (int i = 0; i < 5; ++i)
+            routeBtns[(size_t) i].setToggleState (mode == i, juce::dontSendNotification);
+
         juce::String st;
         if (mode == 0)
         {
             if (autoCh == 0)
-                st = language->T ("状態: 自動検出により 入力1(左) のマイクを両耳(中央 L+R)へ出力中",
-                                  "Status: Auto-centering Input 1 (Left) to both L+R");
+                st = language->T ("状態: 自動検出により 入力1(左) のマイクをモノラル中央(L+R)へ出力中",
+                                  "Status: Auto-centering Input 1 (Left) to Mono Center (L+R)");
             else if (autoCh == 1)
-                st = language->T ("状態: 自動検出により 入力2(右) のマイクを両耳(中央 L+R)へ出力中",
-                                  "Status: Auto-centering Input 2 (Right) to both L+R");
+                st = language->T ("状態: 自動検出により 入力2(右) のマイクをモノラル中央(L+R)へ出力中",
+                                  "Status: Auto-centering Input 2 (Right) to Mono Center (L+R)");
             else
-                st = language->T ("状態: 自動（片耳だけマイクが来たら自動で中央 L+R に寄せます）",
-                                  "Status: Auto (Centers single-sided mic to L+R automatically)");
+                st = language->T ("状態: 入力=自動モノラル（片耳マイクを自動で中央 L+R へ寄せます）",
+                                  "Status: Input = Auto Mono (Centers single-sided mic to L+R)");
         }
         else if (mode == 1)
-            st = language->T ("状態: 入力1 (Mic 1) を常に両耳(中央 L+R)へ出力中", "Status: Always centering Input 1 to L+R");
+            st = language->T ("状態: 入力1 (Mic 1) をモノラル中央(L+R)へ固定中", "Status: Input 1 fixed to Mono Center (L+R)");
         else if (mode == 2)
-            st = language->T ("状態: 入力2 (Mic 2) を常に両耳(中央 L+R)へ出力中", "Status: Always centering Input 2 to L+R");
+            st = language->T ("状態: 入力2 (Mic 2) をモノラル中央(L+R)へ固定中", "Status: Input 2 fixed to Mono Center (L+R)");
         else if (mode == 3)
-            st = language->T ("状態: 入力1+2 を合成して両耳(中央 L+R)へ出力中", "Status: Summing Input 1+2 to Center L+R");
+            st = language->T ("状態: 入力1+2 を合成してモノラル中央(L+R)へ出力中", "Status: Summing Input 1+2 to Mono Center (L+R)");
         else
-            st = language->T ("状態: ステレオ 1+2 分離（左右そのまま）", "Status: Stereo 1+2 (Unchanged)");
+            st = language->T ("状態: 入力=ステレオ 1+2 分離（左右そのまま）", "Status: Input = Stereo 1+2 (Unchanged)");
 
-        if (processor.getOutputMonoMode())
-            st += language->T (" ／ 🌐モノラル最適化(cluster対応): ON", " / Mono Opt (cluster): ON");
+        st += outMono
+            ? language->T (" ／ 出力: モノラル (L=R)", " / Output: Mono (L=R)")
+            : language->T (" ／ 出力: ステレオ", " / Output: Stereo");
         statusLabel.setText (st, juce::dontSendNotification);
     }
 
     GzzioLnF ownLnf;
     VocalGzzioProcessor& processor;
-    juce::Label titleLabel, monoDescLabel, statusLabel;
+    bool isEmbedded { false };
+    juce::Label titleLabel, outSectionLabel, inSectionLabel, statusLabel;
     std::array<juce::TextButton, 5> routeBtns;
-    juce::TextButton outMonoBtn;
+    juce::TextButton outMonoBtn, outStereoBtn, openDevBtn;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RouteOutPanel)
 };
+
+//==============================================================================
+// v4.7.0 スタンドアロン専用「音声デバイス ＆ 入出力モノラル／ステレオ・チャンネル個別設定」ウインドウ
+// JUCE標準の SettingsComponent は showChannelsAsStereoPairs = true のため 1+2 ステレオペアしか選べず、
+// また入力／出力のモノラル切替も見つかりにくかった問題を解消する。
+static void launchStandaloneAudioMonoDialog (VocalGzzioProcessor& processor, std::shared_ptr<tip::Language> language)
+{
+   #if JucePlugin_Build_Standalone
+    if (auto* holder = juce::StandalonePluginHolder::getInstance())
+    {
+        class StandaloneAudioMonoDialogContent : public juce::Component
+        {
+        public:
+            StandaloneAudioMonoDialogContent (juce::StandalonePluginHolder& h,
+                                              VocalGzzioProcessor& p,
+                                              std::shared_ptr<tip::Language> lang)
+                : holder (h),
+                  routePanel (p, lang, true),
+                  muteBtn (lang->T ("スピーカー使用時のハウリング防止のためマイク入力を一時ミュートする（ヘッドホン使用時はチェックを外してください）",
+                                    "Mute audio input to prevent speaker feedback loop (uncheck when using headphones)")),
+                  deviceSelector (h.deviceManager,
+                                  0, 16,
+                                  0, 16,
+                                  true,
+                                  (h.processor.get() != nullptr && h.processor->producesMidi()),
+                                  false, // ★ showChannelsAsStereoPairs = false (1chモノラル個別選択を可能にする！)
+                                  false)
+            {
+                ownLnf.refreshPaletteColours();
+                setLookAndFeel (&ownLnf);
+                setOpaque (true);
+
+                addAndMakeVisible (routePanel);
+
+                muteBtn.setClickingTogglesState (true);
+                muteBtn.getToggleStateValue().referTo (holder.getMuteInputValue());
+                addAndMakeVisible (muteBtn);
+
+                addAndMakeVisible (deviceSelector);
+                setSize (620, 740);
+            }
+
+            ~StandaloneAudioMonoDialogContent() override
+            {
+                holder.saveAudioDeviceState();
+                setLookAndFeel (nullptr);
+            }
+
+            void paint (juce::Graphics& g) override
+            {
+                g.fillAll (Palette::bgTop);
+            }
+
+            void resized() override
+            {
+                auto r = getLocalBounds().reduced (10);
+                routePanel.setBounds (r.removeFromTop (316));
+                r.removeFromTop (6);
+                muteBtn.setBounds (r.removeFromTop (28));
+                r.removeFromTop (6);
+                deviceSelector.setBounds (r);
+            }
+
+        private:
+            GzzioLnF ownLnf;
+            juce::StandalonePluginHolder& holder;
+            RouteOutPanel routePanel;
+            juce::ToggleButton muteBtn;
+            juce::AudioDeviceSelectorComponent deviceSelector;
+        };
+
+        juce::DialogWindow::LaunchOptions o;
+        o.content.setOwned (new StandaloneAudioMonoDialogContent (*holder, processor, language));
+        o.dialogTitle                  = language->T ("VocalGzzio 音声デバイス ＆ 入力・出力モノラル／ステレオ設定",
+                                                      "VocalGzzio Audio Device & Input/Output Mono/Stereo Settings");
+        o.dialogBackgroundColour       = Palette::bgTop;
+        o.escapeKeyTriggersCloseButton = true;
+        o.useNativeTitleBar            = true;
+        o.resizable                    = true;
+        o.launchAsync();
+    }
+   #else
+    juce::ignoreUnused (processor, language);
+   #endif
+}
 
 //==============================================================================
 // v3.0-c 「音のとおり道」— 常設のカード列
@@ -3336,6 +3534,18 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     };
     addAndMakeVisible (checkupButton);
 
+    // v4.7.0 入出力モノラル・マイク中央寄せ設定（詳細画面からも常に開けるようにする）
+    routeButton.setButtonText (language->T ("🎯入出力モノ", "I/O MONO"));
+    routeButton.setTooltip (language->T ("マイク入力（自動モノラル／入力1モノラル／入力2モノラル／ステレオ）と、出力（モノラル／ステレオ）を切り替えます。",
+                                         "Switch mic input (Auto Mono, Input 1 Mono, Input 2 Mono, Stereo) and output (Mono / Stereo)."));
+    routeButton.setColour (juce::TextButton::buttonColourId, Palette::blue.withAlpha (0.20f));
+    styleButton (routeButton);
+    routeButton.onClick = [this]
+    {
+        openRoutePopup (routeButton.getScreenBounds());
+    };
+    addChildComponent (routeButton);
+
     // v2.2.0 配信出力(単体起動版のみ。プラグイン版はホストが配線するので出さない)
     streamButton.setButtonText (language->so_btn_label());
     streamButton.setTooltip (language->so_btn_tip());
@@ -4202,6 +4412,7 @@ void VocalGzzioContent::updateTabVisibility()
     charBox.setVisible (fx);
     tapButton.setVisible (fx);
     midiButton.setVisible (fx);     // v2.1.0 MIDIスイッチ設定
+    routeButton.setVisible (fx);    // v4.7.0 入出力モノラル設定
     streamButton.setVisible (fx && processor.isStandalone());   // v2.2.0 配信出力
     lampMega.btn.setVisible (fx);
     lampCho .btn.setVisible (fx);
@@ -4624,6 +4835,42 @@ void VocalGzzioContent::addKnob (Knob& k, const juce::String& paramID, const juc
 
 void VocalGzzioContent::timerCallback()
 {
+   #if JucePlugin_Build_Standalone
+    if (processor.isStandalone())
+    {
+        if (auto* sfw = findParentComponentOfClass<juce::StandaloneFilterWindow>())
+        {
+            const juce::String optTxt = language->T ("⚙ 音声・入出力・モノラル設定", "Audio / Mono I/O");
+            for (int c = 0; c < sfw->getNumChildComponents(); ++c)
+            {
+                if (auto* tb = dynamic_cast<juce::TextButton*> (sfw->getChildComponent (c)))
+                {
+                    if (tb->getButtonText() != optTxt)
+                    {
+                        tb->setButtonText (optTxt);
+                        tb->setSize (198, juce::jmax (20, sfw->getTitleBarHeight() - 8));
+                    }
+                    break;
+                }
+            }
+        }
+        auto& desk = juce::Desktop::getInstance();
+        for (int i = desk.getNumComponents(); --i >= 0;)
+        {
+            if (auto* dw = dynamic_cast<juce::DialogWindow*> (desk.getComponent (i)))
+            {
+                if (dw->getName() == "Audio/MIDI Settings" || dw->getName() == TRANS ("Audio/MIDI Settings"))
+                {
+                    dw->exitModalState (0);
+                    delete dw;
+                    openStandaloneAudioSettings();
+                    break;
+                }
+            }
+        }
+    }
+   #endif
+
     if (isOverview())
     {
         updateOverviewState();
@@ -6499,9 +6746,19 @@ void VocalGzzioContent::resized()
         auto c3 = r3.removeFromLeft (185);
         charBox    .setBounds (c3.getX() + 4, c3.getCentreY() - 28, 168, 26);
         megaTypeBox.setBounds (c3.getX() + 4, c3.getCentreY() + 4, 168, 26);
-        auto mb = r3.removeFromRight (104);            // v2.1.0/v2.2.0 設定ボタン2つ
-        midiButton  .setBounds (mb.getX() + 4, mb.getCentreY() - 28, 96, 26);
-        streamButton.setBounds (mb.getX() + 4, mb.getCentreY() + 2,  96, 26);
+        auto mb = r3.removeFromRight (processor.isStandalone() ? 204 : 104);
+        if (processor.isStandalone())
+        {
+            auto mbR = mb.removeFromRight (100);
+            routeButton .setBounds (mbR.getX() + 2, mbR.getCentreY() - 28, 96, 26);
+            streamButton.setBounds (mbR.getX() + 2, mbR.getCentreY() + 2,  96, 26);
+            midiButton  .setBounds (mb.getX()  + 4, mb.getCentreY() - 28,  96, 26);
+        }
+        else
+        {
+            midiButton  .setBounds (mb.getX() + 4, mb.getCentreY() - 28, 96, 26);
+            routeButton .setBounds (mb.getX() + 4, mb.getCentreY() + 2,  96, 26);
+        }
         placeCells (r3, { &megaAmtK, &roboFreqK, &roboMixK });
 
         // v1.9.0: the framed band now hosts AUTO-TUNE (left) and KEY DETECT (right).
@@ -6731,6 +6988,7 @@ void VocalGzzioContent::applyThemeToKnobs()
     keyScaleButton .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::ice.withAlpha (0.18f));
     analyzeButton  .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
     midiButton     .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::green.withAlpha (0.18f));
+    routeButton    .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.20f));
     streamButton   .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::salmon.withAlpha (0.18f));
     tapButton      .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
     for (auto& power : overviewSectionPower)
@@ -7016,9 +7274,12 @@ void VocalGzzioContent::refreshLanguage()
     pickK.label.setText (language->pick_label(), juce::dontSendNotification);
     pickK.slider.setTooltip (language->pick_tip());
 
-    // v2.1.0/v2.2.0 設定ボタンも言語に追随
+    // v2.1.0/v2.2.0/v4.7.0 設定ボタンも言語に追随
     midiButton.setButtonText (language->midi_btn_label());
     midiButton.setTooltip (language->midi_btn_tip());
+    routeButton.setButtonText (language->T ("🎯入出力モノ", "I/O MONO"));
+    routeButton.setTooltip (language->T ("マイク入力（自動モノラル／入力1モノラル／入力2モノラル／ステレオ）と、出力（モノラル／ステレオ）を切り替えます。",
+                                         "Switch mic input (Auto Mono, Input 1 Mono, Input 2 Mono, Stereo) and output (Mono / Stereo)."));
     streamButton.setButtonText (language->so_btn_label());
     streamButton.setTooltip (language->so_btn_tip());
 
@@ -7365,6 +7626,11 @@ void VocalGzzioContent::openStreamOutPopup (juce::Rectangle<int> anchorScreenBou
         juce::CallOutBox::launchAsynchronously (std::move (panel), anchorScreenBounds, nullptr);
     }
     repaint();
+}
+
+void VocalGzzioContent::openStandaloneAudioSettings()
+{
+    launchStandaloneAudioMonoDialog (processor, language);
 }
 
 void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds)

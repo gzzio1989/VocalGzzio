@@ -265,12 +265,28 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
-    // 1c. ヘッダの「🎯中央寄せ / MONO」ルーティング設定ピル
-    if (! routePillRect.isEmpty() && routePillRect.contains (pt))
+    // 1c. ヘッダの「🎯入出力・モノラル」ルーティング設定ピル ＆ 計器カード内の「🎤入力:モノ/ステレオ」直結ピル
+    if ((! routePillRect.isEmpty() && routePillRect.contains (pt))
+        || (! ioInMonoRect.isEmpty() && ioInMonoRect.contains (pt)))
     {
-        openRoutePopup (localAreaToGlobal (routePillRect));
-        overviewHint = language->T ("【🎯 中央寄せ / MONO】片耳だけマイクが聴こえる問題を解消し、入力1/2の中央寄せや完全モノラル出力・全出力ミラーリングを設定します。",
-                                    "[CENTER / MONO] Fixes single-sided mic input by centering Input 1/2 to L+R or forcing full mono output across all channels.");
+        const auto anchor = (! ioInMonoRect.isEmpty() && ioInMonoRect.contains (pt)) ? ioInMonoRect : routePillRect;
+        openRoutePopup (localAreaToGlobal (anchor));
+        overviewHint = language->T ("【🎯 入力・出力 モノラル／ステレオ設定】マイク入力（自動モノラル中央／入力1モノラル／入力2モノラル／ステレオ）と、出力（モノラル／ステレオ）を切り替えます。",
+                                    "[INPUT / OUTPUT MONO & STEREO] Switch mic input (Auto Mono, Input 1 Mono, Input 2 Mono, Stereo) and output (Mono / Stereo).");
+        return true;
+    }
+
+    // 1c-2. 計器＆入出力カード内の「🔊出力: モノラル / ステレオ」ワンクリック切替ピル
+    if (! ioOutMonoRect.isEmpty() && ioOutMonoRect.contains (pt))
+    {
+        const bool nextMono = ! processor.getOutputMonoMode();
+        processor.setOutputMonoMode (nextMono);
+        overviewHint = nextMono
+            ? language->T ("【🔊 出力: モノラル ON】左右のスピーカー／ヘッドホンおよび配信出力へ完全同一のモノラル音声（L=R）を出力します。もう一度押すとステレオ出力に戻ります。",
+                           "[OUTPUT: MONO ON] Outputs identical dual-mono audio (L=R) to speakers/headphones and stream output. Click again for Stereo.")
+            : language->T ("【🔊 出力: ステレオ ON】通常の立体ステレオ出力に戻しました。もう一度押すとモノラル出力に切り替わります。",
+                           "[OUTPUT: STEREO ON] Restored normal stereo output. Click again to switch to Mono output.");
+        repaint();
         return true;
     }
 
@@ -619,9 +635,12 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
         if (rect.contains (pt))
             return language->T ("声の仕上がりをまとめて切り替えます。4つの効果と音色・圧縮・残響が変わります。入力音量とノイズ除去の設定は保ちます。",
                                 "Chooses a vocal character, changing the four effects, tone, compression and reverb. Input gain and noise reduction settings are preserved.");
-    if (routePillRect.contains (pt))
-        return language->T ("マイクが片耳（左だけ・右だけ）から聴こえる問題を解消します。入力1/2の中央寄せ(L+R)や、最終出力の完全モノラル化・出力3-4等へのミラーリングを設定します。",
-                            "Fixes single-sided mic audio by centering Input 1 or Input 2 to both L+R, or forcing full mono output across all output pairs.");
+    if (routePillRect.contains (pt) || ioInMonoRect.contains (pt))
+        return language->T ("【🎤 入力・出力 モノラル／ステレオ設定】マイク入力をモノラル（自動中央寄せ／入力1モノラル／入力2モノラル／1+2合成モノラル）またはステレオに切り替え、出力のモノラル／ステレオも設定します。",
+                            "[INPUT / OUTPUT MONO & STEREO] Switch mic input between Mono (Auto, Input 1, Input 2, Sum 1+2) and Stereo, and toggle Mono/Stereo output.");
+    if (ioOutMonoRect.contains (pt))
+        return language->T ("【🔊 出力: モノラル ⇄ ステレオ切替】クリックすると、出力音声を「モノラル（左右同一 L=R）」と「ステレオ（立体）」の間で1クリックで切り替えます。",
+                            "[OUTPUT: MONO / STEREO] Click to toggle output audio between Mono (identical L=R) and Stereo.");
     if (streamPillRect.contains (pt))
         return language->T ("ASIOで自分の声を聴きながら、専用仮想ドライバ「ライン (VocalGzzio Driver (WDM))」（または SYNCROOM Driver / VB-CABLE）へ処理後の声を同時に流し、OBS・Discord・VRChat・SYNCROOMへ直接渡します。",
                             "Simultaneously streams processed audio to 'ライン (VocalGzzio Driver (WDM))' (or SYNCROOM Driver / VB-CABLE) while keeping your main interface on ASIO.");
@@ -764,6 +783,8 @@ void VocalGzzioContent::resizedOverview()
     argonPadRect = {};
     levelBadgeRect = {};
     irOverviewRect = {};
+    ioInMonoRect = {};
+    ioOutMonoRect = {};
     talkPillRect = {};
     loopPillRect = {};
     for (auto& r : argonBarRects) r = {};
@@ -1042,9 +1063,36 @@ void VocalGzzioContent::resizedOverview()
             coutureSwatchRects[(size_t) c] = { swX0 + c * (swW + swGap), swY, swW, 26 };
     }
 
-    const int levelButtonWidth = overviewOutput.getWidth() < 240 ? 80 : 124;
+    const int levelButtonWidth = overviewOutput.getWidth() < 240 ? 74 : (overviewOutput.getWidth() < 340 ? 76 : 94);
     levelBadgeRect = { overviewOutput.getRight() - levelButtonWidth - 10, overviewOutput.getY() + 10, levelButtonWidth, 24 };
     overviewOutputTrim.setBounds (levelBadgeRect);
+
+    // 計器＆入出力カード内の「🎤入力: モノラル/ステレオ」「🔊出力: モノラル/ステレオ」直結ピル配置
+    if (overviewLayoutMode == 2)
+    {
+        // STUDIO RACK (幅170px・縦長): 5連メーターと入出力ノブの間に横並びで配置
+        const int pillW = (overviewOutput.getWidth() - 20) / 2;
+        ioInMonoRect  = { overviewOutput.getX() + 8,              overviewOutput.getY() + 206, pillW, 26 };
+        ioOutMonoRect = { overviewOutput.getX() + 12 + pillW,     overviewOutput.getY() + 206, pillW, 26 };
+    }
+    else if (overviewOutput.getWidth() >= 400)
+    {
+        // ARGON (456px) / V-LIVER (442px): カードヘッダ行に見出しと音量確認ボタンの間へ配置
+        const int rightLimit = levelBadgeRect.getX() - 6;
+        const int outW = 108;
+        const int inW  = 114;
+        ioOutMonoRect = { rightLimit - outW,               overviewOutput.getY() + 9, outW, 26 };
+        ioInMonoRect  = { ioOutMonoRect.getX() - 5 - inW,  overviewOutput.getY() + 9, inW,  26 };
+    }
+    else
+    {
+        // CLASSIC (304px): カードヘッダ行にコンパクト配置
+        const int rightLimit = levelBadgeRect.getX() - 4;
+        const int outW = 76;
+        const int inW  = 80;
+        ioOutMonoRect = { rightLimit - outW,               overviewOutput.getY() + 9, outW, 26 };
+        ioInMonoRect  = { ioOutMonoRect.getX() - 4 - inW,  overviewOutput.getY() + 9, inW,  26 };
+    }
 
     // ---- 各セクションカード上段のダイレクトスイッチ群（全配置共通でカード上部に整列） ----
     // カード0（整える）上段2行: ノイズ測定・自動追従・状態表示
@@ -1283,18 +1331,18 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         // [⚡軽量 / LITE] ワンタッチ省負荷モードピル
         drawHeaderPill (litePillRect, liteMode, Palette::green, language->T ("⚡軽量", "LITE"));
 
-        // [🎯中央寄せ / MONO] 片耳マイク自動中央寄せ・モノラル最適化ピル
+        // [🎯入出力モノラル / MONO] 入力・出力モノラル／ステレオ切替ピル
         if (! routePillRect.isEmpty())
         {
             const int rMode = processor.getInputRouteMode();
             const bool outMono = processor.getOutputMonoMode();
             const bool rActive = outMono || (rMode != 4);
             const auto rCol = outMono ? Palette::blue : Palette::ice;
-            const char* rJa[5] = { "🎯中央音", "🎯IN1中央", "🎯IN2中央", "🎯1+2中央", "🎯ステレオ" };
-            const char* rEn[5] = { "CENTER",   "IN1->C",    "IN2->C",    "1+2->C",    "STEREO"    };
+            const char* rJa[5] = { "🎯入:自動モノ", "🎯入:IN1モノ", "🎯入:IN2モノ", "🎯入:1+2モノ", "🎯ステレオ" };
+            const char* rEn[5] = { "IN:AUTO-M",    "IN:1-MONO",    "IN:2-MONO",    "IN:1+2-M",     "STEREO"     };
             const int idx = juce::jlimit (0, 4, rMode);
             const juce::String rLabel = outMono
-                ? language->T ("🎯単音化", "MONO")
+                ? language->T ("🎯入出力:モノ", "I/O:MONO")
                 : juce::String::fromUTF8 (language->english ? rEn[idx] : rJa[idx]);
             drawHeaderPill (routePillRect, rActive, rCol, rLabel);
         }
@@ -2740,11 +2788,43 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
 
     card (overviewOutput, Palette::green);
     g.setColour (Palette::ink);
-    const bool compactOut = (overviewOutput.getWidth() < 240);
-    const int bw = compactOut ? 80 : 124;
-    fitText (g, compactOut ? language->T ("計器", "I/O") : language->T ("計器 ＆ 入出力", "TELEMETRY & I/O"),
-             juce::Rectangle<int> (overviewOutput.getX() + 24, overviewOutput.getY() + 8, overviewOutput.getWidth() - bw - 36, 28),
-             juce::Justification::centredLeft, 16.0f, true);
+    const bool compactOut = (overviewOutput.getWidth() < 340);
+    const int titleW = (overviewOutput.getWidth() >= 400 && ! ioInMonoRect.isEmpty())
+                     ? (ioInMonoRect.getX() - overviewOutput.getX() - 28)
+                     : (compactOut ? 60 : 124);
+    fitText (g, compactOut ? language->T ("計器", "I/O") : language->T ("計器・入出力", "TELEMETRY & I/O"),
+             juce::Rectangle<int> (overviewOutput.getX() + 24, overviewOutput.getY() + 8, juce::jmax (44, titleW), 28),
+             juce::Justification::centredLeft, 15.5f, true);
+
+    // ---- 計器＆入出力カード内の「🎤入力: モノラル/ステレオ」「🔊出力: モノラル/ステレオ」直結ピル描画 ----
+    {
+        auto drawIoPill = [&] (juce::Rectangle<int> r, bool active, juce::Colour col, const juce::String& label)
+        {
+            if (r.isEmpty()) return;
+            const auto rf = r.toFloat();
+            const float rad = rf.getHeight() * 0.46f;
+            g.setColour (active ? col.withAlpha (pastelTheme() ? 0.30f : 0.36f)
+                                : Palette::panel2.withAlpha (0.92f));
+            g.fillRoundedRectangle (rf, rad);
+            g.setColour (active ? col : Palette::panelLn);
+            g.drawRoundedRectangle (rf.reduced (0.5f), rad, active ? 1.6f : 1.0f);
+            g.setColour (active ? Palette::ink : Palette::inkSoft);
+            fitText (g, label, r.reduced (4, 0), juce::Justification::centred, 12.5f, active);
+        };
+        const int rMode = juce::jlimit (0, 4, processor.getInputRouteMode());
+        const bool inMonoActive = (rMode != 4);
+        const bool outMonoActive = processor.getOutputMonoMode();
+        const bool shortIo = (ioInMonoRect.getWidth() < 90);
+        const char* inJaFull[5]  = { "🎤入力:自動モノ", "🎤入力:IN1モノ", "🎤入力:IN2モノ", "🎤入力:1+2モノ", "🎤入力:ステレオ" };
+        const char* inJaShort[5] = { "🎤入:自動",       "🎤入:IN1",       "🎤入:IN2",       "🎤入:1+2",       "🎤入:ステ"       };
+        const char* inEn[5]      = { "IN:AUTO-M",       "IN:1-MONO",      "IN:2-MONO",      "IN:1+2-M",       "IN:STEREO"       };
+        const juce::String inTxt = juce::String::fromUTF8 (language->english ? inEn[rMode] : (shortIo ? inJaShort[rMode] : inJaFull[rMode]));
+        const juce::String outTxt = outMonoActive
+            ? (shortIo ? language->T ("🔊出:モノ", "OUT:M") : language->T ("🔊出力:モノラル", "OUT:MONO"))
+            : (shortIo ? language->T ("🔊出:ステ", "OUT:S") : language->T ("🔊出力:ステレオ", "OUT:STEREO"));
+        drawIoPill (ioInMonoRect,  inMonoActive,  Palette::green, inTxt);
+        drawIoPill (ioOutMonoRect, outMonoActive, Palette::blue,  outTxt);
+    }
 
     // ---- 5ch リアルタイム計器盤（Kawaii時はパステル・ペンライト粒＆ハートピーク、通常時はスタジオLEDバーグラフ） ----
     {
