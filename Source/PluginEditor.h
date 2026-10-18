@@ -3298,6 +3298,7 @@ private:
     void openRoutePopup (juce::Rectangle<int> anchorScreenBounds);
     void openStreamOutPopup (juce::Rectangle<int> anchorScreenBounds);
     void openStandaloneAudioSettings();
+    void openStageStudioPopup (juce::Rectangle<int> anchorScreenBounds);
     void openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds);
     bool overviewEnabled { true };
     int  overviewLayoutMode { 0 };     // 0=Argon Cockpit, 1=V-Liver Stage, 2=Studio Rack, 3=Classic
@@ -3313,6 +3314,8 @@ private:
     juce::Rectangle<int> ioOutMonoRect;   // 🔊 計器＆入出力カード内の「出力: モノラル/ステレオ」直結ピル
     juce::Rectangle<int> talkPillRect;    // 🎤⇄💬 歌枠 ⇄ 雑談MC ワンクリック瞬間ライブ切替ピル
     juce::Rectangle<int> loopPillRect;    // 🔄 5秒録って手放し聴き比べ「試聴ルーパー」ピル
+    juce::Rectangle<int> coughPillRect;   // 😷 咳払い・くしゃみ瞬間ミュート（8ms無音フェード・残響鳴り残り防止）ピル
+    juce::Rectangle<int> stagePillRect;   // 🎵 BGMプレイヤー・1クリックWAV録音・30秒さかのぼり保存・声質ターゲット診断ピル
     juce::Rectangle<int> irOverviewRect;  // 🌊 IR残響 音響減衰カーブ表示＆外部IR(.wav/.aiff)ローダーカプセル
     juce::Rectangle<int> argonPadRect;
     std::array<juce::Rectangle<int>, 4> argonBarRects;
@@ -3559,6 +3562,7 @@ private:
     juce::TextButton tapButton { "TAP" };
     juce::TextButton midiButton;                           // v2.1.0 MIDIスイッチ設定
     juce::TextButton routeButton;                          // v4.7.0 入出力モノラル・マイク中央寄せ設定
+    juce::TextButton stageButton;                          // v4.8.0 BGM・WAV録音・30秒さかのぼり・声質ターゲット診断
     juce::TextButton streamButton;                         // v2.2.0 配信出力(単体起動版のみ)
     juce::TextButton checkupButton;                        // v2.10.0 点検
     double lastUsageMs = 0.0;                              // v2.10.0 使われ方の集計時刻

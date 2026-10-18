@@ -635,10 +635,14 @@ int main()
     {
         view.setOverview (true);
         view.setOverviewLayoutMode (0);
-        const juce::Point<int> talkPt { 1095, 92 };
-        const juce::Point<int> loopPt { 1205, 92 };
-        check (view.overviewHelpAt (talkPt).isNotEmpty(), "hovering Singing/MC Talk pill shows explanation");
-        check (view.overviewHelpAt (loopPt).isNotEmpty(), "hovering 5s Audition Looper pill shows explanation");
+        const juce::Point<int> talkPt  { 965,  92 };
+        const juce::Point<int> loopPt  { 1063, 92 };
+        const juce::Point<int> coughPt { 1163, 92 };
+        const juce::Point<int> stagePt { 1273, 92 };
+        check (view.overviewHelpAt (talkPt).isNotEmpty(),  "hovering Singing/MC Talk pill shows explanation");
+        check (view.overviewHelpAt (loopPt).isNotEmpty(),  "hovering 5s Audition Looper pill shows explanation");
+        check (view.overviewHelpAt (coughPt).isNotEmpty(), "hovering Cough Instant Mute pill shows explanation");
+        check (view.overviewHelpAt (stagePt).isNotEmpty(), "hovering BGM/REC Stage pill shows explanation");
 
         // Set rich singing reverb/delay/width parameters
         setParameter ("mod_hirogari", 1.0f);
@@ -693,6 +697,38 @@ int main()
 
         check (view.handleOverviewMouseDown (loopPt), "clicking 5s Audition Looper pill while playing stops loop");
         check (processor->getAuditionState() == VocalGzzioProcessor::AuditionOff, "Audition Looper returns to Off state");
+
+        // Verify v4.8.0 Stage & Studio 4 Pillars:
+        //   Pillar 4: Cough Instant Mute (coughPillRect) & Scream Safety Guard
+        check (! processor->getCoughMute(), "Cough Instant Mute starts OFF");
+        check (view.handleOverviewMouseDown (coughPt), "clicking Cough Instant Mute pill is handled");
+        check (processor->getCoughMute(), "clicking Cough Instant Mute pill enables mute");
+        check (view.handleOverviewMouseDown (coughPt), "clicking Cough Instant Mute pill again unmutes");
+        check (! processor->getCoughMute(), "Cough Instant Mute returns to OFF");
+
+        //   Pillar 1: Built-in BGM Player + Key Shift (±6st) + Pitch Sync + Auto Ducking
+        check (! processor->isBgmPlaying(), "BGM Player starts paused");
+        check (view.handleOverviewMouseDown (stagePt), "clicking BGM/REC Stage pill in headless test toggles BGM playback");
+        check (processor->hasBgmLoaded(), "Built-in demo BGM track is loaded on demand");
+        check (processor->isBgmPlaying(), "BGM Player starts playing");
+        processor->setBgmPitchSemi (2);
+        check (processor->getBgmPitchSemi() == 2, "BGM Key Shift sets +2 semitones");
+        processor->setBgmPitchSemi (0);
+        processor->setBgmPlaying (false);
+
+        //   Pillar 2: 30s Retroactive WAV Save & 1-Click WAV Recording (Wet+Dry)
+        check (processor->getRetroBufferedSec() >= 4.0f, "Retroactive 30s buffer captured singing audio");
+        check (processor->saveRetroWavRecording(), "Retroactive 30s Wet+Dry 24-bit WAV save succeeds");
+
+        //   Pillar 3: 5s Voice Target AI Diagnosis (all 5 targets + low-SR 16kHz Nyquist safety)
+        for (int t = 0; t < 5; ++t)
+        {
+            check (processor->runVoiceTargetDiagnosis (t), "5s Voice Target AI Diagnosis succeeds for target style");
+            check (processor->getLastVoiceTargetStyle() == t, "lastVoiceTargetStyle matches diagnosed target");
+        }
+        processor->prepareToPlay (16000.0, 256);
+        check (processor->runVoiceTargetDiagnosis (0), "Voice Target AI Diagnosis is Nyquist-safe even at 16kHz headset sample rate");
+        processor->prepareToPlay (48000.0, 256);
     }
     view.setLookAndFeel (nullptr);
     processor->releaseResources();

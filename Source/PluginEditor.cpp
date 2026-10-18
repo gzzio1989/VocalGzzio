@@ -2053,6 +2053,511 @@ private:
 };
 
 //==============================================================================
+// v4.8.0 ステージ＆スタジオ統合パネル
+//  柱①：🎵 カラオケ・BGMプレイヤー内蔵（キー変更±6半音・ピッチ補正連動・声優先BGMダッキング・WDM混音選択）
+//  柱②：🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（完成音Wet＋素の声Dryを24bit WAV同時保存）
+//  柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律：あなたの声×5種の理想ターゲット差分を自動調律）
+//  柱④：🛡 絶叫セーフティガード（-0.5dBFS突発爆音防止） ＆ 😷 咳払い瞬間ミュート（8ms無音遮断）
+class StageStudioPanel : public juce::Component, private juce::Timer
+{
+    std::shared_ptr<tip::Language> language;
+public:
+    StageStudioPanel (VocalGzzioContent& ownerContent, VocalGzzioProcessor& p, std::shared_ptr<tip::Language> value)
+        : language (std::move (value)), owner (ownerContent), processor (p)
+    {
+        ownLnf.refreshPaletteColours();
+        setLookAndFeel (&ownLnf);
+
+        // ---- 柱①：カラオケ・BGMプレイヤー ----
+        loadBgmBtn.setButtonText (language->T ("📂 カラオケ・BGM音源を開く...", "📂 Load Backing Track..."));
+        loadBgmBtn.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.22f));
+        loadBgmBtn.onClick = [this] { browseBgmFile(); };
+        addAndMakeVisible (loadBgmBtn);
+
+        demoBgmBtn.setButtonText (language->T ("🎹 内蔵デモ伴奏で試す (王道進行)", "🎹 Load Built-in Demo Track"));
+        demoBgmBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.24f));
+        demoBgmBtn.onClick = [this]
+        {
+            processor.loadBuiltinDemoBgm();
+            processor.setBgmPlaying (true);
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (demoBgmBtn);
+
+        playBgmBtn.setClickingTogglesState (true);
+        playBgmBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        playBgmBtn.onClick = [this]
+        {
+            if (! processor.hasBgmLoaded())
+                processor.loadBuiltinDemoBgm();
+            processor.setBgmPlaying (playBgmBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (playBgmBtn);
+
+        rewBgmBtn.setButtonText (language->T ("⏮ 先頭", "⏮ Top"));
+        rewBgmBtn.onClick = [this] { processor.rewindBgm(); refresh(); };
+        addAndMakeVisible (rewBgmBtn);
+
+        loopBgmBtn.setClickingTogglesState (true);
+        loopBgmBtn.setButtonText (language->T ("🔁 ループ", "🔁 Loop"));
+        loopBgmBtn.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+        loopBgmBtn.setToggleState (processor.isBgmLooping(), juce::dontSendNotification);
+        loopBgmBtn.onClick = [this] { processor.setBgmLooping (loopBgmBtn.getToggleState()); };
+        addAndMakeVisible (loopBgmBtn);
+
+        keyDownBtn.setButtonText (language->T ("♭ -1半音", "♭ -1 Semi"));
+        keyDownBtn.onClick = [this] { processor.setBgmPitchSemi (processor.getBgmPitchSemi() - 1); refresh(); };
+        addAndMakeVisible (keyDownBtn);
+
+        keyZeroBtn.setButtonText (language->T ("原曲キー (±0)", "Original (0)"));
+        keyZeroBtn.onClick = [this] { processor.setBgmPitchSemi (0); refresh(); };
+        addAndMakeVisible (keyZeroBtn);
+
+        keyUpBtn.setButtonText (language->T ("♯ +1半音", "♯ +1 Semi"));
+        keyUpBtn.onClick = [this] { processor.setBgmPitchSemi (processor.getBgmPitchSemi() + 1); refresh(); };
+        addAndMakeVisible (keyUpBtn);
+
+        syncKeyBtn.setClickingTogglesState (true);
+        syncKeyBtn.setButtonText (language->T ("🔗 ピッチ補正・ハモリのキーも自動連動", "🔗 Sync Pitch/Harmony Key"));
+        syncKeyBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        syncKeyBtn.setToggleState (processor.getBgmSyncKey(), juce::dontSendNotification);
+        syncKeyBtn.onClick = [this] { processor.setBgmSyncKey (syncKeyBtn.getToggleState()); };
+        addAndMakeVisible (syncKeyBtn);
+
+        bgmVolSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+        bgmVolSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 62, 22);
+        bgmVolSlider.setRange (-36.0, 6.0, 0.5);
+        bgmVolSlider.setTextValueSuffix (" dB");
+        bgmVolSlider.setValue (processor.getBgmGainDb(), juce::dontSendNotification);
+        bgmVolSlider.onValueChange = [this] { processor.setBgmGainDb ((float) bgmVolSlider.getValue()); };
+        addAndMakeVisible (bgmVolSlider);
+
+        bgmDuckSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+        bgmDuckSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 54, 22);
+        bgmDuckSlider.setRange (0.0, 100.0, 1.0);
+        bgmDuckSlider.setTextValueSuffix (" %");
+        bgmDuckSlider.setValue (processor.getBgmDuckAmt() * 100.0f, juce::dontSendNotification);
+        bgmDuckSlider.onValueChange = [this] { processor.setBgmDuckAmt ((float) bgmDuckSlider.getValue() * 0.01f); };
+        addAndMakeVisible (bgmDuckSlider);
+
+        bgmRouteBtn.setClickingTogglesState (true);
+        bgmRouteBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        bgmRouteBtn.setToggleState (processor.getBgmToStream(), juce::dontSendNotification);
+        bgmRouteBtn.onClick = [this]
+        {
+            processor.setBgmToStream (bgmRouteBtn.getToggleState());
+            refresh();
+        };
+        addAndMakeVisible (bgmRouteBtn);
+
+        // ---- 柱②：1クリックWAV録音 ＆ 直前30秒さかのぼり保存 ----
+        wavRecBtn.setClickingTogglesState (true);
+        wavRecBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+        wavRecBtn.onClick = [this]
+        {
+            processor.toggleWavRecording();
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (wavRecBtn);
+
+        retroSaveBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.28f));
+        retroSaveBtn.onClick = [this]
+        {
+            processor.saveRetroWavRecording();
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (retroSaveBtn);
+
+        openRecDirBtn.setButtonText (language->T ("📂 録音フォルダを開く", "📂 Open Recordings Folder"));
+        openRecDirBtn.onClick = [this]
+        {
+            processor.getRecordingsDirectory().startAsProcess();
+        };
+        addAndMakeVisible (openRecDirBtn);
+
+        // ---- 柱③：5秒声質ターゲット診断（AIオートオーブ調律） ----
+        static const char* const kTargetJa[5] = {
+            "✨ 透明感ウィスパー",
+            "🔥 歌い手リード",
+            "💎 アイドル艶ポップ",
+            "🎙 ラジオ深み低音",
+            "🎸 弾き語りアコギ"
+        };
+        static const char* const kTargetEn[5] = {
+            "✨ Whisper Air",
+            "🔥 Lead Singer",
+            "💎 Idol Pop",
+            "🎙 Radio Deep",
+            "🎸 Acoustic"
+        };
+        for (int i = 0; i < 5; ++i)
+        {
+            auto& b = diagBtns[(size_t) i];
+            b.setButtonText (language->T (kTargetJa[i], kTargetEn[i]));
+            b.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+            b.onClick = [this, i]
+            {
+                processor.runVoiceTargetDiagnosis (i);
+                owner.syncArgonOrbFromParams();
+                owner.repaint();
+                refresh();
+            };
+            addAndMakeVisible (b);
+        }
+
+        // ---- 柱④：絶叫セーフティガード ＆ 咳払い瞬間ミュート ----
+        coughBtn.setClickingTogglesState (true);
+        coughBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+        coughBtn.onClick = [this]
+        {
+            processor.setCoughMute (coughBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (coughBtn);
+
+        screamGuardBtn.setClickingTogglesState (true);
+        screamGuardBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        screamGuardBtn.onClick = [this]
+        {
+            processor.setScreamGuardOn (screamGuardBtn.getToggleState());
+            refresh();
+        };
+        addAndMakeVisible (screamGuardBtn);
+
+        setSize (720, 560);
+        refresh();
+        startTimerHz (10);
+    }
+
+    ~StageStudioPanel() override { setLookAndFeel (nullptr); }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.setColour (Palette::panel);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), 8.0f);
+        g.setColour (Palette::panelLn);
+        g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 8.0f, 1.2f);
+
+        auto drawSectionCard = [&] (juce::Rectangle<int> r, juce::Colour accent, const juce::String& title)
+        {
+            const auto rf = r.toFloat();
+            g.setColour (Palette::panel2.withAlpha (0.88f));
+            g.fillRoundedRectangle (rf, 8.0f);
+            g.setColour (accent.withAlpha (0.55f));
+            g.drawRoundedRectangle (rf.reduced (0.5f), 8.0f, 1.2f);
+            g.setColour (accent);
+            g.fillRoundedRectangle (rf.getX() + 10.0f, rf.getY() + 8.0f, 4.0f, 18.0f, 2.0f);
+            g.setColour (Palette::ink);
+            g.setFont (GzzioLnF::uiFont (15.0f, true));
+            g.drawText (title, r.withX (r.getX() + 20).withY (r.getY() + 5).withHeight (24),
+                        juce::Justification::centredLeft);
+        };
+
+        drawSectionCard (secBgmRect,   Palette::green,
+                         language->T ("① 🎵 カラオケ・BGMプレイヤー ＆ 声優先オートダッキング（キー変更±6・ピッチ補正連動）",
+                                      "1. Karaoke / BGM Player & Vocal-Priority Auto Ducking (Key Shift & Sync)"));
+        drawSectionCard (secRecRect,   Palette::salmon,
+                         language->T ("② 🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（完成音Wet＋素の声Dry 24bit同時保存）",
+                                      "2. 1-Click WAV Recorder & 30s Retroactive Save (Simultaneous Wet + Dry 24-bit WAV)"));
+        drawSectionCard (secDiagRect,  Palette::yellow,
+                         language->T ("③ 🎯 5秒声質ターゲット診断（あなたの声質×理想ターゲットの差分から2DオーブをAI自動調律）",
+                                      "3. 5s Voice Target AI Diagnosis (Auto-tunes 2D Argon Orb & EQ to target vocal curve)"));
+        drawSectionCard (secGuardRect, Palette::ice,
+                         language->T ("④ 🛡 絶叫セーフティガード（-0.5dBFS突発爆音防止） ＆ 😷 咳払い瞬間ミュート",
+                                      "4. Scream Safety Limiter (-0.5dBFS Ceiling) & Cough Instant Mute (8ms Click-Free)"));
+
+        // BGM状態＆プログレスバー描画
+        {
+            g.setColour (Palette::ink);
+            g.setFont (GzzioLnF::uiFont (14.0f, true));
+            const float dur = processor.getBgmDurationSec();
+            const float cur = dur * processor.getBgmProgress();
+            auto fmtTime = [] (float s)
+            {
+                const int tot = juce::jmax (0, (int) std::round (s));
+                return juce::String (tot / 60) + ":" + juce::String (tot % 60).paddedLeft ('0', 2);
+            };
+            const juce::String bgmInfo = processor.getBgmTitle()
+                + (dur > 0.1f ? ("   [" + fmtTime (cur) + " / " + fmtTime (dur) + "]") : "");
+            g.drawText (bgmInfo, bgmStatusRect.withTrimmedRight (170), juce::Justification::centredLeft);
+
+            const int semi = processor.getBgmPitchSemi();
+            const juce::String semiTxt = language->T ("現在キー: ", "Key: ")
+                                       + (semi > 0 ? "+" : "") + juce::String (semi)
+                                       + language->T (" 半音", " st");
+            g.setColour (semi != 0 ? Palette::yellow : Palette::inkSoft);
+            g.drawText (semiTxt, bgmStatusRect.withLeft (bgmStatusRect.getRight() - 166), juce::Justification::centredRight);
+
+            // プログレスバー（クリックでシーク可能）
+            const auto pb = bgmProgRect.toFloat();
+            g.setColour (Palette::track);
+            g.fillRoundedRectangle (pb, 4.0f);
+            g.setColour (processor.isBgmPlaying() ? Palette::green : Palette::blue);
+            g.fillRoundedRectangle (pb.withWidth (pb.getWidth() * processor.getBgmProgress()), 4.0f);
+
+            // スライダー見出し＋ダッキング減衰メーター
+            g.setColour (Palette::inkSoft);
+            g.setFont (GzzioLnF::uiFont (14.0f, true));
+            g.drawText (language->T ("BGM音量:", "BGM Vol:"), bgmVolLabelRect, juce::Justification::centredLeft);
+            g.drawText (language->T ("声優先ダッキング:", "Vocal Duck:"), bgmDuckLabelRect, juce::Justification::centredLeft);
+
+            const float duckDb = processor.getBgmDuckMeterDb();
+            g.setColour (duckDb > 0.4f ? Palette::yellow : Palette::inkSoft);
+            g.drawText (language->T ("減衰: -", "Duck: -") + juce::String (duckDb, 1) + " dB",
+                        bgmDuckMeterRect, juce::Justification::centredRight);
+        }
+
+        // WAV録音ステータス描画
+        {
+            g.setColour (Palette::inkSoft);
+            g.setFont (GzzioLnF::uiFont (14.0f, false));
+            g.drawFittedText (processor.getLastSavedWavStatus(), wavStatusRect, juce::Justification::centredLeft, 2);
+        }
+
+        // 5秒声質ターゲット診断ステータス＆4帯域バー描画
+        {
+            g.setColour (Palette::ink);
+            g.setFont (GzzioLnF::uiFont (14.0f, false));
+            g.drawFittedText (processor.getVoiceTargetSummary(), diagStatusRect, juce::Justification::centredLeft, 2);
+
+            static const char* const kBandJa[4] = { "低域の厚み", "中域の声芯", "中高域の抜け", "高域の空気感" };
+            static const char* const kBandEn[4] = { "Low Body",   "Mid Core",   "Presence",     "High Air"     };
+            const int bw = diagBarsRect.getWidth() / 4;
+            for (int b = 0; b < 4; ++b)
+            {
+                auto cell = juce::Rectangle<int> (diagBarsRect.getX() + b * bw, diagBarsRect.getY(), bw - 6, diagBarsRect.getHeight());
+                g.setColour (Palette::inkSoft);
+                g.setFont (GzzioLnF::uiFont (14.0f, true));
+                g.drawText (language->T (kBandJa[b], kBandEn[b]), cell.removeFromLeft (86), juce::Justification::centredLeft);
+                auto track = cell.reduced (2, 5).toFloat();
+                g.setColour (Palette::track);
+                g.fillRoundedRectangle (track, 3.0f);
+                const float uVal = juce::jlimit (0.0f, 1.0f, processor.getVoiceDiagUserBand (b));
+                const float tVal = juce::jlimit (0.0f, 1.0f, processor.getVoiceDiagTargetBand (b));
+                g.setColour (Palette::blue.withAlpha (0.75f));
+                g.fillRoundedRectangle (track.withWidth (track.getWidth() * uVal), 3.0f);
+                const float tx = track.getX() + track.getWidth() * tVal;
+                g.setColour (Palette::yellow);
+                g.fillRect (tx - 1.5f, track.getY() - 2.0f, 3.0f, track.getHeight() + 4.0f);
+            }
+        }
+
+        // 絶叫セーフティガード作動メーター描画
+        {
+            const float grDb = processor.getScreamGuardDb();
+            g.setColour (grDb > 0.2f ? Palette::salmon : Palette::inkSoft);
+            g.setFont (GzzioLnF::uiFont (14.0f, true));
+            g.drawText (language->T ("突発ピーク抑制量: -", "Peak Guard: -") + juce::String (grDb, 1) + " dB",
+                        guardMeterRect, juce::Justification::centredRight);
+        }
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        if (bgmProgRect.expanded (0, 4).contains (e.getPosition()))
+        {
+            const float norm = (float) (e.x - bgmProgRect.getX()) / (float) juce::jmax (1, bgmProgRect.getWidth());
+            processor.setBgmProgress (norm);
+            repaint();
+        }
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (bgmProgRect.expanded (0, 12).contains (e.getPosition()))
+        {
+            const float norm = (float) (e.x - bgmProgRect.getX()) / (float) juce::jmax (1, bgmProgRect.getWidth());
+            processor.setBgmProgress (norm);
+            repaint();
+        }
+    }
+
+    void resized() override
+    {
+        auto b = getLocalBounds().reduced (10);
+
+        // ① カラオケ・BGMプレイヤー (188px)
+        secBgmRect = b.removeFromTop (188);
+        {
+            auto inner = secBgmRect.reduced (10, 6);
+            inner.removeFromTop (26);
+            auto r1 = inner.removeFromTop (30);
+            loadBgmBtn.setBounds (r1.removeFromLeft (206)); r1.removeFromLeft (6);
+            demoBgmBtn.setBounds (r1.removeFromLeft (214)); r1.removeFromLeft (6);
+            playBgmBtn.setBounds (r1.removeFromLeft (112)); r1.removeFromLeft (6);
+            rewBgmBtn .setBounds (r1.removeFromLeft (68));  r1.removeFromLeft (6);
+            loopBgmBtn.setBounds (r1);
+
+            inner.removeFromTop (5);
+            auto rProg = inner.removeFromTop (22);
+            bgmStatusRect = rProg.removeFromLeft (420);
+            rProg.removeFromLeft (8);
+            bgmProgRect   = rProg.reduced (0, 5);
+
+            inner.removeFromTop (5);
+            auto rKey = inner.removeFromTop (28);
+            keyDownBtn.setBounds (rKey.removeFromLeft (96));  rKey.removeFromLeft (5);
+            keyZeroBtn.setBounds (rKey.removeFromLeft (118)); rKey.removeFromLeft (5);
+            keyUpBtn  .setBounds (rKey.removeFromLeft (96));  rKey.removeFromLeft (10);
+            syncKeyBtn.setBounds (rKey.removeFromLeft (248)); rKey.removeFromLeft (8);
+            bgmRouteBtn.setBounds (rKey);
+
+            inner.removeFromTop (5);
+            auto rMix = inner.removeFromTop (28);
+            bgmVolLabelRect  = rMix.removeFromLeft (68);
+            bgmVolSlider.setBounds (rMix.removeFromLeft (210));
+            rMix.removeFromLeft (12);
+            bgmDuckLabelRect = rMix.removeFromLeft (118);
+            bgmDuckSlider.setBounds (rMix.removeFromLeft (192));
+            bgmDuckMeterRect = rMix;
+        }
+        b.removeFromTop (8);
+
+        // ② 1クリックWAV録音 ＆ 直前30秒さかのぼり保存 (106px)
+        secRecRect = b.removeFromTop (106);
+        {
+            auto inner = secRecRect.reduced (10, 6);
+            inner.removeFromTop (26);
+            auto r1 = inner.removeFromTop (32);
+            wavRecBtn   .setBounds (r1.removeFromLeft (228)); r1.removeFromLeft (8);
+            retroSaveBtn.setBounds (r1.removeFromLeft (290)); r1.removeFromLeft (8);
+            openRecDirBtn.setBounds (r1);
+            inner.removeFromTop (4);
+            wavStatusRect = inner;
+        }
+        b.removeFromTop (8);
+
+        // ③ 5秒声質ターゲット診断（AIオートオーブ調律） (142px)
+        secDiagRect = b.removeFromTop (142);
+        {
+            auto inner = secDiagRect.reduced (10, 6);
+            inner.removeFromTop (26);
+            auto r1 = inner.removeFromTop (32);
+            const int bw = (r1.getWidth() - 24) / 5;
+            for (int i = 0; i < 5; ++i)
+            {
+                diagBtns[(size_t) i].setBounds (r1.removeFromLeft (i == 4 ? r1.getWidth() : bw));
+                if (i < 4) r1.removeFromLeft (6);
+            }
+            inner.removeFromTop (4);
+            diagBarsRect = inner.removeFromTop (22);
+            inner.removeFromTop (2);
+            diagStatusRect = inner;
+        }
+        b.removeFromTop (8);
+
+        // ④ 絶叫セーフティガード ＆ 咳払い瞬間ミュート (残り ~78px)
+        secGuardRect = b;
+        {
+            auto inner = secGuardRect.reduced (10, 6);
+            inner.removeFromTop (26);
+            auto r1 = inner.removeFromTop (32);
+            coughBtn      .setBounds (r1.removeFromLeft (258)); r1.removeFromLeft (8);
+            screamGuardBtn.setBounds (r1.removeFromLeft (288)); r1.removeFromLeft (8);
+            guardMeterRect = r1;
+        }
+    }
+
+private:
+    void browseBgmFile()
+    {
+        chooser = std::make_unique<juce::FileChooser> (
+            language->T ("カラオケ・BGM音声ファイルを選択 (.wav / .mp3 / .flac / .ogg / .aiff)",
+                         "Select Backing Track Audio File (.wav / .mp3 / .flac / .ogg / .aiff)"),
+            juce::File(), "*.wav;*.mp3;*.flac;*.ogg;*.aif;*.aiff");
+        const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        juce::Component::SafePointer<StageStudioPanel> safe (this);
+        chooser->launchAsync (flags, [safe] (const juce::FileChooser& fc)
+        {
+            if (safe == nullptr) return;
+            const auto f = fc.getResult();
+            if (f.existsAsFile())
+            {
+                if (safe->processor.loadBgmFile (f))
+                    safe->processor.setBgmPlaying (true);
+                safe->refresh();
+                safe->owner.repaint();
+            }
+        });
+    }
+
+    void timerCallback() override { refresh(); }
+
+    void refresh()
+    {
+        const bool playing = processor.isBgmPlaying();
+        playBgmBtn.setToggleState (playing, juce::dontSendNotification);
+        playBgmBtn.setButtonText (playing ? language->T ("⏸ 一時停止", "⏸ Pause")
+                                          : language->T ("▶ BGM再生", "▶ Play BGM"));
+        loopBgmBtn.setToggleState (processor.isBgmLooping(), juce::dontSendNotification);
+        syncKeyBtn.setToggleState (processor.getBgmSyncKey(), juce::dontSendNotification);
+
+        const bool toStream = processor.getBgmToStream();
+        bgmRouteBtn.setToggleState (toStream, juce::dontSendNotification);
+        bgmRouteBtn.setButtonText (toStream
+            ? language->T ("📡 配信にも混ぜる", "📡 Mix to Stream")
+            : language->T ("🎧 自分の耳だけ", "🎧 Monitor Only"));
+
+        const bool rec = processor.isWavRecording();
+        wavRecBtn.setToggleState (rec, juce::dontSendNotification);
+        if (rec)
+        {
+            wavRecBtn.setButtonText (language->T ("⏹ 録音停止・WAV保存 (", "⏹ Stop & Save (")
+                                     + juce::String (processor.getWavRecordingSec(), 1) + "s)");
+        }
+        else
+        {
+            wavRecBtn.setButtonText (language->T ("🔴 1クリックWAV録音 開始 (Wet+Dry)", "🔴 Start 1-Click WAV Rec (Wet+Dry)"));
+        }
+
+        const int retroSec = juce::jmax (1, (int) std::round (processor.getRetroBufferedSec()));
+        retroSaveBtn.setButtonText (language->T ("⏪ 直前", "⏪ Save Last ")
+                                    + juce::String (retroSec)
+                                    + language->T ("秒をさかのぼって今すぐWAV保存！", "s Retroactively (Wet+Dry)!"));
+
+        const int activeDiag = processor.getLastVoiceTargetStyle();
+        for (int i = 0; i < 5; ++i)
+            diagBtns[(size_t) i].setToggleState (activeDiag == i, juce::dontSendNotification);
+
+        const bool cMute = processor.getCoughMute();
+        coughBtn.setToggleState (cMute, juce::dontSendNotification);
+        coughBtn.setButtonText (cMute
+            ? language->T ("🔇 咳払い瞬間ミュート中 (押して復帰)", "🔇 COUGH MUTED (Click to Unmute)")
+            : language->T ("😷 咳払い・くしゃみ瞬間ミュート (8ms遮断)", "😷 Cough Instant Mute (8ms Fade)"));
+
+        const bool sgOn = processor.getScreamGuardOn();
+        screamGuardBtn.setToggleState (sgOn, juce::dontSendNotification);
+        screamGuardBtn.setButtonText (sgOn
+            ? language->T ("🛡 絶叫セーフティガード ON (-0.5dBFS防壁)", "🛡 Scream Safety Guard ON (-0.5dBFS)")
+            : language->T ("🛡 絶叫セーフティガード OFF", "🛡 Scream Safety Guard OFF"));
+
+        repaint();
+    }
+
+    GzzioLnF ownLnf;
+    VocalGzzioContent& owner;
+    VocalGzzioProcessor& processor;
+    juce::Rectangle<int> secBgmRect, secRecRect, secDiagRect, secGuardRect;
+    juce::Rectangle<int> bgmStatusRect, bgmProgRect, bgmVolLabelRect, bgmDuckLabelRect, bgmDuckMeterRect;
+    juce::Rectangle<int> wavStatusRect, diagBarsRect, diagStatusRect, guardMeterRect;
+    juce::TextButton loadBgmBtn, demoBgmBtn, playBgmBtn, rewBgmBtn, loopBgmBtn;
+    juce::TextButton keyDownBtn, keyZeroBtn, keyUpBtn, syncKeyBtn, bgmRouteBtn;
+    juce::Slider bgmVolSlider, bgmDuckSlider;
+    juce::TextButton wavRecBtn, retroSaveBtn, openRecDirBtn;
+    std::array<juce::TextButton, 5> diagBtns;
+    juce::TextButton coughBtn, screamGuardBtn;
+    std::unique_ptr<juce::FileChooser> chooser;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StageStudioPanel)
+};
+
+//==============================================================================
 // v4.7.0 スタンドアロン専用「音声デバイス ＆ 入出力モノラル／ステレオ・チャンネル個別設定」ウインドウ
 // JUCE標準の SettingsComponent は showChannelsAsStereoPairs = true のため 1+2 ステレオペアしか選べず、
 // また入力／出力のモノラル切替も見つかりにくかった問題を解消する。
@@ -3535,7 +4040,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     addAndMakeVisible (checkupButton);
 
     // v4.7.0 入出力モノラル・マイク中央寄せ設定（詳細画面からも常に開けるようにする）
-    routeButton.setButtonText (language->T ("🎯入出力モノ", "I/O MONO"));
+    routeButton.setButtonText (language->T ("入出力", "I/O"));
     routeButton.setTooltip (language->T ("マイク入力（自動モノラル／入力1モノラル／入力2モノラル／ステレオ）と、出力（モノラル／ステレオ）を切り替えます。",
                                          "Switch mic input (Auto Mono, Input 1 Mono, Input 2 Mono, Stereo) and output (Mono / Stereo)."));
     routeButton.setColour (juce::TextButton::buttonColourId, Palette::blue.withAlpha (0.20f));
@@ -3545,6 +4050,18 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         openRoutePopup (routeButton.getScreenBounds());
     };
     addChildComponent (routeButton);
+
+    // v4.8.0 BGMプレイヤー・1クリックWAV録音・30秒さかのぼり保存・声質ターゲット診断（詳細画面からも開けるようにする）
+    stageButton.setButtonText (language->T ("BGM録音", "BGM/REC"));
+    stageButton.setTooltip (language->T ("カラオケ・BGMプレイヤー（キー変更・自動BGMダッキング・WDM混音選択）、1クリックWAV録音＆直前30秒さかのぼり保存、5秒声質ターゲット診断、絶叫セーフティガードを開きます。",
+                                         "Opens Karaoke/BGM player, 1-click WAV recorder & 30s retroactive save, 5s Voice Target AI tuner, and Scream Safety Guard."));
+    stageButton.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.22f));
+    styleButton (stageButton);
+    stageButton.onClick = [this]
+    {
+        openStageStudioPopup (stageButton.getScreenBounds());
+    };
+    addChildComponent (stageButton);
 
     // v2.2.0 配信出力(単体起動版のみ。プラグイン版はホストが配線するので出さない)
     streamButton.setButtonText (language->so_btn_label());
@@ -4413,6 +4930,7 @@ void VocalGzzioContent::updateTabVisibility()
     tapButton.setVisible (fx);
     midiButton.setVisible (fx);     // v2.1.0 MIDIスイッチ設定
     routeButton.setVisible (fx);    // v4.7.0 入出力モノラル設定
+    stageButton.setVisible (fx);    // v4.8.0 BGM・録音・声質診断設定
     streamButton.setVisible (fx && processor.isStandalone());   // v2.2.0 配信出力
     lampMega.btn.setVisible (fx);
     lampCho .btn.setVisible (fx);
@@ -4470,7 +4988,9 @@ void VocalGzzioContent::updateTabVisibility()
                          (juce::Component*) &charBox,   (juce::Component*) &tapButton,
                          (juce::Component*) &analyzeButton, (juce::Component*) &keyScaleButton,
                          (juce::Component*) &tabFxButton,  (juce::Component*) &tabEqButton,
-                         (juce::Component*) &fxWarnButton })
+                         (juce::Component*) &fxWarnButton, (juce::Component*) &midiButton,
+                         (juce::Component*) &routeButton,  (juce::Component*) &stageButton,
+                         (juce::Component*) &streamButton })
             c->setVisible (false);
         //  その箱のスイッチ・コンボ類は出し、ほかの箱のものはしまう。
         {
@@ -4884,6 +5404,8 @@ void VocalGzzioContent::timerCallback()
         }
         if (hint.isNotEmpty() && hint != overviewHint) { overviewHint = hint; repaint (overviewHelp); }
         repaint (overviewOutput);
+        if (processor.isBgmPlaying() || processor.isWavRecording())
+            repaint (stagePillRect);
     }
     // v3.0「つぶさない」の数字は毎回変わるので、20Hz で描き直す。
     // ★これが無いと、OFF にした瞬間の数字が**消えずに残る**（実際に残った）。
@@ -6746,18 +7268,20 @@ void VocalGzzioContent::resized()
         auto c3 = r3.removeFromLeft (185);
         charBox    .setBounds (c3.getX() + 4, c3.getCentreY() - 28, 168, 26);
         megaTypeBox.setBounds (c3.getX() + 4, c3.getCentreY() + 4, 168, 26);
-        auto mb = r3.removeFromRight (processor.isStandalone() ? 204 : 104);
+        auto mb = r3.removeFromRight (204);
+        auto mbR = mb.removeFromRight (100);
         if (processor.isStandalone())
         {
-            auto mbR = mb.removeFromRight (100);
             routeButton .setBounds (mbR.getX() + 2, mbR.getCentreY() - 28, 96, 26);
             streamButton.setBounds (mbR.getX() + 2, mbR.getCentreY() + 2,  96, 26);
             midiButton  .setBounds (mb.getX()  + 4, mb.getCentreY() - 28,  96, 26);
+            stageButton .setBounds (mb.getX()  + 4, mb.getCentreY() + 2,   96, 26);
         }
         else
         {
-            midiButton  .setBounds (mb.getX() + 4, mb.getCentreY() - 28, 96, 26);
-            routeButton .setBounds (mb.getX() + 4, mb.getCentreY() + 2,  96, 26);
+            routeButton .setBounds (mbR.getX() + 2, mbR.getCentreY() - 28, 96, 26);
+            stageButton .setBounds (mbR.getX() + 2, mbR.getCentreY() + 2,  96, 26);
+            midiButton  .setBounds (mb.getX()  + 4, mb.getCentreY() - 28,  96, 26);
         }
         placeCells (r3, { &megaAmtK, &roboFreqK, &roboMixK });
 
@@ -6989,6 +7513,7 @@ void VocalGzzioContent::applyThemeToKnobs()
     analyzeButton  .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
     midiButton     .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::green.withAlpha (0.18f));
     routeButton    .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.20f));
+    stageButton    .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::yellow.withAlpha (0.22f));
     streamButton   .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::salmon.withAlpha (0.18f));
     tapButton      .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
     for (auto& power : overviewSectionPower)
@@ -7277,9 +7802,12 @@ void VocalGzzioContent::refreshLanguage()
     // v2.1.0/v2.2.0/v4.7.0 設定ボタンも言語に追随
     midiButton.setButtonText (language->midi_btn_label());
     midiButton.setTooltip (language->midi_btn_tip());
-    routeButton.setButtonText (language->T ("🎯入出力モノ", "I/O MONO"));
+    routeButton.setButtonText (language->T ("入出力", "I/O"));
     routeButton.setTooltip (language->T ("マイク入力（自動モノラル／入力1モノラル／入力2モノラル／ステレオ）と、出力（モノラル／ステレオ）を切り替えます。",
                                          "Switch mic input (Auto Mono, Input 1 Mono, Input 2 Mono, Stereo) and output (Mono / Stereo)."));
+    stageButton.setButtonText (language->T ("BGM録音", "BGM/REC"));
+    stageButton.setTooltip (language->T ("カラオケ・BGMプレイヤー（キー変更・自動BGMダッキング・WDM混音選択）、1クリックWAV録音＆直前30秒さかのぼり保存、5秒声質ターゲット診断、絶叫セーフティガードを開きます。",
+                                         "Opens Karaoke/BGM player, 1-click WAV recorder & 30s retroactive save, 5s Voice Target AI tuner, and Scream Safety Guard."));
     streamButton.setButtonText (language->so_btn_label());
     streamButton.setTooltip (language->so_btn_tip());
 
@@ -7631,6 +8159,20 @@ void VocalGzzioContent::openStreamOutPopup (juce::Rectangle<int> anchorScreenBou
 void VocalGzzioContent::openStandaloneAudioSettings()
 {
     launchStandaloneAudioMonoDialog (processor, language);
+}
+
+void VocalGzzioContent::openStageStudioPopup (juce::Rectangle<int> anchorScreenBounds)
+{
+    if (isShowing())
+    {
+        auto panel = std::make_unique<StageStudioPanel> (*this, processor, language);
+        juce::CallOutBox::launchAsynchronously (std::move (panel), anchorScreenBounds, nullptr);
+    }
+    else
+    {
+        processor.toggleBgmPlaying();
+    }
+    repaint();
 }
 
 void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds)

@@ -449,6 +449,77 @@ public:
     //== v4.7.0 声優先ダッキング（歌っている最中の残響抑え量 dB） ==
     float getSpaceDuckDb() const noexcept      { return meterDuckDb.load (std::memory_order_relaxed); }
 
+    //== v4.8.0 柱④：😷 咳払い瞬間ミュート ＆ 🛡 絶叫セーフティガード ==
+    bool  getCoughMute() const noexcept        { return coughMute.load (std::memory_order_relaxed); }
+    void  setCoughMute (bool b) noexcept       { coughMute.store (b, std::memory_order_relaxed); }
+    void  toggleCoughMute() noexcept           { coughMute.store (! getCoughMute(), std::memory_order_relaxed); }
+    bool  getScreamGuardOn() const noexcept    { return screamGuardOn.load (std::memory_order_relaxed); }
+    void  setScreamGuardOn (bool b) noexcept   { screamGuardOn.store (b, std::memory_order_relaxed); markStateDirty(); }
+    float getScreamGuardDb() const noexcept    { return meterScreamGuardDb.load (std::memory_order_relaxed); }
+
+    //== v4.8.0 柱①：🎵 カラオケ・BGMプレイヤー内蔵（キー変更・自動BGMダッキング・WDM混音選択） ==
+    bool  loadBgmFile (const juce::File& file);
+    void  loadBuiltinDemoBgm();
+    void  clearBgm();
+    bool  hasBgmLoaded() const noexcept        { return bgmLoadedSamples.load (std::memory_order_relaxed) > 0; }
+    juce::String getBgmTitle() const           { const juce::ScopedLock sl (bgmMetaLock); return bgmTitle; }
+    bool  isBgmPlaying() const noexcept        { return bgmPlaying.load (std::memory_order_relaxed); }
+    void  setBgmPlaying (bool b) noexcept      { bgmPlaying.store (b, std::memory_order_relaxed); }
+    void  toggleBgmPlaying() noexcept          { if (! hasBgmLoaded()) loadBuiltinDemoBgm(); bgmPlaying.store (! isBgmPlaying(), std::memory_order_relaxed); }
+    void  rewindBgm() noexcept                 { bgmReadPos.store (0.0, std::memory_order_relaxed); }
+    bool  isBgmLooping() const noexcept        { return bgmLooping.load (std::memory_order_relaxed); }
+    void  setBgmLooping (bool b) noexcept      { bgmLooping.store (b, std::memory_order_relaxed); }
+    float getBgmProgress() const noexcept
+    {
+        const int len = bgmLoadedSamples.load (std::memory_order_relaxed);
+        return len > 0 ? juce::jlimit (0.0f, 1.0f, (float) (bgmReadPos.load (std::memory_order_relaxed) / (double) len)) : 0.0f;
+    }
+    void  setBgmProgress (float norm01) noexcept
+    {
+        const int len = bgmLoadedSamples.load (std::memory_order_relaxed);
+        if (len > 0) bgmReadPos.store ((double) juce::jlimit (0.0f, 1.0f, norm01) * (double) (len - 1), std::memory_order_relaxed);
+    }
+    float getBgmDurationSec() const noexcept
+    {
+        const int len = bgmLoadedSamples.load (std::memory_order_relaxed);
+        return (len > 0 && currentSampleRate > 1000.0) ? (float) ((double) len / currentSampleRate) : 0.0f;
+    }
+    float getBgmGainDb() const noexcept        { return bgmGainDb.load (std::memory_order_relaxed); }
+    void  setBgmGainDb (float db) noexcept     { bgmGainDb.store (juce::jlimit (-36.0f, 6.0f, db), std::memory_order_relaxed); }
+    int   getBgmPitchSemi() const noexcept     { return bgmPitchSemi.load (std::memory_order_relaxed); }
+    void  setBgmPitchSemi (int semi);
+    bool  getBgmSyncKey() const noexcept       { return bgmSyncKey.load (std::memory_order_relaxed); }
+    void  setBgmSyncKey (bool b) noexcept      { bgmSyncKey.store (b, std::memory_order_relaxed); }
+    float getBgmDuckAmt() const noexcept       { return bgmDuckAmt.load (std::memory_order_relaxed); }
+    void  setBgmDuckAmt (float amt01) noexcept { bgmDuckAmt.store (juce::jlimit (0.0f, 1.0f, amt01), std::memory_order_relaxed); }
+    float getBgmDuckMeterDb() const noexcept  { return meterBgmDuckDb.load (std::memory_order_relaxed); }
+    bool  getBgmToStream() const noexcept      { return bgmToStream.load (std::memory_order_relaxed); }
+    void  setBgmToStream (bool b) noexcept     { bgmToStream.store (b, std::memory_order_relaxed); }
+
+    //== v4.8.0 柱②：🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（Wet+Dry同時24bit保存） ==
+    bool  isWavRecording() const noexcept      { return wavRecording.load (std::memory_order_relaxed); }
+    float getWavRecordingSec() const noexcept
+    {
+        return currentSampleRate > 1000.0 ? (float) ((double) wavRecPos.load (std::memory_order_relaxed) / currentSampleRate) : 0.0f;
+    }
+    float getRetroBufferedSec() const noexcept
+    {
+        return currentSampleRate > 1000.0 ? (float) ((double) retroFilled.load (std::memory_order_relaxed) / currentSampleRate) : 0.0f;
+    }
+    void  startWavRecording() noexcept;
+    bool  stopAndSaveWavRecording();
+    void  toggleWavRecording();
+    bool  saveRetroWavRecording();
+    juce::File   getRecordingsDirectory() const;
+    juce::String getLastSavedWavStatus() const { const juce::ScopedLock sl (bgmMetaLock); return lastSavedWavStatus; }
+
+    //== v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ==
+    bool  runVoiceTargetDiagnosis (int targetStyle);
+    int   getLastVoiceTargetStyle() const noexcept { return lastVoiceTargetStyle.load (std::memory_order_relaxed); }
+    juce::String getVoiceTargetSummary() const     { const juce::ScopedLock sl (bgmMetaLock); return voiceTargetSummary; }
+    float getVoiceDiagUserBand (int b) const noexcept   { return (b >= 0 && b < 4) ? voiceDiagUserBands[b].load (std::memory_order_relaxed)   : 0.5f; }
+    float getVoiceDiagTargetBand (int b) const noexcept { return (b >= 0 && b < 4) ? voiceDiagTargetBands[b].load (std::memory_order_relaxed) : 0.5f; }
+
     //== v2.10.0 点検 =========================================================
     // ★ここから下はどれも音を作らない。音声スレッドからは呼ばない。
 
@@ -1038,6 +1109,59 @@ private:
     std::atomic<int>  auditionLen    { 0 };        // 録音された有効サンプル長
     int               auditionMaxSamples { 240000 };
     std::atomic<float> meterDuckDb   { 0.0f };     // 声優先ダッキングで現在残響を抑えている量(dB, 0..15)
+
+    // ---- v4.8.0 柱④：😷 咳払い瞬間ミュート ＆ 🛡 絶叫セーフティガード ----
+    std::atomic<bool>  coughMute          { false };
+    float              coughMuteGain      { 1.0f };
+    float              coughMuteStep      { 0.002f };
+    std::atomic<bool>  screamGuardOn      { true };
+    float              screamGuardEnv     { 0.0f };
+    std::atomic<float> meterScreamGuardDb { 0.0f };
+
+    // ---- v4.8.0 柱①：🎵 カラオケ・BGMプレイヤー内蔵（キー変更・自動BGMダッキング・WDM混音選択） ----
+    mutable juce::CriticalSection bgmMetaLock;
+    juce::SpinLock     bgmAudioLock;
+    std::shared_ptr<const juce::AudioBuffer<float>> bgmAudioBuf;
+    juce::String       bgmTitle;
+    std::atomic<int>   bgmLoadedSamples   { 0 };
+    std::atomic<bool>  bgmPlaying         { false };
+    std::atomic<bool>  bgmLooping         { true };
+    std::atomic<double> bgmReadPos        { 0.0 };
+    std::atomic<float> bgmGainDb          { -6.0f };
+    std::atomic<int>   bgmPitchSemi       { 0 };
+    std::atomic<bool>  bgmSyncKey         { true };
+    int                bgmBaseKey         { -1 };
+    std::atomic<float> bgmDuckAmt         { 0.55f };
+    float              bgmDuckEnv         { 0.0f };
+    float              bgmDuckGain        { 1.0f };
+    std::atomic<float> meterBgmDuckDb     { 0.0f };
+    std::atomic<bool>  bgmToStream        { true };
+    std::vector<float> bgmPitchRingL, bgmPitchRingR;
+    int                bgmPitchRingW      { 0 };
+    float              bgmPitchPhase      { 0.0f };
+    juce::AudioBuffer<float> bgmBlockScratch;
+
+    // ---- v4.8.0 柱②：🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（Wet+Dry同時24bit保存） ----
+    juce::AudioBuffer<float> retroDryBuf, retroWetBuf;
+    int                retroMaxSamples    { 1440000 };
+    std::atomic<int>   retroWritePos      { 0 };
+    std::atomic<int>   retroFilled        { 0 };
+    std::atomic<bool>  retroFreeze        { false };
+    juce::AudioBuffer<float> wavRecDryBuf, wavRecWetBuf;
+    int                wavRecMaxSamples   { 5760000 }; // 最大120秒分を事前確保
+    std::atomic<int>   wavRecPos          { 0 };
+    std::atomic<bool>  wavRecording       { false };
+    juce::String       lastSavedWavStatus;
+    bool               writeDryWetWavPair (const juce::AudioBuffer<float>& drySrc,
+                                           const juce::AudioBuffer<float>& wetSrc,
+                                           int numFrames,
+                                           const juce::String& prefixTag);
+
+    // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
+    std::atomic<int>   lastVoiceTargetStyle { 1 };
+    juce::String       voiceTargetSummary;
+    std::atomic<float> voiceDiagUserBands[4]   { 0.48f, 0.52f, 0.45f, 0.42f };
+    std::atomic<float> voiceDiagTargetBands[4] { 0.55f, 0.72f, 0.65f, 0.70f };
 
     // v2.8.0: A/Bスロット自体を保存するとき、その中にまたA/Bを入れないための札。
     // 入れてしまうと保存が入れ子に増殖して、プロジェクトが開けなくなる。

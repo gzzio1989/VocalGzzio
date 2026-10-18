@@ -330,6 +330,29 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+    // 1d-4. 2段目の「😷咳ミュート」ワンクリック瞬間無音ミュートピル（8ms滑らか遮断・残響鳴り残り防止）
+    if (! coughPillRect.isEmpty() && coughPillRect.contains (pt))
+    {
+        processor.toggleCoughMute();
+        const bool muted = processor.getCoughMute();
+        overviewHint = muted
+            ? language->T ("【🔇 咳払い瞬間ミュート中】マイク入力をリバーブ・ディレイの手前で8ms無音遮断しました（ポップノイズも残響の鳴り残りもゼロ）。もう一度押すと即座に復帰します。",
+                           "[COUGH MUTE ON] Smoothly muted mic input in 8ms before reverb/delay (zero pop noise or reverb tail). Click again to unmute.")
+            : language->T ("【😷 咳払いミュート解除】マイク音声を滑らかに復帰しました。",
+                           "[COUGH MUTE OFF] Restored microphone audio.");
+        repaint();
+        return true;
+    }
+
+    // 1d-5. 2段目の「🎵BGM・録音・診断」ステージ＆スタジオ統合パネルピル
+    if (! stagePillRect.isEmpty() && stagePillRect.contains (pt))
+    {
+        openStageStudioPopup (localAreaToGlobal (stagePillRect));
+        overviewHint = language->T ("【🎵 BGM・録音・声質診断・絶叫ガード】カラオケ伴奏プレイヤー（キー変更・自動ダッキング・WDM混音選択）、1クリックWAV録音＆直前30秒さかのぼり保存、5秒声質ターゲット診断、絶叫セーフティガードを開きます。",
+                                    "[STAGE & STUDIO HUB] Opens Karaoke/BGM player (key shift, auto-ducking, WDM mix), 1-click WAV recorder & 30s retroactive save, 5s Voice Target AI tuner, and Scream Safety Guard.");
+        return true;
+    }
+
     // 1e. Output boost trim. The visible button and this hit-test use the same action.
     if (! levelBadgeRect.isEmpty() && levelBadgeRect.contains (pt))
     {
@@ -653,6 +676,12 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
     if (loopPillRect.contains (pt))
         return language->T ("【5秒録音・手放し試聴ルーパー】1回押すとマイクの素の声を5秒間録音し、直後から自動ループ再生します。骨伝導のない客観的な自分の声を聴きながら、両手で仕上がりや2Dオーブ・原音比較を追い込めます。",
                             "[5s Quick Audition Looper] Click once to record 5 seconds of your dry voice, then automatically loop it through the DSP chain so you can tweak settings and compare raw vs. processed hands-free.");
+    if (coughPillRect.contains (pt))
+        return language->T ("【😷 咳払い・くしゃみ瞬間ミュート】リバーブやディレイへ入る手前でマイクを8ms滑らかに無音遮断します。ポップノイズも残響の鳴り残りもゼロで、BGM再生は止めずに咳払いだけを隠せます。",
+                            "[Cough Instant Mute] Smoothly mutes microphone input in 8ms before reverb/delay with zero pop noise or reverb tail while keeping BGM playing.");
+    if (stagePillRect.contains (pt))
+        return language->T ("【🎵 BGM・録音・声質ターゲット診断・絶叫ガード】カラオケ伴奏プレイヤー（キー変更±6・自動BGMダッキング・WDM混音選択）、1クリックWAV録音＆直前30秒さかのぼり保存（Wet+Dry同時）、5秒声質ターゲット診断、絶叫セーフティガードを開きます。",
+                            "[BGM / WAV Recorder / Voice Target AI / Scream Guard] Opens Karaoke BGM player (key shift, auto-ducking, WDM mix), 1-click WAV & 30s retroactive recorder (Wet+Dry), 5s Voice Target AI tuner, and Scream Safety Guard.");
     for (size_t c = 0; c < coutureSwatchRects.size(); ++c)
         if (! coutureSwatchRects[c].isEmpty() && coutureSwatchRects[c].contains (pt))
             return language->T ("クチュール・コスメ5色のカラーバリエーション（01ロゼ／02アイシーラベンダー／03ノワールロリータ／04ティファニーミント／05ハニーピーチ）をワンタッチで切り替えます。",
@@ -787,6 +816,8 @@ void VocalGzzioContent::resizedOverview()
     ioOutMonoRect = {};
     talkPillRect = {};
     loopPillRect = {};
+    coughPillRect = {};
+    stagePillRect = {};
     for (auto& r : argonBarRects) r = {};
     for (auto& r : argonTargetRects) r = {};
     for (auto& r : coutureSwatchRects) r = {};
@@ -809,20 +840,22 @@ void VocalGzzioContent::resizedOverview()
     overviewPitch  .setBounds (toolbar.removeFromRight (126)); toolbar.removeFromRight (5);
     checkupButton  .setBounds (toolbar.removeFromRight (86));
 
-    // ---- 2段目: 仕上がり・音の種類・ワンクリック自動設定・A/B比較・歌枠⇄雑談MC・5秒試聴ルーパー・原音比較・初期化 ----
+    // ---- 2段目: 仕上がり・音の種類・ワンクリック自動設定・A/B比較・歌枠⇄雑談MC・5秒試聴・咳ミュート・BGM録音診断・原音比較・初期化 ----
     const int barY = 72, barH = 40;
-    finishPresetBox.setBounds (116, barY, 232, barH);
-    srcModeLabelArea = { 352, barY, 84, barH };
-    srcModeBox     .setBounds (440, barY, 152, barH);
-    autoSetupButton.setBounds (600, barY, 134, barH);
-    songSetupButton.setBounds (740, barY, 134, barH);
-    abA            .setBounds (882, barY, 42,  barH);
-    abB            .setBounds (928, barY, 42,  barH);
-    abCopy         .setBounds (974, barY, 62,  barH);
-    talkPillRect   = { 1044, barY + 3, 102, barH - 6 };
-    loopPillRect   = { 1152, barY + 3, 106, barH - 6 };
-    overviewCompare.setBounds (1266, barY, 188, barH);
-    resetButton    .setBounds (1460, barY, w - edge - 1460, barH);
+    finishPresetBox.setBounds (110, barY, 212, barH);
+    srcModeLabelArea = { 324, barY, 74, barH };
+    srcModeBox     .setBounds (400, barY, 136, barH);
+    autoSetupButton.setBounds (542, barY, 114, barH);
+    songSetupButton.setBounds (660, barY, 114, barH);
+    abA            .setBounds (780, barY, 36,  barH);
+    abB            .setBounds (820, barY, 36,  barH);
+    abCopy         .setBounds (860, barY, 52,  barH);
+    talkPillRect   = { 918,  barY + 3, 94,  barH - 6 };
+    loopPillRect   = { 1016, barY + 3, 94,  barH - 6 };
+    coughPillRect  = { 1114, barY + 3, 98,  barH - 6 };
+    stagePillRect  = { 1216, barY + 3, 114, barH - 6 };
+    overviewCompare.setBounds (1336, barY, 144, barH);
+    resetButton    .setBounds (1484, barY, w - edge - 1484, barH);
 
     auto grid = [this] (juce::Rectangle<int> r, std::initializer_list<Knob*> knobs, int columns)
     {
@@ -1387,6 +1420,39 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                 g.setColour (Palette::panel.withAlpha (0.65f));
                 g.fillRoundedRectangle (bar, 1.1f);
                 g.setColour (aCol);
+                g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * prog), 1.1f);
+            }
+        }
+
+        // [😷咳ミュート] 咳払い・くしゃみ瞬間無音遮断ピル（8ms滑らかフェード・残響鳴り残り防止）
+        if (! coughPillRect.isEmpty())
+        {
+            const bool cMute = processor.getCoughMute();
+            drawHeaderPill (coughPillRect, cMute, cMute ? Palette::salmon : Palette::inkSoft,
+                            cMute ? language->T ("🔇ミュート中", "MUTED") : language->T ("😷咳ミュート", "COUGH"));
+        }
+
+        // [🎵BGM・録音・診断] カラオケ伴奏・1クリックWAV録音・30秒さかのぼり・声質ターゲット診断ピル
+        if (! stagePillRect.isEmpty())
+        {
+            const bool recOn = processor.isWavRecording();
+            const bool bgmOn = processor.isBgmPlaying();
+            const bool stAct = recOn || bgmOn;
+            const auto stCol = recOn ? Palette::salmon : (bgmOn ? Palette::green : Palette::yellow);
+            const juce::String stLab = recOn
+                ? language->T ("🔴WAV録音中", "●WAV REC")
+                : bgmOn
+                    ? language->T ("🎵BGM再生中", "🎵BGM ON")
+                    : language->T ("🎵BGM・録音", "BGM/REC");
+            drawHeaderPill (stagePillRect, stAct, stCol, stLab);
+            if (bgmOn)
+            {
+                const float prog = juce::jlimit (0.0f, 1.0f, processor.getBgmProgress());
+                auto bar = stagePillRect.toFloat().reduced (8.0f, 0.0f);
+                bar = bar.withTop (bar.getBottom() - 3.5f).withHeight (2.2f);
+                g.setColour (Palette::panel.withAlpha (0.65f));
+                g.fillRoundedRectangle (bar, 1.1f);
+                g.setColour (stCol);
                 g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * prog), 1.1f);
             }
         }

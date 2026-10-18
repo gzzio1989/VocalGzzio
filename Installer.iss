@@ -1,4 +1,4 @@
-﻿; ============================================================
+; ============================================================
 ;  VocalGzzio — Windows インストーラー (Inno Setup 6)
 ; ------------------------------------------------------------
 ;  作り方（2026-08-13 更新）:
@@ -137,9 +137,27 @@ Source: "docs\style.css"; DestDir: "{app}\{#MyVst3Name}"; Components: vst3; Flag
 Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\VST3\{#MyVst3Name}\*"; \
     DestDir: "{app}\{#MyVst3Name}"; Components: vst3; \
     Flags: recursesubdirs createallsubdirs ignoreversion
-; 単体起動版
+; 単体起動版 ＆ 専用仮想オーディオドライバ (VocalGzzio Driver (WDM))
 Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\Standalone\{#MyExeName}"; \
     DestDir: "{#MyStandaloneDir}"; Components: standalone; Flags: ignoreversion
+Source: "VocalGzzioWdmInstaller.exe"; \
+    DestDir: "{#MyStandaloneDir}"; Components: standalone; Flags: ignoreversion
+Source: "driver\syncroom.inf"; \
+    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
+Source: "driver\syncroom.cat"; \
+    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
+Source: "driver\syncroom.sys"; \
+    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
+
+[Run]
+Filename: "{#MyStandaloneDir}\VocalGzzioWdmInstaller.exe"; Parameters: "--install --no-elevate"; \
+    Components: standalone; Flags: runhidden waituntilterminated
+
+#ifndef TrialBuild
+[UninstallRun]
+Filename: "{#MyStandaloneDir}\VocalGzzioWdmInstaller.exe"; Parameters: "--uninstall --no-elevate"; \
+    Components: standalone; Flags: runhidden waituntilterminated; RunOnceId: "UninstallVocalGzzioWdmDriver"
+#endif
 
 [Icons]
 Name: "{commonprograms}\{#MyAppName2}"; Filename: "{#MyStandaloneDir}\{#MyExeName}"; Components: standalone
