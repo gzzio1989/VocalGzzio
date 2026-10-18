@@ -1,50 +1,33 @@
-# VocalGzzio 4.7.0
+# VocalGzzio 4.8.0
 
-歌・話し声・アコースティックギターの音を整えるプラグイン＆単体起動アプリです。
-ノイズ除去、音量そろえ、音色（2D声質重力場オーブ＆4軸成形）、音程、空間IR残響、歌枠⇄雑談MCのワンクリック瞬間切替、5秒試聴ルーパー、単体起動版の片耳マイク中央化と外部配信ブリッジを総合画面から調整できます。
+歌・話し声・アコースティックギター・VTuber配信・メタバース通話（cluster / VRChat / Discord / OBS / SYNCROOM）の音を整えるプラグイン＆単体起動アプリです。
+ノイズ除去、音量そろえ、音色（2D声質重力場オーブ＆4軸成形）、音程、空間IR残響、歌枠⇄雑談MCのワンクリック瞬間切替、5秒試聴ルーパー、カラオケ・BGMプレイヤー内蔵（キー変更＆自動ダッキング）、1クリックWAV録音＆直前30秒さかのぼり保存、5秒声質ターゲット診断、絶叫セーフティガード＆咳払い瞬間ミュート、そして**あらゆるオーディオインターフェース（サウンドハウス・Amazon主要60ブランド・160機種以上）に対応する自動クロック同期・IN1〜IN4マルチ入力中央化・外部配信ブリッジ**を総合画面から調整できます。
 
-> **更新状況（2026年10月18日）**：**VocalGzzio 4.7.0（Couture & Live Streamer Edition）** を公開しました。歌設定を壊さず曲間のMCトークで残響やハモリを瞬時にオフにする **「🎤歌枠 ⇄ 💬雑談MC ワンクリック瞬間切替」**、骨伝導なしで自分の声を客観試聴しながら音作りできる **「🔄 5秒試聴ルーパー」**、歌っている最中の歌詞埋もれを防ぐ **「🌊 声優先ダッキング直結＆可視化」** に加え、高級コスメ着想の「クチュール5色（01ロゼ／02氷紫／03黒姫／04翡翠／05白桃）」、片耳マイク自動中央化（`🎯単音化`）、SYNCROOM / OBS 向け外部配信出力ブリッジ（`📡外部出力`）、空間IRリバーブの減衰波形表示＆カスタムIR（`.wav`/`.aiff`）読込に対応しています。実際に入手できるファイルは[BOOTHの商品ページ](https://gzzio.booth.pm/items/8764003)で確認してください。Windows版とMac版は同じ購入に含まれ、既存購入者も追加購入なしで両方利用できます。
+> **更新状況（2026年10月19日）**：**VocalGzzio 4.8.0（Stage & Studio / Universal Audio Interface Edition）** を公開しました。サウンドハウス・Amazonで流通する主要60ブランド・160機種以上のオーディオインターフェース／配信ミキサー／32bitフロート機／USBマイク／VR機器に完全対応しました。実際に入手できるファイルは[BOOTHの商品ページ](https://gzzio.booth.pm/items/8208045)で確認してください。Windows版とMac版は同じ購入に含まれ、既存購入者も追加購入なしで両方利用できます。
 
-[商品と体験版](https://gzzio.booth.pm/items/8764003) · [使い方](docs/manual.html) · [4.7.0の変更記録](docs/updates-4.7.0.md) · [4.6.0の変更記録](docs/updates-4.6.0.md) · [4.5.0の変更記録](docs/updates-4.5.0.md) · [過去の画面](docs/archive-ui-history.md) · [Macの導入と起動警告](https://gzzio1989.github.io/apps/vocalgzzio/mac-install.html)
+[商品と体験版](https://gzzio.booth.pm/items/8208045) · [使い方](docs/manual.html) · [4.7.0の変更記録](docs/updates-4.7.0.md) · [4.6.0の変更記録](docs/updates-4.6.0.md) · [4.5.0の変更記録](docs/updates-4.5.0.md) · [過去の画面](docs/archive-ui-history.md) · [Macの導入と起動警告](https://gzzio1989.github.io/apps/vocalgzzio/mac-install.html)
+
+---
+
+## 🎙️ 対応オーディオインターフェース・配信ミキサー・USBマイク・VR機器 完全一覧表
+**（サウンドハウス・Amazon 主要60ブランド / 160機種以上対応）**
+
+お手持ちの機材がどのメーカー・どの端子構成であっても、VocalGzzio 単体起動版（Standalone）＋内蔵の専用仮想ドライバ **`ライン (VocalGzzio Driver (WDM))`** でそのままお使いいただけます。
+
+| カテゴリ / メーカー | 主な対応機種（サウンドハウス・Amazon 定番＆最新モデル） | ハードウェア仕様・端子特徴 | VocalGzzio v4.8 自動対応機能 |
+| :--- | :--- | :--- | :--- |
+| **① 配信・実況・ゲームミキサー**<br>YAMAHA / Roland / audio-technica | ・**YAMAHA**: `AG03MK2` / `AG06MK2` / `AG08` / `ZG01` / `ZG02` / `AG03` / `AG06`<br>・**audio-technica**: `AT-UMX3`（Amazonベストセラー1位）<br>・**Roland**: `BRIDGE CAST` / `BRIDGE CAST X` / `BRIDGE CAST ONE` / `VT-4` / `E-4` / `GO:MIXER PRO-X` | ・`IN 1` マイク入力＋本体 `LOOPBACK` スイッチ搭載<br>・`GAME` / `CHAT` / `VOICE` / `STREAM` 等複数のWindows仮想WDMバスを搭載<br>・`AT-UMX3` はドライバレス最大192kHz対応 | **◎ 完全対応（推奨）**<br>・複数WDMバスのサンプルレート（48kHz等）を一括自動統一し、`cluster` 等の音消えを防止<br>・本体 `LOOPBACK` ON時のハウリング発振を0.35秒で自動検知し耳への返しを自動ミュート |
+| **② DTM・歌枠・歌ってみた超定番**<br>Steinberg / Focusrite / Roland | ・**Steinberg**: `UR22C` / `UR12` / `UR24C` / `UR44C` / `UR816C` / `IXO12` / `IXO22` / `URX22C` / `URX44C` / `UR-RT2` / `UR-RT4`<br>・**Focusrite**: `Scarlett Solo` / `2i2` / `4i4` / `8i6` / `18i8` / `18i20`（第3〜第4世代） / `Vocaster One` / `Two` / `Clarett+`<br>・**Roland**: `Rubix22` / `Rubix24` / `Rubix44` | ・**`Scarlett Solo (第4世代)` はXLRマイク端子が右（`IN 2`）**<br>・**`Rubix44` / `UR44C` / `Scarlett 4i4` はマイク入力が `IN 1〜4`、サブヘッドホンが `OUT 3-4`** | **◎ 完全対応（推奨）**<br>・`IN 1〜IN 4` のどこにマイクを挿してもAC音声帯域検知で自動的に両耳中央（`L=R`）へ配置（手動固定も可）<br>・多ch機の `IN 1〜4` ＆ `OUT 1〜4`（2系統目ヘッドホン含む）を自動有効化 |
+| **③ 高音質スタジオ定番**<br>SSL / MOTU / Universal Audio / Audient | ・**Solid State Logic**: `SSL 2` / `SSL 2+` / `SSL 2 MKII` / `SSL 2+ MKII` / `SSL 12`<br>・**MOTU**: `M2` / `M4` / `M6` / `UltraLite-mk5` / `828`<br>・**Universal Audio**: `Volt 1` / `Volt 2` / `Volt 4` / `Volt 176` / `Volt 276` / `Volt 476` / `Volt 476P` / `Apollo Twin` / `Apollo Solo`<br>・**Audient**: `iD4mkII` / `iD14mkII` / `iD24` / `iD44mkII` / `EVO 4` / `EVO 8` / `EVO 16` | ・**`MOTU M2/M4` や `Audient EVO 4/8` は `IN 3-4` が内部ステレオループバック端子**<br>・44.1kHz〜192kHzの高解像度ASIO駆動 | **◎ 完全対応（推奨）**<br>・`IN 3-4` にステレオのPCループバック音が流れていても誤吸い込みせず、単一マイク端子（`IN 1/2`）だけを正確に追従<br>・最大192kHzリサンプリング対応 |
+| **④ 32bit Float・新世代機**<br>ZOOM / TASCAM / Lewitt / Topping | ・**ZOOM**: `UAC-232` / `UAC-432` / `UAC-2` / `AMS-22` / `AMS-24` / `AMS-44` / `PodTrak P4` / `P8` / `LiveTrak`<br>・**TASCAM**: `US-1x2HR` / `US-2x2HR` / `US-4x4HR` / `MiNiSTUDIO US-32W` / `US-42W` / `Series 102i` / `208i` / `Portacapture` / `FR-AV2`<br>・**Lewitt**: `CONNECT 2` / `CONNECT 6`<br>・**Topping**: `E2x2` / `E2x2 OTG` / `E4x4` | ・**`ZOOM UAC-232 / 432` や `URX` 等は32bit FloatデュアルAD搭載**（大声時に `+0dBFS` / `\|x\| > 1.0f` を超える浮動小数点信号が入力される） | **◎ 完全対応（推奨）**<br>・**32bit Float自動ヘッドルーム制御**を搭載。`+0dBFS` を超える突発的な大声入力も内部で自動パッド制御し、ピッチ補正やEQが一切クリップしません |
+| **⑤ ハイエンドプロ機・統合配信コンソール**<br>RME / Neumann / Elgato / RODE / TC Helicon / Antelope / Apogee | ・**RME**: `Babyface Pro FS` / `Fireface UCX II` / `Fireface UFX II` / `UFX III` / `Digiface`<br>・**Neumann**: `MT 48` ・**Antelope Audio**: `Zen Go` / `Zen Quadro` / `Discrete 4/8`<br>・**Apogee**: `Boom` / `Duet 3` / `Symphony Desktop`<br>・**RODE**: `RODECaster Pro II` / `RODECaster Duo` / `Streamer X` / `AI-1`<br>・**Elgato**: `Wave XLR` / `Wave:3`（Wave Link対応）<br>・**TC Helicon**: `GoXLR` / `GoXLR Mini` / `Perform-V` | ・TotalMix FX / Wave Link / GoXLR / RODECaster 等のマルチバス・仮想ルーティング搭載 | **◎ 完全対応（推奨）**<br>・`VocalGzzio Driver (WDM)` ＋ `Yamaha SYNCROOM Driver` ＋ `VB-CABLE` の**最大3系統同時ミラー送出**に対応し、どの仮想バスへも遅延30msで直結可能 |
+| **⑥ コスパDTM・ミキサー・ギター系**<br>PreSonus / Arturia / NI / Behringer / M-Audio / Mackie / Blackstar / IK | ・**PreSonus**: `AudioBox GO` / `USB 96` / `Studio 24c` / `26c` / `68c` / `Revelator io24` / `io44` / `Quantum ES 2` / `ES 4`<br>・**Arturia**: `MiniFuse 1` / `2` / `4` / `AudioFuse`<br>・**Native Instruments**: `Komplete Audio 1` / `2` / `6`<br>・**Behringer**: `UMC22` / `UM2` / `UMC202HD` / `204HD` / `404HD` / `FLOW 8`<br>・**M-Audio**: `M-Track Solo` / `Duo` / `AIR 192\|4` / `6` / `8`<br>・**Mackie**: `Onyx` / `ProFX` / `M-Caster` / `MainStream` ・**Blackstar**: `Polar 2` / `4` ・**IK Multimedia**: `AXE I/O` / `iRig Pro` / `iRig Stream` | ・専用ASIOドライバ搭載機、および `ASIO4ALL v2` 等の排他ラッパーを使用するエントリー機 | **◎ 完全対応**<br>・`ASIO4ALL` 等でWindowsの他アプリの音がロックされる機種でも、ワンクリック **「🌐 全アプリ共存・共有モード（WASAPI共有）」** ボタンで `cluster` やブラウザと完全共存 |
+| **⑦ USBマイク・ゲーミングDAC・VR機器**<br>Shure / HyperX / Blue / FIFINE / Maono / Sound Blaster / SteelSeries / Meta Quest | ・**USBマイク**: `Shure MV7+` / `MV7` / `MVX2U`、`HyperX QuadCast S` / `2` / `SoloCast`、`Blue Yeti` / `Nano`、`audio-technica AT2020USB-X` / `AT2040USB`、`Razer Seiren`<br>・**配信ミキサー/DAC**: `FIFINE AmpliGame SC3`、`Maono AME2` / `G1 NEO`、`Razer Audio Mixer`、`Creative Sound Blaster GC7` / `X4` / `G6`、`SteelSeries GameDAC Gen 2` / `Arctis Nova`、`Astro MixAmp`、`Sony INZONE`<br>・**VR機器**: `Meta Quest 3 / 3S / 2 (Oculus Virtual Audio)`、`SteamVR (Index / Bigscreen Beyond)`、`VIVE`、`PICO 4` | ・入力（USBマイクやVRマイク）と出力（ヘッドホンやVRスピーカー）が**別々のデバイス**に分かれる構成 | **◎ 完全対応**<br>・**「🌐 全アプリ共存・共有モード」** を押すだけで、別々のUSBマイク入力とヘッドホン／VRスピーカー出力を自動で束ね、`VocalGzzio Driver (WDM)` へ加工後の声を送出します |
+
+---
 
 ## 最初の3ステップ
 
-1. 入力の種類を選び、いちばん強く歌うところで入力が歪まないよう音声機器の音量を合わせます（マイクが片耳しか聞こえない場合は `🎯単音化` が自動で両耳中央に揃えます）。
-2. 「うた自動」の自動調整か「仕上がり」を選びます。中央のオーブや4本のバーで、温かみ（倍音）・声の輪郭（声芯）・空気感（空気）・広がり（立体）を調整できます。
-3. `🔄5秒試聴` で自分の声を5秒録ってループ再生しながら、「押して原音と比較」で聴き比べ、出力音量と残響を仕上げます。曲間のトークでは `🎤歌枠/MC` を押すだけで設定を保ったまま残響をオフにできます。
-
-ノイズがあるときは、黙った状態で「ノイズを測る」を押し、学習後にノイズ除去を少しずつ上げます。強くかけると声や息も変化するため、最大値を常用するための機能ではありません。
-
-## 4.7.0 / 4.6.0 の新機能と特徴
-
-- **🎤歌枠 ⇄ 💬雑談MC ワンクリック瞬間ライブ切替（4.7.0 新搭載）**：歌枠用に追い込んだ残響・やまびこ・ハモリ・広がりの数値を一切書き換えずに一時ミュートし、曲間のコメント読みでクリアなMC声へ12msクロスフェードで切り替えます。再クリックで元の歌設定へ100%復帰します。
-- **🔄 5秒録って手放し聴き比べ「試聴ルーパー」（4.7.0 新搭載）**：1回クリックすると素の声を5秒録音し、直後から自動ループ再生します。骨伝導が混ざらない客観的な自分の声を聴きながら、両手で2Dオーブや仕上がり・原音比較を追い込めます。
-- **🌊 声優先ダッキング直結＆リアルタイム減衰表示（4.7.0 新搭載）**：歌っている最中は残響を自動で抑えて歌詞をくっきり届け、フレーズの語尾でふわっと余韻を広げる「声優先ダッキング（0% / 45% / 75%）」を空間IRカプセル（`IR・声優先`）に統合しました。
-- **クチュール・コスメティック 5色パレット（♥LIVER ＆ 文字・見た目）**：高級コスメパレットやジュエリーの質感を取り入れた5色（`01ロゼ` ロゼ・クチュール / `02氷紫` アイシーラベンダー / `03黒姫` ノワール・ロリータ / `04翡翠` ティファニーミント / `05白桃` ハニーピーチ）を1クリックで切り替えられます。
-- **片耳マイク自動中央化（`🎯単音化`） ＆ 外部配信出力ブリッジ（`📡外部出力`）**：インターフェースの片側入力のみのマイクを両耳センターへ自動補正し、VB-CABLE や Yamaha SYNCROOM Driver (WDM) 等へ直接同時送出できます。
-- **空間IRリバーブ「へや」減衰波形 ＆ カスタムIR読込（`IR・声優先`）**：6種類の計算生成IRに加え、手持ちの `.wav` / `.aiff` IRファイルの読み込みと減衰エンベロープ波形表示に対応しています。
-
-音量保護は大きな音で音量を緩やかに下げる補助です。瞬間的なピークをすべて止める機能ではありません。マイクや音声機器ですでに歪んだ入力を元に戻すこともできません。最も大きく歌う箇所で出力を確認してください。
-
-## 音程と遅延について
-
-音程補正・ハモリは単独の歌声など、音程が1つの音源を対象にしています。声とギターが混ざった音を分離して補正する機能はありません。
-
-音程処理を有効にすると、48kHzでは約42.6ミリ秒の処理遅延が加わります。現在の値は画面に表示します。低遅延モードでは音程系を停止します。音声機器・録音ソフト・通信による遅延は別に発生します。
-
-## 配布形式と確認範囲
-
-- Windows 10 / 11、64ビット：VST3・単体起動アプリ。
-- Mac：macOS 11以降、Appleシリコン／Intel用。VST3・AU・単体起動アプリをインストーラーで導入します。
-- 製品版と体験版は別の名前で導入されます。体験版は60秒ごとに0.6秒だけ音量が下がり、A/B比較および設定ファイルの保存・読込は使えません。
-- MacのApple開発者署名・公証、Windowsインストーラーの電子署名は未付与です。Macの `.component` は録音ソフトが読む部品です。導入には `.pkg`、単体起動には導入済みの `.app` を使ってください。
-
-製品版はBOOTHの購入履歴から、体験版は無料配布欄から入手してください。インストール前に録音ソフトと単体起動アプリを終了します。既存のパラメータ番号を保ち、プロジェクトを開いただけで新しい仕上がりを自動適用することはありません。音質修正による音の違いは生じるため、大事なプロジェクトと更新前の音を書き出して保管してください。
-
-## 開発・配布物の作成
-
-CMake 3.22以上、C++17、JUCE 8.0.12を使用します。WindowsはVisual StudioのC++開発環境、MacはXcodeの開発環境が必要です。
-
-Windowsの検査は `tools/run_tests.ps1` で実行します。検査用ビルドは設定保存先を隔離します。配布用は別フォルダーで `VOCALGZZIO_BUILD_TESTS=OFF`・`VOCALGZZIO_LITE=OFF` を指定し、製品版と体験版も分けてビルドしてください。
-
-Windowsのインストーラーは `tools/package_windows.ps1`、説明書を含むZIPは `tools/package_windows_archive.py` で作成します。前者は版番号・製品名・製品と体験の目印・検査用保存先の混入を照合し、既存配布物の上書きを拒否します。Macは `tools/package_macos.py` をMac上で使い、ソースと本体の版、2種類のCPU、アイコンを照合します。
+1. 入力の種類を選び、いちばん強く歌うところで入力が歪まないよう音声機器の音量を合わせます（マイクが `IN 1〜IN 4` のどこに挿さっていても、自動で両耳中央 `L=R` に揃えます）。
+2. 「うた自動」の自動調整か「仕上がり」、または「🎯 ステージ＆スタジオ」の **5秒声質ターゲット診断** を選びます。中央のオーブや4本のバーで、温かみ（倍音）・声の輪郭（声芯）・空気感（空気）・広がり（立体）を調整できます。
+3. `🔄5秒試聴` で自分の声を5秒録ってループ再生しながら、「押して原音と比較」で聴き比べ、出力音量と残響を仕上げます。`cluster`・`VRChat`・`Discord`・`OBS` で使うときは、相手アプリのマイクに **`ライン (VocalGzzio Driver (WDM))`** を選ぶだけです。

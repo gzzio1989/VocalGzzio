@@ -31,29 +31,70 @@ namespace gz
 class StreamOut : private juce::AudioIODeviceCallback
 {
 public:
-    StreamOut()
+    explicit StreamOut (bool isPrimary = true) : allowMirror (isPrimary)
     {
         ring.setSize (2, ringLen);
         ring.clear();
-        temp.setSize (2, 8192);
+        temp.setSize (2, 16384);
         temp.clear();
+        if (allowMirror)
+        {
+            mirrorOut  = std::make_unique<StreamOut> (false);
+            mirrorOut2 = std::make_unique<StreamOut> (false);
+        }
     }
 
     ~StreamOut() override { stop(); }
 
     //== メッセージスレッド ==================================================
 
+    // Windowsの「既定の再生デバイス（スピーカー）」が仮想ドライバに奪われていたら実スピーカーへ復元し、
+    // 実スピーカーのWindows WDMサンプルレート（例: 48000Hz）を返す。
+    static double rescueWindowsDefaultSpeakerAndGetSampleRate (juce::String* outRealSpeaker = nullptr,
+                                                               juce::String* outRealMic     = nullptr);
+
+    // 接続中のインターフェース（Roland Rubix / Yamaha AG / Steinberg UR / Focusrite Scarlett / Volt / MOTU /
+    // SSL / Audient / RME / PreSonus / TASCAM / ZOOM / Behringer / USBマイク / VRヘッドセット等）の
+    // Windows WDM再生・録音エンドポイントと既定スピーカーを照合・修復し、最適な同期サンプルレートと診断結果を返す。
+    static double inspectAndHealWindowsAudioForInterface (const juce::String& activeDeviceName,
+                                                          juce::String* outRealSpeaker = nullptr,
+                                                          juce::String* outRealMic     = nullptr,
+                                                          juce::String* outDiagReport  = nullptr);
+
     static bool isVirtualLoopbackName (const juce::String& n) noexcept
     {
+        // VRヘッドセット(Oculus Virtual Audio Device等)やGPU音声、ゲーミングDACのヘッドホン側は実スピーカーなので除外
+        if (n.containsIgnoreCase ("Oculus") || n.containsIgnoreCase ("Quest")
+            || n.containsIgnoreCase ("Steam Streaming") || n.containsIgnoreCase ("VIVE")
+            || n.containsIgnoreCase ("NVIDIA") || n.containsIgnoreCase ("AMD")
+            || n.containsIgnoreCase ("Sonar - Gaming") || n.containsIgnoreCase ("Sonar - Headphone")
+            || n.containsIgnoreCase ("Wave Link Monitor"))
+            return false;
+
         return n.containsIgnoreCase ("VocalGzzio")
             || n.containsIgnoreCase ("GzzioRoom")
             || n.containsIgnoreCase ("SYNCROOM")
+            || n.containsIgnoreCase ("NETDUETTO")
             || n.containsIgnoreCase ("VB-Audio")
             || n.containsIgnoreCase ("CABLE")
             || n.containsIgnoreCase ("VoiceMeeter")
-            || n.containsIgnoreCase ("Virtual")
-            || n.containsIgnoreCase ("Loopback")
-            || n.containsIgnoreCase ("BlackHole");
+            || n.containsIgnoreCase ("VAIO")
+            || n.containsIgnoreCase ("BlackHole")
+            || n.containsIgnoreCase ("Soundflower")
+            || n.containsIgnoreCase ("Rogue Amoeba")
+            || n.containsIgnoreCase ("Wave Link Stream")
+            || n.containsIgnoreCase ("Broadcast Stream Mix")
+            || n.containsIgnoreCase ("Loopback");
+    }
+
+    // 他アプリ(cluster / VRChat / Discord / ブラウザ等)の音を排他ロックで消してしまうラッパー系ASIOドライバ判定
+    static bool isExclusiveWrapperAsioName (const juce::String& n) noexcept
+    {
+        return n.containsIgnoreCase ("ASIO4ALL")
+            || n.containsIgnoreCase ("Realtek ASIO")
+            || n.containsIgnoreCase ("Generic Low Latency ASIO")
+            || n.containsIgnoreCase ("MAGIX Low Latency")
+            || n.containsIgnoreCase ("DirectX Full Duplex");
     }
 
     // 選べる出力先の一覧。ASIO は他アプリと排他になりやすく、メイン出力と
@@ -119,6 +160,7 @@ public:
         if (proc.start ("\"" + installer.getFullPathName() + "\" --install"))
         {
             proc.waitForProcessToFinish (25000);
+            rescueWindowsDefaultSpeakerAndGetSampleRate();
             return proc.getExitCode() == 0;
         }
        #endif
@@ -154,28 +196,57 @@ public:
         else
             devSr = hostSr;
 
-        // FIFO を目標量(約60ms)まで無音で満たしてから流し始める。
-        // 出だしの数ブロックで在庫切れ→プチッと鳴るのを防ぐ。
+        // FIFO を目標量(約30ms)まで無音で満たしてから流し始める。
+        // 低遅延を保ちつつ出だしの数ブロックで在庫切れ→プチッと鳴るのを防ぐ。
         fifo.reset();
         ring.clear();
-        target = juce::jlimit (256, ringLen / 2, (int) (hostSr * 0.06));
+        target = juce::jlimit (256, ringLen / 4, (int) (hostSr * 0.03));
         {
             int s1, sz1, s2, sz2;
             fifo.prepareToWrite (target, s1, sz1, s2, sz2);
             fifo.finishedWrite (sz1 + sz2);
         }
-        ratioSm = hostSr / devSr;
+        ratioSm = hostSr / juce::jmax (8000.0, devSr);
         for (auto& i : interp) i.reset();
         underruns.store (0);
 
         deviceName_ = deviceName;
         active.store (true);
         adm().addAudioCallback (this);
+
+        // cluster / VRChat / Discord / OBS 等で「VocalGzzio Driver (WDM)」「Yamaha SYNCROOM Driver (WDM)」
+        // 「VB-CABLE」のどれがマイク選択されていても確実に声が届くよう、最大2系統の仮想ケーブルへ同時ミラー出力する
+        if (allowMirror && isVirtualLoopbackName (deviceName))
+        {
+            const auto names = getOutputDeviceNames();
+            juce::StringArray altDevs;
+            for (const auto& n : names)
+            {
+                if (n == deviceName) continue;
+                if (n.containsIgnoreCase ("VocalGzzio") || n.containsIgnoreCase ("SYNCROOM")
+                    || n.containsIgnoreCase ("CABLE") || n.containsIgnoreCase ("GzzioRoom"))
+                {
+                    altDevs.addIfNotAlreadyThere (n);
+                }
+            }
+            if (altDevs.size() >= 1 && mirrorOut != nullptr)
+            {
+                mirrorOut->setForceMono (forceMono.load (std::memory_order_relaxed));
+                mirrorOut->start (altDevs[0], hostSr);
+            }
+            if (altDevs.size() >= 2 && mirrorOut2 != nullptr)
+            {
+                mirrorOut2->setForceMono (forceMono.load (std::memory_order_relaxed));
+                mirrorOut2->start (altDevs[1], hostSr);
+            }
+        }
         return true;
     }
 
     void stop()
     {
+        if (mirrorOut != nullptr)  mirrorOut->stop();
+        if (mirrorOut2 != nullptr) mirrorOut2->stop();
         if (admPtr == nullptr) { active.store (false); return; }
         if (! active.exchange (false) && admPtr->getCurrentAudioDevice() == nullptr) return;
         admPtr->removeAudioCallback (this);
@@ -183,15 +254,40 @@ public:
         deviceName_.clear();
     }
 
-    bool isRunning() const noexcept          { return active.load(); }
+    bool isRunning() const noexcept
+    {
+        return active.load() && admPtr != nullptr && admPtr->getCurrentAudioDevice() != nullptr
+               && admPtr->getCurrentAudioDevice()->isOpen();
+    }
     juce::String getDeviceName() const       { return deviceName_; }
+    juce::String getMirrorDeviceName() const { return (mirrorOut != nullptr && mirrorOut->isRunning()) ? mirrorOut->getDeviceName() : juce::String(); }
     juce::String getLastError() const        { return lastError; }
     double getDeviceSampleRate() const noexcept { return devSr; }
     int  getUnderrunCount() const noexcept   { return underruns.load(); }
     bool isForceMono() const noexcept        { return forceMono.load (std::memory_order_relaxed); }
-    void setForceMono (bool b) noexcept      { forceMono.store (b, std::memory_order_relaxed); }
+    void setForceMono (bool b) noexcept
+    {
+        forceMono.store (b, std::memory_order_relaxed);
+        if (mirrorOut != nullptr)  mirrorOut->setForceMono (b);
+        if (mirrorOut2 != nullptr) mirrorOut2->setForceMono (b);
+    }
 
-    void setHostSampleRate (double sr) noexcept { if (sr > 0.0) hostSr = sr; }
+    void setHostSampleRate (double sr) noexcept
+    {
+        if (sr > 0.0 && std::abs (sr - hostSr) > 1.0)
+        {
+            hostSr = sr;
+            target = juce::jlimit (256, ringLen / 4, (int) (hostSr * 0.03));
+            if (devSr > 0.0)
+                ratioSm = juce::jlimit (0.2, 4.5, hostSr / devSr);
+        }
+        else if (sr > 0.0)
+        {
+            hostSr = sr;
+        }
+        if (mirrorOut != nullptr)  mirrorOut->setHostSampleRate (sr);
+        if (mirrorOut2 != nullptr) mirrorOut2->setHostSampleRate (sr);
+    }
 
     //== オーディオスレッド ==================================================
 
@@ -214,6 +310,9 @@ public:
             juce::FloatVectorOperations::copy (ring.getWritePointer (1, s2), R + sz1,  sz2);
         }
         fifo.finishedWrite (sz1 + sz2);
+
+        if (mirrorOut != nullptr)  mirrorOut->push (L, R, n);
+        if (mirrorOut2 != nullptr) mirrorOut2->push (L, R, n);
     }
 
 private:
@@ -222,10 +321,10 @@ private:
         if (dev != nullptr)
         {
             devSr = dev->getCurrentSampleRate() > 0.0 ? dev->getCurrentSampleRate() : hostSr;
-            const int want = juce::jmax (2048, dev->getCurrentBufferSizeSamples() * 8 + 64);
+            const int want = juce::jmax (4096, dev->getCurrentBufferSizeSamples() * 8 + 64);
             if (temp.getNumSamples() < want) temp.setSize (2, want, false, false, true);
         }
-        ratioSm = hostSr / devSr;
+        ratioSm = juce::jlimit (0.2, 4.5, hostSr / juce::jmax (8000.0, devSr));
     }
 
     void audioDeviceStopped() override {}
@@ -239,18 +338,31 @@ private:
 
         if (! active.load() || numOut < 1 || numSamples <= 0) return;
 
+        int fill = fifo.getNumReady();
+
+        // OSやVRワールド読み込み等でWASAPIスレッドが一時停止し、FIFOに90ms以上の遅延が溜まった場合は
+        // 目標量(30ms)まで即座にスキップし、通話相手に声が遅れて届き続ける現象を防ぐ
+        const int maxAllowedFill = juce::jmax (target * 3, 4096);
+        if (fill > maxAllowedFill)
+        {
+            const int drop = fill - target;
+            int ds1, dsz1, ds2, dsz2;
+            fifo.prepareToRead (drop, ds1, dsz1, ds2, dsz2);
+            fifo.finishedRead (dsz1 + dsz2);
+            fill = fifo.getNumReady();
+        }
+
         // --- クロックずれの吸収: たまり具合から再生速度を微調整 ---
-        const int fill = fifo.getNumReady();
         const double err  = (double) (fill - target) / (double) juce::jmax (1, target);
-        const double corr = juce::jlimit (-0.004, 0.004, err * 0.05);   // 最大±0.4%
-        const double want = (hostSr / devSr) * (1.0 + corr);
-        ratioSm += 0.05 * (want - ratioSm);
-        ratioSm = juce::jlimit (0.25, 4.0, ratioSm);
+        const double corr = juce::jlimit (-0.005, 0.005, err * 0.05);   // 最大±0.5%
+        const double want = (hostSr / juce::jmax (8000.0, devSr)) * (1.0 + corr);
+        ratioSm += 0.06 * (want - ratioSm);
+        ratioSm = juce::jlimit (0.2, 4.5, ratioSm);
 
         const int numIn = (int) std::ceil ((double) numSamples * ratioSm) + 2;
         if (numIn > temp.getNumSamples() || fill < numIn)
         {
-            underruns.fetch_add (1);      // 在庫切れ: この回は無音のまま抜ける
+            underruns.fetch_add (1);      // 在庫切れ: この回は無音のまま抜けることで次回すぐtarget分の蓄えを回復する
             return;
         }
 
@@ -312,8 +424,10 @@ private:
     std::atomic<bool> forceMono { false };
     std::atomic<int>  underruns { 0 };
     double hostSr = 48000.0, devSr = 48000.0, ratioSm = 1.0;
-    int    target = 2880;
+    int    target = 1440;
     juce::String deviceName_, lastError;
+    bool allowMirror { true };
+    std::unique_ptr<StreamOut> mirrorOut, mirrorOut2;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StreamOut)
 };

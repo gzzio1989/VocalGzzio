@@ -1636,9 +1636,150 @@ private:
 
 static void launchStandaloneAudioMonoDialog (VocalGzzioProcessor& processor, std::shared_ptr<tip::Language> language);
 
+// v4.8.1 全インターフェース対応・スタンドアロン自動診断＆修復エンジン：
+//  1. Windowsの既定スピーカーが仮想ドライバに奪われていたら実スピーカー(Roland Rubix / AG03 / Scarlett / MOTU / Volt等)へ即時復元し、通信時80%減衰も無効化
+//  2. 使用中ハードウェアのWindows再生(OUT)と録音(IN)のサンプルレート不一致を検出し、48000Hz等へ統一してASIO起動時のクロック反転によるcluster/VRChat/Discordの音消えを根治
+//  3. Rubix 44 / UR44C / Scarlett 4i4 / MOTU M4 等の多チャンネル機では IN 1〜4 ＆ OUT 1〜4(2系統目のヘッドホン端子含む) を自動で有効化
+//  4. ASIO4ALL / Realtek ASIO 等の排他ラッパーや USBマイク＋別ヘッドホン環境向けに、ワンクリック「WASAPI共有モード(全アプリ共存)」切替も搭載
+//  5. 仮想マイク(VocalGzzio Driver (WDM) ＋ SYNCROOM Driver ＋ VB-CABLE トリプルミラー出力)を即時有効化
+static juce::String syncStandaloneAudioForCluster (VocalGzzioProcessor& processor, bool forceEnableStreamOut, bool switchToSharedWasapi = false)
+{
+    if (! processor.isStandalone())
+        return {};
+
+    juce::String activeHwName;
+   #if JucePlugin_Build_Standalone
+    if (auto* holder = juce::StandalonePluginHolder::getInstance())
+    {
+        if (auto* cur = holder->deviceManager.getCurrentAudioDevice())
+            activeHwName = cur->getName();
+        else
+        {
+            juce::AudioDeviceManager::AudioDeviceSetup s;
+            holder->deviceManager.getAudioDeviceSetup (s);
+            activeHwName = s.outputDeviceName.isNotEmpty() ? s.outputDeviceName : s.inputDeviceName;
+        }
+    }
+   #endif
+
+    juce::String realSpk, realMic, diagReport;
+    const double sysSr = gz::StreamOut::inspectAndHealWindowsAudioForInterface (activeHwName, &realSpk, &realMic, &diagReport);
+    double activeSr = processor.getSampleRate();
+
+   #if JucePlugin_Build_Standalone
+    if (auto* holder = juce::StandalonePluginHolder::getInstance())
+    {
+        juce::AudioDeviceManager::AudioDeviceSetup setup;
+        holder->deviceManager.getAudioDeviceSetup (setup);
+        bool changed = false;
+
+        // 「🌐 全アプリ共存・安全共有モード」が押された場合、または排他ASIOラッパーが原因で開けない場合
+        if (switchToSharedWasapi || (holder->deviceManager.getCurrentAudioDevice() == nullptr && realSpk.isNotEmpty()))
+        {
+            holder->deviceManager.setCurrentAudioDeviceType ("Windows Audio", true);
+            holder->deviceManager.getAudioDeviceSetup (setup);
+            if (realSpk.isNotEmpty()) setup.outputDeviceName = realSpk;
+            if (realMic.isNotEmpty()) setup.inputDeviceName  = realMic;
+            if (sysSr >= 44100.0)     setup.sampleRate       = sysSr;
+            setup.useDefaultInputChannels  = true;
+            setup.useDefaultOutputChannels = true;
+            holder->deviceManager.setAudioDeviceSetup (setup, true);
+            changed = true;
+        }
+        else
+        {
+            // ★最重要：Roland Rubix等のASIOが44100Hzで開かれると、本体クロックが48000Hz→44100Hzへ切り替わり、
+            // 48000Hzで再生中のclusterやブラウザのWindows標準音声(WDM)が突然消える！
+            // そのためハードウェアWDM出力／既定スピーカーのサンプルレート(48000Hz等)へ自動同期する。
+            bool needApply = false;
+            if (sysSr >= 44100.0 && std::abs (setup.sampleRate - sysSr) > 1.0)
+            {
+                setup.sampleRate = sysSr;
+                needApply = true;
+            }
+
+            // 多チャンネル機（Roland Rubix 44 / Steinberg UR44C / Scarlett 4i4 / MOTU M4 等）で
+            // IN 3-4 のマイク端子や OUT 3-4 のヘッドホン端子が使えるよう、最大4chまで自動的に有効化する
+            if (auto* cur = holder->deviceManager.getCurrentAudioDevice())
+            {
+                const int numInNames  = cur->getInputChannelNames().size();
+                const int numOutNames = cur->getOutputChannelNames().size();
+                if (numInNames >= 3 && (setup.useDefaultInputChannels || setup.inputChannels.countNumberOfSetBits() <= 2))
+                {
+                    setup.inputChannels.clear();
+                    setup.inputChannels.setRange (0, juce::jmin (4, numInNames), true);
+                    setup.useDefaultInputChannels = false;
+                    needApply = true;
+                }
+                if (numOutNames >= 4 && (setup.useDefaultOutputChannels || setup.outputChannels.countNumberOfSetBits() <= 2))
+                {
+                    setup.outputChannels.clear();
+                    setup.outputChannels.setRange (0, juce::jmin (4, numOutNames), true);
+                    setup.useDefaultOutputChannels = false;
+                    needApply = true;
+                }
+            }
+
+            // バッファサイズが極端に大きすぎる(>512)場合は低遅延な標準値へ整える
+            if (setup.bufferSize > 512)
+            {
+                setup.bufferSize = 256;
+                needApply = true;
+            }
+
+            if (needApply)
+            {
+                auto err = holder->deviceManager.setAudioDeviceSetup (setup, true);
+                if (err.isEmpty())
+                    changed = true;
+            }
+        }
+
+        if (auto* cur = holder->deviceManager.getCurrentAudioDevice())
+        {
+            activeSr = cur->getCurrentSampleRate();
+            activeHwName = cur->getName();
+        }
+
+        if (changed)
+            holder->saveAudioDeviceState();
+    }
+   #endif
+
+    if (forceEnableStreamOut)
+    {
+        auto dev = processor.getStreamOut().findPreferredVirtualDevice();
+       #if JUCE_WINDOWS
+        if (dev.isEmpty())
+        {
+            gz::StreamOut::installVocalGzzioWdmDriver();
+            dev = processor.getStreamOut().findPreferredVirtualDevice();
+        }
+       #endif
+        if (dev.isNotEmpty())
+            processor.setStreamOutput (true, dev);
+    }
+    else
+    {
+        processor.ensureStandaloneVirtualDriverActive();
+    }
+
+    juce::String msg = switchToSharedWasapi
+        ? juce::String::fromUTF8 ("✅ 全アプリ共存・共有モード適用: ")
+        : juce::String::fromUTF8 ("✅ 修復・同期完了: ");
+    if (diagReport.isNotEmpty())
+        msg += diagReport + " / ";
+    else if (realSpk.isNotEmpty())
+        msg += juce::String::fromUTF8 ("既定スピーカー=") + realSpk + " / ";
+    msg += juce::String ((int) std::round (activeSr > 0.0 ? activeSr : (sysSr > 0.0 ? sysSr : 48000.0))) + "Hz同期";
+    if (processor.getStreamOut().isRunning())
+        msg += juce::String::fromUTF8 (" / 配信出力ON");
+    return msg;
+}
+
 //==============================================================================
-// v2.2.0 / v4.6.0 / v4.7.0 外部出力ブリッジパネル(VocalGzzio Driver (WDM) / SYNCROOM / VB-CABLE 同時出力)
-// ＋ 入力・出力のモノラル／ステレオ直結スイッチ＆音声デバイス設定ボタン
+// v2.2.0 / v4.6.0 / v4.7.0 / v4.8.1 外部出力ブリッジパネル(VocalGzzio Driver (WDM) / SYNCROOM / VB-CABLE 同時出力)
+// ＋ cluster・通話 音消え一発修復 ＆ 全アプリ共存共有モード ＆ 自分の耳への返しミュート ＆ IN1〜IN4マルチ入力切替
 class StreamOutPanel : public juce::Component, private juce::Timer
 {
     std::shared_ptr<tip::Language> language;
@@ -1665,6 +1806,16 @@ public:
         };
         addAndMakeVisible (monoButton);
 
+        monMuteBtn.setClickingTogglesState (true);
+        monMuteBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+        monMuteBtn.setToggleState (processor.getMonitorMute(), juce::dontSendNotification);
+        monMuteBtn.onClick = [this]
+        {
+            processor.setMonitorMute (monMuteBtn.getToggleState());
+            refresh();
+        };
+        addAndMakeVisible (monMuteBtn);
+
        #if JUCE_WINDOWS
         installDrvButton.setButtonText (language->T ("🔧 VocalGzzio Driver 再登録", "🔧 Register VocalGzzio Driver"));
         installDrvButton.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.22f));
@@ -1680,10 +1831,40 @@ public:
         addAndMakeVisible (installDrvButton);
        #endif
 
+        clusterFixBtn.setButtonText (language->T ("🛠 cluster・通話 音消え一発修復 (クロック同期＋スピーカー復元)",
+                                                  "🛠 Fix cluster/Call Audio Loss (Sync Clock + Restore Speaker)"));
+        clusterFixBtn.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.28f));
+        clusterFixBtn.onClick = [this]
+        {
+            lastFixMsg = syncStandaloneAudioForCluster (processor, true, false);
+            reloadDevices (false);
+            onButton.setToggleState (processor.getStreamOut().isRunning(), juce::dontSendNotification);
+            refresh();
+        };
+        addAndMakeVisible (clusterFixBtn);
+
+        sharedModeBtn.setButtonText (language->T ("🌐 全アプリ共存・共有モード (USBマイク/VR/排他ASIO用)",
+                                                  "🌐 Shared Audio Mode (For USB Mic / VR / Exclusive ASIO)"));
+        sharedModeBtn.setColour (juce::TextButton::buttonColourId, Palette::blue.withAlpha (0.25f));
+        sharedModeBtn.onClick = [this]
+        {
+            lastFixMsg = syncStandaloneAudioForCluster (processor, true, true);
+            reloadDevices (false);
+            onButton.setToggleState (processor.getStreamOut().isRunning(), juce::dontSendNotification);
+            refresh();
+        };
+        addAndMakeVisible (sharedModeBtn);
+
         inRouteBtn.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.22f));
         inRouteBtn.onClick = [this]
         {
-            processor.setInputRouteMode ((processor.getInputRouteMode() + 1) % 5);
+            // 0(Auto) -> 1(IN1) -> 2(IN2) -> 5(IN3) -> 6(IN4) -> 3(Sum) -> 4(Stereo)
+            static const int kOrder[7] = { 0, 1, 2, 5, 6, 3, 4 };
+            const int cur = processor.getInputRouteMode();
+            int nextIdx = 0;
+            for (int i = 0; i < 7; ++i)
+                if (kOrder[i] == cur) { nextIdx = (i + 1) % 7; break; }
+            processor.setInputRouteMode (kOrder[nextIdx]);
             refresh();
         };
         addAndMakeVisible (inRouteBtn);
@@ -1719,16 +1900,15 @@ public:
         addAndMakeVisible (status);
 
         hint.setText (language->T (
-            "出力先に専用ドライバ「ライン (VocalGzzio Driver (WDM))」（または SYNCROOM Driver / VB-CABLE）を選ぶと、\n"
-            "メインのオーディオインターフェース(ASIO)で自分の声を聴きながら、OBS・Discord・VRChat・cluster・SYNCROOM 等の\n"
-            "マイク入力へ処理後の声を直接流し込めます（相手アプリ側のマイクで「ライン (VocalGzzio Driver (WDM))」を選択）。",
-            "Select 'ライン (VocalGzzio Driver (WDM))' (or SYNCROOM Driver / VB-CABLE) to bridge processed audio\n"
-            "directly into OBS, Discord, VRChat, or SYNCROOM while keeping your main interface on low-latency ASIO."),
+            "💡 cluster・Discord・VRChat・OBSのマイクに「ライン (VocalGzzio Driver (WDM))」（または SYNCROOM / VB-CABLE）を選択してください。\n"
+            "※ インターフェース(Rubix/AG03/UR/Scarlett/MOTU/Volt等)のクロック競合による音消えは「🛠 一発修復」、USBマイクやASIO4ALLの排他ロックは「🌐 共有モード」で即解決します！",
+            "Select 'ライン (VocalGzzio Driver (WDM))' (or SYNCROOM / VB-CABLE) as your mic in cluster, Discord, VRChat, or OBS.\n"
+            "Use 'Fix cluster/Call Audio Loss' to sync hardware sample rates, or 'Shared Audio Mode' for USB mics, VR headsets, and ASIO4ALL."),
             juce::dontSendNotification);
         hint.setColour (juce::Label::textColourId, Palette::inkSoft);
         addAndMakeVisible (hint);
 
-        setSize (620, 238);
+        setSize (660, 276);
         refresh();
         startTimerHz (4);
     }
@@ -1747,9 +1927,11 @@ public:
     {
         auto b = getLocalBounds().reduced (10);
         auto row1 = b.removeFromTop (30);
-        onButton.setBounds (row1.removeFromLeft (128));
+        onButton.setBounds (row1.removeFromLeft (114));
         row1.removeFromLeft (6);
-        monoButton.setBounds (row1.removeFromLeft (164));
+        monoButton.setBounds (row1.removeFromLeft (138));
+        row1.removeFromLeft (6);
+        monMuteBtn.setBounds (row1.removeFromLeft (204));
         row1.removeFromLeft (6);
         status.setBounds (row1);
         b.removeFromTop (6);
@@ -1761,10 +1943,16 @@ public:
        #endif
         devBox.setBounds (row2);
         b.removeFromTop (6);
+        auto rowFix = b.removeFromTop (30);
+        const int fixW = (rowFix.getWidth() - 6) * 54 / 100;
+        clusterFixBtn.setBounds (rowFix.removeFromLeft (fixW));
+        rowFix.removeFromLeft (6);
+        sharedModeBtn.setBounds (rowFix);
+        b.removeFromTop (6);
         auto row3 = b.removeFromTop (30);
-        inRouteBtn.setBounds (row3.removeFromLeft (206));
+        inRouteBtn.setBounds (row3.removeFromLeft (216));
         row3.removeFromLeft (6);
-        mainOutMonoBtn.setBounds (row3.removeFromLeft (182));
+        mainOutMonoBtn.setBounds (row3.removeFromLeft (184));
         row3.removeFromLeft (6);
         audioDevBtn.setBounds (row3);
         b.removeFromTop (6);
@@ -1788,7 +1976,7 @@ private:
         onButton.setEnabled (true);
         auto wanted = preferVocalGzzio ? processor.getStreamOut().findVocalGzzioDriverDevice()
                                        : processor.getStreamDeviceWanted();
-        if (wanted.isEmpty())
+        if (wanted.isEmpty() || ! gz::StreamOut::isVirtualLoopbackName (wanted))
             wanted = processor.getStreamOut().findPreferredVirtualDevice();
         const int idx = names.indexOf (wanted);
         devBox.setSelectedId (idx >= 0 ? idx + 1 : 1, juce::dontSendNotification);
@@ -1800,38 +1988,82 @@ private:
         refresh();
     }
 
-    void timerCallback() override { refresh(); }
+    void timerCallback() override
+    {
+        if (processor.isStandalone() && processor.isStreamOutputWanted() && ! processor.getStreamOut().isRunning())
+        {
+            if (++watchdogTicks >= 8) // 2秒ごとにUSB抜き差し・スリープ復帰からの自動再接続を監視
+            {
+                watchdogTicks = 0;
+                processor.ensureStandaloneVirtualDriverActive();
+            }
+        }
+        else
+        {
+            watchdogTicks = 0;
+        }
+        refresh();
+    }
 
     void refresh()
     {
         auto& so = processor.getStreamOut();
         juce::String t;
-        if (so.isRunning())
-            t = language->so_run_txt() + "  (" + juce::String ((int) so.getDeviceSampleRate()) + " Hz)";
+        if (processor.getFeedbackGuardTripped())
+            t = language->T ("🛡️ ループバック発振を自動遮断 (返しミュートON・配信継続中)", "🛡️ Feedback Loop Guard Active (Self-Monitor Muted)");
+        else if (lastFixMsg.isNotEmpty())
+            t = lastFixMsg;
+        else if (so.isRunning())
+            t = language->so_run_txt() + " (" + juce::String ((int) so.getDeviceSampleRate()) + "Hz)";
         else if (onButton.getToggleState())
-            t = language->so_fail_txt() + "  " + so.getLastError();
+            t = language->so_fail_txt() + " " + so.getLastError();
         else
             t = language->so_off_txt();
         if (status.getText() != t) status.setText (t, juce::dontSendNotification);
         if (onButton.getToggleState() != so.isRunning() && ! onButton.getToggleState())
             onButton.setToggleState (so.isRunning(), juce::dontSendNotification);
 
-        const int rMode = juce::jlimit (0, 4, processor.getInputRouteMode());
-        const char* inJa[5] = {
-            "🎤 入力: 自動モノラル (クリックで切替)",
-            "🎤 入力: IN1(左)モノラル (クリックで切替)",
-            "🎤 入力: IN2(右)モノラル (クリックで切替)",
-            "🎤 入力: 1+2合成モノラル (クリックで切替)",
-            "🎤 入力: ステレオ1+2 (クリックで切替)"
-        };
-        const char* inEn[5] = {
-            "Mic In: Auto Mono",
-            "Mic In: Input 1 Mono",
-            "Mic In: Input 2 Mono",
-            "Mic In: 1+2 Sum Mono",
-            "Mic In: Stereo 1+2"
-        };
-        inRouteBtn.setButtonText (language->T (inJa[rMode], inEn[rMode]));
+        const bool mm = processor.getMonitorMute();
+        monMuteBtn.setToggleState (mm, juce::dontSendNotification);
+        monMuteBtn.setButtonText (mm
+            ? language->T ("🔇 自分の耳への返し: ミュート中", "🔇 Self Monitor: MUTED")
+            : language->T ("🎧 自分の耳への返し: ON (通話時クリックで消音)", "🎧 Self Monitor: ON"));
+
+        const int rMode = juce::jlimit (0, 6, processor.getInputRouteMode());
+        const int autoCh = processor.getAutoCenterChannel();
+        juce::String inLabelJa, inLabelEn;
+        switch (rMode)
+        {
+            case 0:
+                inLabelJa = juce::String::fromUTF8 ("🎤 入力: 自動モノラル [現在 IN") + juce::String (autoCh + 1) + "]";
+                inLabelEn = "Mic In: Auto Mono [IN" + juce::String (autoCh + 1) + "]";
+                break;
+            case 1:
+                inLabelJa = juce::String::fromUTF8 ("🎤 入力: IN1(左) 固定モノラル");
+                inLabelEn = "Mic In: Input 1 Mono";
+                break;
+            case 2:
+                inLabelJa = juce::String::fromUTF8 ("🎤 入力: IN2(右/Solo) 固定モノラル");
+                inLabelEn = "Mic In: Input 2 Mono";
+                break;
+            case 5:
+                inLabelJa = juce::String::fromUTF8 ("🎤 入力: IN3(Rubix44等) 固定モノラル");
+                inLabelEn = "Mic In: Input 3 Mono";
+                break;
+            case 6:
+                inLabelJa = juce::String::fromUTF8 ("🎤 入力: IN4(Rubix44等) 固定モノラル");
+                inLabelEn = "Mic In: Input 4 Mono";
+                break;
+            case 3:
+                inLabelJa = juce::String::fromUTF8 ("🎤 入力: 全マイク合成モノラル (IN1-4)");
+                inLabelEn = "Mic In: All Mic Sum Mono";
+                break;
+            default:
+                inLabelJa = juce::String::fromUTF8 ("🎤 入力: ステレオ 1+2 分離");
+                inLabelEn = "Mic In: Stereo 1+2";
+                break;
+        }
+        inRouteBtn.setButtonText (language->T (inLabelJa.toRawUTF8(), inLabelEn.toRawUTF8()));
 
         const bool outM = processor.getOutputMonoMode();
         mainOutMonoBtn.setToggleState (outM, juce::dontSendNotification);
@@ -1842,7 +2074,9 @@ private:
 
     GzzioLnF ownLnf;                        // 子より後に破棄されるよう先頭に置く
     VocalGzzioProcessor& processor;
-    juce::TextButton onButton, monoButton, installDrvButton, inRouteBtn, mainOutMonoBtn, audioDevBtn;
+    int watchdogTicks { 0 };
+    juce::String lastFixMsg;
+    juce::TextButton onButton, monoButton, monMuteBtn, installDrvButton, clusterFixBtn, sharedModeBtn, inRouteBtn, mainOutMonoBtn, audioDevBtn;
     juce::Label devLabel, status, hint;
     juce::ComboBox devBox;
 
@@ -1850,7 +2084,7 @@ private:
 };
 
 //==============================================================================
-// v4.6.0 / v4.7.0 入力・出力 モノラル／ステレオ切替 ＆ マイク中央寄せパネル
+// v4.6.0 / v4.7.0 / v4.8.1 全インターフェース対応 入力(IN1〜IN4)・出力 モノラル／ステレオ切替 ＆ cluster・通話修復パネル
 class RouteOutPanel : public juce::Component, private juce::Timer
 {
     std::shared_ptr<tip::Language> language;
@@ -1861,14 +2095,14 @@ public:
         ownLnf.refreshPaletteColours();
         setLookAndFeel (&ownLnf);
 
-        titleLabel.setText (language->T ("🎯 入力・出力のモノラル／ステレオ切替 ＆ マイク設定",
-                                         "Input / Output Mono & Stereo Switch & Mic Routing"),
+        titleLabel.setText (language->T ("🎯 全インターフェース対応：入出力ルーティング ＆ cluster・通話設定",
+                                         "Universal Audio Interface I/O Routing & cluster/Call Setup"),
                             juce::dontSendNotification);
         titleLabel.setColour (juce::Label::textColourId, Palette::ink);
         addAndMakeVisible (titleLabel);
 
-        outSectionLabel.setText (language->T ("■ 出力（スピーカー／ヘッドホン／配信出力）のモノラル・ステレオ切替",
-                                              "Output (Speakers / Headphones / Stream) Mono & Stereo"),
+        outSectionLabel.setText (language->T ("■ 出力（スピーカー／ヘッドホン OUT 1-4／配信出力）のモノラル・ステレオ切替",
+                                              "Output (Speakers / Headphones OUT 1-4 / Stream) Mono & Stereo"),
                                  juce::dontSendNotification);
         outSectionLabel.setColour (juce::Label::textColourId, Palette::ink);
         addAndMakeVisible (outSectionLabel);
@@ -1903,39 +2137,78 @@ public:
         };
         addAndMakeVisible (outMonoBtn);
 
-        inSectionLabel.setText (language->T ("■ 入力（マイク）のモノラル・ステレオ切替",
-                                             "Input (Microphone) Mono & Stereo Routing"),
+        if (processor.isStandalone())
+        {
+            clusterFixBtn.setButtonText (language->T ("🛠 cluster・通話 音消え一発修復 (48kHz同期＋スピーカー復元＋配信ON)",
+                                                      "🛠 Fix cluster/Call Audio Loss (Sync Clock + Restore Speaker)"));
+            clusterFixBtn.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.28f));
+            clusterFixBtn.onClick = [this]
+            {
+                fixStatusText = syncStandaloneAudioForCluster (processor, true, false);
+                refresh();
+            };
+            addAndMakeVisible (clusterFixBtn);
+
+            sharedModeBtn.setButtonText (language->T ("🌐 全アプリ共存・安全共有モード (WASAPI共有・USBマイク/VR機器/ASIO4ALL用)",
+                                                      "🌐 Safe Shared Mode (WASAPI Shared for USB Mics / VR / ASIO4ALL)"));
+            sharedModeBtn.setColour (juce::TextButton::buttonColourId, Palette::blue.withAlpha (0.25f));
+            sharedModeBtn.onClick = [this]
+            {
+                fixStatusText = syncStandaloneAudioForCluster (processor, true, true);
+                refresh();
+            };
+            addAndMakeVisible (sharedModeBtn);
+
+            monMuteBtn.setClickingTogglesState (true);
+            monMuteBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+            monMuteBtn.setToggleState (processor.getMonitorMute(), juce::dontSendNotification);
+            monMuteBtn.onClick = [this]
+            {
+                processor.setMonitorMute (monMuteBtn.getToggleState());
+                refresh();
+            };
+            addAndMakeVisible (monMuteBtn);
+        }
+
+        inSectionLabel.setText (language->T ("■ マイク入力端子切替（IN 1〜IN 4 自動追従／個別固定／複数マイク合成）",
+                                             "Microphone Input Port Routing (Auto IN 1-4 / Fixed / Multi-Mic Sum)"),
                                 juce::dontSendNotification);
         inSectionLabel.setColour (juce::Label::textColourId, Palette::ink);
         addAndMakeVisible (inSectionLabel);
 
-        const char* ja[5] = {
-            "🎤 マイク入力: 自動モノラル（片耳マイクを自動検出して両耳中央 L+R へ）",
-            "🎤 マイク入力: 入力1 (左・Mic 1) をモノラル (L+R) へ固定",
-            "🎤 マイク入力: 入力2 (右・Mic 2) をモノラル (L+R) へ固定",
-            "🎤 マイク入力: 入力1 + 入力2 を合成してモノラル (L+R) へ配置",
-            "🎤 マイク入力: ステレオ（入力1=左 / 入力2=右 のまま分離）"
+        static const int kRouteValues[7] = { 0, 1, 2, 5, 6, 3, 4 };
+        const char* ja[7] = {
+            "🎤 自動モノラル（IN 1〜IN 4 のうち声が入っているマイク端子を自動追従して両耳中央 L+R へ）",
+            "🎤 IN 1 固定 (左 / Mic 1: 標準XLR端子)",
+            "🎤 IN 2 固定 (右 / Mic 2: Solo第4世代・2ch目)",
+            "🎤 IN 3 固定 (3ch目: Rubix44・UR44C・4i4・M4)",
+            "🎤 IN 4 固定 (4ch目: Rubix44・UR44C・4i4・M4)",
+            "🎤 全マイク合成 (IN 1〜4 自動ミックス中央)",
+            "🎤 ステレオ 1+2 分離 (左右そのまま処理)"
         };
-        const char* en[5] = {
-            "Mic Input: Auto Mono (Center active single-sided mic to L+R)",
-            "Mic Input: Input 1 Mono (Center Left / Mic 1 to L+R)",
-            "Mic Input: Input 2 Mono (Center Right / Mic 2 to L+R)",
-            "Mic Input: Sum Input 1 + Input 2 to Mono (L+R)",
+        const char* en[7] = {
+            "Mic Input: Auto Mono (Auto-detects active mic on IN 1..4 and centers to L+R)",
+            "Mic Input: IN 1 Mono (Left / Standard XLR)",
+            "Mic Input: IN 2 Mono (Right / Scarlett Solo XLR)",
+            "Mic Input: IN 3 Mono (Ch 3: Rubix44/UR44C/4i4/M4)",
+            "Mic Input: IN 4 Mono (Ch 4: Rubix44/UR44C/4i4/M4)",
+            "Mic Input: All Mic Sum (Mix IN 1..4 to L+R)",
             "Mic Input: Stereo 1+2 (Keep L/R separate)"
         };
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < 7; ++i)
         {
+            const int routeVal = kRouteValues[i];
             auto& b = routeBtns[(size_t) i];
             b.setClickingTogglesState (true);
             b.setRadioGroupId (4601);
             b.setButtonText (language->T (ja[i], en[i]));
             b.setColour (juce::TextButton::buttonOnColourId, Palette::green);
-            b.setToggleState (processor.getInputRouteMode() == i, juce::dontSendNotification);
-            b.onClick = [this, i]
+            b.setToggleState (processor.getInputRouteMode() == routeVal, juce::dontSendNotification);
+            b.onClick = [this, i, routeVal]
             {
                 if (routeBtns[(size_t) i].getToggleState())
                 {
-                    processor.setInputRouteMode (i);
+                    processor.setInputRouteMode (routeVal);
                     refresh();
                 }
             };
@@ -1957,7 +2230,7 @@ public:
         statusLabel.setColour (juce::Label::textColourId, Palette::inkSoft);
         addAndMakeVisible (statusLabel);
 
-        setSize (590, (processor.isStandalone() && ! isEmbedded) ? 356 : 316);
+        setSize (640, processor.isStandalone() ? (isEmbedded ? 416 : 456) : 346);
         refresh();
         startTimerHz (5);
     }
@@ -1979,23 +2252,59 @@ public:
         b.removeFromTop (4);
         outSectionLabel.setBounds (b.removeFromTop (20));
         b.removeFromTop (2);
-        auto outRow = b.removeFromTop (32);
+        auto outRow = b.removeFromTop (30);
         const int halfW = (outRow.getWidth() - 8) / 2;
         outMonoBtn.setBounds (outRow.removeFromLeft (halfW));
         outRow.removeFromLeft (8);
         outStereoBtn.setBounds (outRow);
-        b.removeFromTop (8);
-        inSectionLabel.setBounds (b.removeFromTop (20));
-        b.removeFromTop (2);
-        for (int i = 0; i < 5; ++i)
-        {
-            routeBtns[(size_t) i].setBounds (b.removeFromTop (28));
-            b.removeFromTop (3);
-        }
-        if (processor.isStandalone() && ! isEmbedded)
+        if (processor.isStandalone())
         {
             b.removeFromTop (4);
-            openDevBtn.setBounds (b.removeFromTop (32));
+            auto fixRow = b.removeFromTop (28);
+            const int fixLeftW = (fixRow.getWidth() - 6) * 53 / 100;
+            clusterFixBtn.setBounds (fixRow.removeFromLeft (fixLeftW));
+            fixRow.removeFromLeft (6);
+            sharedModeBtn.setBounds (fixRow);
+            b.removeFromTop (4);
+            monMuteBtn.setBounds (b.removeFromTop (28));
+        }
+        b.removeFromTop (6);
+        inSectionLabel.setBounds (b.removeFromTop (20));
+        b.removeFromTop (2);
+        // 0: Auto Mono (1行)
+        routeBtns[0].setBounds (b.removeFromTop (28));
+        b.removeFromTop (3);
+        // 1 & 2: IN 1 / IN 2 (2列)
+        {
+            auto r12 = b.removeFromTop (28);
+            const int w = (r12.getWidth() - 6) / 2;
+            routeBtns[1].setBounds (r12.removeFromLeft (w));
+            r12.removeFromLeft (6);
+            routeBtns[2].setBounds (r12);
+        }
+        b.removeFromTop (3);
+        // 3 & 4: IN 3 / IN 4 (2列)
+        {
+            auto r34 = b.removeFromTop (28);
+            const int w = (r34.getWidth() - 6) / 2;
+            routeBtns[3].setBounds (r34.removeFromLeft (w));
+            r34.removeFromLeft (6);
+            routeBtns[4].setBounds (r34);
+        }
+        b.removeFromTop (3);
+        // 5 & 6: 全マイク合成 / ステレオ分離 (2列)
+        {
+            auto r56 = b.removeFromTop (28);
+            const int w = (r56.getWidth() - 6) / 2;
+            routeBtns[5].setBounds (r56.removeFromLeft (w));
+            r56.removeFromLeft (6);
+            routeBtns[6].setBounds (r56);
+        }
+        b.removeFromTop (3);
+        if (processor.isStandalone() && ! isEmbedded)
+        {
+            b.removeFromTop (3);
+            openDevBtn.setBounds (b.removeFromTop (30));
         }
         b.removeFromTop (2);
         statusLabel.setBounds (b);
@@ -2006,33 +2315,58 @@ private:
 
     void refresh()
     {
+        static const int kRouteValues[7] = { 0, 1, 2, 5, 6, 3, 4 };
         const int mode = processor.getInputRouteMode();
         const int autoCh = processor.getAutoCenterChannel();
         const bool outMono = processor.getOutputMonoMode();
         outMonoBtn.setToggleState (outMono, juce::dontSendNotification);
         outStereoBtn.setToggleState (! outMono, juce::dontSendNotification);
-        for (int i = 0; i < 5; ++i)
-            routeBtns[(size_t) i].setToggleState (mode == i, juce::dontSendNotification);
+        for (int i = 0; i < 7; ++i)
+            routeBtns[(size_t) i].setToggleState (mode == kRouteValues[i], juce::dontSendNotification);
+
+        if (processor.isStandalone())
+        {
+            const bool mm = processor.getMonitorMute();
+            monMuteBtn.setToggleState (mm, juce::dontSendNotification);
+            monMuteBtn.setButtonText (mm
+                ? language->T ("🔇 自分の耳への返しミュート: ON（配信・clusterへは声が届きます／自分の耳には返しません）",
+                               "🔇 Self-Monitor Mute: ON (Voice sent to cluster/Stream, muted in your headphones)")
+                : language->T ("🎧 自分の耳への返しミュート: OFF（自分の声がヘッドホンに返ります／二重に聴こえる時はON）",
+                               "🎧 Self-Monitor Mute: OFF (Click to mute your own voice in headphones during calls)"));
+        }
+
+        if (processor.getFeedbackGuardTripped())
+        {
+            statusLabel.setText (language->T (
+                "🛡️ ループバック／ハウリング発振を自動検知したため「自分の耳への返しミュート」を自動ONにしました（配信出力は継続中）",
+                "🛡️ Hardware Loopback / Feedback oscillation detected! Self-Monitor Mute auto-enabled to protect your ears."),
+                juce::dontSendNotification);
+            return;
+        }
+
+        if (fixStatusText.isNotEmpty())
+        {
+            statusLabel.setText (fixStatusText, juce::dontSendNotification);
+            return;
+        }
 
         juce::String st;
         if (mode == 0)
         {
-            if (autoCh == 0)
-                st = language->T ("状態: 自動検出により 入力1(左) のマイクをモノラル中央(L+R)へ出力中",
-                                  "Status: Auto-centering Input 1 (Left) to Mono Center (L+R)");
-            else if (autoCh == 1)
-                st = language->T ("状態: 自動検出により 入力2(右) のマイクをモノラル中央(L+R)へ出力中",
-                                  "Status: Auto-centering Input 2 (Right) to Mono Center (L+R)");
-            else
-                st = language->T ("状態: 入力=自動モノラル（片耳マイクを自動で中央 L+R へ寄せます）",
-                                  "Status: Input = Auto Mono (Centers single-sided mic to L+R)");
+            st = language->T ("状態: 自動検出により 入力", "Status: Auto-centering Input ")
+               + juce::String (autoCh + 1)
+               + language->T (" のマイクをモノラル中央(L+R)へ出力中", " to Mono Center (L+R)");
         }
         else if (mode == 1)
-            st = language->T ("状態: 入力1 (Mic 1) をモノラル中央(L+R)へ固定中", "Status: Input 1 fixed to Mono Center (L+R)");
+            st = language->T ("状態: 入力1 (IN 1) をモノラル中央(L+R)へ固定中", "Status: Input 1 fixed to Mono Center (L+R)");
         else if (mode == 2)
-            st = language->T ("状態: 入力2 (Mic 2) をモノラル中央(L+R)へ固定中", "Status: Input 2 fixed to Mono Center (L+R)");
+            st = language->T ("状態: 入力2 (IN 2) をモノラル中央(L+R)へ固定中", "Status: Input 2 fixed to Mono Center (L+R)");
+        else if (mode == 5)
+            st = language->T ("状態: 入力3 (IN 3) をモノラル中央(L+R)へ固定中", "Status: Input 3 fixed to Mono Center (L+R)");
+        else if (mode == 6)
+            st = language->T ("状態: 入力4 (IN 4) をモノラル中央(L+R)へ固定中", "Status: Input 4 fixed to Mono Center (L+R)");
         else if (mode == 3)
-            st = language->T ("状態: 入力1+2 を合成してモノラル中央(L+R)へ出力中", "Status: Summing Input 1+2 to Mono Center (L+R)");
+            st = language->T ("状態: 全マイク(IN 1〜4)を合成してモノラル中央(L+R)へ出力中", "Status: Summing active mics to Mono Center (L+R)");
         else
             st = language->T ("状態: 入力=ステレオ 1+2 分離（左右そのまま）", "Status: Input = Stereo 1+2 (Unchanged)");
 
@@ -2045,9 +2379,10 @@ private:
     GzzioLnF ownLnf;
     VocalGzzioProcessor& processor;
     bool isEmbedded { false };
+    juce::String fixStatusText;
     juce::Label titleLabel, outSectionLabel, inSectionLabel, statusLabel;
-    std::array<juce::TextButton, 5> routeBtns;
-    juce::TextButton outMonoBtn, outStereoBtn, openDevBtn;
+    std::array<juce::TextButton, 7> routeBtns;
+    juce::TextButton outMonoBtn, outStereoBtn, clusterFixBtn, sharedModeBtn, monMuteBtn, openDevBtn;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RouteOutPanel)
 };
@@ -2595,7 +2930,7 @@ static void launchStandaloneAudioMonoDialog (VocalGzzioProcessor& processor, std
                 addAndMakeVisible (muteBtn);
 
                 addAndMakeVisible (deviceSelector);
-                setSize (620, 740);
+                setSize (640, 790);
             }
 
             ~StandaloneAudioMonoDialogContent() override
@@ -2612,7 +2947,7 @@ static void launchStandaloneAudioMonoDialog (VocalGzzioProcessor& processor, std
             void resized() override
             {
                 auto r = getLocalBounds().reduced (10);
-                routePanel.setBounds (r.removeFromTop (316));
+                routePanel.setBounds (r.removeFromTop (380));
                 r.removeFromTop (6);
                 muteBtn.setBounds (r.removeFromTop (28));
                 r.removeFromTop (6);
@@ -8398,6 +8733,17 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         }
         if (const char* ss = std::getenv ("GZ_SEASON"))  // test hook: force a season (0-3)
             content.forceSeason (juce::String (ss).getIntValue());
+    }
+
+    if (p.isStandalone())
+    {
+        syncStandaloneAudioForCluster (p, false);
+        juce::Component::SafePointer<VocalGzzioEditor> safeEd (this);
+        juce::MessageManager::callAsync ([safeEd, &p]()
+        {
+            if (safeEd != nullptr)
+                syncStandaloneAudioForCluster (p, false);
+        });
     }
 }
 

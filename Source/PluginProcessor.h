@@ -355,6 +355,7 @@ public:
     bool isStandalone() const noexcept { return wrapperType == wrapperType_Standalone; }
     gz::StreamOut& getStreamOut() noexcept { return streamOut; }
     juce::String getStreamDeviceWanted() const { return streamDevWanted; }
+    bool isStreamOutputWanted() const noexcept { return streamWanted; }
     void setStreamOutput (bool on, const juce::String& deviceName)
     {
         streamUserConfigured = true;
@@ -366,9 +367,19 @@ public:
     }
     void ensureStandaloneVirtualDriverActive()
     {
-        if (! isStandalone() || streamUserConfigured) return;
-        if (streamOut.isRunning() && streamOut.getDeviceName().containsIgnoreCase ("VocalGzzio")) return;
-        const auto vgDev = streamOut.findVocalGzzioDriverDevice();
+        if (! isStandalone()) return;
+        gz::StreamOut::rescueWindowsDefaultSpeakerAndGetSampleRate();
+        if (streamUserConfigured && gz::StreamOut::isVirtualLoopbackName (streamDevWanted))
+        {
+            if (streamWanted && ! streamOut.isRunning())
+                streamOut.start (streamDevWanted, currentSampleRate);
+            return;
+        }
+        if (streamOut.isRunning() && gz::StreamOut::isVirtualLoopbackName (streamOut.getDeviceName()))
+            return;
+        auto vgDev = streamOut.findVocalGzzioDriverDevice();
+        if (vgDev.isEmpty())
+            vgDev = streamOut.findPreferredVirtualDevice();
         if (vgDev.isNotEmpty())
         {
             streamDevWanted = vgDev;
@@ -377,13 +388,21 @@ public:
         }
     }
 
-    //== v4.6.0 マイク入力の中央寄せルーティング ＆ モノラル出力 ==
-    // route: 0=自動センター(単体起動時)/ステレオ, 1=入力1(左/Mic1)➔中央, 2=入力2(右/Mic2)➔中央,
-    //        3=入力1+2合成➔中央, 4=ステレオ固定(左右独立)
+    //== v4.6.0 / v4.8.1 マイク入力の中央寄せルーティング(IN1〜IN4+対応) ＆ モノラル出力 ＆ 通話用ヘッドホン返しミュート ==
+    // route: 0=自動センター(IN1〜IN4から声のある端子を自動追従), 1=入力1(Mic1)➔中央, 2=入力2(Mic2/Scarlett Solo等)➔中央,
+    //        3=全マイク合成(IN1+2+3+4)➔中央, 4=ステレオ固定(IN1=L/IN2=R), 5=入力3(Mic3/Rubix44等)➔中央, 6=入力4(Mic4/Rubix44等)➔中央
     int  getInputRouteMode() const noexcept    { return inputRouteMode.load (std::memory_order_relaxed); }
-    void setInputRouteMode (int m) noexcept    { inputRouteMode.store (juce::jlimit (0, 4, m), std::memory_order_relaxed); markStateDirty(); }
+    void setInputRouteMode (int m) noexcept    { inputRouteMode.store (juce::jlimit (0, 6, m), std::memory_order_relaxed); markStateDirty(); }
     bool getOutputMonoMode() const noexcept    { return outputMonoMode.load (std::memory_order_relaxed); }
     void setOutputMonoMode (bool b) noexcept   { outputMonoMode.store (b, std::memory_order_relaxed); markStateDirty(); }
+    bool getMonitorMute() const noexcept       { return monitorMute.load (std::memory_order_relaxed); }
+    void setMonitorMute (bool b) noexcept
+    {
+        monitorMute.store (b, std::memory_order_relaxed);
+        if (! b) feedbackGuardTripped.store (false, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    bool getFeedbackGuardTripped() const noexcept { return feedbackGuardTripped.load (std::memory_order_relaxed); }
     int  getAutoCenterChannel() const noexcept { return autoCenterCh.load (std::memory_order_relaxed); }
 
     //== v4.7.0 歌枠 ⇄ 雑談MC ワンクリック瞬間ライブ切替（歌設定を1ミリも壊さず残響・エコー・ピッチ系を即ミュート） ==
@@ -1096,10 +1115,13 @@ private:
     bool          streamUserConfigured = false;    // ユーザーが明示的に配信ON/OFFを切り替えたか
     bool          streamAutoChecked    = false;    // 単体起動時に VocalGzzio Driver (WDM) 自動接続を行ったか
     bool          suppressDeviceRestore = false;   // A/B切替中は配信先を触らない
-    std::atomic<int>  inputRouteMode { 0 };        // 0=自動センター(単体)/ステレオ, 1=IN1➔中央, 2=IN2➔中央, 3=IN1+2➔中央, 4=ステレオ固定
+    std::atomic<int>  inputRouteMode { 0 };        // 0=自動センター(IN1-4)/ステレオ, 1=IN1➔中央, 2=IN2➔中央, 3=全入力合成➔中央, 4=ステレオ固定, 5=IN3➔中央, 6=IN4➔中央
     std::atomic<bool> outputMonoMode { false };    // 最終出力も完全モノラル化(L=R=(L+R)/2)
-    std::atomic<int>  autoCenterCh   { 0 };        // 単体起動時の自動センターが現在掴んでいる入力ch (0 or 1)
-    double            inRouteEnergy[2] {};         // 自動センター判定用の平滑エネルギー
+    std::atomic<bool> monitorMute    { false };    // 通話・cluster用：配信出力(StreamOut)は鳴らしたまま、自分のヘッドホン返し音のみミュート
+    std::atomic<bool> feedbackGuardTripped { false }; // ハードウェアループバック等の発振検知時に自分の耳への返しを自動ミュートしたか
+    int               feedbackHoldSamples  { 0 };     // 連続発振サンプル数カウンタ
+    std::atomic<int>  autoCenterCh   { 0 };        // 単体起動時の自動センターが現在掴んでいる入力ch (0..7)
+    double            inRouteEnergy[8] {};         // 自動センター判定用の平滑エネルギー (最大8ch)
 
     // ---- v4.7.0 歌枠⇄雑談MC瞬間切替 ＆ 5秒試聴ルーパー ＆ 声優先ダッキング表示 ----
     std::atomic<bool> liveTalkMode   { false };    // true=雑談MC中(歌設定を保ったまま残響・エコー・ピッチ系・Haloを即時バイパス)
@@ -1110,13 +1132,14 @@ private:
     int               auditionMaxSamples { 240000 };
     std::atomic<float> meterDuckDb   { 0.0f };     // 声優先ダッキングで現在残響を抑えている量(dB, 0..15)
 
-    // ---- v4.8.0 柱④：😷 咳払い瞬間ミュート ＆ 🛡 絶叫セーフティガード ----
+    // ---- v4.8.0 柱④：😷 咳払い瞬間ミュート ＆ 🛡 絶叫セーフティガード ＆ 32bitフロート自動ヘッドルーム ----
     std::atomic<bool>  coughMute          { false };
     float              coughMuteGain      { 1.0f };
     float              coughMuteStep      { 0.002f };
     std::atomic<bool>  screamGuardOn      { true };
     float              screamGuardEnv     { 0.0f };
     std::atomic<float> meterScreamGuardDb { 0.0f };
+    float              floatPadGain       { 1.0f };
 
     // ---- v4.8.0 柱①：🎵 カラオケ・BGMプレイヤー内蔵（キー変更・自動BGMダッキング・WDM混音選択） ----
     mutable juce::CriticalSection bgmMetaLock;

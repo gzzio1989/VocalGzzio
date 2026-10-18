@@ -1114,6 +1114,9 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     coughMuteStep = (float) (1.0 / juce::jmax (32.0, 0.008 * sampleRate));
     screamGuardEnv = 0.0f;
     meterScreamGuardDb.store (0.0f, std::memory_order_relaxed);
+    floatPadGain = 1.0f;
+    feedbackHoldSamples = 0;
+    for (auto& e : inRouteEnergy) e = 0.0;
 
     bgmPitchRingL.assign ((size_t) ((int) (0.120 * sampleRate) + 16), 0.0f);
     bgmPitchRingR.assign (bgmPitchRingL.size(), 0.0f);
@@ -1387,6 +1390,8 @@ void VocalGzzioProcessor::updateParameters()
 bool VocalGzzioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto out = layouts.getMainOutputChannelSet();
+    if (isStandalone())
+        return out.size() >= 1 && out.size() <= 16 && layouts.getMainInputChannelSet().size() <= 16;
     if (out != juce::AudioChannelSet::mono() && out != juce::AudioChannelSet::stereo())
         return false;
     return layouts.getMainInputChannelSet() == out;
@@ -1433,93 +1438,183 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     const bool  crushOn = apvts.getRawParameterValue ("crush_on")->load() > 0.5f;
     const float crushCg = crushOn ? crushGuard : 0.0f;
 
-    // ---- v2.6.0 入力の防火壁 ----
-    // ホストや他のプラグインから NaN/Inf が一度でも流れ込むと、内部の再帰状態
-    // (フィルタ・コンプの包絡・ピッチシフタの位相メモリ)が汚染されて自然には
-    // 戻らず、「最初しか音が出ない」状態になる。入口で見つけて 0 に置き換える。
+    // ---- v2.6.0 入力の防火壁 ＋ v4.8.1 32bitフロート機(ZOOM UAC-232/432・Steinberg URX等)の0dBFS超え自動ヘッドルーム制御 ----
+    // ホストや他のプラグインから NaN/Inf が一度でも流れ込むと、内部の再帰状態が汚染されるため入口で 0 に置き換える。
+    // また、32bitフロート対応インターフェース(ZOOM UAC-232/432等)でゲイン調整なしに大声を出して |x| > 1.0f (+0dBFS超え) の
+    // 浮動小数点信号がそのまま入ってきても絶対にクリップしないよう、0dBFS超えを検知した瞬間だけ滑らかに自動パッドを入れる。
+    // (通常の16/24bit整数インターフェースでは |x| <= 1.0f のため 1サンプルも変化しない)
+    float blockMaxIn = 0.0f;
     for (int ch = 0; ch < totalCh; ++ch)
     {
         float* p = fullBuffer.getWritePointer (ch);
         if (! gzBlockFinite (p, numSamples))
+        {
             for (int i = 0; i < numSamples; ++i)
                 if (! std::isfinite (p[i])) p[i] = 0.0f;
+        }
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float a = std::abs (p[i]);
+            if (a > blockMaxIn) blockMaxIn = a;
+        }
+    }
+    if (blockMaxIn > 1.0f || floatPadGain < 0.9999f)
+    {
+        const float targetPad = (blockMaxIn > 1.0f) ? juce::jlimit (0.05f, 1.0f, 0.92f / blockMaxIn) : 1.0f;
+        if (targetPad < floatPadGain)
+            floatPadGain = targetPad; // 0dBFS超えの突発入力には即時追従してクリップを完全阻止
+        else
+            floatPadGain += 0.04f * (targetPad - floatPadGain); // 通常域へ戻ったら滑らかに復帰
+        if (floatPadGain > 0.9995f) floatPadGain = 1.0f;
+
+        for (int ch = 0; ch < totalCh; ++ch)
+            juce::FloatVectorOperations::multiply (fullBuffer.getWritePointer (ch), floatPadGain, numSamples);
     }
 
-    // ---- v4.6.0 マイク入力の中央寄せルーティング（片耳問題を入口で根治） ----
-    // Roland Rubix 44 や RME Fireface UC 等を単体起動版(Standalone)で使うと、
-    // 入力1+2の片側（Mic 1 = 左 / Mic 2 = 右）だけにマイクが繋がっているため、
-    // そのまま出力1+2へ流すと「左耳（または右耳）からしか自分の声が聴こえない」
-    // かつ「空いている反対chのプリアンプ熱雑音がそのまま混ざる」現象が起きる。
-    // 原音コピー(dryBuffer)・ハム除去・ノイズ除去・チューナーより手前の入口で
-    // 有効なマイク入力を両耳の中央(L=R)へ揃えることで、原音比較中も配信出力も
-    // 常に中央定位になり、未接続chのノイズ混入も同時に遮断する。
+    // ---- v4.8.0 マイク入力の中央寄せルーティング（全インターフェース IN1〜IN4・多ch完全対応） ----
+    // Roland Rubix 22/24/44、Yamaha AG03/06、Steinberg UR22C/UR44C、Focusrite Scarlett Solo/2i2/4i4、
+    // MOTU M2/M4、SSL 2、Universal Audio Volt、RME Fireface 等を単体起動版(Standalone)で使う際、
+    // 入力1〜4のどこにXLRマイクが挿さっていても、有効なマイク入力を両耳の中央(L=R)へ揃え、
+    // 空いている反対chのプリアンプ熱雑音やDCオフセットの混入を入口で遮断する。
     if (numCh >= 2 && ! selfTestRunning.load (std::memory_order_relaxed))
     {
-        if (getTotalNumInputChannels() == 1)
+        const int availIn = juce::jmin (totalCh, juce::jmax (1, getTotalNumInputChannels()));
+        if (availIn == 1)
         {
+            autoCenterCh.store (0, std::memory_order_relaxed);
             juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
         }
         else
         {
             const int routeMode = inputRouteMode.load (std::memory_order_relaxed);
-            if (routeMode == 1)
+            if (routeMode == 1) // IN 1 (左マイク固定)
             {
                 autoCenterCh.store (0, std::memory_order_relaxed);
                 juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
             }
-            else if (routeMode == 2)
+            else if (routeMode == 2) // IN 2 (右マイク固定 / Scarlett Solo 4th Gen XLR等)
             {
                 autoCenterCh.store (1, std::memory_order_relaxed);
                 juce::FloatVectorOperations::copy (buffer.getWritePointer (0), buffer.getReadPointer (1), numSamples);
             }
-            else if (routeMode == 3)
+            else if (routeMode == 5) // IN 3 (Rubix 44 / UR44C / Scarlett 4i4 / MOTU M4 等の3ch目マイク)
             {
+                const int srcCh = (availIn > 2) ? 2 : 0;
+                autoCenterCh.store (srcCh, std::memory_order_relaxed);
+                if (srcCh != 0)
+                    juce::FloatVectorOperations::copy (buffer.getWritePointer (0), fullBuffer.getReadPointer (srcCh), numSamples);
+                juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
+            }
+            else if (routeMode == 6) // IN 4 (Rubix 44 / UR44C / Scarlett 4i4 / MOTU M4 等の4ch目マイク)
+            {
+                const int srcCh = (availIn > 3) ? 3 : 1;
+                autoCenterCh.store (srcCh, std::memory_order_relaxed);
+                juce::FloatVectorOperations::copy (buffer.getWritePointer (0), fullBuffer.getReadPointer (srcCh), numSamples);
+                juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
+            }
+            else if (routeMode == 3) // 全マイク合成 (IN 1+2 または IN 1〜4 のうち信号のあるchを合成)
+            {
+                const int scanCh = juce::jmin (availIn, 4);
+                double e[4] = { 0.0, 0.0, 0.0, 0.0 };
+                double maxE = 0.0;
+                for (int c = 0; c < scanCh; ++c)
+                {
+                    const float* rc = fullBuffer.getReadPointer (c);
+                    double s = 0.0;
+                    for (int i = 0; i < numSamples; ++i)
+                        s += (double) rc[i] * (double) rc[i];
+                    e[c] = s / (double) juce::jmax (1, numSamples);
+                    if (e[c] > maxE) maxE = e[c];
+                }
+                int activeMask = 0;
+                int activeCount = 0;
+                for (int c = 0; c < scanCh; ++c)
+                {
+                    if (e[c] > 1.0e-7 && e[c] >= maxE * 0.0625)
+                    {
+                        activeMask |= (1 << c);
+                        ++activeCount;
+                    }
+                }
+                if (activeCount <= 0)
+                {
+                    activeMask = 3; // IN 1 + IN 2
+                    activeCount = 2;
+                }
+                const float mixScale = (activeCount == 1) ? 1.0f : (1.0f / (float) activeCount);
                 float* L = buffer.getWritePointer (0);
                 float* R = buffer.getWritePointer (1);
-                double e0 = 0.0, e1 = 0.0;
                 for (int i = 0; i < numSamples; ++i)
                 {
-                    e0 += (double) L[i] * L[i];
-                    e1 += (double) R[i] * R[i];
-                }
-                // 片側しか信号が来ていない場合は -6dB 減衰させず等倍で合成する
-                const float mixScale = (e0 > e1 * 16.0 || e1 > e0 * 16.0) ? 1.0f : 0.5f;
-                for (int i = 0; i < numSamples; ++i)
-                {
-                    const float m = (L[i] + R[i]) * mixScale;
+                    float sum = 0.0f;
+                    for (int c = 0; c < scanCh; ++c)
+                        if ((activeMask & (1 << c)) != 0)
+                            sum += fullBuffer.getReadPointer (c)[i];
+                    const float m = sum * mixScale;
                     L[i] = m;
                     R[i] = m;
                 }
             }
             else if (routeMode == 0 && (isStandalone() || outputMonoMode.load (std::memory_order_relaxed)))
             {
-                const float* r0 = buffer.getReadPointer (0);
-                const float* r1 = buffer.getReadPointer (1);
-                double e0 = 0.0, e1 = 0.0;
-                for (int i = 0; i < numSamples; ++i)
-                {
-                    e0 += (double) r0[i] * r0[i];
-                    e1 += (double) r1[i] * r1[i];
-                }
-                e0 /= juce::jmax (1, numSamples);
-                e1 /= juce::jmax (1, numSamples);
+                // 自動モノラル (IN 1〜4 のうち声が入っている端子を自動追従して中央 L=R へ配置)
+                // 隣接サンプル差分 dx = rc[i] - rc[i-1] によるAC音声帯域エネルギーで判定するため、
+                // 未接続端子のDCオフセットや50/60Hzハムで空き端子へ誤切り替えすることがない。
+                const int scanCh = juce::jmin (availIn, 4);
+                double e[4] = { 0.0, 0.0, 0.0, 0.0 };
                 const double alpha = 1.0 - std::exp (-numSamples / (0.025 * juce::jmax (8000.0, currentSampleRate)));
-                inRouteEnergy[0] += alpha * (e0 - inRouteEnergy[0]);
-                inRouteEnergy[1] += alpha * (e1 - inRouteEnergy[1]);
-
-                int activeCh = autoCenterCh.load (std::memory_order_relaxed);
-                if (e0 > 1.0e-7 || e1 > 1.0e-7)
+                for (int c = 0; c < scanCh; ++c)
                 {
-                    if (activeCh == 0 && e1 > e0 * 4.0 && inRouteEnergy[1] > inRouteEnergy[0] * 2.5)
-                        activeCh = 1;
-                    else if (activeCh == 1 && e0 > e1 * 4.0 && inRouteEnergy[0] > inRouteEnergy[1] * 2.5)
-                        activeCh = 0;
+                    const float* rc = fullBuffer.getReadPointer (c);
+                    double acSum = 0.0;
+                    float prev = numSamples > 0 ? rc[0] : 0.0f;
+                    for (int i = 1; i < numSamples; ++i)
+                    {
+                        const float dx = rc[i] - prev;
+                        prev = rc[i];
+                        acSum += (double) dx * (double) dx;
+                    }
+                    e[c] = acSum / (double) juce::jmax (1, numSamples - 1);
+                    inRouteEnergy[c] += alpha * (e[c] - inRouteEnergy[c]);
+                }
+
+                int activeCh = juce::jlimit (0, scanCh - 1, autoCenterCh.load (std::memory_order_relaxed));
+                int bestCh = activeCh;
+                double bestE = e[activeCh];
+
+                // 1. まず IN 1 / IN 2 を優先判定（明確な声レベルのAC変動 > 1.6e-5 があるときのみ切り替え）
+                for (int c = 0; c < juce::jmin (scanCh, 2); ++c)
+                {
+                    if (e[c] > 1.6e-5 && e[c] > bestE * 3.5 && inRouteEnergy[c] > inRouteEnergy[bestCh] * 2.2)
+                    {
+                        bestCh = c;
+                        bestE = e[c];
+                    }
+                }
+                // 2. IN 1 / IN 2 が両方無音(< 1.0e-6)で、IN 3 または IN 4 に単一マイク音声(> 5.0e-5)がある場合のみ追従
+                // （MOTU M2/M4 や EVO 4/8 の IN 3-4 ステレオループバック e[2]≒e[3] は除外）
+                if (scanCh > 2 && inRouteEnergy[0] < 1.0e-6 && inRouteEnergy[1] < 1.0e-6)
+                {
+                    for (int c = 2; c < scanCh; ++c)
+                    {
+                        const int otherLoopCh = (c == 2) ? 3 : 2;
+                        const bool looksLikeStereoLoopback = (scanCh >= 4 && e[otherLoopCh] > e[c] * 0.45 && e[c] > e[otherLoopCh] * 0.45);
+                        if (! looksLikeStereoLoopback && e[c] > 5.0e-5 && e[c] > bestE * 4.0 && inRouteEnergy[c] > inRouteEnergy[bestCh] * 2.5)
+                        {
+                            bestCh = c;
+                            bestE = e[c];
+                        }
+                    }
+                }
+                if (bestCh != activeCh)
+                {
+                    activeCh = bestCh;
                     autoCenterCh.store (activeCh, std::memory_order_relaxed);
                 }
-                if (activeCh == 0)
-                    juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
-                else
-                    juce::FloatVectorOperations::copy (buffer.getWritePointer (0), buffer.getReadPointer (1), numSamples);
+
+                if (activeCh != 0)
+                    juce::FloatVectorOperations::copy (buffer.getWritePointer (0), fullBuffer.getReadPointer (activeCh), numSamples);
+                juce::FloatVectorOperations::copy (buffer.getWritePointer (1), buffer.getReadPointer (0), numSamples);
             }
         }
     }
@@ -3848,9 +3943,53 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         streamOut.push (L, R, numSamples);
     }
 
-    // 🎧 自分の耳だけ（練習モード）のときは、WDM配信出力へ声だけを送ったあとにヘッドホン側へBGMを足す
-    if (bgmMixedNow && ! bgmSendToStream)
+    // 🛡️ ハードウェアループバック／スピーカー発振（ハウリング）自動遮断ガード
+    // AG03/AG06の「LOOPBACK」やRubix 44の「LOOPBACKスイッチ」がONのまま返しミュートがOFFだと、
+    // 出力がそのまま入力へ戻って無限増幅（ピーッという発振）を起こす。
+    // 入出力が同時に高レベルで0.35秒以上張り付いた場合はループバック発振と判定し、
+    // 即座に「自分の耳への返しミュート(monitorMute)」を自動ONにして耳と機材を守る（配信出力StreamOutは維持）。
+    if (isStandalone() && ! monitorMute.load (std::memory_order_relaxed)
+        && auditionState.load (std::memory_order_relaxed) != AuditionPlaying
+        && ! selfTestRunning.load (std::memory_order_relaxed))
     {
+        const float inPkNow  = meterIn.load (std::memory_order_relaxed);
+        const float outPkNow = buffer.getMagnitude (0, numSamples);
+        if (inPkNow > 0.85f && outPkNow > 0.90f)
+        {
+            feedbackHoldSamples += numSamples;
+            if (feedbackHoldSamples > (int) (0.35 * juce::jmax (8000.0, currentSampleRate)))
+            {
+                monitorMute.store (true, std::memory_order_relaxed);
+                feedbackGuardTripped.store (true, std::memory_order_relaxed);
+                feedbackHoldSamples = 0;
+            }
+        }
+        else
+        {
+            feedbackHoldSamples = juce::jmax (0, feedbackHoldSamples - numSamples * 2);
+        }
+    }
+    else
+    {
+        feedbackHoldSamples = 0;
+    }
+
+    // 🔇 自分の耳への返しミュート（cluster・通話・ボイチャ中の二重聴こえ防止）
+    // 配信出力(StreamOut)へ声を送ったあと、メインのスピーカー/ヘッドホン出力から生声の返しだけを消す。
+    if (isStandalone() && monitorMute.load (std::memory_order_relaxed)
+        && auditionState.load (std::memory_order_relaxed) != AuditionPlaying
+        && ! selfTestRunning.load (std::memory_order_relaxed))
+    {
+        fullBuffer.clear();
+        if (bgmMixedNow)
+        {
+            buffer.copyFrom (0, 0, bgmBlockScratch, 0, 0, numSamples);
+            if (numCh > 1) buffer.copyFrom (1, 0, bgmBlockScratch, 1, 0, numSamples);
+        }
+    }
+    else if (bgmMixedNow && ! bgmSendToStream)
+    {
+        // 🎧 自分の耳だけ（練習モード）のときは、WDM配信出力へ声だけを送ったあとにヘッドホン側へBGMを足す
         buffer.addFrom (0, 0, bgmBlockScratch, 0, 0, numSamples);
         if (numCh > 1) buffer.addFrom (1, 0, bgmBlockScratch, 1, 0, numSamples);
     }
@@ -4507,6 +4646,7 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
     so->setAttribute ("route", inputRouteMode.load (std::memory_order_relaxed));
     so->setAttribute ("mono", outputMonoMode.load (std::memory_order_relaxed) ? 1 : 0);
     so->setAttribute ("smono", streamOut.isForceMono() ? 1 : 0);
+    so->setAttribute ("mon_mute", monitorMute.load (std::memory_order_relaxed) ? 1 : 0);
 
     // v2.8.0 ★A/Bのもう片方を保存する。
     // これまで abSlot[] はメモリの中だけにあり、保存していなかった。そのため
@@ -4644,12 +4784,16 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
             streamDevWanted      = so->getStringAttribute ("dev");
             streamWanted         = so->getIntAttribute ("on", 0) != 0;
             streamUserConfigured = so->getIntAttribute ("user_cfg", 0) != 0;
-            inputRouteMode.store (juce::jlimit (0, 4, so->getIntAttribute ("route", 0)), std::memory_order_relaxed);
+            inputRouteMode.store (juce::jlimit (0, 6, so->getIntAttribute ("route", 0)), std::memory_order_relaxed);
             outputMonoMode.store (so->getIntAttribute ("mono", 0) != 0, std::memory_order_relaxed);
             streamOut.setForceMono (so->getIntAttribute ("smono", 0) != 0);
-            // 単体起動版のときだけ、保存されていた配信先を開き直す（未設定時は VocalGzzio Driver (WDM) を自動接続）
+            monitorMute.store (so->getIntAttribute ("mon_mute", 0) != 0, std::memory_order_relaxed);
+            // 単体起動版のときだけ、保存されていた配信先を開き直す（未設定時や通常スピーカーが誤って入っていた場合は VocalGzzio Driver (WDM) を自動接続）
             if (isStandalone())
             {
+                if (! streamUserConfigured && ! gz::StreamOut::isVirtualLoopbackName (streamDevWanted))
+                    streamDevWanted.clear();
+
                 if (streamWanted && streamDevWanted.isNotEmpty())
                     streamOut.start (streamDevWanted, currentSampleRate);
                 else if (! streamUserConfigured)
@@ -5424,3 +5568,415 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new VocalGzzioProcessor();
 }
+
+#if JUCE_WINDOWS
+#ifndef NOMINMAX
+ #define NOMINMAX
+#endif
+#include <windows.h>
+#include <mmdeviceapi.h>
+#include <audioclient.h>
+#include <functiondiscoverykeys_devpkey.h>
+
+namespace
+{
+    struct GzPolicyConfigWin10 : public IUnknown
+    {
+        virtual HRESULT STDMETHODCALLTYPE GetMixFormat (PCWSTR, WAVEFORMATEX**) = 0;
+        virtual HRESULT STDMETHODCALLTYPE GetDeviceFormat (PCWSTR, INT, WAVEFORMATEX**) = 0;
+        virtual HRESULT STDMETHODCALLTYPE ResetDeviceFormat (PCWSTR) = 0;
+        virtual HRESULT STDMETHODCALLTYPE SetDeviceFormat (PCWSTR, WAVEFORMATEX*, WAVEFORMATEX*) = 0;
+        virtual HRESULT STDMETHODCALLTYPE GetProcessingPeriod (PCWSTR, INT, PINT64, PINT64) = 0;
+        virtual HRESULT STDMETHODCALLTYPE SetProcessingPeriod (PCWSTR, PINT64) = 0;
+        virtual HRESULT STDMETHODCALLTYPE GetShareMode (PCWSTR, void*) = 0;
+        virtual HRESULT STDMETHODCALLTYPE SetShareMode (PCWSTR, void*) = 0;
+        virtual HRESULT STDMETHODCALLTYPE GetPropertyValue (PCWSTR, const PROPERTYKEY&, PROPVARIANT*) = 0;
+        virtual HRESULT STDMETHODCALLTYPE SetPropertyValue (PCWSTR, const PROPERTYKEY&, PROPVARIANT*) = 0;
+        virtual HRESULT STDMETHODCALLTYPE SetDefaultEndpoint (PCWSTR wszDeviceId, ERole eRole) = 0;
+        virtual HRESULT STDMETHODCALLTYPE SetEndpointVisibility (PCWSTR, INT) = 0;
+    };
+
+    static GzPolicyConfigWin10* createPolicyConfig()
+    {
+        static const GUID clsidPolicyConfig = { 0x870af99c, 0x171d, 0x4f9e, { 0xaf, 0x0d, 0xe6, 0x3d, 0xf4, 0x0c, 0x2b, 0xc9 } };
+        static const GUID iidPolicyConfig10 = { 0xf8679f50, 0x850a, 0x41cf, { 0x9c, 0x72, 0x43, 0x0f, 0x29, 0x02, 0x90, 0xc8 } };
+        static const GUID iidPolicyConfig7  = { 0x568b9108, 0x44bf, 0x40b4, { 0x90, 0x06, 0x86, 0xaf, 0xe5, 0xb5, 0xa6, 0x20 } };
+
+        GzPolicyConfigWin10* pConfig = nullptr;
+        HRESULT hr = CoCreateInstance (clsidPolicyConfig, nullptr, CLSCTX_ALL, iidPolicyConfig10, (void**) &pConfig);
+        if (FAILED (hr) || pConfig == nullptr)
+            hr = CoCreateInstance (clsidPolicyConfig, nullptr, CLSCTX_ALL, iidPolicyConfig7, (void**) &pConfig);
+        return SUCCEEDED (hr) ? pConfig : nullptr;
+    }
+
+    static void setWindowsEndpointDefaultAllRoles (PCWSTR devId)
+    {
+        if (devId == nullptr || devId[0] == L'\0') return;
+        if (auto* pConfig = createPolicyConfig())
+        {
+            pConfig->SetDefaultEndpoint (devId, eConsole);
+            pConfig->SetDefaultEndpoint (devId, eMultimedia);
+            pConfig->SetDefaultEndpoint (devId, eCommunications);
+            pConfig->Release();
+        }
+    }
+
+    static bool trySetMmDeviceSampleRate (IMMDevice* dev, DWORD targetSampleRate)
+    {
+        if (dev == nullptr || targetSampleRate < 8000) return false;
+        LPWSTR wstrId = nullptr;
+        if (FAILED (dev->GetId (&wstrId)) || wstrId == nullptr) return false;
+
+        bool changed = false;
+        if (auto* pConfig = createPolicyConfig())
+        {
+            WAVEFORMATEX* pwfx = nullptr;
+            if (SUCCEEDED (pConfig->GetDeviceFormat (wstrId, 0, &pwfx)) && pwfx != nullptr)
+            {
+                if (pwfx->nSamplesPerSec != targetSampleRate && pwfx->nBlockAlign > 0)
+                {
+                    pwfx->nSamplesPerSec = targetSampleRate;
+                    pwfx->nAvgBytesPerSec = pwfx->nSamplesPerSec * pwfx->nBlockAlign;
+                    if (SUCCEEDED (pConfig->SetDeviceFormat (wstrId, pwfx, nullptr)))
+                        changed = true;
+                }
+                CoTaskMemFree (pwfx);
+            }
+            pConfig->Release();
+        }
+        CoTaskMemFree (wstrId);
+        return changed;
+    }
+
+    static juce::String getMmDeviceFriendlyName (IMMDevice* dev)
+    {
+        if (dev == nullptr) return {};
+        IPropertyStore* props = nullptr;
+        juce::String result;
+        if (SUCCEEDED (dev->OpenPropertyStore (STGM_READ, &props)) && props != nullptr)
+        {
+            PROPVARIANT varName;
+            PropVariantInit (&varName);
+            if (SUCCEEDED (props->GetValue (PKEY_Device_FriendlyName, &varName)) && varName.vt == VT_LPWSTR && varName.pwszVal != nullptr)
+                result = juce::String (varName.pwszVal);
+            PropVariantClear (&varName);
+            props->Release();
+        }
+        return result;
+    }
+
+    static double getMmDeviceSampleRate (IMMDevice* dev)
+    {
+        if (dev == nullptr) return 0.0;
+        double sr = 0.0;
+        IAudioClient* client = nullptr;
+        if (SUCCEEDED (dev->Activate (__uuidof (IAudioClient), CLSCTX_ALL, nullptr, (void**) &client)) && client != nullptr)
+        {
+            WAVEFORMATEX* pwfx = nullptr;
+            if (SUCCEEDED (client->GetMixFormat (&pwfx)) && pwfx != nullptr)
+            {
+                sr = (double) pwfx->nSamplesPerSec;
+                CoTaskMemFree (pwfx);
+            }
+            client->Release();
+        }
+        return sr;
+    }
+
+    // サウンドハウス・Amazonで流通する主要60ブランド・160機種以上のインターフェース／配信ミキサー／USBマイク／VR機器を網羅
+    static bool doesEndpointMatchHardware (const juce::String& wdmName, const juce::String& activeHwName)
+    {
+        if (wdmName.isEmpty() || activeHwName.isEmpty()) return false;
+        static const char* const kBrandTokens[] = {
+            // YAMAHA / Steinberg
+            "AG03", "AG06", "AG08", "ZG01", "ZG02", "YH-G01", "UR12", "UR22", "UR24", "UR44", "UR816", "URX", "UR-RT", "IXO12", "IXO22", "IXO", "Steinberg", "Yamaha",
+            // Roland / BOSS
+            "Rubix", "BRIDGE CAST", "GO:MIXER", "VT-4", "E-4", "GIGCASTER", "Roland", "BOSS",
+            // Focusrite
+            "Focusrite", "Scarlett", "Vocaster", "Clarett",
+            // Solid State Logic (SSL)
+            "SSL", "Solid State Logic",
+            // MOTU
+            "MOTU", "M2", "M4", "M6", "UltraLite", "828", "Track16", "MicroBook",
+            // Universal Audio
+            "Volt", "Apollo", "Arrow", "Universal Audio",
+            // RME
+            "RME", "Babyface", "Fireface", "Digiface", "Madiface",
+            // Audient
+            "Audient", "iD4", "iD14", "iD24", "iD44", "EVO 4", "EVO 8", "EVO 16", "EVO",
+            // audio-technica
+            "AT-UMX3", "AT2020", "AT2040", "AT-BHA", "audio-technica", "Audio-Technica",
+            // ZOOM (32bit float / Streaming / Podcast)
+            "ZOOM", "UAC-232", "UAC-432", "UAC-", "AMS-22", "AMS-24", "AMS-44", "AMS-", "PodTrak", "LiveTrak",
+            // TASCAM
+            "TASCAM", "US-1x2", "US-2x2", "US-4x4", "US-32", "US-42", "MiNiSTUDIO", "Series 102", "Series 208", "Portacapture", "Mixcast", "FR-AV2",
+            // PreSonus
+            "PreSonus", "AudioBox", "Revelator", "Studio 24", "Studio 26", "Studio 68", "Studio 18", "Quantum",
+            // Arturia & Native Instruments
+            "MiniFuse", "AudioFuse", "Arturia", "Komplete", "Native Instruments",
+            // Lewitt & Topping
+            "Lewitt", "CONNECT 2", "CONNECT 6", "Topping", "E2x2", "E4x4",
+            // RODE / Elgato / TC Helicon (Multi-bus Streaming Mixers)
+            "RODECaster", "Streamer X", "AI-1", "RODE", "Rode",
+            "Wave XLR", "Wave:3", "Wave:1", "Wave Link", "Elgato",
+            "GoXLR", "TC-Helicon", "Perform-V",
+            // Antelope Audio & Apogee & Neumann
+            "Antelope", "Zen Go", "Zen Quadro", "Zen Tour", "Discrete",
+            "Apogee", "Boom", "Duet", "Symphony",
+            "Neumann", "MT 48",
+            // Mackie / Blackstar / IK Multimedia / iConnectivity / Cranborne / Allen & Heath
+            "Mackie", "Onyx", "ProFX", "M-Caster", "MainStream", "DLZ",
+            "Blackstar", "Polar", "IK Multimedia", "AXE I/O", "iRig",
+            "iConnectivity", "AUDIO4c", "Cranborne", "Camden", "Allen & Heath", "ZEDi",
+            // Behringer & M-Audio
+            "Behringer", "UMC", "UM2", "U-Phoria", "FLOW 8", "Xenyx",
+            "M-Audio", "M-Track", "AIR 192",
+            // Amazon Best-Selling Gaming Mixers / USB Mics / Headsets / VR
+            "FIFINE", "AmpliGame", "SC3", "Maono", "Maonocaster", "AME2", "G1 NEO",
+            "Razer", "Seiren", "Sound Blaster", "GC7", "SteelSeries", "GameDAC", "Arctis", "Sonar", "MixAmp", "Astro",
+            "HyperX", "QuadCast", "SoloCast", "Yeti", "Blue Microphones", "Shure", "MV7", "MVX2U",
+            "INZONE", "Logicool", "Logitech", "Oculus", "Quest", "Steam Streaming", "VIVE", "Index", "PICO"
+        };
+        for (const char* tok : kBrandTokens)
+        {
+            const juce::String t (tok);
+            if (activeHwName.containsIgnoreCase (t) && wdmName.containsIgnoreCase (t))
+                return true;
+        }
+        return false;
+    }
+}
+#endif
+
+double gz::StreamOut::inspectAndHealWindowsAudioForInterface (const juce::String& activeHardwareName,
+                                                              juce::String* outRealSpeaker,
+                                                              juce::String* outRealMic,
+                                                              juce::String* outDiagReport)
+{
+   #if JUCE_WINDOWS
+    // 1. Windowsの「通信時の音量80%減衰(ダッキング)」を「何もしない(3)」に設定
+    {
+        HKEY hKey = nullptr;
+        if (RegCreateKeyExW (HKEY_CURRENT_USER, L"Software\\Microsoft\\Multimedia\\Audio",
+                             0, nullptr, 0, KEY_SET_VALUE, nullptr, &hKey, nullptr) == ERROR_SUCCESS && hKey != nullptr)
+        {
+            const DWORD pref = 3; // 3 = Do nothing (何もしない)
+            RegSetValueExW (hKey, L"UserDuckingPreference", 0, REG_DWORD, reinterpret_cast<const BYTE*> (&pref), sizeof (pref));
+            RegCloseKey (hKey);
+        }
+    }
+
+    double detectedRate = 0.0;
+    double hwRenderRate = 0.0;
+    juce::String hwRenderName;
+    bool restoredDefaultSpk = false;
+    bool alignedHwFormat = false;
+
+    const HRESULT hrCom = CoInitializeEx (nullptr, COINIT_APARTMENTTHREADED);
+    IMMDeviceEnumerator* pEnum = nullptr;
+    if (SUCCEEDED (CoCreateInstance (__uuidof (MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof (IMMDeviceEnumerator), (void**) &pEnum)) && pEnum != nullptr)
+    {
+        // 2. 既定の再生デバイス(スピーカー/ヘッドホン)が仮想ドライバに奪われていないか点検
+        bool needRestoreRender = false;
+        for (ERole role : { eConsole, eMultimedia, eCommunications })
+        {
+            IMMDevice* defDev = nullptr;
+            if (SUCCEEDED (pEnum->GetDefaultAudioEndpoint (eRender, role, &defDev)) && defDev != nullptr)
+            {
+                const auto name = getMmDeviceFriendlyName (defDev);
+                if (isVirtualLoopbackName (name))
+                    needRestoreRender = true;
+                else if (role == eConsole)
+                {
+                    if (outRealSpeaker != nullptr) *outRealSpeaker = name;
+                    detectedRate = getMmDeviceSampleRate (defDev);
+                }
+                defDev->Release();
+            }
+        }
+
+        // 3. 全アクティブ再生エンドポイントを走査し、(A) 既定スピーカー救出候補 と (B) 同一ハードウェアの全WDM再生バス(GAME/CHAT/MAIN/AUX等) を特定する
+        std::vector<IMMDevice*> matchedRenderDevs;
+        {
+            IMMDeviceCollection* pCol = nullptr;
+            if (SUCCEEDED (pEnum->EnumAudioEndpoints (eRender, DEVICE_STATE_ACTIVE, &pCol)) && pCol != nullptr)
+            {
+                UINT count = 0;
+                pCol->GetCount (&count);
+                IMMDevice* bestSpk = nullptr;
+                int bestScore = -1000;
+                for (UINT i = 0; i < count; ++i)
+                {
+                    IMMDevice* item = nullptr;
+                    if (SUCCEEDED (pCol->Item (i, &item)) && item != nullptr)
+                    {
+                        const auto name = getMmDeviceFriendlyName (item);
+                        if (! isVirtualLoopbackName (name))
+                        {
+                            int score = 10;
+                            if (doesEndpointMatchHardware (name, activeHardwareName))
+                            {
+                                score += 90;
+                                item->AddRef();
+                                matchedRenderDevs.push_back (item);
+                                if (hwRenderName.isEmpty())
+                                {
+                                    hwRenderName = name;
+                                    hwRenderRate = getMmDeviceSampleRate (item);
+                                }
+                            }
+                            if (name.containsIgnoreCase ("Rubix") || name.containsIgnoreCase ("Focusrite")
+                                || name.containsIgnoreCase ("Steinberg") || name.containsIgnoreCase ("MOTU")
+                                || name.containsIgnoreCase ("AG03") || name.containsIgnoreCase ("AG06")
+                                || name.containsIgnoreCase ("AG08") || name.containsIgnoreCase ("ZG01")
+                                || name.containsIgnoreCase ("ZG02") || name.containsIgnoreCase ("BRIDGE CAST")
+                                || name.containsIgnoreCase ("AT-UMX3") || name.containsIgnoreCase ("Volt")
+                                || name.containsIgnoreCase ("SSL") || name.containsIgnoreCase ("Audient")
+                                || name.containsIgnoreCase ("RME") || name.containsIgnoreCase ("MiniFuse")
+                                || name.containsIgnoreCase ("UAC-") || name.containsIgnoreCase ("GoXLR")
+                                || name.containsIgnoreCase ("RODECaster") || name.containsIgnoreCase ("CONNECT")
+                                || name.containsIgnoreCase ("E2x2") || name.containsIgnoreCase ("Zen Go")
+                                || name.containsIgnoreCase ("Headphone")
+                                || name.containsIgnoreCase (juce::String::fromUTF8 ("スピーカー"))
+                                || name.containsIgnoreCase (juce::String::fromUTF8 ("ヘッドホン"))
+                                || name.containsIgnoreCase ("OUT"))
+                                score += 50;
+                            if (name.containsIgnoreCase ("NVIDIA") || name.containsIgnoreCase ("AMD") || name.containsIgnoreCase ("Display"))
+                                score -= 20;
+
+                            if (score > bestScore)
+                            {
+                                if (bestSpk != nullptr) bestSpk->Release();
+                                bestSpk = item;
+                                bestSpk->AddRef();
+                                bestScore = score;
+                            }
+                        }
+                        item->Release();
+                    }
+                }
+                if (bestSpk != nullptr)
+                {
+                    if (needRestoreRender || detectedRate <= 0.0)
+                    {
+                        const auto name = getMmDeviceFriendlyName (bestSpk);
+                        if (outRealSpeaker != nullptr) *outRealSpeaker = name;
+                        detectedRate = getMmDeviceSampleRate (bestSpk);
+                        if (needRestoreRender)
+                        {
+                            LPWSTR wstrId = nullptr;
+                            if (SUCCEEDED (bestSpk->GetId (&wstrId)) && wstrId != nullptr)
+                            {
+                                setWindowsEndpointDefaultAllRoles (wstrId);
+                                restoredDefaultSpk = true;
+                                CoTaskMemFree (wstrId);
+                            }
+                        }
+                    }
+                    bestSpk->Release();
+                }
+                pCol->Release();
+            }
+        }
+
+        // 4. 全アクティブ録音エンドポイントを走査し、実マイク名と同一ハードウェアの全WDM録音バス(MAIN/CHAT/STREAM/LOOPBACK等)も特定する
+        std::vector<IMMDevice*> matchedCaptureDevs;
+        {
+            IMMDevice* defCap = nullptr;
+            if (SUCCEEDED (pEnum->GetDefaultAudioEndpoint (eCapture, eConsole, &defCap)) && defCap != nullptr)
+            {
+                const auto name = getMmDeviceFriendlyName (defCap);
+                if (! isVirtualLoopbackName (name) && outRealMic != nullptr)
+                    *outRealMic = name;
+                defCap->Release();
+            }
+
+            IMMDeviceCollection* pCol = nullptr;
+            if (SUCCEEDED (pEnum->EnumAudioEndpoints (eCapture, DEVICE_STATE_ACTIVE, &pCol)) && pCol != nullptr)
+            {
+                UINT count = 0;
+                pCol->GetCount (&count);
+                for (UINT i = 0; i < count; ++i)
+                {
+                    IMMDevice* item = nullptr;
+                    if (SUCCEEDED (pCol->Item (i, &item)) && item != nullptr)
+                    {
+                        const auto name = getMmDeviceFriendlyName (item);
+                        if (! isVirtualLoopbackName (name))
+                        {
+                            if (outRealMic != nullptr && outRealMic->isEmpty())
+                                *outRealMic = name;
+                            if (doesEndpointMatchHardware (name, activeHardwareName))
+                            {
+                                item->AddRef();
+                                matchedCaptureDevs.push_back (item);
+                            }
+                        }
+                        item->Release();
+                    }
+                }
+                pCol->Release();
+            }
+        }
+
+        // 5. 同一オーディオインターフェース（特にBRIDGE CAST / AG08 / ZG01 / GoXLR / RODECaster等のマルチバス機を含む）の
+        //    全WDM再生バス・全WDM録音バスでサンプルレートが食い違っている場合、基準レートへ一括統一してクロック反転による音消えを根治する
+        const double targetRate = (hwRenderRate >= 44100.0) ? hwRenderRate : ((detectedRate >= 44100.0) ? detectedRate : 48000.0);
+        if (targetRate >= 44100.0)
+        {
+            for (auto* rDev : matchedRenderDevs)
+            {
+                const double rSr = getMmDeviceSampleRate (rDev);
+                if (rSr > 0.0 && std::abs (rSr - targetRate) > 1.0)
+                    if (trySetMmDeviceSampleRate (rDev, (DWORD) std::lround (targetRate)))
+                        alignedHwFormat = true;
+            }
+            for (auto* cDev : matchedCaptureDevs)
+            {
+                const double cSr = getMmDeviceSampleRate (cDev);
+                if (cSr > 0.0 && std::abs (cSr - targetRate) > 1.0)
+                    if (trySetMmDeviceSampleRate (cDev, (DWORD) std::lround (targetRate)))
+                        alignedHwFormat = true;
+            }
+            if (! matchedRenderDevs.empty())
+                detectedRate = targetRate;
+        }
+
+        for (auto* rDev : matchedRenderDevs)  rDev->Release();
+        for (auto* cDev : matchedCaptureDevs) cDev->Release();
+        pEnum->Release();
+    }
+    if (SUCCEEDED (hrCom))
+        CoUninitialize();
+
+    if (outDiagReport != nullptr)
+    {
+        juce::String rep;
+        if (hwRenderName.isNotEmpty())
+            rep << juce::String::fromUTF8 ("機材WDM出力: ") << hwRenderName << " (" << (int) hwRenderRate << "Hz)";
+        else if (outRealSpeaker != nullptr && outRealSpeaker->isNotEmpty())
+            rep << juce::String::fromUTF8 ("既定スピーカー: ") << *outRealSpeaker << " (" << (int) detectedRate << "Hz)";
+
+        if (restoredDefaultSpk)
+            rep << juce::String::fromUTF8 (" [既定スピーカー救出済]");
+        if (alignedHwFormat)
+            rep << juce::String::fromUTF8 (" [全バスクロック統一済]");
+        if (isExclusiveWrapperAsioName (activeHardwareName))
+            rep << juce::String::fromUTF8 (" ⚠️排他ASIOラッパー検出(共有モード推奨)");
+        *outDiagReport = rep;
+    }
+
+    return detectedRate;
+   #else
+    juce::ignoreUnused (activeHardwareName, outRealSpeaker, outRealMic, outDiagReport);
+    return 0.0;
+   #endif
+}
+
+double gz::StreamOut::rescueWindowsDefaultSpeakerAndGetSampleRate (juce::String* outRealSpeaker, juce::String* outRealMic)
+{
+    return inspectAndHealWindowsAudioForInterface ({}, outRealSpeaker, outRealMic, nullptr);
+}
+
+
+
