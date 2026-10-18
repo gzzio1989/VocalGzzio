@@ -628,8 +628,75 @@ int main()
             check (view.getThemeMode() == expectedCycle[step], "clicking ♥LIVER pill cycles through all 5 Couture colorways");
         }
     }
+    // Verify v4.7.0 features:
+    //   1. Singing <-> MC Talk 1-click non-destructive toggle (liveTalkMode / talkPillRect)
+    //   2. 5-Second Quick Audition Looper (AuditionRecording -> AuditionPlaying -> AuditionOff / loopPillRect)
+    //   3. Vocal-Priority Space Ducking meter & DSP response (getSpaceDuckDb)
+    {
+        view.setOverview (true);
+        view.setOverviewLayoutMode (0);
+        const juce::Point<int> talkPt { 1095, 92 };
+        const juce::Point<int> loopPt { 1205, 92 };
+        check (view.overviewHelpAt (talkPt).isNotEmpty(), "hovering Singing/MC Talk pill shows explanation");
+        check (view.overviewHelpAt (loopPt).isNotEmpty(), "hovering 5s Audition Looper pill shows explanation");
+
+        // Set rich singing reverb/delay/width parameters
+        setParameter ("mod_hirogari", 1.0f);
+        setParameter ("revon", 1.0f);
+        setParameter ("revmix", 55.0f);
+        setParameter ("delay", 35.0f);
+        setParameter ("width", 45.0f);
+        setParameter ("duck", 65.0f);
+
+        check (! processor->getLiveTalkMode(), "liveTalkMode starts OFF (Singing mode)");
+        check (view.handleOverviewMouseDown (talkPt), "clicking Singing/MC Talk pill is handled");
+        check (processor->getLiveTalkMode(), "clicking Singing/MC Talk pill enables MC Talk mode");
+        check (std::abs (processor->apvts.getRawParameterValue ("revmix")->load() - 55.0f) < 0.01f
+            && std::abs (processor->apvts.getRawParameterValue ("delay")->load() - 35.0f) < 0.01f
+            && std::abs (processor->apvts.getRawParameterValue ("width")->load() - 45.0f) < 0.01f,
+               "MC Talk mode preserves 100% of APVTS singing parameters");
+        check (view.handleOverviewMouseDown (talkPt), "clicking Singing/MC Talk pill again is handled");
+        check (! processor->getLiveTalkMode(), "clicking Singing/MC Talk pill returns to Singing mode");
+
+        // Verify 5-Second Quick Audition Looper lifecycle (Off -> Recording -> Playing -> Off)
+        check (processor->getAuditionState() == VocalGzzioProcessor::AuditionOff, "Audition Looper starts Off");
+        check (view.handleOverviewMouseDown (loopPt), "clicking 5s Audition Looper pill starts recording");
+        check (processor->getAuditionState() == VocalGzzioProcessor::AuditionRecording, "Audition Looper enters Recording state");
+
+        juce::MidiBuffer loopMidi;
+        juce::AudioBuffer<float> voiceBuf (2, 256);
+        // Feed 5.0 seconds (48000 * 5 = 240000 samples -> 940 blocks of 256) of synthetic singing
+        for (int b = 0; b < 940; ++b)
+        {
+            for (int i = 0; i < 256; ++i)
+            {
+                const float s = 0.25f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * (float) (b * 256 + i) / 48000.0f);
+                voiceBuf.setSample (0, i, s);
+                voiceBuf.setSample (1, i, s);
+            }
+            processor->processBlock (voiceBuf, loopMidi);
+        }
+        check (processor->getAuditionState() == VocalGzzioProcessor::AuditionPlaying,
+               "Audition Looper automatically transitions from 5s Recording to hands-free Loop Playback");
+        check (processor->getSpaceDuckDb() > 0.2f,
+               "Vocal-Priority Space Ducking actively ducks reverb while singing and reports dB reduction");
+
+        // Feed pure silence while in AuditionPlaying and verify the looper outputs the recorded phrase
+        float loopOutPeak = 0.0f;
+        for (int b = 0; b < 10; ++b)
+        {
+            voiceBuf.clear();
+            processor->processBlock (voiceBuf, loopMidi);
+            loopOutPeak = juce::jmax (loopOutPeak, voiceBuf.getMagnitude (0, 256));
+        }
+        check (loopOutPeak > 0.05f, "Audition Looper replays recorded vocal phrase hands-free even when mic input is silent");
+
+        check (view.handleOverviewMouseDown (loopPt), "clicking 5s Audition Looper pill while playing stops loop");
+        check (processor->getAuditionState() == VocalGzzioProcessor::AuditionOff, "Audition Looper returns to Off state");
+    }
     view.setLookAndFeel (nullptr);
     processor->releaseResources();
     std::printf ("Overview failures: %d\n", failures);
     return failures == 0 ? 0 : 1;
 }
+

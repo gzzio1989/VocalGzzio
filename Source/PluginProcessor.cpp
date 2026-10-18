@@ -1099,6 +1099,15 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     duckAtk    = 1.0f - std::exp (-1.0f / (0.015f * (float) sampleRate));   // duck engages ~15 ms
     duckRel    = 1.0f - std::exp (-1.0f / (0.200f * (float) sampleRate));   // blooms back ~200 ms
     rmsAccum = 0.0f;
+    meterDuckDb.store (0.0f, std::memory_order_relaxed);
+
+    // v4.7.0 5秒試聴ルーパーのステレオバッファを事前確保（音声スレッドでの確保ゼロ）
+    auditionMaxSamples = juce::jmax (4096, (int) std::lround (5.0 * sampleRate));
+    auditionBuf.setSize (2, auditionMaxSamples, false, true, true);
+    auditionBuf.clear();
+    auditionState.store (AuditionOff, std::memory_order_relaxed);
+    auditionPos.store (0, std::memory_order_relaxed);
+    auditionLen.store (0, std::memory_order_relaxed);
 
     // AUTO SETUP analysis band-pass bank (side-chain only, never touches audio)
     {
@@ -1590,6 +1599,73 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         }
     }
 
+    // ---- v4.7.0 5秒録って手放し聴き比べ「試聴ルーパー（Quick Audition Looper）」 ----
+    // 歌いながら骨伝導が混ざった状態では、エフェクトの効き具合やテーマごとの声色を
+    // 客観的に判断しづらい。ここ（入力トリム直後・原音コピー dryBuffer の直前）で
+    // 5秒間の素の声を録音し、録音完了後は自動で手放しループ再生に切り替える。
+    // 原音コピーより手前で差し替えるため、ループ再生中に 2D オーブや仕上がりプリセットを
+    // 動かしてリアルタイムに音色を作れるだけでなく、「押して原音と比較」も同じ録音フレーズの
+    // 未加工音と加工音を正確に比較できる。
+    if (! selfTestRunning.load (std::memory_order_relaxed) && auditionBuf.getNumSamples() > 0)
+    {
+        const int audSt = auditionState.load (std::memory_order_acquire);
+        const int maxCap = auditionBuf.getNumSamples();
+        if (audSt == AuditionRecording)
+        {
+            int pos = auditionPos.load (std::memory_order_relaxed);
+            const float* inL = buffer.getReadPointer (0);
+            const float* inR = buffer.getReadPointer (numCh > 1 ? 1 : 0);
+            float* recL = auditionBuf.getWritePointer (0);
+            float* recR = auditionBuf.getWritePointer (1);
+            for (int n = 0; n < numSamples; ++n)
+            {
+                if (pos < maxCap)
+                {
+                    recL[pos] = inL[n];
+                    recR[pos] = inR[n];
+                    ++pos;
+                }
+            }
+            if (pos >= maxCap)
+            {
+                auditionLen.store (maxCap, std::memory_order_relaxed);
+                auditionPos.store (0, std::memory_order_relaxed);
+                auditionState.store (AuditionPlaying, std::memory_order_release);
+            }
+            else
+            {
+                auditionPos.store (pos, std::memory_order_relaxed);
+            }
+        }
+        else if (audSt == AuditionPlaying)
+        {
+            const int loopLen = juce::jlimit (1, maxCap, auditionLen.load (std::memory_order_relaxed));
+            int pos = auditionPos.load (std::memory_order_relaxed) % loopLen;
+            const int xfadeSamples = juce::jmin (loopLen / 4, juce::jmax (32, (int) (0.012 * currentSampleRate)));
+            const float* recL = auditionBuf.getReadPointer (0);
+            const float* recR = auditionBuf.getReadPointer (1);
+            float* outL = buffer.getWritePointer (0);
+            float* outR = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+            for (int n = 0; n < numSamples; ++n)
+            {
+                float sL = recL[pos];
+                float sR = recR[pos];
+                // ループ終端の12msだけ先頭と滑らかにクロスフェードし、継ぎ目のプチノイズを防ぐ
+                if (xfadeSamples > 0 && pos >= loopLen - xfadeSamples)
+                {
+                    const int headIdx = pos - (loopLen - xfadeSamples);
+                    const float alpha = (float) headIdx / (float) xfadeSamples;
+                    sL = sL * (1.0f - alpha) + recL[headIdx] * alpha;
+                    sR = sR * (1.0f - alpha) + recR[headIdx] * alpha;
+                }
+                outL[n] = sL;
+                if (outR != nullptr) outR[n] = sR;
+                if (++pos >= loopLen) pos = 0;
+            }
+            auditionPos.store (pos, std::memory_order_relaxed);
+        }
+    }
+
     // ---- v2.10.0 距離ならし（近接効果の自動補正） ----
     // マイク音量の直後・原音コピーより前。ここが v2.8.0 で確定した「いちばん手前」。
     // 原音側にも掛かるので、Mix で混ぜ戻したときに太さが食い違わない。
@@ -1944,10 +2020,10 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     const bool protectBand = b == 3 ? dnHfVoiceHold > 0 : voiceOpen;
                     const float below = juce::jlimit (0.0f, 1.0f,
                                           (openThr - dnEnv[b]) / juce::jmax (openThr - dnFloor[b] * 0.5f, 1e-9f));
-                    // v4.6.0 深層フロア抑制: 低〜中高域(b < 3: 0〜4500Hz)の包絡が学習床(dnFloor)以下に沈んでいる
+                    // v4.6.0/v4.7.0 深層フロア抑制: 低〜中低域(b < 2: 0〜1200Hz)の包絡が学習床(dnFloor)以下に沈んでいる
                     // 定常ノイズ区間では追加の深掘り減衰(最大+18dB)を滑らかに重ね、I/F固有の複合ノイズ(-68dBFS)を
-                    // 無音域まで沈める。高域(b == 3)は母音漏れによるポンピングを防ぐため従来カーブを維持する。
-                    const float deepFloor = (b < 3)
+                    // 無音域まで沈める。中高域〜高域(b >= 2)は喋り出しのノイズ跳ね(サフサフ)を防ぐため従来カーブを維持する。
+                    const float deepFloor = (b < 2)
                         ? juce::jlimit (0.0f, 1.0f, (dnFloor[b] * 1.25f - dnEnv[b]) / juce::jmax (dnFloor[b] * 0.50f, 1e-9f))
                         : 0.0f;
                     const float attenDb = maxAttenDb * below + (dnOn ? 18.0f * amount * deepFloor : 0.0f);
@@ -2114,28 +2190,31 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         // v2.9.0 セッションモード: ONの間、遅延をふやす3機能はここで素通しにする。
         // スイッチ自体は触らない(セッションを抜けたら元どおり鳴る)。
         const bool sessionOn = apvts.getRawParameterValue ("session")->load() > 0.5f;
-        sessionActive.store (sessionOn);
+        const bool talkMc    = liveTalkMode.load (std::memory_order_relaxed)
+                            && ! selfTestRunning.load (std::memory_order_relaxed);
+        sessionActive.store (sessionOn || talkMc);
 
         // v2.10.0 ★アコギではピッチ補正・ハモリ・ボイス変換を通さない。
         //  どれも「声のピッチ」を前提にした処理で、和音が鳴るギターに掛けると
         //  検出が別の弦に飛び移って音程がふらつく。切れば遅延も 0 のままになる。
         // v3.0 モジュール「へんしん」。OFF のあいだは3つとも切れる＝遅延も0のまま。
+        // v4.7.0 雑談MC切替(talkMc)中も、歌枠のパラメータ値を保ったままピッチ系を素通しにする。
         const bool henshinOn = mods.displayGain (gz::ModuleChain::Henshin) > 0.5f;
 
         const bool vcOn = (apvts.getRawParameterValue ("vc_on")->load() > 0.5f)
-                            && henshinOn && ! sessionOn && srcPitchOk
+                            && henshinOn && ! sessionOn && ! talkMc && srcPitchOk
                           #if VOCALGZZIO_LITE
                             && false   // Lite版は非搭載
                           #endif
                             ;
         const bool jnOn = (apvts.getRawParameterValue ("jn_on")->load() > 0.5f)
-                            && henshinOn && ! sessionOn && srcPitchOk
+                            && henshinOn && ! sessionOn && ! talkMc && srcPitchOk
                           #if VOCALGZZIO_LITE
                             && false   // Lite版は非搭載
                           #endif
                             ;
         const bool atOn = (apvts.getRawParameterValue ("at_on")->load() > 0.5f)
-                            && henshinOn && ! sessionOn && srcPitchOk
+                            && henshinOn && ! sessionOn && ! talkMc && srcPitchOk
                           #if VOCALGZZIO_LITE
                             && false   // Lite版は非搭載
                           #endif
@@ -2928,7 +3007,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     }
     if (neiroRun)
     {
-        const bool monoOpt = outputMonoMode.load (std::memory_order_relaxed)
+        const bool monoOpt = (outputMonoMode.load (std::memory_order_relaxed)
+                           || liveTalkMode.load (std::memory_order_relaxed))
                           && ! selfTestRunning.load (std::memory_order_relaxed);
         const float arVelvet = apvts.getRawParameterValue ("argon_velvet")->load() * 0.01f;
         const float arFocus  = apvts.getRawParameterValue ("argon_focus")->load()  * 0.01f;
@@ -2989,6 +3069,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     //  飛ばすので save/restore も要らない ＝ buffer に一切触らない ＝ 完全な素通し。
     //  渡し中（クロスフェード）のあいだは今までどおり走らせて混ぜる。
     const bool spaceRun = ! mods.isOff (gz::ModuleChain::Hirogari);
+    const bool talkMcSpace = liveTalkMode.load (std::memory_order_relaxed)
+                          && ! selfTestRunning.load (std::memory_order_relaxed);
     if (spaceRun) mods.save (gz::ModuleChain::Hirogari, buffer);
 
     // ---- Doubler (modulated short delay, mono-safe L/R inversion) + Width ----
@@ -2996,11 +3078,11 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     {
         const bool monoOpt = outputMonoMode.load (std::memory_order_relaxed)
                           && ! selfTestRunning.load (std::memory_order_relaxed);
-        const bool  dblOn    = apvts.getRawParameterValue ("dbl_on")->load() > 0.5f;
+        const bool  dblOn    = apvts.getRawParameterValue ("dbl_on")->load() > 0.5f && ! talkMcSpace;
         const float dblAmt   = juce::jlimit (0.0f, 1.0f,
                                    (dblOn ? apvts.getRawParameterValue ("doubler")->load() * 0.01f : 0.0f)
                                    * (1.0f + 0.35f * liftNow));
-        const float widthAmt = monoOpt ? 0.0f : juce::jlimit (0.0f, 1.0f,
+        const float widthAmt = (monoOpt || talkMcSpace) ? 0.0f : juce::jlimit (0.0f, 1.0f,
                                    apvts.getRawParameterValue ("width")->load() * 0.01f
                                    * (1.0f + 0.30f * emoBloomNow + 0.45f * liftNow)
                                    + 0.06f * emoBloomNow + 0.08f * liftNow);
@@ -3060,7 +3142,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // ---- v1.4.0 Chorus (wet-only voices; dry path untouched -> zero latency) ----
     if (spaceRun)
     {
-        const bool  choOn  = apvts.getRawParameterValue ("cho_on")->load() > 0.5f;
+        const bool  choOn  = apvts.getRawParameterValue ("cho_on")->load() > 0.5f && ! talkMcSpace;
         const float choAmt = apvts.getRawParameterValue ("cho_amt")->load() * 0.01f;
         if (choOn && choAmt > 0.001f)
         {
@@ -3092,19 +3174,27 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 duckGain += (target < duckGain ? duckAtk : duckRel) * (target - duckGain);
                 duckGainBuf[(size_t) n] = duckGain;
             }
+            meterDuckDb.store (juce::jmax (0.0f, -juce::Decibels::gainToDecibels (duckGain, -24.0f)),
+                               std::memory_order_relaxed);
         }
         else
         {
             duckGain = 1.0f;
             std::fill (duckGainBuf.begin(), duckGainBuf.begin() + numSamples, 1.0f);
+            meterDuckDb.store (0.0f, std::memory_order_relaxed);
         }
+    }
+    else
+    {
+        meterDuckDb.store (0.0f, std::memory_order_relaxed);
     }
 
     // ---- Delay (tempo-syncable echo, feedback highcut, ducked wet) ----
     if (spaceRun)
     {
         // v2.10.0 しゃべり配信ではやまびこを切る(聞き取りを妨げるため)。
-        const bool  dlyOn = apvts.getRawParameterValue ("dly_on")->load() > 0.5f && srcSpaceOk;
+        // v4.7.0 雑談MCモード(talkMcSpace)でも歌設定を壊さずやまびこを素通しにする。
+        const bool  dlyOn = apvts.getRawParameterValue ("dly_on")->load() > 0.5f && srcSpaceOk && ! talkMcSpace;
         const float dAmt  = juce::jlimit (0.0f, 1.0f,
                                 (dlyOn ? apvts.getRawParameterValue ("delay")->load() * 0.01f : 0.0f)
                                 * (1.0f + 0.25f * liftNow));   // v2.0.0 サビリフト
@@ -3165,7 +3255,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     if (spaceRun)
     {
         // ON/OFFの選択は、しゃべりを含む全用途で有効。
-        const bool  revOn  = apvts.getRawParameterValue ("revon")->load() > 0.5f && srcSpaceOk;
+        // v4.7.0 雑談MCモード(talkMcSpace)中は revOn=false として 12ms フェードアウトで残響をスッと消す。
+        const bool  revOn  = apvts.getRawParameterValue ("revon")->load() > 0.5f && srcSpaceOk && ! talkMcSpace;
         const float revMix = apvts.getRawParameterValue ("revmix")->load() * 0.01f;
         const bool revEnabled = revOn && revMix > 0.001f;
         if (revEnabled || revBypassGain > 0.0f)

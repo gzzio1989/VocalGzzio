@@ -7385,6 +7385,14 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
     }
     menu.addItem (200, language->T ("外部IR音声ファイルを読み込む...", "Load Custom IR Audio File..."));
 
+    menu.addSeparator();
+    menu.addSectionHeader (language->T ("声優先ダッキング（歌っている最中は残響を抑え、語尾で広げる）",
+                                        "Vocal-Priority Space Ducking (Clear Lyrics, Blooming Tails)"));
+    const float curDuck = processor.apvts.getRawParameterValue ("duck")->load();
+    menu.addItem (300, language->T ("ダッキング 切 (0%・常時一定の残響)", "Ducking OFF (0% - Constant Reverb)"), true, curDuck < 10.0f);
+    menu.addItem (301, language->T ("自然な歌詞優先 (45%・歌枠おすすめ)", "Natural Lyric Priority (45% - Recommended)"), true, curDuck >= 10.0f && curDuck < 60.0f);
+    menu.addItem (302, language->T ("しっかり歌詞くっきり (75%・速い曲向け)", "Strong Lyric Clarity (75% - Fast Songs)"), true, curDuck >= 60.0f);
+
     juce::Component::SafePointer<VocalGzzioContent> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (anchorScreenBounds),
                         [safe, setRevType] (int res)
@@ -7394,6 +7402,23 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
         {
             safe->processor.clearCustomIrFile();
             setRevType (kHeyaFirst + (res - 100));
+            safe->repaint();
+        }
+        else if (res >= 300 && res <= 302)
+        {
+            const float duckVals[3] = { 0.0f, 45.0f, 75.0f };
+            const float targetDuck = duckVals[res - 300];
+            if (auto* p = safe->processor.apvts.getParameter ("duck"))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (safe->processor.apvts.getParameterRange ("duck").convertTo0to1 (targetDuck));
+                p->endChangeGesture();
+            }
+            safe->overviewHint = (res == 300)
+                ? safe->language->T ("【声優先ダッキング 切】歌っている最中も一定の残響量を保ちます。",
+                                     "[Space Ducking OFF] Keeps reverb level constant while singing.")
+                : safe->language->T ("【声優先ダッキング 入】歌っている最中は残響・やまびこを自動で抑えて歌詞をくっきり届け、フレーズの切れ目で余韻をふわっと広げます。",
+                                     "[Space Ducking ON] Automatically ducks reverb and echo while singing so fast lyrics stay clear, then blooms in phrase gaps.");
             safe->repaint();
         }
         else if (res == 202)

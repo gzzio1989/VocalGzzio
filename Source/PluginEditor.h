@@ -3308,6 +3308,8 @@ private:
     juce::Rectangle<int> litePillRect;
     juce::Rectangle<int> routePillRect;   // 🎯 中央寄せ・モノラル出力ピル
     juce::Rectangle<int> streamPillRect;  // 📡 外部出力 (SYNCROOM / VB-CABLE 等) ピル
+    juce::Rectangle<int> talkPillRect;    // 🎤⇄💬 歌枠 ⇄ 雑談MC ワンクリック瞬間ライブ切替ピル
+    juce::Rectangle<int> loopPillRect;    // 🔄 5秒録って手放し聴き比べ「試聴ルーパー」ピル
     juce::Rectangle<int> irOverviewRect;  // 🌊 IR残響 音響減衰カーブ表示＆外部IR(.wav/.aiff)ローダーカプセル
     juce::Rectangle<int> argonPadRect;
     std::array<juce::Rectangle<int>, 4> argonBarRects;

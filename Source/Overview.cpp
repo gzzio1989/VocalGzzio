@@ -283,6 +283,37 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+    // 1d-2. 2段目の「🎤歌枠 ⇄ 💬雑談MC」ワンクリック瞬間ライブ切替ピル
+    if (! talkPillRect.isEmpty() && talkPillRect.contains (pt))
+    {
+        processor.toggleLiveTalkMode();
+        const bool isMc = processor.getLiveTalkMode();
+        overviewHint = isMc
+            ? language->T ("【💬 雑談MCモード 入】歌枠の設定を1ミリも変えずに、残響・やまびこ・ピッチ補正・ハモリをスッと消して聞き取りやすいMCトーク声へ切り替えました。もう一度押すと一瞬で歌枠へ戻ります。",
+                           "[MC TALK MODE ON] Smoothly mutes reverb, echo, pitch correction, and harmony for clear speech without altering your singing settings. Click again to return to singing.")
+            : language->T ("【🎤 歌枠モード 復帰】雑談MCを解除し、設定してあった残響・やまびこ・ピッチ補正・ハモリをそのまま復元しました。",
+                           "[SING MODE RESTORED] Exited MC Talk mode and restored your reverb, echo, pitch correction, and harmony settings.");
+        repaint();
+        return true;
+    }
+
+    // 1d-3. 2段目の「🔄5秒試聴ルーパー」録音・手放しループ再生ピル
+    if (! loopPillRect.isEmpty() && loopPillRect.contains (pt))
+    {
+        processor.toggleAudition();
+        const int st = processor.getAuditionState();
+        overviewHint = (st == VocalGzzioProcessor::AuditionRecording)
+            ? language->T ("【● 5秒試聴録音中】マイクに向かって5秒ほど歌うか話してください。5秒経つと自動でループ再生に切り替わり、手放しで音作りや原音比較ができます（途中で押すとそこまでを即ループ再生します）。",
+                           "[RECORDING 5s PHRASE] Sing or speak for up to 5 seconds. Loops automatically so you can tweak the orb or compare hands-free (click again to loop early).")
+            : (st == VocalGzzioProcessor::AuditionPlaying)
+                ? language->T ("【▶ 手放し試聴ループ再生中】録音したあなたの声を繰り返し流しています。声を出さずに2Dオーブや仕上がり・配色を切り替えたり、「押して原音と比較」で聴き比べられます（もう一度押すと停止）。",
+                               "[LOOP AUDITION PLAYING] Looping your recorded voice through the live DSP chain. Adjust the 2D orb, finishes, or hold Compare hands-free (click again to stop).")
+                : language->T ("【🔄 5秒試聴ルーパー 停止】試聴ループ再生を停止し、通常の生マイク入力へ戻しました。",
+                               "[AUDITION LOOPER STOPPED] Stopped loop playback and returned to live microphone input.");
+        repaint();
+        return true;
+    }
+
     // 1e. Output boost trim. The visible button and this hit-test use the same action.
     if (! levelBadgeRect.isEmpty() && levelBadgeRect.contains (pt))
     {
@@ -290,12 +321,12 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
-    // 1f. 03 SPACE カード内の「🌊 IR波形・外部IR読込」カプセルクリック
+    // 1f. 03 SPACE カード内の「🌊 IR波形・外部IR読込・声優先ダッキング」カプセルクリック
     if (! irOverviewRect.isEmpty() && irOverviewRect.contains (pt))
     {
         openIrSelectorMenu (localAreaToGlobal (irOverviewRect));
-        overviewHint = language->T ("【🌊 IR残響・外部IR読込】6種の内蔵コンボリューションIR空間の切替や、お手持ちの外部IRファイル(.wav/.aiff)の読み込み・解除を行います。",
-                                    "[IR CONVOLUTION] Switch between the 6 built-in IR spaces or load/clear an external custom IR audio file (.wav/.aiff).");
+        overviewHint = language->T ("【🌊 IR残響・外部IR読込・声優先ダッキング】内蔵6部屋のIR切替、外部IRファイル(.wav/.aiff)の読込、および「声優先ダッキング（歌っている最中は残響を抑え語尾で広げる）」を設定します。",
+                                    "[IR CONVOLUTION & DUCKING] Switch between the 6 built-in IR spaces, load a custom IR (.wav/.aiff), or set Vocal-Priority Space Ducking.");
         return true;
     }
 
@@ -595,8 +626,14 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
         return language->T ("ASIOで自分の声を聴きながら、「Yamaha SYNCROOM Driver (WDM)」や「VB-CABLE」等の外部デバイスへ処理後の声を同時に流し、SYNCROOMやOBSへ直接渡します。",
                             "Simultaneously streams processed audio to external virtual devices like 'Yamaha SYNCROOM Driver (WDM)' or 'VB-CABLE' while keeping your main interface on ASIO.");
     if (irOverviewRect.contains (pt))
-        return language->T ("実空間IR（インパルス応答）残響の音響減衰カーブを表示します。クリックすると内蔵6部屋のIR切替や、外部IRファイル(.wav/.aiff)の読み込み・解除ができます。",
-                            "Displays the acoustic decay curve of the IR convolution reverb. Click to switch between the 6 built-in rooms or load/clear a custom IR file (.wav/.aiff).");
+        return language->T ("実空間IR（インパルス応答）残響の音響減衰カーブと声優先ダッキングを表示します。クリックすると内蔵6部屋のIR切替・外部IRファイル(.wav/.aiff)の読込・歌っている最中の残響自動回避（声優先ダッキング）が選べます。",
+                            "Displays the IR convolution decay curve and vocal-priority space ducking. Click to switch between 6 built-in rooms, load a custom IR (.wav/.aiff), or set vocal-priority ducking.");
+    if (talkPillRect.contains (pt))
+        return language->T ("【歌枠⇄雑談MC 瞬間切替】クリックすると歌設定（残響・エコー・ハモリ・広がり）を一切壊さず一時ミュートし、曲間のトークでもお風呂場にならないクリアなMC声へワンタッチで切り替えます。",
+                            "[Singing / MC Talk Toggle] Non-destructively mutes reverb, echo, harmony, and stereo width for clean between-song MC talk while preserving 100% of your singing settings for instant return.");
+    if (loopPillRect.contains (pt))
+        return language->T ("【5秒録音・手放し試聴ルーパー】1回押すとマイクの素の声を5秒間録音し、直後から自動ループ再生します。骨伝導のない客観的な自分の声を聴きながら、両手で仕上がりや2Dオーブ・原音比較を追い込めます。",
+                            "[5s Quick Audition Looper] Click once to record 5 seconds of your dry voice, then automatically loop it through the DSP chain so you can tweak settings and compare raw vs. processed hands-free.");
     for (size_t c = 0; c < coutureSwatchRects.size(); ++c)
         if (! coutureSwatchRects[c].isEmpty() && coutureSwatchRects[c].contains (pt))
             return language->T ("クチュール・コスメ5色のカラーバリエーション（01ロゼ／02アイシーラベンダー／03ノワールロリータ／04ティファニーミント／05ハニーピーチ）をワンタッチで切り替えます。",
@@ -727,6 +764,8 @@ void VocalGzzioContent::resizedOverview()
     argonPadRect = {};
     levelBadgeRect = {};
     irOverviewRect = {};
+    talkPillRect = {};
+    loopPillRect = {};
     for (auto& r : argonBarRects) r = {};
     for (auto& r : argonTargetRects) r = {};
     for (auto& r : coutureSwatchRects) r = {};
@@ -749,17 +788,19 @@ void VocalGzzioContent::resizedOverview()
     overviewPitch  .setBounds (toolbar.removeFromRight (126)); toolbar.removeFromRight (5);
     checkupButton  .setBounds (toolbar.removeFromRight (86));
 
-    // ---- 2段目: 仕上がり・音の種類・ワンクリック自動設定・A/B比較・原音比較・初期化 ----
+    // ---- 2段目: 仕上がり・音の種類・ワンクリック自動設定・A/B比較・歌枠⇄雑談MC・5秒試聴ルーパー・原音比較・初期化 ----
     const int barY = 72, barH = 40;
-    finishPresetBox.setBounds (116, barY, 320, barH);
-    srcModeLabelArea = { 444, barY, 88, barH };
-    srcModeBox     .setBounds (536, barY, 156, barH);
-    autoSetupButton.setBounds (704, barY, 134, barH);
-    songSetupButton.setBounds (846, barY, 134, barH);
-    abA            .setBounds (992, barY, 42,  barH);
-    abB            .setBounds (1040, barY, 42, barH);
-    abCopy         .setBounds (1088, barY, 62, barH);
-    overviewCompare.setBounds (1162, barY, 288, barH);
+    finishPresetBox.setBounds (116, barY, 232, barH);
+    srcModeLabelArea = { 352, barY, 84, barH };
+    srcModeBox     .setBounds (440, barY, 152, barH);
+    autoSetupButton.setBounds (600, barY, 134, barH);
+    songSetupButton.setBounds (740, barY, 134, barH);
+    abA            .setBounds (882, barY, 42,  barH);
+    abB            .setBounds (928, barY, 42,  barH);
+    abCopy         .setBounds (974, barY, 62,  barH);
+    talkPillRect   = { 1044, barY + 3, 102, barH - 6 };
+    loopPillRect   = { 1152, barY + 3, 106, barH - 6 };
+    overviewCompare.setBounds (1266, barY, 188, barH);
     resetButton    .setBounds (1460, barY, w - edge - 1460, barH);
 
     auto grid = [this] (juce::Rectangle<int> r, std::initializer_list<Knob*> knobs, int columns)
@@ -1264,6 +1305,39 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             const bool sOn = processor.getStreamOut().isRunning();
             drawHeaderPill (streamPillRect, sOn, sOn ? Palette::green : Palette::salmon,
                             sOn ? language->T ("📡SYNC中", "SYNC ON") : language->T ("📡外部出力", "SYNC OUT"));
+        }
+
+        // [🎤歌枠 ⇄ 💬雑談MC] 歌設定を100%保ったまま残響・エコー・ハモリを一時オフにするライブ瞬間切替ピル
+        if (! talkPillRect.isEmpty())
+        {
+            const bool isTalk = processor.getLiveTalkMode();
+            drawHeaderPill (talkPillRect, isTalk, isTalk ? Palette::yellow : Palette::ice,
+                            isTalk ? language->T ("💬雑談MC中", "MC TALK") : language->T ("🎤歌枠/MC", "SING/MC"));
+        }
+
+        // [🔄5秒試聴] 5秒録って手放し聴き比べできる試聴ルーパーピル（録音中・再生中はプログレスバーも表示）
+        if (! loopPillRect.isEmpty())
+        {
+            const int aState = processor.getAuditionState();
+            const bool aActive = (aState != VocalGzzioProcessor::AuditionOff);
+            const auto aCol = (aState == VocalGzzioProcessor::AuditionRecording) ? Palette::salmon
+                            : (aState == VocalGzzioProcessor::AuditionPlaying)   ? Palette::green : Palette::blue;
+            const juce::String aLabel = (aState == VocalGzzioProcessor::AuditionRecording)
+                ? language->T ("●録音中...", "●REC 5s")
+                : (aState == VocalGzzioProcessor::AuditionPlaying)
+                    ? language->T ("🔄試聴再生", "LOOP ON")
+                    : language->T ("🔄5秒試聴", "5s LOOP");
+            drawHeaderPill (loopPillRect, aActive, aCol, aLabel);
+            if (aActive)
+            {
+                const float prog = juce::jlimit (0.0f, 1.0f, processor.getAuditionProgress());
+                auto bar = loopPillRect.toFloat().reduced (8.0f, 0.0f);
+                bar = bar.withTop (bar.getBottom() - 3.5f).withHeight (2.2f);
+                g.setColour (Palette::panel.withAlpha (0.65f));
+                g.fillRoundedRectangle (bar, 1.1f);
+                g.setColour (aCol);
+                g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * prog), 1.1f);
+            }
         }
     }
 
@@ -2974,16 +3048,29 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             g.strokePath (waveStroke, juce::PathStrokeType (isHeya ? 1.5f : 1.0f));
         }
 
-        g.setColour (isHeya ? accentCol : Palette::panelLn);
-        g.drawRoundedRectangle (irF.reduced (0.5f), irRad, isHeya ? 1.5f : 1.0f);
-        g.setColour (isHeya ? Palette::ink : Palette::inkSoft);
+        const float duckPct = processor.apvts.getRawParameterValue ("duck")->load();
+        const float duckDb  = processor.getSpaceDuckDb();
+        if (duckPct > 1.0f && ! liteMode)
+        {
+            const float duckRatio = juce::jlimit (0.05f, 1.0f, (duckDb > 0.2f ? duckDb / 12.0f : duckPct / 100.0f * 0.35f));
+            auto dBar = irF.reduced (6.0f, 0.0f);
+            dBar = dBar.withTop (irF.getY() + 2.0f).withHeight (2.2f);
+            g.setColour (Palette::yellow.withAlpha (duckDb > 0.2f ? 0.90f : 0.45f));
+            g.fillRoundedRectangle (dBar.withWidth (dBar.getWidth() * duckRatio), 1.1f);
+        }
+
+        g.setColour (isHeya ? accentCol : (duckPct > 1.0f ? Palette::yellow.withAlpha (0.75f) : Palette::panelLn));
+        g.drawRoundedRectangle (irF.reduced (0.5f), irRad, (isHeya || duckPct > 1.0f) ? 1.5f : 1.0f);
+        g.setColour ((isHeya || duckPct > 1.0f) ? Palette::ink : Palette::inkSoft);
         const bool compactIr = (irOverviewRect.getWidth() < 110);
         const juce::String irLabel = hasCustom
             ? (compactIr ? language->T ("IR:外部", "IR:WAV") : language->T ("IR:外部読込", "IR: CUSTOM"))
-            : isHeya
-                ? (compactIr ? language->T ("IR波形", "IR ON") : language->T ("IR波形・読込", "IR WAVE"))
-                : (compactIr ? language->T ("IR読込", "IR...") : language->T ("IR切替・読込", "IR LOAD"));
-        fitText (g, irLabel, irOverviewRect.reduced (4, 0), juce::Justification::centred, 14.0f, isHeya);
+            : (duckPct > 1.0f)
+                ? (compactIr ? language->T ("IR/声優先", "IR/DUCK") : language->T ("IR・声優先", "IR + DUCK"))
+                : isHeya
+                    ? (compactIr ? language->T ("IR波形", "IR ON") : language->T ("IR波形・読込", "IR WAVE"))
+                    : (compactIr ? language->T ("IR読込", "IR...") : language->T ("IR切替・読込", "IR LOAD"));
+        fitText (g, irLabel, irOverviewRect.reduced (4, 0), juce::Justification::centred, 14.0f, isHeya || duckPct > 1.0f);
     }
 
     // パステル・ライバーテーマではぷにぐじマスコットとジュースサーバーも総合画面に優しく添える（軽量モード時は省略）

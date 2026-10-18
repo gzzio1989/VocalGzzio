@@ -373,6 +373,68 @@ public:
     void setOutputMonoMode (bool b) noexcept   { outputMonoMode.store (b, std::memory_order_relaxed); markStateDirty(); }
     int  getAutoCenterChannel() const noexcept { return autoCenterCh.load (std::memory_order_relaxed); }
 
+    //== v4.7.0 歌枠 ⇄ 雑談MC ワンクリック瞬間ライブ切替（歌設定を1ミリも壊さず残響・エコー・ピッチ系を即ミュート） ==
+    bool getLiveTalkMode() const noexcept      { return liveTalkMode.load (std::memory_order_relaxed); }
+    void setLiveTalkMode (bool b) noexcept     { liveTalkMode.store (b, std::memory_order_relaxed); }
+    void toggleLiveTalkMode() noexcept         { liveTalkMode.store (! getLiveTalkMode(), std::memory_order_relaxed); }
+
+    //== v4.7.0 5秒録って手放し聴き比べ「試聴ルーパー（Quick Audition Looper）」 ==
+    // state: 0=待機(通常の生マイク), 1=5秒録音中, 2=手放しループ再生中(DSP全段＋原音比較がリアルタイムに効く)
+    enum AuditionState { AuditionOff = 0, AuditionRecording = 1, AuditionPlaying = 2 };
+    int   getAuditionState() const noexcept    { return auditionState.load (std::memory_order_relaxed); }
+    float getAuditionProgress() const noexcept
+    {
+        const int st  = auditionState.load (std::memory_order_relaxed);
+        const int pos = auditionPos.load (std::memory_order_relaxed);
+        if (st == AuditionRecording)
+            return auditionMaxSamples > 0 ? juce::jlimit (0.0f, 1.0f, (float) pos / (float) auditionMaxSamples) : 0.0f;
+        if (st == AuditionPlaying)
+        {
+            const int len = auditionLen.load (std::memory_order_relaxed);
+            return len > 0 ? juce::jlimit (0.0f, 1.0f, (float) pos / (float) len) : 0.0f;
+        }
+        return 0.0f;
+    }
+    void startAuditionRecord() noexcept
+    {
+        auditionPos.store (0, std::memory_order_relaxed);
+        auditionLen.store (0, std::memory_order_relaxed);
+        auditionState.store (AuditionRecording, std::memory_order_release);
+    }
+    void stopAudition() noexcept
+    {
+        auditionState.store (AuditionOff, std::memory_order_release);
+        auditionPos.store (0, std::memory_order_relaxed);
+    }
+    void toggleAudition() noexcept
+    {
+        const int st = auditionState.load (std::memory_order_relaxed);
+        if (st == AuditionOff)
+        {
+            startAuditionRecord();
+        }
+        else if (st == AuditionRecording)
+        {
+            const int recorded = auditionPos.load (std::memory_order_relaxed);
+            if (recorded >= juce::jmax (1024, (int) (0.25 * currentSampleRate)))
+            {
+                auditionLen.store (recorded, std::memory_order_relaxed);
+                auditionPos.store (0, std::memory_order_relaxed);
+                auditionState.store (AuditionPlaying, std::memory_order_release);
+            }
+            else
+            {
+                stopAudition();
+            }
+        }
+        else
+        {
+            stopAudition();
+        }
+    }
+
+    //== v4.7.0 声優先ダッキング（歌っている最中の残響抑え量 dB） ==
+    float getSpaceDuckDb() const noexcept      { return meterDuckDb.load (std::memory_order_relaxed); }
 
     //== v2.10.0 点検 =========================================================
     // ★ここから下はどれも音を作らない。音声スレッドからは呼ばない。
@@ -952,6 +1014,16 @@ private:
     std::atomic<bool> outputMonoMode { false };    // 最終出力も完全モノラル化(L=R=(L+R)/2)
     std::atomic<int>  autoCenterCh   { 0 };        // 単体起動時の自動センターが現在掴んでいる入力ch (0 or 1)
     double            inRouteEnergy[2] {};         // 自動センター判定用の平滑エネルギー
+
+    // ---- v4.7.0 歌枠⇄雑談MC瞬間切替 ＆ 5秒試聴ルーパー ＆ 声優先ダッキング表示 ----
+    std::atomic<bool> liveTalkMode   { false };    // true=雑談MC中(歌設定を保ったまま残響・エコー・ピッチ系・Haloを即時バイパス)
+    juce::AudioBuffer<float> auditionBuf;          // 5秒間の試聴ルーパー用ステレオバッファ(prepareToPlayで事前確保・ヒープ確保ゼロ)
+    std::atomic<int>  auditionState  { 0 };        // 0=待機, 1=録音中(最大5秒), 2=手放しループ再生中
+    std::atomic<int>  auditionPos    { 0 };        // 録音・再生ヘッド位置(サンプル単位)
+    std::atomic<int>  auditionLen    { 0 };        // 録音された有効サンプル長
+    int               auditionMaxSamples { 240000 };
+    std::atomic<float> meterDuckDb   { 0.0f };     // 声優先ダッキングで現在残響を抑えている量(dB, 0..15)
+
     // v2.8.0: A/Bスロット自体を保存するとき、その中にまたA/Bを入れないための札。
     // 入れてしまうと保存が入れ子に増殖して、プロジェクトが開けなくなる。
     bool          omitAbInState = false;

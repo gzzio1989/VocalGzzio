@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VocalGzzio VERSION 4.6.0 LANGUAGES C CXX)
+project(VocalGzzio VERSION 4.7.0 LANGUAGES C CXX)
+# 4.7.0: 歌枠⇄雑談MCのワンクリック瞬間切替、5秒録って手放しで聴き比べられる試聴ルーパー、声優先ダッキングの直結操作を総合画面へ搭載。
 # 4.6.0: 深層ノイズ＆微弱ハム徹底除去、スタンドアロン片耳マイク自動センター＆モノラル出力、SYNCROOM等の外部仮想デバイス同時出力ブリッジを総合画面へ搭載。
 # 4.5.0: 声芯の調整、自動設定との連携、操作の安全性と配布整合性を改善。
 # ★2026-10-15: 4.3.3 → 4.4.0 (Gemini4Argon Edition: Argon Velvet Engine & 4 Workspace Architectures + Lite Mode)
