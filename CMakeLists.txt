@@ -168,6 +168,21 @@ target_compile_definitions(VocalGzzio PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0)
 if (WIN32)
     target_compile_definitions(VocalGzzio PUBLIC JUCE_ASIO=1)
+    add_executable(VocalGzzioWdmInstaller tools/VocalGzzioWdmInstaller.cpp)
+    if (MSVC)
+        target_compile_options(VocalGzzioWdmInstaller PRIVATE /utf-8)
+    endif()
+    target_link_libraries(VocalGzzioWdmInstaller PRIVATE setupapi newdev cfgmgr32 shell32 ole32 advapi32)
+    if (TARGET VocalGzzio_Standalone)
+        add_custom_command(TARGET VocalGzzio_Standalone POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:VocalGzzioWdmInstaller>"
+                "$<TARGET_FILE_DIR:VocalGzzio_Standalone>/VocalGzzioWdmInstaller.exe"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/driver"
+                "$<TARGET_FILE_DIR:VocalGzzio_Standalone>/driver"
+            COMMENT "Bundling VocalGzzioWdmInstaller.exe and WDM driver alongside Standalone")
+    endif()
 endif()
 
 option(VOCALGZZIO_BUILD_TESTS "Build the regression checks with CTest" OFF)
@@ -189,5 +204,6 @@ if (VOCALGZZIO_BUILD_TESTS)
     target_compile_definitions(VocalGzzio PUBLIC VOCALGZZIO_TESTING=1)
     add_subdirectory(tools)
 endif()
+
 
 

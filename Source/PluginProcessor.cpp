@@ -1191,8 +1191,16 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // v2.2.0 配信出力: 本線のサンプリングレートが変わったら開き直す
     // (レート比が変わるため。止まっているときは何もしない)
     streamOut.setHostSampleRate (sampleRate);
-    if (streamWanted && isStandalone() && streamDevWanted.isNotEmpty())
-        streamOut.start (streamDevWanted, sampleRate);
+    if (isStandalone())
+    {
+        if (streamWanted && streamDevWanted.isNotEmpty())
+            streamOut.start (streamDevWanted, sampleRate);
+        else if (! streamUserConfigured && ! streamAutoChecked)
+        {
+            streamAutoChecked = true;
+            juce::MessageManager::callAsync ([this] { ensureStandaloneVirtualDriverActive(); });
+        }
+    }
 }
 
 void VocalGzzioProcessor::updateParameters()
@@ -4238,6 +4246,7 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
     auto* so = root->createNewChildElement ("STREAMOUT");
     so->setAttribute ("on", streamWanted ? 1 : 0);
     so->setAttribute ("dev", streamDevWanted);
+    so->setAttribute ("user_cfg", streamUserConfigured ? 1 : 0);
     so->setAttribute ("route", inputRouteMode.load (std::memory_order_relaxed));
     so->setAttribute ("mono", outputMonoMode.load (std::memory_order_relaxed) ? 1 : 0);
     so->setAttribute ("smono", streamOut.isForceMono() ? 1 : 0);
@@ -4375,16 +4384,19 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
         // ので、A/B経由の復元では触らない(MIDI割当と同じ扱い)。
         if (auto* so = xml.getChildByName ("STREAMOUT"); so != nullptr && ! suppressDeviceRestore)
         {
-            streamDevWanted = so->getStringAttribute ("dev");
-            streamWanted    = so->getIntAttribute ("on", 0) != 0;
+            streamDevWanted      = so->getStringAttribute ("dev");
+            streamWanted         = so->getIntAttribute ("on", 0) != 0;
+            streamUserConfigured = so->getIntAttribute ("user_cfg", 0) != 0;
             inputRouteMode.store (juce::jlimit (0, 4, so->getIntAttribute ("route", 0)), std::memory_order_relaxed);
             outputMonoMode.store (so->getIntAttribute ("mono", 0) != 0, std::memory_order_relaxed);
             streamOut.setForceMono (so->getIntAttribute ("smono", 0) != 0);
-            // 単体起動版のときだけ、保存されていた配信先を開き直す
+            // 単体起動版のときだけ、保存されていた配信先を開き直す（未設定時は VocalGzzio Driver (WDM) を自動接続）
             if (isStandalone())
             {
                 if (streamWanted && streamDevWanted.isNotEmpty())
                     streamOut.start (streamDevWanted, currentSampleRate);
+                else if (! streamUserConfigured)
+                    ensureStandaloneVirtualDriverActive();
                 else
                     streamOut.stop();
             }

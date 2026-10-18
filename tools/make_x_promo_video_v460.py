@@ -379,7 +379,7 @@ def main():
                 # 特徴まとめ
                 bullets = [
                     "♪ 歌枠⇄雑談MC 1クリック切替 ＆ ◎5秒試聴ルーパー ＆ ◆声優先ダッキング可視化",
-                    "★ クチュール5色（01ロゼ／02氷紫／03黒姫／04翡翠／05白桃）＆ 片耳中央化・配信出力直結",
+                    "★ クチュール5色（01ロゼ〜05白桃）＆ 専用仮想ドライバ「VocalGzzio Driver (WDM)」同梱",
                     "◆ 製品版 2,500円（買い切り・Windows & Mac 同梱・既存購入者は無料で4.7.0へ更新可能）",
                     "♥ 無料体験版あり（60秒ごとに0.6秒音量低下・保存不可 ／ 音質と全機能をお試し可能）",
                 ]
@@ -388,7 +388,7 @@ def main():
                     d.text((100, by), b, font=get_font(22), fill=(250, 245, 252, 255))
                     by += 42
 
-                d.text((100, 582), "Vocal Source: Coin of the Realm / Mr_Yesterday (Lyrics D A Ayer, 2020) CC BY 3.0 — Loudness matched at -18.0 LUFS",
+                d.text((100, 582), "Vocal Source: Come Inside (pell) / Madam Snowflake (2019) CC BY 3.0 (ccmixter.org/files/snowflake/59563) — -18.0 LUFS",
                        font=f_sm, fill=(175, 162, 185, 255))
                 d.text((100, 610), "https://gzzio.booth.pm/items/8764003   （Mac版は未公証／音程補正は単独の声向け・48kHzで約42.6ms遅延）",
                        font=f_sm, fill=(245, 215, 155, 255))

@@ -274,12 +274,12 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
-    // 1d. ヘッダの「📡外部出力 (SYNCROOM / VB-CABLE)」ブリッジ設定ピル
+    // 1d. ヘッダの「📡外部出力 (VocalGzzio Driver (WDM) / SYNCROOM / VB-CABLE)」ブリッジ設定ピル
     if (! streamPillRect.isEmpty() && streamPillRect.contains (pt))
     {
         openStreamOutPopup (localAreaToGlobal (streamPillRect));
-        overviewHint = language->T ("【📡 外部出力 (SYNCROOM / VB-CABLE)】ASIOで自分の声を聴きながら、Yamaha SYNCROOM Driver (WDM) や VB-CABLE へ処理後の声を同時出力します。",
-                                    "[SYNC OUT] Bridges processed audio directly into Yamaha SYNCROOM Driver (WDM) or VB-CABLE while keeping your main interface on ASIO.");
+        overviewHint = language->T ("【📡 外部出力 (VocalGzzio Driver (WDM))】ASIOで自分の声を聴きながら、専用仮想ドライバ「ライン (VocalGzzio Driver (WDM))」へ処理後の声を同時出力します。",
+                                    "[WDM / SYNC OUT] Bridges processed audio directly into 'ライン (VocalGzzio Driver (WDM))' while keeping your main interface on ASIO.");
         return true;
     }
 
@@ -623,8 +623,8 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
         return language->T ("マイクが片耳（左だけ・右だけ）から聴こえる問題を解消します。入力1/2の中央寄せ(L+R)や、最終出力の完全モノラル化・出力3-4等へのミラーリングを設定します。",
                             "Fixes single-sided mic audio by centering Input 1 or Input 2 to both L+R, or forcing full mono output across all output pairs.");
     if (streamPillRect.contains (pt))
-        return language->T ("ASIOで自分の声を聴きながら、「Yamaha SYNCROOM Driver (WDM)」や「VB-CABLE」等の外部デバイスへ処理後の声を同時に流し、SYNCROOMやOBSへ直接渡します。",
-                            "Simultaneously streams processed audio to external virtual devices like 'Yamaha SYNCROOM Driver (WDM)' or 'VB-CABLE' while keeping your main interface on ASIO.");
+        return language->T ("ASIOで自分の声を聴きながら、専用仮想ドライバ「ライン (VocalGzzio Driver (WDM))」（または SYNCROOM Driver / VB-CABLE）へ処理後の声を同時に流し、OBS・Discord・VRChat・SYNCROOMへ直接渡します。",
+                            "Simultaneously streams processed audio to 'ライン (VocalGzzio Driver (WDM))' (or SYNCROOM Driver / VB-CABLE) while keeping your main interface on ASIO.");
     if (irOverviewRect.contains (pt))
         return language->T ("実空間IR（インパルス応答）残響の音響減衰カーブと声優先ダッキングを表示します。クリックすると内蔵6部屋のIR切替・外部IRファイル(.wav/.aiff)の読込・歌っている最中の残響自動回避（声優先ダッキング）が選べます。",
                             "Displays the IR convolution decay curve and vocal-priority space ducking. Click to switch between 6 built-in rooms, load a custom IR (.wav/.aiff), or set vocal-priority ducking.");
@@ -1299,12 +1299,15 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             drawHeaderPill (routePillRect, rActive, rCol, rLabel);
         }
 
-        // [📡外部出力] SYNCROOM / VB-CABLE 同時出力ブリッジピル
+        // [📡外部出力] VocalGzzio Driver (WDM) / SYNCROOM / VB-CABLE 同時出力ブリッジピル
         if (! streamPillRect.isEmpty())
         {
             const bool sOn = processor.getStreamOut().isRunning();
+            const bool isVgWdm = sOn && processor.getStreamOut().getDeviceName().containsIgnoreCase ("VocalGzzio");
             drawHeaderPill (streamPillRect, sOn, sOn ? Palette::green : Palette::salmon,
-                            sOn ? language->T ("📡SYNC中", "SYNC ON") : language->T ("📡外部出力", "SYNC OUT"));
+                            sOn ? (isVgWdm ? language->T ("📡WDM出力中", "WDM ON")
+                                           : language->T ("📡SYNC中", "SYNC ON"))
+                                : language->T ("📡外部出力", "SYNC OUT"));
         }
 
         // [🎤歌枠 ⇄ 💬雑談MC] 歌設定を100%保ったまま残響・エコー・ハモリを一時オフにするライブ瞬間切替ピル

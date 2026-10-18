@@ -357,11 +357,24 @@ public:
     juce::String getStreamDeviceWanted() const { return streamDevWanted; }
     void setStreamOutput (bool on, const juce::String& deviceName)
     {
+        streamUserConfigured = true;
         streamDevWanted = deviceName;
         streamWanted    = on;
         if (on) streamOut.start (deviceName, currentSampleRate);
         else    streamOut.stop();
         markStateDirty();
+    }
+    void ensureStandaloneVirtualDriverActive()
+    {
+        if (! isStandalone() || streamUserConfigured) return;
+        if (streamOut.isRunning() && streamOut.getDeviceName().containsIgnoreCase ("VocalGzzio")) return;
+        const auto vgDev = streamOut.findVocalGzzioDriverDevice();
+        if (vgDev.isNotEmpty())
+        {
+            streamDevWanted = vgDev;
+            streamWanted    = true;
+            streamOut.start (streamDevWanted, currentSampleRate);
+        }
     }
 
     //== v4.6.0 マイク入力の中央寄せルーティング ＆ モノラル出力 ==
@@ -1009,6 +1022,8 @@ private:
     gz::StreamOut streamOut;
     juce::String  streamDevWanted;
     bool          streamWanted = false;
+    bool          streamUserConfigured = false;    // ユーザーが明示的に配信ON/OFFを切り替えたか
+    bool          streamAutoChecked    = false;    // 単体起動時に VocalGzzio Driver (WDM) 自動接続を行ったか
     bool          suppressDeviceRestore = false;   // A/B切替中は配信先を触らない
     std::atomic<int>  inputRouteMode { 0 };        // 0=自動センター(単体)/ステレオ, 1=IN1➔中央, 2=IN2➔中央, 3=IN1+2➔中央, 4=ステレオ固定
     std::atomic<bool> outputMonoMode { false };    // 最終出力も完全モノラル化(L=R=(L+R)/2)

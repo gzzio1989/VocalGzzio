@@ -1632,8 +1632,8 @@ private:
 
 //==============================================================================
 // v2.2.0 / v4.6.0 外部出力ブリッジパネル(SYNCROOM / VB-CABLE / OBS 同時出力)。
-// 処理後の音を「もう1つの出力先(Yamaha SYNCROOM Driver や VB-CABLE 等)」へ
-// 同時に流し、ASIO でインターフェースを掴んだまま SYNCROOM や OBS へ音を渡す。
+// 処理後の音を「もう1つの出力先(専用ドライバ VocalGzzio Driver (WDM) 等)」へ
+// 同時に流し、ASIO でインターフェースを掴んだまま OBS・Discord・VRChat・SYNCROOM へ音を渡す。
 class StreamOutPanel : public juce::Component, private juce::Timer
 {
     std::shared_ptr<tip::Language> language;
@@ -1660,20 +1660,26 @@ public:
         };
         addAndMakeVisible (monoButton);
 
+       #if JUCE_WINDOWS
+        installDrvButton.setButtonText (language->T ("🔧 VocalGzzio Driver 再登録", "🔧 Register VocalGzzio Driver"));
+        installDrvButton.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.22f));
+        installDrvButton.onClick = [this]
+        {
+            if (gz::StreamOut::installVocalGzzioWdmDriver())
+            {
+                reloadDevices (true);
+                onButton.setToggleState (true, juce::dontSendNotification);
+                apply();
+            }
+        };
+        addAndMakeVisible (installDrvButton);
+       #endif
+
         devLabel.setText (language->so_dev(), juce::dontSendNotification);
         devLabel.setColour (juce::Label::textColourId, Palette::ink);
         addAndMakeVisible (devLabel);
 
-        auto names = processor.getStreamOut().getOutputDeviceNames();
-        for (int i = 0; i < names.size(); ++i) devBox.addItem (names[i], i + 1);
-        if (names.isEmpty()) { devBox.addItem (language->so_none(), 1); devBox.setEnabled (false); onButton.setEnabled (false); }
-        {
-            auto wanted = processor.getStreamDeviceWanted();
-            if (wanted.isEmpty())
-                wanted = processor.getStreamOut().findPreferredVirtualDevice();
-            const int idx = names.indexOf (wanted);
-            devBox.setSelectedId (idx >= 0 ? idx + 1 : 1, juce::dontSendNotification);
-        }
+        reloadDevices (false);
         devBox.onChange = [this] { if (onButton.getToggleState()) apply(); };
         addAndMakeVisible (devBox);
 
@@ -1682,16 +1688,16 @@ public:
         addAndMakeVisible (status);
 
         hint.setText (language->T (
-            "出力先に「Yamaha SYNCROOM Driver (WDM)」や「CABLE Input (VB-CABLE)」を選ぶと、\n"
-            "メインのオーディオインターフェース(ASIO)で自分の声を聴きながら、SYNCROOM・OBS・Discord 等の\n"
-            "マイク入力へ処理後の声を直接流し込めます（SYNCROOM や VB-CABLE が入っていればすぐ使えます）。",
-            "Select 'Yamaha SYNCROOM Driver (WDM)' or 'CABLE Input (VB-CABLE)' to bridge processed audio\n"
-            "directly into SYNCROOM, OBS, or Discord while keeping your main interface on low-latency ASIO."),
+            "出力先に専用ドライバ「ライン (VocalGzzio Driver (WDM))」（または SYNCROOM Driver / VB-CABLE）を選ぶと、\n"
+            "メインのオーディオインターフェース(ASIO)で自分の声を聴きながら、OBS・Discord・VRChat・cluster・SYNCROOM 等の\n"
+            "マイク入力へ処理後の声を直接流し込めます（相手アプリ側のマイクで「ライン (VocalGzzio Driver (WDM))」を選択）。",
+            "Select 'ライン (VocalGzzio Driver (WDM))' (or SYNCROOM Driver / VB-CABLE) to bridge processed audio\n"
+            "directly into OBS, Discord, VRChat, or SYNCROOM while keeping your main interface on low-latency ASIO."),
             juce::dontSendNotification);
         hint.setColour (juce::Label::textColourId, Palette::inkSoft);
         addAndMakeVisible (hint);
 
-        setSize (540, 194);
+        setSize (580, 198);
         refresh();
         startTimerHz (4);
     }
@@ -1710,20 +1716,46 @@ public:
     {
         auto b = getLocalBounds().reduced (10);
         auto row1 = b.removeFromTop (30);
-        onButton.setBounds (row1.removeFromLeft (140));
-        row1.removeFromLeft (8);
-        monoButton.setBounds (row1.removeFromLeft (186));
-        row1.removeFromLeft (8);
+        onButton.setBounds (row1.removeFromLeft (128));
+        row1.removeFromLeft (6);
+        monoButton.setBounds (row1.removeFromLeft (176));
+        row1.removeFromLeft (6);
         status.setBounds (row1);
         b.removeFromTop (8);
         auto row2 = b.removeFromTop (28);
-        devLabel.setBounds (row2.removeFromLeft (70));
+        devLabel.setBounds (row2.removeFromLeft (64));
+       #if JUCE_WINDOWS
+        installDrvButton.setBounds (row2.removeFromRight (166));
+        row2.removeFromRight (6);
+       #endif
         devBox.setBounds (row2);
         b.removeFromTop (6);
         hint.setBounds (b);
     }
 
 private:
+    void reloadDevices (bool preferVocalGzzio)
+    {
+        devBox.clear (juce::dontSendNotification);
+        auto names = processor.getStreamOut().getOutputDeviceNames();
+        for (int i = 0; i < names.size(); ++i) devBox.addItem (names[i], i + 1);
+        if (names.isEmpty())
+        {
+            devBox.addItem (language->so_none(), 1);
+            devBox.setEnabled (false);
+            onButton.setEnabled (false);
+            return;
+        }
+        devBox.setEnabled (true);
+        onButton.setEnabled (true);
+        auto wanted = preferVocalGzzio ? processor.getStreamOut().findVocalGzzioDriverDevice()
+                                       : processor.getStreamDeviceWanted();
+        if (wanted.isEmpty())
+            wanted = processor.getStreamOut().findPreferredVirtualDevice();
+        const int idx = names.indexOf (wanted);
+        devBox.setSelectedId (idx >= 0 ? idx + 1 : 1, juce::dontSendNotification);
+    }
+
     void apply()
     {
         processor.setStreamOutput (onButton.getToggleState(), devBox.getText());
@@ -1749,7 +1781,7 @@ private:
 
     GzzioLnF ownLnf;                        // 子より後に破棄されるよう先頭に置く
     VocalGzzioProcessor& processor;
-    juce::TextButton onButton, monoButton;
+    juce::TextButton onButton, monoButton, installDrvButton;
     juce::Label devLabel, status, hint;
     juce::ComboBox devBox;
 

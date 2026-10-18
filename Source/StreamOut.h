@@ -45,7 +45,9 @@ public:
 
     static bool isVirtualLoopbackName (const juce::String& n) noexcept
     {
-        return n.containsIgnoreCase ("SYNCROOM")
+        return n.containsIgnoreCase ("VocalGzzio")
+            || n.containsIgnoreCase ("GzzioRoom")
+            || n.containsIgnoreCase ("SYNCROOM")
             || n.containsIgnoreCase ("VB-Audio")
             || n.containsIgnoreCase ("CABLE")
             || n.containsIgnoreCase ("VoiceMeeter")
@@ -56,36 +58,71 @@ public:
 
     // 選べる出力先の一覧。ASIO は他アプリと排他になりやすく、メイン出力と
     // 取り合いになるので、ここでは出さない(仮想ケーブルは WASAPI 等に出る)。
-    // v4.6.0: Yamaha SYNCROOM Driver や VB-CABLE 等の仮想ドライバを先頭へ優先配置する。
+    // 専用仮想ドライバ「ライン (VocalGzzio Driver (WDM))」を最優先で先頭へ配置する。
     juce::StringArray getOutputDeviceNames()
     {
-        juce::StringArray virtualNames, otherNames;
+        juce::StringArray vocalGzzioNames, virtualNames, otherNames;
         for (auto* t : adm().getAvailableDeviceTypes())
         {
             if (t->getTypeName().containsIgnoreCase ("ASIO")) continue;
             t->scanForDevices();
             for (const auto& n : t->getDeviceNames (false))     // false = 出力側
             {
-                if (n.isEmpty() || virtualNames.contains (n) || otherNames.contains (n))
+                if (n.isEmpty() || vocalGzzioNames.contains (n) || virtualNames.contains (n) || otherNames.contains (n))
                     continue;
-                if (isVirtualLoopbackName (n))
+                if (n.containsIgnoreCase ("VocalGzzio"))
+                    vocalGzzioNames.add (n);
+                else if (isVirtualLoopbackName (n))
                     virtualNames.add (n);
                 else
                     otherNames.add (n);
             }
         }
-        virtualNames.addArray (otherNames);
-        return virtualNames;
+        vocalGzzioNames.addArray (virtualNames);
+        vocalGzzioNames.addArray (otherNames);
+        return vocalGzzioNames;
+    }
+
+    juce::String findVocalGzzioDriverDevice()
+    {
+        const auto names = getOutputDeviceNames();
+        for (const auto& n : names)
+            if (n.containsIgnoreCase ("VocalGzzio")) return n;
+        return {};
     }
 
     juce::String findPreferredVirtualDevice()
     {
         const auto names = getOutputDeviceNames();
         for (const auto& n : names)
+            if (n.containsIgnoreCase ("VocalGzzio")) return n;
+        for (const auto& n : names)
+            if (n.containsIgnoreCase ("GzzioRoom")) return n;
+        for (const auto& n : names)
             if (n.containsIgnoreCase ("SYNCROOM")) return n;
         for (const auto& n : names)
             if (isVirtualLoopbackName (n)) return n;
         return {};
+    }
+
+    static bool installVocalGzzioWdmDriver()
+    {
+       #if JUCE_WINDOWS
+        const auto exeDir = juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory();
+        juce::File installer = exeDir.getChildFile ("VocalGzzioWdmInstaller.exe");
+        if (! installer.existsAsFile())
+            installer = juce::File ("C:\\Program Files\\VocalGzzio\\VocalGzzioWdmInstaller.exe");
+        if (! installer.existsAsFile())
+            return false;
+
+        juce::ChildProcess proc;
+        if (proc.start ("\"" + installer.getFullPathName() + "\" --install"))
+        {
+            proc.waitForProcessToFinish (25000);
+            return proc.getExitCode() == 0;
+        }
+       #endif
+        return false;
     }
 
     bool start (const juce::String& deviceName, double hostSampleRate)
