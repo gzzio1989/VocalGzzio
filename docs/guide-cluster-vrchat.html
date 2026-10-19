@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>【解決】cluster・VRChat・DiscordでマイクやASIOを使うと音が消える・片耳になる原因と1クリック修復法｜VocalGzzio 4.8.0</title>
+<meta name="description" content="clusterやVRChat、Discordでオーディオインターフェース（AG03・Scarlett・Rubix・BRIDGE CAST等）やASIOを使うとワールドの音や通話相手の声が消える原因を解説。VocalGzzio v4.8.0の「音消え一発修復」「全アプリ共存モード」で1クリック解決する方法。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><nav><strong>VocalGzzio 4.8.0</strong><a href="index.html">トップ</a><a href="manual.html">説明書・対応機種</a><a href="guide-utawaku-obs.html">OBS歌枠ガイド</a><a href="https://gzzio.booth.pm/items/8764003">無料体験版・BOOTH</a></nav></header>
+<main>
+<p class="eyebrow">メタバース・VC通話 トラブル解決ガイド（cluster / VRChat / Discord 対応）</p>
+<h1>cluster・VRChatでマイクを使うと<br>「ワールドの音が消える」「片耳になる」を1クリックで直す方法</h1>
+<p class="lead">「スタンドアロンでエフェクトをかけてclusterで話そうとすると、clusterの音が消えてしまう」「ScarlettやAG03にマイクを挿すと左耳（または右耳）からしか聞こえない」——そんなWindows特有の音声競合を、<strong>VocalGzzio v4.8.0</strong> の新機能でわずか1秒で解決する手順を解説します。</p>
+
+<div class="actions">
+<a class="button" href="https://gzzio.booth.pm/items/8764003">🛒 0円の無料体験版をダウンロード（BOOTH）</a>
+<a class="button secondary" href="https://youtu.be/3HBy-uGv6vo">📺 YouTubeで原音比較を聴く</a>
+</div>
+
+<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin:1.5rem 0;box-shadow:0 8px 28px rgba(0,0,0,0.18);"><iframe src="https://www.youtube.com/embed/3HBy-uGv6vo" title="VocalGzzio v4.8.0 原音比較＆機能紹介ムービー" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
+
+<h2>1. なぜ cluster や VRChat で「音が消える」のか？（4つの原因）</h2>
+<table>
+<thead><tr><th>原因</th><th>起きる症状</th><th>よく発生する機材・環境</th></tr></thead>
+<tbody>
+<tr><td><strong>① Windowsの「通信時の80%音量低下（ダッキング）」</strong></td><td>clusterやDiscordでマイク入力を開始した瞬間、Windowsが「通話中」と判定してワールドBGMやゲーム音を勝手に80%〜100%絞ってしまう</td><td>すべてのWindows 10 / 11 PC（初期設定で有効になっているため）</td></tr>
+<tr><td><strong>② 排他ASIO / ASIO4ALL によるデバイス独占ロック</strong></td><td>単体アプリをASIOで起動した瞬間、オーディオインターフェースの出力が独占され、clusterやブラウザの音が一切出なくなる</td><td>ASIO4ALL、汎用ASIOドライバ、一部のエントリー機（UM2 / UMC22 / M-Track等）</td></tr>
+<tr><td><strong>③ サンプルレートの不一致（44.1kHz vs 48kHz）</strong></td><td>Windows既定が44.1kHzでアプリ側が48kHz（またはその逆）のとき、クロック切り替えで他アプリの音声ストリームが切断される</td><td>AG03MK2、UR22C、Scarlett、Rubix24/44、USBマイク各種</td></tr>
+<tr><td><strong>④ マルチバス（1-2 / 3-4）の不一致と二重返し</strong></td><td>出力が「3-4」や「Chat」バスに逃げて聞こえない、または自分の声がヘッドホンとアプリの両方から二重に返ってハウリングする</td><td>Roland Rubix44、BRIDGE CAST、Elgato Wave Link、Sound Blaster GC7、SteelSeries Sonar</td></tr>
+</tbody>
+</table>
+
+<h2>2. 『VocalGzzio v4.8.0』の3ボタンで1クリック解決する手順</h2>
+<p>『VocalGzzio v4.8.0』の単体起動アプリ（Standalone）を起動すると、画面上部に3つの専用修復ボタンが表示されています。</p>
+
+<div class="grid">
+<section class="card">
+<h3>🛠 ①「cluster・通話 音消え一発修復」</h3>
+<p>クリックした瞬間に、Windowsレジストリの通信音量低下（80%ダッキング）を「何もしない」へ自動書き換えし、サンプルレートを48kHzへ揃えてオーディオ出力を瞬時に再同期します。</p>
+</section>
+<section class="card">
+<h3>🌐 ②「全アプリ共存・共有モード」</h3>
+<p>ASIOで他のアプリの音が消えてしまう場合や、USBマイク・Meta Quest 3等をお使いの場合にクリックすると、全アプリの音が同時に鳴る「低遅延WASAPI共有モード」へ自動で切り替わります。</p>
+</section>
+<section class="card">
+<h3>🎧 ③「自分の耳への返しミュート」</h3>
+<p>clusterやVRChat、OBSへ送る仮想マイク（「ライン (VocalGzzio Driver (WDM))」）には美しいエフェクト声を送り続けながら、自分のヘッドホンへの直接返しだけをミュートして二重聞こえを防ぎます。</p>
+</section>
+</div>
+
+<h2>3. cluster / VRChat 側のマイク設定（たった1箇所選ぶだけ！）</h2>
+<ol>
+<li>『VocalGzzio』単体アプリを起動し、お好みの声質（🎤歌枠、☕ゆるふわ、または「🎯5秒AI声質診断」）を選びます。</li>
+<li>『cluster』または『VRChat』『Discord』の設定画面を開きます。</li>
+<li><strong>マイク（入力デバイス）</strong>に <strong><code>ライン (VocalGzzio Driver (WDM))</code></strong> を選びます。</li>
+<li><strong>スピーカー（出力デバイス）</strong>には、普段お使いのヘッドホン・オーディオインターフェース（または <code>Oculus Virtual Audio Device</code> 等）をそのまま選びます。</li>
+</ol>
+<div class="note">これだけで、ワールドのBGMや仲間の声をクリアに聴きながら、ノイズ除去・音量均一化・空間IRリバーブ・ピッチ補正・5人ハモリ・絶叫セーフティガードが効いた最高の声をメタバースへ届けられます！</div>
+
+<h2>4. 「マイクが左耳（または右耳）からしか聞こえない」片耳問題の自動解決</h2>
+<p>オーディオインターフェースの <code>IN 1</code>（XLR端子）にマイクを挿すと左耳だけ、<strong>Focusrite Scarlett Solo（第3・第4世代）</strong>のようにXLR端子が <code>IN 2</code> にある機種では右耳だけから声が鳴ってしまいます。<br>
+『VocalGzzio v4.8.0』の <strong><code>Auto Mono IN1-4</code></strong> モード（初期設定でON）は、<code>IN 1</code>〜<code>IN 4</code> のうち「人間の声が入っているチャンネル」だけを自動で追尾し、両耳の中央（L+R）へ揃えて出力します（MOTU M2/M4等の <code>IN 3-4</code> にあるPCループバック音は自動で除外します）。</p>
+
+<img src="interface-compatibility-4.8.0.png" width="1600" height="1230" alt="VocalGzzio 4.8.0 対応オーディオインターフェース完全一覧表">
+
+<div class="actions">
+<a class="button" href="https://gzzio.booth.pm/items/8764003">🛒 0円の無料体験版・製品版（2,500円買い切り）を見る</a>
+<a class="button secondary" href="guide-utawaku-obs.html">🎤 OBS歌枠・カラオケ伴奏キー変更ガイドへ</a>
+</div>
+</main>
+<footer>© G’zzio · <a href="index.html">トップ</a> · <a href="manual.html">説明書</a> · <a href="https://gzzio.booth.pm/items/8764003">BOOTH</a></footer>
+</body>
+</html>

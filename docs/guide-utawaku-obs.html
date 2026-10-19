@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>【DAW不要】OBS歌枠配信でエコー・カラオケ伴奏キー変更・30秒さかのぼり録音を1画面で完結させる方法｜VocalGzzio 4.8.0</title>
+<meta name="description" content="OBSでの歌枠配信（YouTube・Twitch・ツイキャス・IRIAM）や「歌ってみた」宅録を、DAWや仮想ケーブルなしで日本語1画面で完結させる方法。伴奏キー変更（±6半音・ピッチ補正連動）、歌枠⇄雑談MC 1クリック切替、直前30秒さかのぼりWAV録音対応。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><nav><strong>VocalGzzio 4.8.0</strong><a href="index.html">トップ</a><a href="manual.html">説明書・対応機種</a><a href="guide-cluster-vrchat.html">cluster・VRChat音消え解決</a><a href="https://gzzio.booth.pm/items/8764003">無料体験版・BOOTH</a></nav></header>
+<main>
+<p class="eyebrow">VTuber・Vライバー・歌い手向け OBS歌枠＆宅録 完全ガイド</p>
+<h1>DAWも複雑なVST設定も不要！<br>OBS歌枠配信＆「歌ってみた」録音を1画面で完結させる方法</h1>
+<p class="lead">「歌枠でカラオケ音源のキーを変えたいけれど、ピッチ補正と両方設定するのが大変」「曲が終わって雑談MCに入るとき、毎回リバーブを切り忘れてお風呂場のまま喋ってしまう」「練習中に最高のテイクが出たのに録音ボタンを押していなかった」——そんな歌枠・宅録の悩みを<strong>VocalGzzio v4.8.0</strong>がすべて解決します。</p>
+
+<div class="actions">
+<a class="button" href="https://gzzio.booth.pm/items/8764003">🛒 0円の無料体験版をダウンロード（BOOTH）</a>
+<a class="button secondary" href="https://youtu.be/3HBy-uGv6vo">📺 YouTubeで原音比較を聴く</a>
+</div>
+
+<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin:1.5rem 0;box-shadow:0 8px 28px rgba(0,0,0,0.18);"><iframe src="https://www.youtube.com/embed/3HBy-uGv6vo" title="VocalGzzio v4.8.0 原音比較＆機能紹介ムービー" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
+
+<h2>1. OBS 歌枠配信がたった3ステップで完成する理由</h2>
+<ol>
+<li><strong>専用仮想ドライバ「VocalGzzio Driver (WDM)」が標準同梱：</strong>別途VB-CABLEやVoiceMeeterをインストールする必要はありません。インストーラーを実行するだけで、OBSの「マイク／補助音声」に <code>ライン (VocalGzzio Driver (WDM))</code> が現れます。</li>
+<li><strong>🎵内蔵カラオケ伴奏プレイヤー ＆ キー変更（±6半音）：</strong>お手持ちのカラオケ音源（WAV / MP3 / FLAC / OGG / AIFF）をアプリ内で直接再生でき、キー（-6〜+6半音）を変更すると、<strong>ボーカル側のピッチ補正・5人ハモリのキーも自動で連動</strong>します。</li>
+<li><strong>🌊声優先オートダッキング：</strong>あなたが歌い出した瞬間だけカラオケ伴奏や空間IR残響が自動で少し下がり、歌詞が伴奏に埋もれずくっきり前に出ます。</li>
+</ol>
+
+<h2>2. 歌枠ライバー・歌ってみた宅録者に選ばれる5つの神機能</h2>
+<table>
+<thead><tr><th>機能名</th><th>解決できるお悩み</th></tr></thead>
+<tbody>
+<tr><td><strong>🎤歌枠 ⇄ 💬雑談MC 瞬間切替</strong></td><td>曲が終わってコメント読み・雑談に入る瞬間、1クリックで歌枠設定を壊さずにリバーブ・ディレイ・ハモリを一時オフにして聞き取りやすいトーク声へ切り替えます。</td></tr>
+<tr><td><strong>⏪直前30秒さかのぼりWAV録音</strong></td><td>録音ボタンを押していなくても、「今のサビ最高だった！」と思った瞬間にボタンを押せば、直前30秒間の歌声を24bit WAVで救出できます。</td></tr>
+<tr><td><strong>Wet（完成音）＋ Dry（素の声）同時保存</strong></td><td>自分で聴く・SNSにすぐ投稿できる「エフェクト込みの完成音（Wet）」と、MIX師にそのまま提出できる「無加工の素の声（Dry）」の2ファイルが同時に保存されます。</td></tr>
+<tr><td><strong>🎯5秒AI声質ターゲット診断</strong></td><td>マイクに向かって5秒歌うだけで声の重心・明るさ・倍音を分析し、5つの理想ターゲット（✨透明感ウィスパー／🎤王道アイドル／🔥パワフルロック／🌙深みイケボ／🎧耳元ASMR）へ2Dオーブを自動調律します。</td></tr>
+<tr><td><strong>🛡絶叫セーフティガード ＆ 😷咳ミュート</strong></td><td>突発的な叫び声を0.2msアタックで-0.3dBFS以内に保護し、咳払いやくしゃみをポップノイズ皆無（8msクロスフェード）で即座に無音化します。</td></tr>
+</tbody>
+</table>
+
+<h2>3. これから機材を揃える方へ：予算・用途別おすすめオーディオインターフェース目安</h2>
+<p>『VocalGzzio v4.8.0』はサウンドハウス・Amazonで販売中の<strong>主要60ブランド・160機種以上</strong>に対応しています。</p>
+<img src="interface-compatibility-4.8.0.png" width="1600" height="1230" alt="VocalGzzio 4.8.0 対応オーディオインターフェース完全一覧表">
+
+<div class="actions">
+<a class="button" href="https://gzzio.booth.pm/items/8764003">🛒 まずは0円の無料体験版で試す（BOOTH）</a>
+<a class="button secondary" href="guide-cluster-vrchat.html">🥽 cluster・VRChat 音消え解決ガイドへ</a>
+</div>
+</main>
+<footer>© G’zzio · <a href="index.html">トップ</a> · <a href="manual.html">説明書</a> · <a href="https://gzzio.booth.pm/items/8764003">BOOTH</a></footer>
+</body>
+</html>
