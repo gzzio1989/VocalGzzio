@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-VocalGzzio v4.8.0 (Stage & Studio Complete Edition) 用の BOOTH商品画像（全8枚＋特設サムネ1枚）を生成するスクリプト。
+VocalGzzio v4.9.0 (Starry Sky & Universal Style Edition) 用の BOOTH商品画像（全8枚＋特設サムネ1枚）を生成するスクリプト。
 「ぷにぐじ」マスコットとクリーム背景の親しみやすい世界観を継承しつつ、
-v4.8.0 の4大新機能（カラオケBGM再生＆キー変更±6＆声優先ダッキング、1クリックWAV録音＆直前30秒さかのぼりWet+Dry保存、
-5秒AI声質ターゲット診断、絶叫セーフティガード＆咳払い8ms瞬間ミュート）およびターゲット別の利点を一目で伝える。
+v4.9.0 の「星空・海・黄昏 5大風景コレクション（01銀河・02碧海・03朝焼・04晩秋・05蒼劇）」「4つの表示・操作スタイル（標準／◉くっきり大文字／★かんたん3ステップ／●マット・具体表記）」、
+およびカラオケBGM再生＆キー変更±6、直前30秒さかのぼりWet+Dry録音、5秒AI声質診断、cluster音消え一発修復を一目で伝える。
 """
 import os
 from pathlib import Path
@@ -84,7 +84,7 @@ def draw_footer(d: ImageDraw.ImageDraw, w: int, h: int, right_text: str):
     y_line = h - 82
     d.line([64, y_line, w - 64, y_line], fill=(216, 204, 188), width=2)
     f = get_font(22, bold=True)
-    d.text((64, h - 58), "G'zzio  |  VocalGzzio v4.8.0", font=f, fill=(148, 132, 118))
+    d.text((64, h - 58), "G'zzio  |  VocalGzzio v4.9.0", font=f, fill=(148, 132, 118))
     bb = d.textbbox((0, 0), right_text, font=f)
     tw = bb[2] - bb[0]
     d.text((w - 64 - tw, h - 58), right_text, font=f, fill=SUB)
@@ -115,12 +115,12 @@ def make_banner():
     d = ImageDraw.Draw(im)
     d.text((405, 48), "Windows & Mac  ／  VST3・AU・単体起動アプリ・専用WDM仮想ドライバ同梱", font=get_font(23, True), fill=ORANGE_ACCENT)
     d.text((400, 92), "ボーカルグッジオ", font=get_font(66, True), fill=INK)
-    d.text((945, 114), "VocalGzzio v4.8.0", font=get_font(44, True), fill=(126, 108, 94))
-    d.text((405, 188), "伴奏再生＆キー変更・直前30秒さかのぼり録音・5秒AI声質診断・絶叫＆咳ガード搭載！", font=get_font(26, True), fill=INK)
+    d.text((945, 114), "VocalGzzio v4.9.0", font=get_font(44, True), fill=(126, 108, 94))
+    d.text((405, 188), "星空5景＆クチュール5色・4種の見やすさ切替・伴奏キー変更・30秒さかのぼり録音搭載！", font=get_font(25, True), fill=INK)
 
     pills = [
-        ("♪伴奏再生＆キー変更±6", PINK_BG, PINK_BORDER, PINK_ACCENT, 290),
-        ("★30秒さかのぼりWAV録音", TEAL_BG, TEAL_BORDER, TEAL_ACCENT, 295),
+        ("◉4種の見やすさ＆星空5景", PINK_BG, PINK_BORDER, PINK_ACCENT, 295),
+        ("♪伴奏キー変更＆30秒録音", TEAL_BG, TEAL_BORDER, TEAL_ACCENT, 290),
         ("2,500円・買い切り", CREAM_CARD, CARD_BORDER, INK, 225),
         ("無料の体験版あり", CREAM_CARD, CARD_BORDER, INK, 225),
     ]
@@ -131,51 +131,69 @@ def make_banner():
 
     im.convert("RGB").save(OUT_DIR / "BOOTH_1_バナー.png", quality=95)
 
-# 2. BOOTH_2_商品画像.png (1200 x 1200)
+# 2. BOOTH_2_商品画像.png (1200 x 1200) — 4つの表示・操作スタイル＆星空5景
 def make_main_product():
     w, h = 1200, 1200
     im = make_cream_canvas(w, h, mascot_pos=(54, 42), mascot_size=(260, 260))
     d = ImageDraw.Draw(im)
-    d.text((880, 52), "VocalGzzio v4.8.0", font=get_font(26, True), fill=ORANGE_ACCENT)
-    d.text((340, 88), "歌枠も、歌ってみた録音も、", font=get_font(52, True), fill=INK)
-    d.text((340, 158), "DAWなしでこれ1つで完結。", font=get_font(52, True), fill=INK)
-    d.text((340, 238), "♪カラオケ伴奏＆キー変更・★30秒さかのぼりWet+Dry録音・◎5秒AI声質診断", font=get_font(24, True), fill=SUB)
-    d.text((340, 276), "🛡絶叫ガード・😷咳瞬間ミュート・歌枠⇄雑談MC切替・クチュール5色搭載。", font=get_font(24, True), fill=PINK_ACCENT)
+    d.text((880, 52), "VocalGzzio v4.9.0", font=get_font(26, True), fill=ORANGE_ACCENT)
+    d.text((340, 88), "見やすさも、声づくりも、", font=get_font(52, True), fill=INK)
+    d.text((340, 158), "あなたに合わせて1クリック。", font=get_font(52, True), fill=INK)
+    d.text((340, 238), "◉くっきり大文字 ／ ★かんたん3ステップ ／ ●マット・具体表記に即切替！", font=get_font(22, True), fill=TEAL_ACCENT)
+    d.text((340, 276), "星空・海・黄昏5大風景＆クチュール5色（全19テーマ）・文字150%でも見切れゼロ", font=get_font(21, True), fill=PINK_ACCENT)
 
-    rose_img = resolve_art("v4.8.0_couture_stage.png", "v4.7.0_couture_stage.png")
-    paste_rounded_screenshot(im, rose_img, (56, 336, 1088, 613), radius=18, border_col=(215, 165, 180))
+    gal_img = resolve_art("theme_14_galactic_milkyway.png", "v4.8.0_couture_stage.png")
+    paste_rounded_screenshot(im, gal_img, (56, 330, 710, 400), radius=16, border_col=(110, 195, 255))
 
+    styles = [
+        ("◉ くっきり大文字（高コントラスト）", resolve_art("style_1_high_contrast.png", "theme_14_galactic_milkyway.png"), (255, 215, 60)),
+        ("★ かんたん3ステップ（迷わない）", resolve_art("style_2_3step_guide.png", "theme_14_galactic_milkyway.png"), (80, 210, 175)),
+        ("● マット・具体表記（点滅ゼロ）", resolve_art("style_3_matte_concrete.png", "theme_14_galactic_milkyway.png"), (160, 185, 210)),
+    ]
+    sy = 330
+    for stitle, spath, scol in styles:
+        paste_rounded_screenshot(im, spath, (786, sy, 358, 124), radius=12, border_col=scol)
+        d.rounded_rectangle([792, sy + 92, 786 + 352, sy + 120], radius=7, fill=(18, 16, 22, 225))
+        d.text((804, sy + 95), stitle, font=get_font(16, True), fill=scol)
+        sy += 138
+
+    d.text((56, 752), "▼ v4.9.0 新搭載「星空・海・黄昏」5大風景コレクション（＋クチュール5色も収録）", font=get_font(23, True), fill=INK)
     swatches = [
-        ("01 ロゼ・クチュール", resolve_art("v4.8.0_couture_stage.png", "v4.7.0_couture_stage.png"), (232, 92, 138)),
-        ("02 アイシーラベンダー", resolve_art("v4.8.0_couture_02_lilac.png", "v4.6.0_couture_02_lilac.png"), (168, 138, 240)),
-        ("03 ノワール・ロリータ", resolve_art("v4.8.0_couture_03_noir.png", "v4.6.0_couture_03_noir.png"), (218, 78, 125)),
-        ("04 ティファニーミント", resolve_art("v4.8.0_couture_04_mint.png", "v4.6.0_couture_04_mint.png"), (72, 198, 178)),
-        ("05 ハニーピーチ", resolve_art("v4.8.0_couture_05_peach.png", "v4.6.0_couture_05_peach.png"), (238, 138, 102)),
+        ("01 銀河 MilkyWay", resolve_art("theme_14_galactic_milkyway.png", "v4.8.0_couture_stage.png"), (110, 195, 255)),
+        ("02 碧海 AquaSea", resolve_art("theme_15_lush_aqua_sea.png", "v4.8.0_couture_04_mint.png"), (64, 220, 205)),
+        ("03 朝焼 Dawn", resolve_art("theme_16_radiant_dawn.png", "v4.8.0_couture_05_peach.png"), (255, 160, 110)),
+        ("04 晩秋 Twilight", resolve_art("theme_17_autumn_winter.png", "v4.8.0_couture_02_lilac.png"), (235, 145, 125)),
+        ("05 蒼劇 Sapphire", resolve_art("theme_18_opera_sapphire.png", "v4.8.0_couture_03_noir.png"), (125, 170, 255)),
     ]
     cw = 204
     gap = 17
     sx = 56
-    sy = 968
+    sy = 792
     for title, p, col in swatches:
         paste_rounded_screenshot(im, p, (sx, sy, cw, 115), radius=10, border_col=col)
-        d.rounded_rectangle([sx + 6, sy + 83, sx + cw - 6, sy + 111], radius=8, fill=(24, 18, 24, 215))
+        d.rounded_rectangle([sx + 6, sy + 83, sx + cw - 6, sy + 111], radius=8, fill=(18, 16, 24, 225))
         f = get_font(16, True)
         bb = d.textbbox((0, 0), title, font=f)
         tw = bb[2] - bb[0]
         d.text((sx + (cw - tw) / 2, sy + 88), title, font=f, fill=(255, 248, 252))
         sx += cw + gap
 
+    d.rounded_rectangle([56, 932, w - 56, 1085], radius=18, fill=TEAL_BG, outline=TEAL_BORDER, width=2)
+    d.text((80, 952), "★ なぜ 0円の無料体験版から「製品版（2,500円・買い切り）」へアップグレードするの？", font=get_font(23, True), fill=TEAL_ACCENT)
+    d.text((80, 994), "・無料体験版は60秒ごとに0.6秒だけ音量が下がり、アプリを閉じると設定が初期状態に戻ります。", font=get_font(20, True), fill=INK)
+    d.text((80, 1032), "・製品版なら、あなたの声に合わせた設定・ノイズ学習・テーマを保存し、毎回0秒で本番配信＆録音！", font=get_font(20, True), fill=PINK_ACCENT)
+
     draw_footer(d, w, h, "Windows & Mac 両対応 ／ 無料体験版でまず耳でお確かめください。")
     im.convert("RGB").save(OUT_DIR / "BOOTH_2_商品画像.png", quality=95)
 
-# 3. BOOTH_3_遅延0.png (1200 x 1200) — v4.8.0 4大ステージ＆スタジオ機能＋配信対策
+# 3. BOOTH_3_遅延0.png (1200 x 1200) — 4大ステージ＆スタジオ機能＋配信対策
 def make_card_stream():
     w, h = 1200, 1200
     im = make_cream_canvas(w, h, mascot_pos=(54, 48), mascot_size=(250, 250))
     d = ImageDraw.Draw(im)
-    d.text((545, 52), "1 / 歌枠・歌ってみた・配信がこれ1台で完結（v4.8.0）", font=get_font(22, True), fill=ORANGE_ACCENT)
+    d.text((545, 52), "1 / 歌枠・歌ってみた・配信がこれ1台で完結（v4.9.0）", font=get_font(22, True), fill=ORANGE_ACCENT)
     d.text((330, 96), "伴奏キー変更も、神テイク救出も、", font=get_font(48, True), fill=INK)
-    d.text((330, 166), "AI声質診断も、ぜんぶ内蔵。", font=get_font(48, True), fill=INK)
+    d.text((330, 166), "cluster音消え保護も、ぜんぶ内蔵。", font=get_font(48, True), fill=INK)
 
     cards = [
         ("♪ 内蔵カラオケ・BGMプレイヤー（キー変更±6半音 ＆ 声優先オートダッキング）",
@@ -184,8 +202,8 @@ def make_card_stream():
         ("★ 1クリックWAV録音 ＆ 直前30秒さかのぼり保存（Wet完成音＋Dry素の声 同時保存）",
          "録音ボタンを押していなくても「今のテイク最高だった！」と思ったら【直前30秒を保存】で後から救出！\nエフェクト込みの【完成音(Wet)】とMIX師にそのまま渡せる【無加工の素の声(Dry)】を24bit WAVで同時保存。",
          TEAL_BG, TEAL_BORDER, TEAL_ACCENT),
-        ("◎ 5秒AI声質ターゲット診断 ＆ 歌枠⇄MC即切替 ＆ 絶叫ガード・咳払い8ms瞬間ミュート",
-         "5秒歌うだけでAIが理想の歌声（透明感・アイドル・ロック等）へ自動調律！曲間トークは1クリックでMCへ。\n突発的な叫び声を0.2msで抑える【絶叫ガード】と、プツッという音ゼロで遮断する【咳ミュート】も完備。",
+        ("◎ cluster・VRChat・Discord 音消え自動保護 ＆ 5秒AI声質診断 ＆ 絶叫・咳ガード",
+         "仮想ドライバ導入時にWindowsの既定スピーカーが奪われる現象を自動保護！1クリック音消え修復も搭載。\n5秒歌うだけのAI声質調律、歌枠⇄雑談MC瞬間切替、0.2ms絶叫ガード、8ms咳払いミュートも完備。",
          CREAM_CARD, CARD_BORDER, ORANGE_ACCENT),
     ]
     cy = 290
@@ -200,11 +218,10 @@ def make_card_stream():
 
     draw_pill(d, 64, 995, 340, 62, "♪伴奏再生＆キー変更±6", PINK_BG, PINK_BORDER, PINK_ACCENT, 22)
     draw_pill(d, 424, 995, 350, 62, "★30秒さかのぼりWet+Dry", TEAL_BG, TEAL_BORDER, TEAL_ACCENT, 22)
-    draw_pill(d, 794, 995, 342, 62, "◎5秒AI診断＆絶叫・咳ガード", CREAM_CARD, CARD_BORDER, INK, 21)
+    draw_pill(d, 794, 995, 342, 62, "◎cluster音消え自動保護", CREAM_CARD, CARD_BORDER, INK, 21)
 
-    draw_footer(d, w, h, "専用WDM仮想ドライバ同梱でOBS・Discordへ直結！")
+    draw_footer(d, w, h, "専用WDM仮想ドライバ同梱でOBS・Discord・clusterへ直結！")
     im.convert("RGB").save(OUT_DIR / "BOOTH_3_遅延0.png", quality=95)
-    im.convert("RGB").save(ART_DIR / "BOOTH_3_配信対策_v4.8.0.png", quality=95)
 
 # 4. BOOTH_4_へや.png (1200 x 1200)
 def make_card_heya():
@@ -279,7 +296,7 @@ def make_card_env():
     d.rounded_rectangle([64, 910, w - 64, 1075], radius=18, fill=TEAL_BG, outline=TEAL_BORDER, width=2)
     d.text((96, 932), "購入前に「無料の体験版」でご自身の声・機材との相性をお確かめください", font=get_font(27, True), fill=TEAL_ACCENT)
     d.text((96, 978), "体験版（VocalGzzio Trial）は製品版と別名で導入されるため、同じPCに両方入れても混ざりません。", font=get_font(22, True), fill=INK)
-    d.text((96, 1016), "既に購入済みの方は、追加料金なしで購入履歴から v4.8.0（Win/Mac両方）をダウンロードできます。", font=get_font(22, True), fill=INK)
+    d.text((96, 1016), "既に購入済みの方は、追加料金なしで購入履歴から v4.9.0（Win/Mac両方）をダウンロードできます。", font=get_font(22, True), fill=INK)
 
     draw_footer(d, w, h, "体験版は同じBOOTH商品ページから0円でダウンロードできます。")
     im.convert("RGB").save(OUT_DIR / "BOOTH_5_動作環境と導入.png", quality=95)
@@ -316,8 +333,8 @@ def make_card_license():
         ly += 84
 
     d.rounded_rectangle([64, 855, w - 64, 1075], radius=18, fill=PINK_BG, outline=PINK_BORDER, width=2)
-    d.text((96, 882), "音声エンジン・カラオケBGM再生・30秒さかのぼり録音・AI診断は製品版と同じです", font=get_font(26, True), fill=PINK_ACCENT)
-    d.text((96, 932), "・体験版でも「伴奏再生＆キー変更」「直前30秒保存」「5秒AI声質診断」「絶叫・咳ガード」を試せます。", font=get_font(21, True), fill=INK)
+    d.text((96, 882), "音声エンジン・全19テーマ・4種の表示スタイル・伴奏＆録音は製品版と同じです", font=get_font(25, True), fill=PINK_ACCENT)
+    d.text((96, 932), "・体験版でも「◉くっきり大文字」「★3ステップ」「伴奏キー変更」「直前30秒保存」をすべて試せます。", font=get_font(21, True), fill=INK)
     d.text((96, 974), "・気に入った設定を保存して毎日の歌枠や録音でそのまま使いたくなったら、製品版をご検討ください。", font=get_font(22, True), fill=INK)
     d.text((96, 1016), "・商品画像のマスコットはAI生成、プラグイン本体のC++音声プログラムはすべて手書き実装です。", font=get_font(22, True), fill=SUB)
 
@@ -339,34 +356,34 @@ def make_jacket(is_trial: bool):
 
     d.text((880, 192), "ボーカルグッジオ", font=get_font(28, True), fill=ORANGE_ACCENT)
     d.text((640, 232), "VocalGzzio", font=get_font(82, True), fill=INK)
-    d.text((810, 326), "v4.8.0", font=get_font(64, True), fill=INK)
+    d.text((810, 326), "v4.9.0", font=get_font(64, True), fill=INK)
 
     if is_trial:
         d.text((890, 412), "0円", font=get_font(96, True), fill=ORANGE_ACCENT)
         d.text((650, 526), "60秒ごとに0.6秒だけ音量が下がります", font=get_font(26, True), fill=INK)
-        zip_label = "VocalGzzio_v4.8.0_Windows_体験版.zip  （＋Mac体験版）"
+        zip_label = "VocalGzzio_v4.9.0_Windows_体験版.zip  （＋Mac体験版）"
     else:
         d.text((685, 412), "2,500円", font=get_font(96, True), fill=TEAL_ACCENT)
         d.text((665, 526), "買い切り・税込 ／ 同時に3台まで（Win & Mac）", font=get_font(25, True), fill=INK)
-        zip_label = "VocalGzzio_v4.8.0_Windows_製品版.zip  （＋Mac製品版）"
+        zip_label = "VocalGzzio_v4.9.0_Windows_製品版.zip  （＋Mac製品版）"
 
     d.rounded_rectangle([64, 570, 820, 642], radius=16, fill=CREAM_CARD, outline=CARD_BORDER, width=2)
     d.text((92, 591), zip_label, font=get_font(24, True), fill=INK)
 
     d.rounded_rectangle([64, 668, w - 64, 960], radius=22, fill=CREAM_CARD, outline=CARD_BORDER, width=2)
-    d.text((100, 696), "ダウンロードに含まれるもの（v4.8.0 Stage & Studio Complete Edition）", font=get_font(25, True), fill=INK)
+    d.text((100, 696), "ダウンロードに含まれるもの（v4.9.0 Starry Sky & Universal Style Edition）", font=get_font(24, True), fill=INK)
     items = [
         "・インストーラー（VST3・単体起動アプリ・専用仮想ドライバ VocalGzzio Driver (WDM) 同梱）",
-        "・♪カラオケBGMプレイヤー（キー変更±6・声優先ダッキング）＆ ★直前30秒さかのぼりWet+Dry録音",
-        "・◎5秒AI声質ターゲット診断 ＆ 🛡絶叫セーフティガード・😷咳瞬間ミュート ＆ 歌枠⇄MC切替",
-        "・クチュール5色（01ロゼ〜05白桃）＋ オフラインで読める「説明書.html」＋ ライセンス表記",
+        "・★星空・海・黄昏5大風景＆クチュール5色（全19テーマ）＋ ◉4つの表示・操作スタイル切替",
+        "・♪カラオケBGM再生＆キー変更±6 ＆ ★直前30秒さかのぼりWet+Dry録音 ＆ ◎5秒AI声質診断",
+        "・◆cluster/VRChat音消え自動保護 ＆ 絶叫セーフティガード・咳瞬間ミュート ＋ オフライン説明書",
     ]
     iy = 748
     for it in items:
         d.text((100, iy), it, font=get_font(22, True), fill=INK)
         iy += 48
 
-    draw_pill(d, 64, 992, 340, 62, "♪伴奏再生＆キー変更±6", PINK_BG, PINK_BORDER, PINK_ACCENT, 22)
+    draw_pill(d, 64, 992, 340, 62, "◉4種の見やすさ＆星空5景", PINK_BG, PINK_BORDER, PINK_ACCENT, 22)
     draw_pill(d, 424, 992, 360, 62, "★30秒さかのぼりWet+Dry", TEAL_BG, TEAL_BORDER, TEAL_ACCENT, 22)
     draw_pill(d, 804, 992, 332, 62, "Windows & Mac 両対応", CREAM_CARD, CARD_BORDER, INK, 23)
 
@@ -375,71 +392,70 @@ def make_jacket(is_trial: bool):
     out_name = "BOOTH_8_ジャケット_体験版.png" if is_trial else "BOOTH_7_ジャケット_製品版.png"
     im.convert("RGB").save(OUT_DIR / out_name, quality=95)
 
-# 9. BOOTH_0_サムネ_クチュール5色_v4.8.0.png (1200 x 1200)
+# 9. BOOTH_0_サムネ_クチュール5色_v4.8.0.png & v4.9.0.png (1200 x 1200)
 def make_special_thumbnail():
     w, h = 1200, 1200
-    im = Image.new("RGBA", (w, h), (22, 15, 24, 255))
+    im = Image.new("RGBA", (w, h), (16, 18, 30, 255))
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
-    od.ellipse([-150, -100, 700, 650], fill=(218, 72, 128, 65))
-    od.ellipse([550, -100, 1350, 650], fill=(120, 90, 220, 55))
-    od.ellipse([200, 600, 1100, 1300], fill=(64, 190, 175, 45))
+    od.ellipse([-150, -100, 700, 650], fill=(80, 140, 255, 65))
+    od.ellipse([550, -100, 1350, 650], fill=(218, 72, 128, 60))
+    od.ellipse([200, 600, 1100, 1300], fill=(50, 200, 185, 50))
     overlay = overlay.filter(ImageFilter.GaussianBlur(75))
     im = Image.alpha_composite(im, overlay)
     d = ImageDraw.Draw(im)
 
-    draw_pill(d, 56, 44, 490, 54, "★ VocalGzzio v4.8.0 大型アップデート", (52, 26, 42), (235, 165, 188), (255, 220, 232), 23)
+    draw_pill(d, 56, 44, 490, 54, "★ VocalGzzio v4.9.0 決定版リリース", (32, 36, 62), (135, 195, 255), (220, 240, 255), 23)
     draw_pill(d, 566, 44, 330, 54, "Windows & Mac 両対応", (28, 44, 52), (110, 210, 195), (175, 248, 235), 23)
-    draw_pill(d, 916, 44, 228, 54, "無料体験版あり", (54, 42, 28), (238, 195, 128), (255, 236, 185), 23)
+    draw_pill(d, 916, 44, 228, 54, "無料体験版 0円", (54, 42, 28), (238, 195, 128), (255, 236, 185), 23)
 
-    d.text((56, 116), "歌枠も宅録も、これ1つで完結。", font=get_font(64, True), fill=(255, 248, 252))
-    d.text((56, 202), "♪伴奏再生＆キー変更・★30秒さかのぼり録音・◎5秒AI声質診断・絶叫＆咳ガード", font=get_font(28, True), fill=(238, 190, 208))
+    d.text((56, 114), "声も、見やすさも、主役級に。", font=get_font(62, True), fill=(255, 250, 255))
+    d.text((56, 198), "★星空・海・黄昏5景 ＆ ◉くっきり大文字・★3ステップ切替 ＆ 伴奏キー変更・30秒録音", font=get_font(25, True), fill=(185, 225, 255))
 
-    argon_img = resolve_art("v4.8.0_argon_cockpit.png", "v4.7.0_argon_cockpit.png")
-    rose_img = resolve_art("v4.8.0_couture_stage.png", "v4.7.0_couture_stage.png")
-    paste_rounded_screenshot(im, argon_img, (460, 268, 684, 385), radius=16, border_col=(110, 215, 245))
-    paste_rounded_screenshot(im, rose_img, (56, 300, 740, 416), radius=18, border_col=(242, 182, 198))
+    step_img = resolve_art("style_2_3step_guide.png", "v4.8.0_argon_cockpit.png")
+    gal_img = resolve_art("theme_14_galactic_milkyway.png", "v4.8.0_couture_stage.png")
+    paste_rounded_screenshot(im, step_img, (460, 262, 684, 385), radius=16, border_col=(88, 225, 185))
+    paste_rounded_screenshot(im, gal_img, (56, 296, 740, 416), radius=18, border_col=(135, 205, 255))
 
-    d.text((56, 738), "▼ クチュール・コスメティック 5色 ＆ 5つのペルソナ画面に1クリック切替", font=get_font(25, True), fill=(255, 225, 236))
+    d.text((56, 734), "▼ 新搭載「星空・海・黄昏」5大風景 ＆ 4つの表示スタイル（全19テーマ収録）", font=get_font(24, True), fill=(235, 245, 255))
     swatches = [
-        ("01 ロゼ", resolve_art("v4.8.0_couture_stage.png", "v4.7.0_couture_stage.png"), (236, 112, 152)),
-        ("02 氷紫", resolve_art("v4.8.0_couture_02_lilac.png", "v4.6.0_couture_02_lilac.png"), (175, 145, 248)),
-        ("03 黒姫", resolve_art("v4.8.0_couture_03_noir.png", "v4.6.0_couture_03_noir.png"), (225, 82, 132)),
-        ("04 翡翠", resolve_art("v4.8.0_couture_04_mint.png", "v4.6.0_couture_04_mint.png"), (82, 212, 190)),
-        ("05 白桃", resolve_art("v4.8.0_couture_05_peach.png", "v4.6.0_couture_05_peach.png"), (245, 152, 112)),
+        ("01 銀河", resolve_art("theme_14_galactic_milkyway.png", "v4.8.0_couture_stage.png"), (120, 200, 255)),
+        ("02 碧海", resolve_art("theme_15_lush_aqua_sea.png", "v4.8.0_couture_04_mint.png"), (72, 225, 210)),
+        ("03 朝焼", resolve_art("theme_16_radiant_dawn.png", "v4.8.0_couture_05_peach.png"), (255, 168, 115)),
+        ("04 晩秋", resolve_art("theme_17_autumn_winter.png", "v4.8.0_couture_02_lilac.png"), (235, 148, 128)),
+        ("05 蒼劇", resolve_art("theme_18_opera_sapphire.png", "v4.8.0_couture_03_noir.png"), (135, 178, 255)),
     ]
     cw = 204
     gap = 17
     sx = 56
-    sy = 782
+    sy = 778
     for title, p, col in swatches:
         paste_rounded_screenshot(im, p, (sx, sy, cw, 115), radius=12, border_col=col)
-        d.rounded_rectangle([sx + 8, sy + 81, sx + cw - 8, sy + 110], radius=8, fill=(18, 12, 20, 225))
+        d.rounded_rectangle([sx + 8, sy + 81, sx + cw - 8, sy + 110], radius=8, fill=(14, 16, 26, 230))
         f = get_font(19, True)
         bb = d.textbbox((0, 0), title, font=f)
         d.text((sx + (cw - (bb[2] - bb[0])) / 2, sy + 85), title, font=f, fill=col)
         sx += cw + gap
 
-    d.rounded_rectangle([56, 922, w - 56, 1102], radius=20, fill=(34, 24, 38, 235), outline=(218, 165, 185), width=2)
+    d.rounded_rectangle([56, 918, w - 56, 1102], radius=20, fill=(24, 28, 46, 240), outline=(135, 195, 255), width=2)
     feats = [
-        ("♪ 伴奏再生＆キー変更±6", "歌うと自動でBGMが下がるダッキング"),
-        ("★ 30秒さかのぼりWet+Dry録音", "完成音とMIX用素の声を同時WAV保存"),
-        ("◎ 5秒AI声質診断＆絶叫・咳ガード", "OBS直結の専用仮想ドライバも同梱"),
+        ("◉ 4つの表示・操作スタイル", "くっきり大文字／かんたん3ステップ"),
+        ("♪ 伴奏キー変更＆30秒録音", "歌うとBGMが下がるダッキング搭載"),
+        ("★ 60社160機種＆cluster保護", "WDM仮想ドライバ同梱でOBSへ直結"),
     ]
     fx = 74
     for head, sub in feats:
-        d.text((fx, 948), head, font=get_font(21, True), fill=(255, 232, 240))
-        d.text((fx, 986), sub, font=get_font(18, True), fill=(205, 188, 200))
+        d.text((fx, 944), head, font=get_font(21, True), fill=(235, 245, 255))
+        d.text((fx, 982), sub, font=get_font(18, True), fill=(185, 205, 230))
         fx += 358
 
-    d.line([82, 1032, w - 82, 1032], fill=(82, 62, 86), width=2)
-    d.text((82, 1048), "製品版 2,500円（買い切り・Win/Mac同梱） ／ まずは0円の無料体験版でお試し！", font=get_font(25, True), fill=(255, 242, 195))
+    d.line([82, 1028, w - 82, 1028], fill=(64, 78, 112), width=2)
+    d.text((82, 1046), "製品版 2,500円（買い切り・設定保存OK） ／ まずは0円の無料体験版でお試し！", font=get_font(24, True), fill=(255, 242, 175))
 
-    d.text((56, 1132), "G'zzio  |  VocalGzzio v4.8.0 Stage & Studio Complete Edition", font=get_font(22, True), fill=(168, 148, 165))
+    d.text((56, 1132), "G'zzio  |  VocalGzzio v4.9.0 Starry Sky & Universal Style Edition", font=get_font(22, True), fill=(155, 170, 195))
+    im.convert("RGB").save(OUT_DIR / "BOOTH_0_サムネ_クチュール5色_v4.9.0.png", quality=95)
     im.convert("RGB").save(OUT_DIR / "BOOTH_0_サムネ_クチュール5色_v4.8.0.png", quality=95)
-    im.convert("RGB").save(OUT_DIR / "BOOTH_0_サムネ_クチュール5色_v4.7.0.png", quality=95)
-    im.convert("RGB").save(OUT_DIR / "BOOTH_0_サムネ_クチュール5色_v4.6.0.png", quality=95)
-    im.convert("RGB").save(ART_DIR / "BOOTH_0_サムネ_クチュール5色_v4.8.0.png", quality=95)
+    im.convert("RGB").save(ART_DIR / "BOOTH_0_サムネ_星空5景_v4.9.0.png", quality=95)
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -452,7 +468,7 @@ def main():
     make_jacket(is_trial=False)
     make_jacket(is_trial=True)
     make_special_thumbnail()
-    print("Generated all 9 BOOTH v4.8.0 images in:", OUT_DIR)
+    print("Generated all 9 BOOTH v4.9.0 images in:", OUT_DIR)
 
 if __name__ == "__main__":
     main()
