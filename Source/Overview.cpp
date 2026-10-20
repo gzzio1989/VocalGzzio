@@ -10,6 +10,36 @@ std::vector<const char*> overviewModules (int section)
     if (section == 1) return { "mod_soroe", "mod_sagyo", "mod_neiro" };
     return { "mod_hirogari" };
 }
+
+// ★ Red Dot & Interactive Soundscape 仕様: クリック・ドラッグ・歌声に呼応して広がる「水紋・流星・蛍火・紅葉＆初雪」波紋エンジン
+struct InteractiveRipple
+{
+    float x { 0.0f }, y { 0.0f };
+    juce::uint32 birthMs { 0 };
+    int seed { 0 };
+    bool active { false };
+};
+InteractiveRipple g_ripples[16];
+int g_rippleWriteIdx = 0;
+int g_vistaMood      = 0; // 0=Harmony, 1=Prism, 2=Deep Resonance
+
+void spawnInteractiveRipple (float x, float y, int seedOffset = 0) noexcept
+{
+    const juce::uint32 now = juce::Time::getMillisecondCounter();
+    // ドラッグ中の連続発火を適度な間隔(45ms)に間引いて美しい多重波紋を作る
+    const int prevIdx = (g_rippleWriteIdx + 15) % 16;
+    if (g_ripples[prevIdx].active && (now - g_ripples[prevIdx].birthMs) < 45
+        && std::hypot (x - g_ripples[prevIdx].x, y - g_ripples[prevIdx].y) < 18.0f)
+        return;
+
+    auto& rp = g_ripples[g_rippleWriteIdx];
+    rp.x       = x;
+    rp.y       = y;
+    rp.birthMs = now;
+    rp.seed    = g_rippleWriteIdx * 37 + seedOffset + (int) (now & 0xff);
+    rp.active  = true;
+    g_rippleWriteIdx = (g_rippleWriteIdx + 1) % 16;
+}
 }
 
 void VocalGzzioContent::setOverviewLayoutMode (int mode, bool manual)
@@ -38,6 +68,62 @@ void VocalGzzioContent::setLiteMode (bool on)
                        "[LITE MODE ON] Pauses background animations and the spectrum display to reduce drawing work. Audio processing settings are unchanged.")
         : language->T ("【軽量モード 切】背景アニメーションとスペクトラム表示を再開します。音声処理の設定は変わりません。",
                        "[LITE MODE OFF] Resumes background animations and the spectrum display. Audio processing settings are unchanged.");
+    repaint();
+}
+
+void VocalGzzioContent::setAccessMode (int m)
+{
+    accessMode = juce::jlimit (0, 3, m);
+    GzzioLnF::setAccessMode (accessMode);
+    Palette::applyTheme (themeMode);
+    if (accessMode > 0)
+        Palette::applyAccessOverride (accessMode);
+
+    if (auto* g = dynamic_cast<GzzioLnF*> (&getLookAndFeel()))
+        g->refreshPaletteColours();
+    sendLookAndFeelChange();
+
+    // 老眼・くっきり大文字モード(1)ではフォント倍率を自動で大きく見やすく引き上げる
+    if (accessMode == 1)
+    {
+        fontScale = 1.92f;
+        if (auto* g = dynamic_cast<GzzioLnF*> (&getLookAndFeel()))
+            g->setFontScale (fontScale);
+    }
+    else if (accessMode == 2 || accessMode == 3)
+    {
+        fontScale = 1.65f;
+        if (auto* g = dynamic_cast<GzzioLnF*> (&getLookAndFeel()))
+            g->setFontScale (fontScale);
+    }
+
+    applyThemeToKnobs();
+    eqGraph.resized();
+    pathRail.refreshColours();
+    refreshOverviewText();
+    if (isOverview())
+    {
+        updateOverviewVisibility();
+        resizedOverview();
+    }
+    else
+    {
+        resized();
+    }
+
+    const char* hintsJa[4] = {
+        "【標準デザイン】通常のテーマ配色・アニメーション・全コントロールを表示します。",
+        "【◉ くっきり・大文字モード】背景透けゼロの超高コントラスト(WCAG AAA 12:1以上)・極太5px針・8分割大目盛り・特大文字・形状記号(▼削る/▲足す/○待機)で小さな文字や目盛りを読みやすくします。",
+        "【★ かんたん3ステップ・ガイドモード】使用頻度の低いスイッチや背景の動きを隠して、「STEP 1 ➔ STEP 2 ➔ STEP 3」の順路ガイドと「★まずここ」主役ハイライト・待機ノブ減光で迷わず操作できます。",
+        "【● マット・具体表記モード】ネオン発光・眩しい反射・グラデーションをすべて抑えたウォームスレート＆セージのマット配色と、水平グリッド整列・具体的で分かりやすい機能表記に切り替えます。"
+    };
+    const char* hintsEn[4] = {
+        "[STANDARD] Full theme visuals and controls.",
+        "[HIGH CONTRAST & LARGE TEXT] WCAG AAA 12:1 contrast, bold 5px needle, 8 large ticks, enlarged text, and shape indicators (▼/▲/○).",
+        "[3-STEP QUICK GUIDE] Streamlined 3-step guided workflow, hero knob callouts, and dimmed standby controls.",
+        "[MATTE & CONCRETE LABELS] Low-glare warm matte sage palette, flat horizontal grid, and concrete functional labels."
+    };
+    overviewHint = language->T (hintsJa[accessMode], hintsEn[accessMode]);
     repaint();
 }
 
@@ -196,6 +282,16 @@ bool VocalGzzioContent::handleOverviewMouseDoubleClick (juce::Point<int> pt)
 
 bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
 {
+    // 0. ユニバーサル・アクセシビリティモード切替ピル (標準 / 👓老眼・大文字 / 🧭ADHD 3ステップ / 🌿ASD 低刺激)
+    for (int a = 0; a < 4; ++a)
+    {
+        if (! accessPillRects[(size_t) a].isEmpty() && accessPillRects[(size_t) a].contains (pt))
+        {
+            setAccessMode (a);
+            return true;
+        }
+    }
+
     // 1. ヘッダの4種ワークスペース配置切替ピル (★ARGON / ♥LIVER / 🎛STUDIO / ◎CLASSIC)
     for (int i = 0; i < 4; ++i)
     {
@@ -207,6 +303,10 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
             {
                 setThemeMode (Palette::themeOfCouture ((Palette::coutureIndex (themeMode) + 1) % 5));
             }
+            else if (i == 0 && ! wasLiverArch && overviewLayoutMode == 0 && oceanStarTheme())
+            {
+                setThemeMode (Palette::themeOfOceanStar ((Palette::oceanStarIndex (themeMode) + 1) % 5));
+            }
             else if (isShowing())
             {
                 if (i == 1 && ! (liverTheme() || themeMode == 1 || themeMode == 8))
@@ -214,16 +314,16 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
                 else if (i == 2 && themeMode != 9)
                     setThemeMode (9);
                 else if (i == 0 && (liverTheme() || themeMode == 9))
-                    setThemeMode (0);
+                    setThemeMode (lastOceanStarTheme);
             }
             const char* archHintsJa[4] = {
-                "【★ ARGON DECK】中央に3D回転トラッカーボールと4軸トリガーを据えた、近未来SFコックピット配置です。",
+                "【★ ARGON DECK】中央に3D回転トラッカーボールと4軸トリガーを据えたコックピット配置です（中央右上の5色ピルで星空・海・黄昏テーマをワンタッチ切替できます）。",
                 "【♥ LIVER STAGE】クチュール・クッションパクト球体＆12連コスメパレットを並べた、Vライバー・歌枠ステージ配置です（もう一度押すか中央右上の5色ピルでコスメ配色をワンタッチ切替できます）。",
                 "【🎛 STUDIO RACK】左から右へ信号経路が並ぶ、プロ音楽家向け5列ヴィンテージ・アナログコンソール配置です。",
                 "【◎ CLASSIC】上部に大型チューナー、下部に3枚のセクションカードを並べた従来の3カード配置です。"
             };
             const char* archHintsEn[4] = {
-                "[ARGON DECK] Next-gen 3-wing sci-fi cockpit centered around the 3D Trackball and 4-axis trigger engine.",
+                "[ARGON DECK] Next-gen 3-wing cockpit centered around the 3D Orb and 4-axis trigger engine (switch Starry Sky & Sea themes with the 5 pills).",
                 "[LIVER STAGE] Couture Cosmetics stage panorama with Cushion Compact sphere, 12-dial ribbon, and 5 one-click colorways.",
                 "[STUDIO RACK] 5-column vertical hardware channel strip following strict left-to-right console signal flow.",
                 "[CLASSIC] Traditional 3-card overview layout."
@@ -233,27 +333,50 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         }
     }
 
-    // 1a. 💄 クチュール・コスメ 5色ワンタッチ切替ピル (01 ロゼ / 02 氷紫 / 03 黒薔薇 / 04 ミント / 05 白桃)
+    // 1a. 💄 クチュール・コスメ 5色 ／ 🌌 星空・海・黄昏コレクション 5色 ワンタッチ切替ピル
     for (int c = 0; c < 5; ++c)
     {
         if (! coutureSwatchRects[(size_t) c].isEmpty() && coutureSwatchRects[(size_t) c].contains (pt))
         {
-            setThemeMode (Palette::themeOfCouture (c));
-            static const char* const kSwatchHintJa[5] = {
-                "【01 ロゼ・クチュール (Rose Gold & Ruby)】ポーセリンファンデーション下地にローズゴールド金具と深紅ルビー鏡面をあしらった王道デパコス配色です。",
-                "【02 アイシーラベンダー＆プラチナシルバー (Glacier Lilac)】透明感ラベンダー下地にプラチナシルバー金具とサファイア鏡面をあしらったブルベ透明感配色です。",
-                "【03 ノワール・ロリータ＆ベルベットゴシック (Noir Ruban)】漆黒ベルベット＆ダークプラム下地にアンティーク銀金具とガーネット鏡面が映える小悪魔ゴシック配色です。",
-                "【04 ティファニーミント＆パールホワイト (Celadon Bijou)】セラドンミント＆パール下地にシャンパンゴールド金具とエメラルド鏡面をあしらったジュエリー配色です。",
-                "【05 多幸感ハニーピーチ＆アプリコット・グロウ (Apricot Miel)】ウォームバニラ＆白桃コーラル下地に24Kハニーゴールド金具をあしらった多幸感イエベ春コスメ配色です。"
-            };
-            static const char* const kSwatchHintEn[5] = {
-                "[01 ROSE COUTURE] Porcelain cushion foundation with Champagne Rose-Gold hardware and Ruby Rose-Quartz mirror.",
-                "[02 GLACIER LILAC] Tone-up lavender foundation with Platinum Sterling Silver hardware and Starlight Sapphire mirror.",
-                "[03 NOIR RUBAN] Dark velvet lace and plum case with Antique Silver hardware and Obsidian Garnet mirror.",
-                "[04 CELADON BIJOU] Pearl-ivory and celadon mint powder with Warm Champagne-Gold hardware and Emerald mirror.",
-                "[05 APRICOT MIEL] Warm vanilla and honey-peach blush with 24K Honey-Gold hardware and Amber-Peach mirror."
-            };
-            overviewHint = language->T (kSwatchHintJa[c], kSwatchHintEn[c]);
+            const bool isCoutureSw = liverTheme() || (overviewLayoutMode == 1 && ! oceanStarTheme() && themeMode != 2 && themeMode != 4);
+            if (isCoutureSw)
+            {
+                setThemeMode (Palette::themeOfCouture (c));
+                static const char* const kSwatchHintJa[5] = {
+                    "【01 ロゼ・クチュール (Rose Gold & Ruby)】ポーセリンファンデーション下地にローズゴールド金具と深紅ルビー鏡面をあしらった王道デパコス配色です。",
+                    "【02 アイシーラベンダー＆プラチナシルバー (Glacier Lilac)】透明感ラベンダー下地にプラチナシルバー金具とサファイア鏡面をあしらったブルベ透明感配色です。",
+                    "【03 ノワール・ロリータ＆ベルベットゴシック (Noir Ruban)】漆黒ベルベット＆ダークプラム下地にアンティーク銀金具とガーネット鏡面が映える小悪魔ゴシック配色です。",
+                    "【04 ティファニーミント＆パールホワイト (Celadon Bijou)】セラドンミント＆パール下地にシャンパンゴールド金具とエメラルド鏡面をあしらったジュエリー配色です。",
+                    "【05 多幸感ハニーピーチ＆アプリコット・グロウ (Apricot Miel)】ウォームバニラ＆白桃コーラル下地に24Kハニーゴールド金具をあしらった多幸感イエベ春コスメ配色です。"
+                };
+                static const char* const kSwatchHintEn[5] = {
+                    "[01 ROSE COUTURE] Porcelain cushion foundation with Champagne Rose-Gold hardware and Ruby Rose-Quartz mirror.",
+                    "[02 GLACIER LILAC] Tone-up lavender foundation with Platinum Sterling Silver hardware and Starlight Sapphire mirror.",
+                    "[03 NOIR RUBAN] Dark velvet lace and plum case with Antique Silver hardware and Obsidian Garnet mirror.",
+                    "[04 CELADON BIJOU] Pearl-ivory and celadon mint powder with Warm Champagne-Gold hardware and Emerald mirror.",
+                    "[05 APRICOT MIEL] Warm vanilla and honey-peach blush with 24K Honey-Gold hardware and Amber-Peach mirror."
+                };
+                overviewHint = language->T (kSwatchHintJa[c], kSwatchHintEn[c]);
+            }
+            else
+            {
+                setThemeMode (Palette::themeOfOceanStar (c));
+                static const char* const kOceanHintJa[5] = {
+                    "【🌌 01 星降る蛍火の夜 (Starlit Firefly Nocturne)】深いミッドナイト・サファイア夜空に、黄金アンバーの蛍火ボケとバイオルミネセンス水色＆ローズ星屑が浮かぶ幻想夜景テーマです。",
+                    "【🌊 02 蒼海オペラ座・深海ベルベット (Grand Opera Sapphire)】ロイヤルコバルトのベルベット幕と深海サファイア照明に、アンティーク真鍮シャンデリアの黄金が輝く重厚ステージテーマです。",
+                    "【🌅 03 夕凪の海と黄昏の水鏡 (Twilight Sea & Sunset Mirror)】黄昏のティール・インディゴ空から茜色アプリコットの水平線、さざ波が揺れる水鏡リフレクションを描いたマジックアワーテーマです。",
+                    "【🐬 04 珊瑚礁の碧海・ルミナスラグーン (Luminous Coral Lagoon)】陽光の差し込む透明なアクアマリン＆ターコイズの海に、珊瑚ピンクと真珠ゴールドがきらめく海中ラグーンテーマです。",
+                    "【🌠 05 天の川と極光プラネタリウム (Celestial Milky Way & Aurora)】深宇宙バイオレットの夜空を横切る天の川星雲と、黄金のアストロラーベ星座線・極光エメラルドが輝く天文台テーマです。"
+                };
+                static const char* const kOceanHintEn[5] = {
+                    "[01 STARLIT FIREFLY NOCTURNE] Deep midnight sapphire night sky with glowing golden-amber firefly bokeh and bioluminescent cyan stardust.",
+                    "[02 GRAND OPERA SAPPHIRE] Royal cobalt velvet stage drapery, electric abyssal blue spotlights, and antique chandelier gold hardware.",
+                    "[03 TWILIGHT SEA & SUNSET MIRROR] Twilight teal-indigo sky melting into a golden apricot sunset horizon and shimmering water mirror ripples.",
+                    "[04 LUMINOUS CORAL LAGOON] Sunlit aquamarine and turquoise reef caustics with coral-pink and pearl-shell gold highlights.",
+                    "[05 CELESTIAL MILKY WAY] Cosmic violet-navy sky with Milky Way nebula clouds, golden astrolabe constellations, and emerald aurora."
+                };
+                overviewHint = language->T (kOceanHintJa[c], kOceanHintEn[c]);
+            }
             return true;
         }
     }
@@ -383,6 +506,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
     if (! argonPadRect.isEmpty() && argonPadRect.contains (pt))
     {
         argonDragging = 0;
+        spawnInteractiveRipple ((float) pt.x, (float) pt.y, 11);
         handleOverviewMouseDrag (pt);
         return true;
     }
@@ -393,7 +517,35 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         if (! argonBarRects[(size_t) i].isEmpty() && argonBarRects[(size_t) i].expanded (0, 2).contains (pt))
         {
             argonDragging = i + 1;
+            spawnInteractiveRipple ((float) pt.x, (float) pt.y, 23 + i * 7);
             handleOverviewMouseDrag (pt);
+            return true;
+        }
+    }
+
+    // 5. ★ 風景・季節パノラマウィンドウ（左右の中段ビスタ窓）クリックでインタラクティブ水紋・流星・紅葉＆初雪バーストを発火！
+    if (oceanStarTheme() && overviewLayoutMode == 0 && ! liteMode)
+    {
+        const juce::Rectangle<int> leftVista  (tuner.getX(),          tuner.getBottom() + 5,
+                                               tuner.getWidth(),      overviewCards[0].getY() - tuner.getBottom() - 10);
+        const juce::Rectangle<int> rightVista (overviewOutput.getX(), overviewOutput.getBottom() + 5,
+                                               overviewOutput.getWidth(), overviewCards[2].getY() - overviewOutput.getBottom() - 10);
+        if (leftVista.contains (pt) || rightVista.contains (pt))
+        {
+            spawnInteractiveRipple ((float) pt.x, (float) pt.y, 53);
+            g_vistaMood = (g_vistaMood + 1) % 3;
+            static const char* const kMoodJa[3] = {
+                "【✦ インタラクティブ風景窓：HARMONY AURA】クリックした位置から水紋・流星・蛍火・紅葉と初雪が広がり、あなたの声の倍音と共鳴します。",
+                "【✦ インタラクティブ風景窓：PRISM CAUSTICS】水面コースティクスと天球のプリズム反射を強調しました。もう一度クリックで表現モードを切り替えられます。",
+                "【✦ インタラクティブ風景窓：DEEP RESONANCE】水鏡の32バンド・シンメトリック倍音ファウンテンと残響波紋をフル展開しました。"
+            };
+            static const char* const kMoodEn[3] = {
+                "[INTERACTIVE SOUNDSCAPE: HARMONY AURA] Ripples, shooting stars, fireflies, or autumn leaves & snow bloom from your touch and resonate with your voice.",
+                "[INTERACTIVE SOUNDSCAPE: PRISM CAUSTICS] Enhanced water caustics and celestial prism reflections. Click again to cycle visual resonance modes.",
+                "[INTERACTIVE SOUNDSCAPE: DEEP RESONANCE] Full 32-band symmetrical water-mirror harmonic fountain and deep spatial ripples."
+            };
+            overviewHint = language->T (kMoodJa[g_vistaMood], kMoodEn[g_vistaMood]);
+            repaint();
             return true;
         }
     }
@@ -405,6 +557,7 @@ void VocalGzzioContent::handleOverviewMouseDrag (juce::Point<int> pt)
 {
     if (argonDragging == 0 && ! argonPadRect.isEmpty())
     {
+        spawnInteractiveRipple ((float) pt.x, (float) pt.y, 17);
         const float nx = (float) (pt.x - argonPadRect.getX()) / (float) juce::jmax (1, argonPadRect.getWidth());
         const float ny = (float) (pt.y - argonPadRect.getY()) / (float) juce::jmax (1, argonPadRect.getHeight());
         applyArgonOrbFromXY (nx, ny);
@@ -415,6 +568,7 @@ void VocalGzzioContent::handleOverviewMouseDrag (juce::Point<int> pt)
         const auto& r = argonBarRects[(size_t) idx];
         if (! r.isEmpty())
         {
+            spawnInteractiveRipple ((float) pt.x, (float) r.getCentreY(), 31 + idx);
             const float norm = juce::jlimit (0.0f, 1.0f, (float) (pt.x - r.getX()) / (float) juce::jmax (1, r.getWidth()));
             const char* ids[4] = { "argon_velvet", "argon_focus", "argon_silk", "argon_halo" };
             if (auto* p = processor.apvts.getParameter (ids[idx]))
@@ -597,6 +751,13 @@ void VocalGzzioContent::updateOverviewVisibility()
     for (auto* lamp : { &lampDn, &lampGate, &lampDs, &lampDly }) lamp->btn.setVisible (true);
     for (auto& power : overviewSectionPower) power.setVisible (true);
     applyUseModeMask();
+    // 🧭 ADHD 集中・3ステップモード(accessMode == 2)では、使用頻度の低い2段目サブスイッチを隠して認知負荷と選択麻痺を防ぐ
+    if (accessMode == 2)
+    {
+        for (auto* sub : { (juce::Component*) &jnOnButton, (juce::Component*) &vcOnButton,
+                           (juce::Component*) &tempoFitButton, (juce::Component*) &sessionButton })
+            sub->setVisible (false);
+    }
     overviewReturn.setVisible (false);
     updateOverviewState();
 }
@@ -770,14 +931,29 @@ void VocalGzzioContent::refreshOverviewText()
     { k.label.setText (language->T (jp, en), juce::dontSendNotification); };
     if (isOverview())
     {
-        label (inGainK, "入力音量", "Input"); label (makeupK, "出力音量", "Output");
-        label (denoiseK, "ノイズ除去", "Noise reduction"); label (gate, "無音時のカット", "Noise gate");
-        label (lowCut, "低音カット", "Low cut"); label (mudK, "こもり", "Low mids");
-        label (comp2K, "音量そろえ", "Leveling"); label (deessK, "サ行おさえ", "De-essing");
-        label (presenceK, "声の明るさ", "Presence"); label (airK, "きらめき", "Air");
-        label (warmthK, "厚み・歪み", "Warmth"); label (resK, "耳ざわり", "Resonance");
-        label (revMixK, "残響の量", "Reverb mix"); label (revSizeK, "残響の長さ", "Reverb size");
-        label (delayK, "やまびこの量", "Delay mix"); label (widthK, "左右の広がり", "Stereo width");
+        if (accessMode == 3)
+        {
+            // 🌿 ASD・感覚過敏モード: 抽象的な比喩表現を避け、物理的・具体的な音響機能名を表示
+            label (inGainK, "入力ゲイン", "Input gain");     label (makeupK, "出力ゲイン", "Output gain");
+            label (denoiseK, "背景ノイズ除去", "Denoise");    label (gate, "無音時ミュート", "Noise gate");
+            label (lowCut, "低域カット(Hz)", "Low-cut Hz");  label (mudK, "中低域(250Hz)", "250Hz EQ");
+            label (comp2K, "音量の均一化", "Compressor");    label (deessK, "歯擦音(サ行)抑制", "De-esser");
+            label (presenceK, "中高域(明瞭度)", "Presence"); label (airK, "高域ブースト", "High air");
+            label (warmthK, "倍音付加(温かみ)", "Harmonics"); label (resK, "共振ピーク抑制", "Resonance");
+            label (revMixK, "残響ブレンド量", "Reverb mix"); label (revSizeK, "残響空間サイズ", "Room size");
+            label (delayK, "反響ディレイ量", "Delay mix");   label (widthK, "ステレオ左右幅", "Stereo width");
+        }
+        else
+        {
+            label (inGainK, "入力音量", "Input"); label (makeupK, "出力音量", "Output");
+            label (denoiseK, "ノイズ除去", "Noise reduction"); label (gate, "無音時のカット", "Noise gate");
+            label (lowCut, "低音カット", "Low cut"); label (mudK, "こもり", "Low mids");
+            label (comp2K, "音量そろえ", "Leveling"); label (deessK, "サ行おさえ", "De-essing");
+            label (presenceK, "声の明るさ", "Presence"); label (airK, "きらめき", "Air");
+            label (warmthK, "厚み・歪み", "Warmth"); label (resK, "耳ざわり", "Resonance");
+            label (revMixK, "残響の量", "Reverb mix"); label (revSizeK, "残響の長さ", "Reverb size");
+            label (delayK, "やまびこの量", "Delay mix"); label (widthK, "左右の広がり", "Stereo width");
+        }
     }
     else
     {
@@ -821,6 +997,7 @@ void VocalGzzioContent::resizedOverview()
     for (auto& r : argonBarRects) r = {};
     for (auto& r : argonTargetRects) r = {};
     for (auto& r : coutureSwatchRects) r = {};
+    for (auto& r : accessPillRects) r = {};
 
     // ---- 1段目: ロゴ・4種ワークスペース配置ピル・軽量ピル・中央寄せ/MONOピル・外部出力(SYNCROOM)ピル・遅延バッジ・ナビツールバー ----
     const int buttonH = 38;
@@ -865,9 +1042,9 @@ void VocalGzzioContent::resizedOverview()
         for (auto* k : knobs)
         {
             auto cell = juce::Rectangle<int> (r.getX() + i % columns * cw, r.getY() + i / columns * ch, cw, ch).reduced (4, 2);
-            k->label.getProperties().set ("fontH", 13.5);
+            k->label.getProperties().set ("fontH", (accessMode == 1) ? 16.0 : 13.5);
             k->label.setBounds (cell.removeFromTop (30));
-            k->slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, juce::jmin (98, cell.getWidth()), 24);
+            k->slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, juce::jmin (104, cell.getWidth()), (accessMode == 1) ? 26 : 24);
             k->slider.setBounds (cell.reduced (3, 0));
             ++i;
         }
@@ -916,15 +1093,42 @@ void VocalGzzioContent::resizedOverview()
         }
     };
 
+    // ✦ 星空・海・黄昏コレクション / 見やすさ・操作スタイルモード専用：4連ダイヤル配置
+    //   （スタイルモード時は視線移動が一切ブレない完全水平グリッド dy=0 に整列！）
+    auto celestialArc = [this] (juce::Rectangle<int> r, Knob* k0, Knob* k1, Knob* k2, Knob* k3)
+    {
+        Knob* ks[4] = { k0, k1, k2, k3 };
+        const int cw = r.getWidth() / 4;
+        const bool flatGrid = (accessMode > 0);
+        const int dy[4] = { flatGrid ? 0 : 10, flatGrid ? 0 : -4, flatGrid ? 0 : -4, flatGrid ? 0 : 10 };
+        const int lblH = (accessMode == 1) ? 24 : 22;
+        const int boxH = (accessMode == 1) ? 24 : 22;
+        for (int i = 0; i < 4; ++i)
+        {
+            const int x = r.getX() + i * cw;
+            const int wCell = (i == 3) ? (r.getRight() - x) : cw;
+            const int yOff = juce::jmax (0, dy[i]);
+            const int hSub = (dy[i] < 0) ? -dy[i] : 0;
+            auto cell = juce::Rectangle<int> (x, r.getY() + yOff, wCell, r.getHeight() - yOff - hSub).reduced (3, 3);
+            if (accessMode == 2 && i == 0)
+                cell.removeFromTop (14); // 「★まずここ」ピル分の余白を確保してラベルとの重なりを完全防止
+            ks[i]->label.getProperties().set ("fontH", (accessMode == 1) ? 15.5 : ((accessMode > 0) ? 14.2 : 13.5));
+            ks[i]->label.setBounds (cell.removeFromTop (lblH));
+            ks[i]->slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, juce::jmin (104, cell.getWidth() - 2), boxH);
+            ks[i]->slider.setBounds (cell.reduced (1, 0));
+        }
+    };
+
     const int top = 122, bottom = h - 92;
 
     if (overviewLayoutMode == 0)
     {
         // =========================================================================
-        // ★ Architecture 0: ARGON COCKPIT (次世代3ウイング・コックピット配置)
-        //   左ウイング: ピッチ＆クリーン (Tuner + 01 CLEAN: 大型主役DENOISE＋3連サテライト)
-        //   中央コア  : 3D回転トラッカーボール & 4軸トリガーフェーダー + 大・小段違い4連コンソール (02 CORE TONE)
-        //   右ウイング: 5ch テレメトリ計器盤＆マスターI/O + 3D空間 (03 SPACE: 大型主役REVERB＋3連サテライト)
+        // ★ Architecture 0:
+        //   - 通常時: ARGON COCKPIT (次世代3ウイング・コックピット配置)
+        //   - 星空・海・黄昏テーマ時 (oceanStarTheme) または 見やすさスタイル時 (accessMode > 0):
+        //     上段はドーム＆左右計器、中段左右に84pxの「パノラマ窓／スタイル案内＆切替デッキ」を開放し、
+        //     下段は y=418 で水平一列に揃う3連デッキを展開！
         // =========================================================================
         const int wingW = 456;
         const int centerW = w - edge * 2 - wingW * 2 - gap * 2; // 1582 - 48 - 912 - 28 = 594
@@ -932,39 +1136,84 @@ void VocalGzzioContent::resizedOverview()
         const int centerX = leftX + wingW + gap;
         const int rightX = centerX + centerW + gap;
 
-        // 左ウイング: 上=Tuner(224px), 下=Card 0(Clean)
-        tuner.setBounds (leftX, top, wingW, 224);
-        overviewCards[0] = { leftX, top + 224 + gap, wingW, bottom - (top + 224 + gap) };
-
-        // 中央コア: 上=Argon 3D Trackball Core(344px), 下=Card 1(Character 段違い4連ストリップ)
-        overviewMonitor = { centerX, top, centerW, 344 };
-        argonPadRect    = { centerX + 16, top + 44, 316, 236 };
-        eqGraph.setBounds (centerX + 344, top + 44, centerW - 360, 100);
-        for (int b = 0; b < 4; ++b)
-            argonBarRects[(size_t) b] = { centerX + 344, top + 154 + b * 32, centerW - 360, 26 };
-        const int targetW = (centerW - 32 - 18) / 4;
-        for (int t = 0; t < 4; ++t)
-            argonTargetRects[(size_t) t] = { centerX + 16 + t * (targetW + 6), top + 290, targetW, 40 };
-
-        overviewCards[1] = { centerX, top + 344 + gap, centerW, bottom - (top + 344 + gap) };
-
-        // 右ウイング: 上=5ch Telemetry & Master I/O(224px), 下=Card 2(Space)
-        overviewOutput   = { rightX, top, wingW, 224 };
-        overviewCards[2] = { rightX, top + 224 + gap, wingW, bottom - (top + 224 + gap) };
-
-        for (int i = 0; i < 3; ++i)
+        if (oceanStarTheme() || accessMode > 0)
         {
-            const auto& c = overviewCards[(size_t) i];
-            overviewMore[(size_t) i].setBounds (c.getRight() - 130, c.getY() + 10, 116, 34);
-            overviewSectionPower[(size_t) i].setBounds (c.getRight() - 210, c.getY() + 10, 72, 34);
-        }
+            const int upperWingH = 208; // y = 122..330 (中段 y=335..413 に水平線パノラマ窓／スタイル案内デッキを開放)
+            const int domeH      = 286; // y = 122..408 (中央プラネタリウム・オペラドーム)
+            const int mirrorTop  = 418; // 下段3枚が水平線で一直線に揃うデッキ (y = 418..698, 高さ280px)
 
-        // 右上 Telemetry の右半分に入出力ノブ2基、左半分に5chメーター
-        grid (juce::Rectangle<int> (overviewOutput.getRight() - 224, overviewOutput.getY() + 42, 214, overviewOutput.getHeight() - 48),
-              { &inGainK, &makeupK }, 2);
-        heroBay (overviewCards[0].reduced (14).withTrimmedTop (122), &denoiseK, &gate, &lowCut, &mudK);
-        staggeredConsole (overviewCards[1].reduced (12).withTrimmedTop (122), &comp2K, &deessK, &presenceK, &warmthK);
-        heroBay (overviewCards[2].reduced (14).withTrimmedTop (122), &revMixK, &revSizeK, &delayK, &widthK);
+            tuner.setBounds (leftX, top, wingW, upperWingH);
+            overviewOutput = { rightX, top, wingW, upperWingH };
+
+            overviewMonitor = { centerX, top, centerW, domeH };
+            argonPadRect    = { centerX + 16, top + 40, 304, 192 };
+            eqGraph.setBounds (centerX + 332, top + 40, centerW - 348, 76);
+            for (int b = 0; b < 4; ++b)
+                argonBarRects[(size_t) b] = { centerX + 332, top + 124 + b * 28, centerW - 348, 23 };
+            const int targetW = (centerW - 32 - 18) / 4;
+            for (int t = 0; t < 4; ++t)
+                argonTargetRects[(size_t) t] = { centerX + 16 + t * (targetW + 6), top + 240, targetW, 36 };
+
+            // 中段右デッキ下部に画面の見やすさ・操作スタイル4モード切替ピルを配置
+            const int accY = top + upperWingH + 5 + 48;
+            const int accGap = 5;
+            const int accW = (wingW - 16 - accGap * 3) / 4;
+            for (int a = 0; a < 4; ++a)
+                accessPillRects[(size_t) a] = { rightX + 8 + a * (accW + accGap), accY, accW, 24 };
+
+            overviewCards[0] = { leftX,   mirrorTop, wingW,   bottom - mirrorTop };
+            overviewCards[1] = { centerX, mirrorTop, centerW, bottom - mirrorTop };
+            overviewCards[2] = { rightX,  mirrorTop, wingW,   bottom - mirrorTop };
+
+            for (int i = 0; i < 3; ++i)
+            {
+                const auto& c = overviewCards[(size_t) i];
+                overviewMore[(size_t) i].setBounds (c.getRight() - 130, c.getY() + 10, 116, 34);
+                overviewSectionPower[(size_t) i].setBounds (c.getRight() - 210, c.getY() + 10, 72, 34);
+            }
+
+            grid (juce::Rectangle<int> (overviewOutput.getRight() - 224, overviewOutput.getY() + 38, 214, overviewOutput.getHeight() - 42),
+                  { &inGainK, &makeupK }, 2);
+            celestialArc (overviewCards[0].reduced (10).withTrimmedTop (120), &denoiseK, &gate, &lowCut, &mudK);
+            celestialArc (overviewCards[1].reduced (12).withTrimmedTop (120), &comp2K, &deessK, &presenceK, &warmthK);
+            celestialArc (overviewCards[2].reduced (10).withTrimmedTop (120), &revMixK, &revSizeK, &delayK, &widthK);
+        }
+        else
+        {
+            // 左ウイング: 上=Tuner(224px), 下=Card 0(Clean)
+            tuner.setBounds (leftX, top, wingW, 224);
+            overviewCards[0] = { leftX, top + 224 + gap, wingW, bottom - (top + 224 + gap) };
+
+            // 中央コア: 上=Argon 3D Trackball Core(344px), 下=Card 1(Character 段違い4連ストリップ)
+            overviewMonitor = { centerX, top, centerW, 344 };
+            argonPadRect    = { centerX + 16, top + 44, 316, 236 };
+            eqGraph.setBounds (centerX + 344, top + 44, centerW - 360, 100);
+            for (int b = 0; b < 4; ++b)
+                argonBarRects[(size_t) b] = { centerX + 344, top + 154 + b * 32, centerW - 360, 26 };
+            const int targetW = (centerW - 32 - 18) / 4;
+            for (int t = 0; t < 4; ++t)
+                argonTargetRects[(size_t) t] = { centerX + 16 + t * (targetW + 6), top + 290, targetW, 40 };
+
+            overviewCards[1] = { centerX, top + 344 + gap, centerW, bottom - (top + 344 + gap) };
+
+            // 右ウイング: 上=5ch Telemetry & Master I/O(224px), 下=Card 2(Space)
+            overviewOutput   = { rightX, top, wingW, 224 };
+            overviewCards[2] = { rightX, top + 224 + gap, wingW, bottom - (top + 224 + gap) };
+
+            for (int i = 0; i < 3; ++i)
+            {
+                const auto& c = overviewCards[(size_t) i];
+                overviewMore[(size_t) i].setBounds (c.getRight() - 130, c.getY() + 10, 116, 34);
+                overviewSectionPower[(size_t) i].setBounds (c.getRight() - 210, c.getY() + 10, 72, 34);
+            }
+
+            // 右上 Telemetry の右半分に入出力ノブ2基、左半分に5chメーター
+            grid (juce::Rectangle<int> (overviewOutput.getRight() - 224, overviewOutput.getY() + 42, 214, overviewOutput.getHeight() - 48),
+                  { &inGainK, &makeupK }, 2);
+            heroBay (overviewCards[0].reduced (14).withTrimmedTop (122), &denoiseK, &gate, &lowCut, &mudK);
+            staggeredConsole (overviewCards[1].reduced (12).withTrimmedTop (122), &comp2K, &deessK, &presenceK, &warmthK);
+            heroBay (overviewCards[2].reduced (14).withTrimmedTop (122), &revMixK, &revSizeK, &delayK, &widthK);
+        }
     }
     else if (overviewLayoutMode == 1)
     {
@@ -1085,7 +1334,8 @@ void VocalGzzioContent::resizedOverview()
         grid (overviewCards[2].reduced (16).withTrimmedTop (126), { &revMixK, &revSizeK, &delayK, &widthK }, 2);
     }
 
-    if (liverTheme() || (overviewLayoutMode == 1 && themeMode != 1 && themeMode != 8 && themeMode != 9))
+    if (accessMode == 0 && (liverTheme() || oceanStarTheme() || themeMode == 2 || themeMode == 4
+        || (overviewLayoutMode == 1 && themeMode != 1 && themeMode != 8 && themeMode != 9)))
     {
         const int swW = (overviewMonitor.getWidth() < 460) ? 44 : 58;
         const int swGap = 4;
@@ -1145,10 +1395,17 @@ void VocalGzzioContent::resizedOverview()
     seqOnButton.setBounds (charRow1);
 
     auto charRow2 = overviewCards[1].reduced (12).withTrimmedTop (88).withHeight (30);
-    const int swW = (charRow2.getWidth() - 12) / 3;
-    atOnButton.setBounds (charRow2.removeFromLeft (swW)); charRow2.removeFromLeft (6);
-    jnOnButton.setBounds (charRow2.removeFromLeft (swW)); charRow2.removeFromLeft (6);
-    vcOnButton.setBounds (charRow2);
+    if (accessMode == 2)
+    {
+        atOnButton.setBounds (charRow2);
+    }
+    else
+    {
+        const int swW = (charRow2.getWidth() - 12) / 3;
+        atOnButton.setBounds (charRow2.removeFromLeft (swW)); charRow2.removeFromLeft (6);
+        jnOnButton.setBounds (charRow2.removeFromLeft (swW)); charRow2.removeFromLeft (6);
+        vcOnButton.setBounds (charRow2);
+    }
 
     // カード2（空間をつくる）上段2行: リバーブ電源・種類選択、テンポ合わせ・低遅延モード
     auto spaceRow1 = overviewCards[2].reduced (12).withTrimmedTop (50).withHeight (34);
@@ -1157,12 +1414,19 @@ void VocalGzzioContent::resizedOverview()
     revTypeBox.setBounds (spaceRow1);
 
     auto spaceRow2 = overviewCards[2].reduced (12).withTrimmedTop (88).withHeight (30);
-    const int spBtnW = (spaceRow2.getWidth() - 12) * 32 / 100;
-    tempoFitButton.setBounds (spaceRow2.removeFromLeft (spBtnW));
-    spaceRow2.removeFromLeft (6);
-    sessionButton .setBounds (spaceRow2.removeFromLeft (spBtnW));
-    spaceRow2.removeFromLeft (6);
-    irOverviewRect = spaceRow2;
+    if (accessMode == 2)
+    {
+        irOverviewRect = spaceRow2;
+    }
+    else
+    {
+        const int spBtnW = (spaceRow2.getWidth() - 12) * 32 / 100;
+        tempoFitButton.setBounds (spaceRow2.removeFromLeft (spBtnW));
+        spaceRow2.removeFromLeft (6);
+        sessionButton .setBounds (spaceRow2.removeFromLeft (spBtnW));
+        spaceRow2.removeFromLeft (6);
+        irOverviewRect = spaceRow2;
+    }
 
     for (auto* lamp : { &lampDn, &lampGate, &lampDs, &lampDly }) lamp->btn.setSize (28, 28);
     auto placePower = [] (Lamp& lamp, Knob& k)
@@ -1181,12 +1445,18 @@ void VocalGzzioContent::resizedOverview()
 
 void VocalGzzioContent::paintOverview (juce::Graphics& g)
 {
-    GzzioLnF::setUseKawaiiFont (pastelTheme());
+    GzzioLnF::setUseKawaiiFont (pastelTheme() && accessMode == 0);
 
-    // 軽量モード(liteMode)時は全画面グラデーションやパーティクル描画を完全バイパスし、単色フラット塗りにする
-    if (liteMode)
+    // 軽量モード(liteMode)または見やすさスタイルモード(accessMode > 0)時は背景の細かい模様やパーティクルを止め、文字が際立つクリーンな下地にする
+    if (liteMode || accessMode == 3)
     {
         g.fillAll (Palette::bgTop);
+    }
+    else if (accessMode == 1 || accessMode == 2)
+    {
+        g.setGradientFill (juce::ColourGradient (Palette::bgTop, 0.0f, 0.0f,
+                                                 Palette::bgBot, 0.0f, (float) getHeight(), false));
+        g.fillRect (getLocalBounds());
     }
     else
     {
@@ -1211,15 +1481,14 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                      juce::Justification just = juce::Justification::centredLeft)
     {
         g.setColour (colour);
-        g.setFont (GzzioLnF::uiFont (juce::jmax (14.0f, height) * juce::jlimit (1.0f, 1.3f, fontScale / 1.5f), bold));
-        g.drawText (value, r, just);
+        fitText (g, value, r, just, juce::jmax (14.0f, height), bold);
     };
 
     // ---- 2段コマンドデッキ・コンソールバー（通常モード時は立体ガラスデッキ＆イルミネーションラインを描画） ----
     if (! liteMode)
     {
         const bool lightDeck = Palette::panel.getPerceivedBrightness() > 0.55f;
-        const float deckAlpha = nightTheme() ? 0.78f : (lightDeck ? 0.94f : 0.66f);
+        const float deckAlpha = (accessMode > 0) ? 0.98f : (nightTheme() ? 0.78f : (lightDeck ? 0.94f : 0.66f));
         const juce::Rectangle<float> topDeck (16.0f, 9.0f, (float) getWidth() - 32.0f, 52.0f);
         const juce::Rectangle<float> botDeck (16.0f, 65.0f, (float) getWidth() - 32.0f, 52.0f);
         for (const auto& d : { topDeck, botDeck })
@@ -1352,8 +1621,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             fitText (g, label, ri.reduced (2, 0), juce::Justification::centred, 14.0f, active);
         };
 
-        const char* pillJa[4] = { "★ARGON", "♥LIVER", "🎛STUDIO", "◎従来" };
-        const char* pillEn[4] = { "ARGON",  "LIVER",  "STUDIO",  "CLASSIC" };
+        const char* pillJa[4] = { oceanStarTheme() ? "✦天球水鏡" : "★ARGON", "♥LIVER", "🎛STUDIO", "◎従来" };
+        const char* pillEn[4] = { oceanStarTheme() ? "HORIZON"   : "ARGON",  "LIVER",  "STUDIO",  "CLASSIC" };
         const juce::Colour pillCols[4] = { Palette::ice, Palette::salmon, Palette::yellow, Palette::blue };
         for (int i = 0; i < 4; ++i)
         {
@@ -1487,17 +1756,18 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     if (! srcModeLabelArea.isEmpty())
         text (language->src_label(), srcModeLabelArea.withTrimmedRight (6), 15, Palette::inkSoft, true, juce::Justification::centredRight);
 
-    // テーマ風景が透けて見えるよう、通常時は半透明ガラス調、軽量モード時はAlpha=1.0の高速ソリッド描画にする
-    const float cardAlpha = liteMode ? 1.0f
+    // テーマ風景が透けて見えるよう、通常時は半透明ガラス調、軽量モード・アクセシビリティモード時はAlpha=1.0の完全不透明マット下地にする
+    const float cardAlpha = (liteMode || accessMode > 0) ? 1.0f
+                          : oceanStarTheme() ? 0.38f
                           : liverTheme() ? 0.96f
                           : (themeMode == 2 || themeMode == 4 || themeMode == 6) ? 0.86f
                           : (themeMode == 1 || themeMode == 8 || themeMode == 9) ? 0.94f : 0.96f;
 
-    // ★ マルチペルソナ・デザイン造形判定（かっこいいSF系／Vライバーキラキラ系／ゆるふわカフェ系／ボタニカル天球系／名機スタジオ系）
+    // ★ マルチペルソナ・デザイン造形判定（かっこいいSF系／Vライバーキラキラ系／ゆるふわカフェ系／星空・海・ボタニカル天球系／名機スタジオ系）
     const bool isYuruStyle   = (themeMode == 1 || themeMode == 8);
-    const bool isLiverStyle  = liverTheme() || (overviewLayoutMode == 1 && ! isYuruStyle && themeMode != 9);
-    const bool isNatureAura  = (themeMode == 2 || themeMode == 3 || themeMode == 4);
-    const bool isStudioStyle = (themeMode == 9) || (overviewLayoutMode == 2 && ! isLiverStyle && ! isYuruStyle);
+    const bool isLiverStyle  = liverTheme() || (overviewLayoutMode == 1 && ! isYuruStyle && themeMode != 9 && ! oceanStarTheme());
+    const bool isNatureAura  = (themeMode == 2 || themeMode == 3 || themeMode == 4 || oceanStarTheme());
+    const bool isStudioStyle = (themeMode == 9) || (overviewLayoutMode == 2 && ! isLiverStyle && ! isYuruStyle && ! oceanStarTheme());
     const bool isSciFiStyle  = ! (isLiverStyle || isYuruStyle || isNatureAura || isStudioStyle) && (overviewLayoutMode == 0);
 
     // 8角形チャンファー（斜めカット装甲プレート）パス生成ヘルパー
@@ -1559,14 +1829,43 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     auto card = [&] (juce::Rectangle<int> r, juce::Colour accent)
     {
         const auto rf = r.toFloat();
-        if (liteMode)
+        if (liteMode || accessMode > 0)
         {
             g.setColour (Palette::panel);
             g.fillRoundedRectangle (rf, 14.0f);
-            g.setColour (Palette::panelLn);
-            g.drawRoundedRectangle (rf.reduced (0.5f), 14.0f, 1.0f);
-            g.setColour (accent);
-            g.fillRoundedRectangle (rf.getX() + 16.0f, rf.getY() + 14.0f, 4.0f, 22.0f, 2.0f);
+            // セクション見出し行の視認性を高めるマット帯
+            if (accessMode == 1)
+            {
+                g.setColour (Palette::panel2);
+                g.fillRoundedRectangle (rf.withHeight (46.0f), 14.0f);
+                g.setColour (accent);
+                g.drawLine (rf.getX() + 12.0f, rf.getY() + 46.0f, rf.getRight() - 12.0f, rf.getY() + 46.0f, 2.2f);
+                g.setColour (Palette::panelLn);
+                g.drawRoundedRectangle (rf.reduced (0.8f), 14.0f, 2.2f);
+                g.setColour (accent);
+                g.fillRoundedRectangle (rf.getX() + 12.0f, rf.getY() + 10.0f, 6.0f, 26.0f, 3.0f);
+            }
+            else if (accessMode == 2)
+            {
+                g.setColour (accent.withAlpha (0.14f));
+                g.fillRoundedRectangle (rf.withHeight (46.0f), 14.0f);
+                g.setColour (accent.withAlpha (0.65f));
+                g.drawLine (rf.getX() + 14.0f, rf.getY() + 46.0f, rf.getRight() - 14.0f, rf.getY() + 46.0f, 1.5f);
+                g.setColour (Palette::panelLn);
+                g.drawRoundedRectangle (rf.reduced (0.6f), 14.0f, 1.6f);
+                g.setColour (accent);
+                g.fillRoundedRectangle (rf.getX() + 14.0f, rf.getY() + 12.0f, 5.0f, 22.0f, 2.5f);
+            }
+            else
+            {
+                g.setColour (Palette::panel2.withAlpha (0.65f));
+                g.fillRoundedRectangle (rf.withHeight (45.0f), 14.0f);
+                g.setColour (Palette::panelLn);
+                g.drawLine (rf.getX() + 14.0f, rf.getY() + 45.0f, rf.getRight() - 14.0f, rf.getY() + 45.0f, 1.0f);
+                g.drawRoundedRectangle (rf.reduced (0.5f), 14.0f, 1.2f);
+                g.setColour (accent);
+                g.fillRoundedRectangle (rf.getX() + 14.0f, rf.getY() + 13.0f, 4.0f, 20.0f, 2.0f);
+            }
             return;
         }
 
@@ -1672,6 +1971,54 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             g.setGradientFill (juce::ColourGradient (Palette::panel, rf.getX(), rf.getY(),
                                                      Palette::panel2.interpolatedWith (Palette::panel, 0.42f), rf.getX(), rf.getBottom(), false));
             g.fillRoundedRectangle (rf, cardRad);
+        }
+        else if (oceanStarTheme())
+        {
+            // 🌌🌊🌅🍁👑 風景・季節コレクション: 背景の銀河・水紋・朝焼け・紅葉と雪が透ける高透過クリスタルガラス＋世界観別カード内質感
+            g.setGradientFill (juce::ColourGradient (Palette::panel.brighter (0.08f).withMultipliedAlpha (cardAlpha), rf.getX(), rf.getY(),
+                                                     Palette::mirrorBot.withMultipliedAlpha (cardAlpha * 0.85f),      rf.getX(), rf.getBottom(), false));
+            g.fillRoundedRectangle (rf, cardRad);
+
+            juce::Path cardClip;
+            cardClip.addRoundedRectangle (rf.reduced (1.5f), cardRad - 1.0f);
+            juce::Graphics::ScopedSaveState cs (g);
+            g.reduceClipRegion (cardClip);
+
+            if (themeMode == 15)
+            {
+                // 🌊 02 碧海: カード内部に揺らめく水紋コースティクス＆上縁のぷるんとした水面メニスカス反射
+                ThemePainter::drawCausticWaveMesh (g, rf, Palette::ice, 0.22f, r.getX() / 40);
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0x55caf0f8), rf.getCentreX(), rf.getY(),
+                                                         juce::Colours::transparentWhite, rf.getCentreX(), rf.getY() + 28.0f, false));
+                g.fillRect (rf.withHeight (28.0f));
+            }
+            else if (themeMode == 14)
+            {
+                // 🌌 01 銀河: カードを斜めに横切る星雲グロー＆微細な星屑
+                g.setGradientFill (juce::ColourGradient (Palette::blue.withAlpha (0.20f), rf.getX() + rf.getWidth() * 0.25f, rf.getBottom() - 20.0f,
+                                                         juce::Colours::transparentBlack, rf.getRight(), rf.getY(), true));
+                g.fillRect (rf);
+                g.setGradientFill (juce::ColourGradient (Palette::salmon.withAlpha (0.16f), rf.getRight() - rf.getWidth() * 0.25f, rf.getY() + 20.0f,
+                                                         juce::Colours::transparentBlack, rf.getX(), rf.getBottom(), true));
+                g.fillRect (rf);
+            }
+            else if (themeMode == 16)
+            {
+                // 🌅 03 朝焼け: カード下辺から立ち昇るゴールデン・サンライズグロー
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0x32ffbe0b), rf.getCentreX(), rf.getBottom(),
+                                                         juce::Colours::transparentBlack, rf.getCentreX(), rf.getY() + rf.getHeight() * 0.35f, false));
+                g.fillRect (rf);
+            }
+            else if (themeMode == 17)
+            {
+                // 🍁 04 晩秋〜初冬: 上辺の白い冬霞ミストと下辺の夕茜リフレクション
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0x24e0f2fe), rf.getCentreX(), rf.getY(),
+                                                         juce::Colours::transparentBlack, rf.getCentreX(), rf.getY() + 42.0f, false));
+                g.fillRect (rf.withHeight (42.0f));
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0x28e04f44), rf.getCentreX(), rf.getBottom(),
+                                                         juce::Colours::transparentBlack, rf.getCentreX(), rf.getBottom() - 64.0f, false));
+                g.fillRect (rf.withTop (rf.getBottom() - 64.0f));
+            }
         }
         else
         {
@@ -1803,21 +2150,74 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             return;
         }
 
-        // 🌿✦ 4. BOTANICAL NATURE / AURORA / BRAND: 二重フィリグリー装飾枠＋四隅ダイヤ星オーナメント
+        // 🌿✦🌌🌊🌅🍁👑 4. BOTANICAL NATURE / AURORA / OCEAN-STAR / BRAND: エッジライト屈折クリスタルガラス＋クロノグラフ隅金具＋世界観別オーナメント
         if (isNatureAura)
         {
-            g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.62f), rf.getX() + 14.0f, (float) (r.getY() + 45),
-                                                     accent.withAlpha (0.10f), rf.getRight() - 14.0f, (float) (r.getY() + 45), false));
-            g.fillRect (rf.getX() + 14.0f, (float) (r.getY() + 45), rf.getWidth() - 28.0f, 1.5f);
-            g.setColour (accent.withAlpha (0.34f));
+            const auto filCol = oceanStarTheme() ? Palette::metalHi : accent;
+            // ヘッダー下部のデュアルトーン・レーザー光導波路ライン
+            g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.88f), rf.getX() + 14.0f, (float) (r.getY() + 45),
+                                                     filCol.withAlpha (0.22f), rf.getRight() - 14.0f, (float) (r.getY() + 45), false));
+            g.fillRect (rf.getX() + 14.0f, (float) (r.getY() + 45), rf.getWidth() - 28.0f, 1.6f);
+
+            // VisionOS / Leica 風の左上ディレクショナル・スペキュラエッジリム光沢
+            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (oceanStarTheme() ? 0.38f : 0.24f), rf.getX(), rf.getY(),
+                                                      filCol.withAlpha (0.08f), rf.getRight(), rf.getBottom(), false));
+            g.drawRoundedRectangle (rf.reduced (1.6f), cardRad - 1.0f, 1.1f);
+
+            g.setColour (filCol.withAlpha (oceanStarTheme() ? 0.50f : 0.34f));
             g.drawRoundedRectangle (rf.reduced (3.8f), cardRad - 2.5f, 1.0f);
-            g.setColour (Palette::panelLn.brighter (0.12f));
-            g.drawRoundedRectangle (rf.reduced (0.5f), cardRad, 1.3f);
-            drawSparkle4 (rf.getX() + 17.0f, rf.getY() + 24.0f, 6.5f, accent);
-            drawSparkle4 (rf.getX() + 10.0f, rf.getY() + 10.0f, 4.0f, accent.withAlpha (0.65f));
-            drawSparkle4 (rf.getRight() - 10.0f, rf.getY() + 10.0f, 4.0f, accent.withAlpha (0.65f));
-            drawSparkle4 (rf.getX() + 10.0f, rf.getBottom() - 10.0f, 4.0f, accent.withAlpha (0.65f));
-            drawSparkle4 (rf.getRight() - 10.0f, rf.getBottom() - 10.0f, 4.0f, accent.withAlpha (0.65f));
+            g.setColour (oceanStarTheme() ? Palette::metalMid.withAlpha (0.85f) : Palette::panelLn.brighter (0.14f));
+            g.drawRoundedRectangle (rf.reduced (0.5f), cardRad, 1.5f);
+
+            // ★ Red Dot クロノグラフ・コーナーラグ金具（四隅のL字精密ベゼルアクセント）
+            if (oceanStarTheme())
+            {
+                const float lugLen = 14.0f;
+                const float inset  = 3.8f;
+                g.setColour (accent.withAlpha (0.78f));
+                // Top-Left & Top-Right
+                g.drawLine (rf.getX() + inset, rf.getY() + cardRad, rf.getX() + inset, rf.getY() + cardRad + lugLen, 2.0f);
+                g.drawLine (rf.getRight() - inset, rf.getY() + cardRad, rf.getRight() - inset, rf.getY() + cardRad + lugLen, 2.0f);
+                // Bottom-Left & Bottom-Right
+                g.drawLine (rf.getX() + inset, rf.getBottom() - cardRad - lugLen, rf.getX() + inset, rf.getBottom() - cardRad, 2.0f);
+                g.drawLine (rf.getRight() - inset, rf.getBottom() - cardRad - lugLen, rf.getRight() - inset, rf.getBottom() - cardRad, 2.0f);
+
+                // 下辺センターのオプティカル・ライトパイプバー
+                const float botBarW = juce::jmin (96.0f, rf.getWidth() * 0.28f);
+                g.setGradientFill (juce::ColourGradient (juce::Colours::transparentWhite, rf.getCentreX() - botBarW * 0.5f, rf.getBottom() - 2.5f,
+                                                         accent.withAlpha (0.82f), rf.getCentreX(), rf.getBottom() - 2.5f, false));
+                g.fillRoundedRectangle (rf.getCentreX() - botBarW * 0.5f, rf.getBottom() - 3.0f, botBarW * 0.5f, 2.0f, 1.0f);
+                g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.82f), rf.getCentreX(), rf.getBottom() - 2.5f,
+                                                         juce::Colours::transparentWhite, rf.getCentreX() + botBarW * 0.5f, rf.getBottom() - 2.5f, false));
+                g.fillRoundedRectangle (rf.getCentreX(), rf.getBottom() - 3.0f, botBarW * 0.5f, 2.0f, 1.0f);
+            }
+
+            if (themeMode == 15)
+            {
+                // 🌊 02 碧海: 見出しとカード四隅にぷるんとした立体3D水滴・気泡を配置
+                ThemePainter::drawWaterDroplet (g, rf.getX() + 17.0f, rf.getY() + 24.0f, 6.8f, accent, 0.92f);
+                ThemePainter::drawWaterDroplet (g, rf.getRight() - 18.0f, rf.getY() + 16.0f, 5.5f, Palette::ice, 0.82f);
+                ThemePainter::drawWaterDroplet (g, rf.getRight() - 30.0f, rf.getY() + 26.0f, 3.4f, Palette::green, 0.78f);
+                ThemePainter::drawWaterDroplet (g, rf.getX() + 14.0f, rf.getBottom() - 14.0f, 4.8f, Palette::ice, 0.76f);
+                ThemePainter::drawWaterDroplet (g, rf.getRight() - 14.0f, rf.getBottom() - 14.0f, 5.2f, accent, 0.78f);
+            }
+            else if (themeMode == 17)
+            {
+                // 🍁 04 晩秋〜初冬: 見出しと四隅に舞い散る紅葉（🍁）と初雪の結晶（❄）
+                ThemePainter::drawMapleLeaf   (g, rf.getX() + 17.0f, rf.getY() + 24.0f, 8.2f, -0.35f, juce::Colour (0xffe11d48), 0.92f);
+                ThemePainter::drawSnowCrystal (g, rf.getRight() - 16.0f, rf.getY() + 16.0f, 6.2f, 0.25f, juce::Colour (0xffe0f2fe), 0.85f);
+                ThemePainter::drawMapleLeaf   (g, rf.getRight() - 34.0f, rf.getY() + 26.0f, 6.8f, 0.65f, juce::Colour (0xfff59e0b), 0.82f);
+                ThemePainter::drawSnowCrystal (g, rf.getX() + 12.0f, rf.getBottom() - 12.0f, 5.2f, 0.0f, juce::Colour (0xffbae6fd), 0.75f);
+                ThemePainter::drawMapleLeaf   (g, rf.getRight() - 14.0f, rf.getBottom() - 14.0f, 6.5f, -0.8f, juce::Colour (0xffea580c), 0.78f);
+            }
+            else
+            {
+                drawSparkle4 (rf.getX() + 17.0f, rf.getY() + 24.0f, 6.8f, accent);
+                drawSparkle4 (rf.getX() + 10.0f, rf.getY() + 10.0f, 4.2f, filCol.withAlpha (0.78f));
+                drawSparkle4 (rf.getRight() - 10.0f, rf.getY() + 10.0f, 4.2f, filCol.withAlpha (0.78f));
+                drawSparkle4 (rf.getX() + 10.0f, rf.getBottom() - 10.0f, 4.2f, filCol.withAlpha (0.78f));
+                drawSparkle4 (rf.getRight() - 10.0f, rf.getBottom() - 10.0f, 4.2f, filCol.withAlpha (0.78f));
+            }
             g.setColour (Palette::ink);
             return;
         }
@@ -1869,43 +2269,70 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     card (overviewMonitor, isLiverStyle ? Palette::salmon : (isYuruStyle ? Palette::yellow : Palette::ice));
     g.setColour (Palette::ink);
     const bool hasSwatches = ! coutureSwatchRects[0].isEmpty();
-    const juce::String monTitle = (overviewLayoutMode == 3)
+    const juce::String monTitle = (accessMode == 1)
+        ? language->T ("◉ 声の4方向バランス調整 ＆ 周波数グラフ（くっきり・大文字）", "◉ 4-WAY VOICE BALANCE & EQ SPECTRUM (HIGH CONTRAST)")
+        : (accessMode == 2)
+        ? language->T ("★ 丸を動かすだけで声のキャラクターを直感調整（3ステップガイド）", "★ DRAG THE ORB TO SHAPE YOUR VOICE (3-STEP GUIDE)")
+        : (accessMode == 3)
+        ? language->T ("● 2軸パラメータ座標パッド (X:倍音/高域 ・ Y:近接/空間幅) ＆ 周波数特性", "● 2D PARAMETER MATRIX & FREQUENCY RESPONSE")
+        : (overviewLayoutMode == 3)
         ? language->T ("音の輪郭", "SPECTRUM")
         : isLiverStyle
         ? (hasSwatches ? language->T ("♥ クチュール・パクト", "COUTURE COMPACT")
                        : language->T ("♥ クチュール・クッションパクト ＆ 歌声ステージRTA", "COUTURE CUSHION COMPACT & STAGE RTA"))
         : isYuruStyle
-        ? language->T ("🍰 パティスリー・ガラスドーム ＆ 歌声カフェRTA", "PATISSERIE GLASS DOME & SPECTRUM")
+        ? language->T ("★ パティスリー・ガラスドーム ＆ 歌声カフェRTA", "PATISSERIE GLASS DOME & SPECTRUM")
+        : oceanStarTheme()
+        ? (overviewLayoutMode == 2
+            ? (themeMode == 14 ? language->T ("🌌 銀河天球", "GALAXY ORB")
+             : themeMode == 15 ? language->T ("🌊 碧海水球", "AQUA ORB")
+             : themeMode == 16 ? language->T ("🌅 朝焼天球", "DAWN ORB")
+             : themeMode == 17 ? language->T ("🍁 晩秋水鏡", "AUTUMN ORB")
+                               : language->T ("👑 蒼劇天球", "OPERA ORB"))
+            : (themeMode == 14 ? language->T ("🌌 天の川銀河天球", "GALACTIC MILKY WAY ORB")
+             : themeMode == 15 ? language->T ("🌊 瑞々しい碧海水球", "LUSH AQUA WATER ORB")
+             : themeMode == 16 ? language->T ("🌅 朝焼けの暁天球", "RADIANT DAWN SUNRISE ORB")
+             : themeMode == 17 ? language->T ("🍁 晩秋と初雪の水鏡", "AUTUMN & FIRST SNOW MIRROR")
+                               : language->T ("👑 蒼海オペラ天球", "GRAND OPERA SAPPHIRE ORB")))
         : (themeMode == 2)
-        ? language->T ("🌿 四季の水紋オーブ ＆ 音の輪郭モニター", "BOTANICAL WATER ORB & SPECTRUM")
+        ? language->T ("✦ 四季の水紋オーブ ＆ 音の輪郭モニター", "BOTANICAL WATER ORB & SPECTRUM")
         : (themeMode == 4)
         ? language->T ("✦ 星屑プラネタリウム天球儀 ＆ 輪郭モニター", "CELESTIAL ASTROLABE & SPECTRUM")
         : isStudioStyle
-        ? language->T ("🎛 アナログ位相ゴニオメーター ＆ スペクトラム RTA", "ANALOG GONIOMETER & RTA")
+        ? language->T ("◆ アナログ位相ゴニオメーター ＆ スペクトラム RTA", "ANALOG GONIOMETER & RTA")
         : language->T ("ARGON 3D 回転トラッカーボール ＆ 4軸トリガー機関", "ARGON 3D TRACKBALL & 4-AXIS TRIGGER");
     auto monTitleRect = overviewMonitor.reduced (28, 8).withHeight (28);
     if (hasSwatches)
         monTitleRect.setRight (juce::jmax (monTitleRect.getX() + 60, coutureSwatchRects[0].getX() - 6));
-    fitText (g, monTitle, monTitleRect, juce::Justification::centredLeft, 16.0f, true);
+    fitText (g, monTitle, monTitleRect, juce::Justification::centredLeft, (accessMode == 1) ? 17.5f : 16.0f, true);
 
-    // ---- 💄 クチュール・コスメ 5色ワンタッチ・ジュエルスウォッチピル描画 ----
+    // ---- 💄 クチュール・コスメ / 🌌 風景・季節コレクション 5色ワンタッチ・ジュエルスウォッチピル描画 ----
     if (hasSwatches)
     {
-        struct SwatchDef { juce::uint32 bgTop, bgBot, gem, rim, ink; const char* ja; const char* en; };
+        struct SwatchDef { juce::uint32 bgTop, bgBot, gem, rim, ink; const char* ja; const char* jaShort; const char* en; const char* enShort; };
         static const SwatchDef kSw[5] = {
-            { 0xfffff4f7, 0xfff8dce8, 0xffd63264, 0xffd4967a, 0xff44182b, "01ロゼ", "01RS" },
-            { 0xfff6f5ff, 0xffe2dff8, 0xff6b52dc, 0xff9aa6c6, 0xff262042, "02氷紫", "02LI" },
-            { 0xff2f1f34, 0xff1c131e, 0xfff43868, 0xffc88ca8, 0xfffcecf4, "03黒姫", "03NR" },
-            { 0xfff2fcf9, 0xffd4efe6, 0xff229a82, 0xffcfa262, 0xff163830, "04翡翠", "04MT" },
-            { 0xfffff8f1, 0xfffce0c8, 0xffe66b30, 0xffda9c48, 0xff462416, "05白桃", "05PC" }
+            { 0xfffff4f7, 0xfff8dce8, 0xffd63264, 0xffd4967a, 0xff44182b, "01ロゼ", "ロゼ", "01RS", "RS" },
+            { 0xfff6f5ff, 0xffe2dff8, 0xff6b52dc, 0xff9aa6c6, 0xff262042, "02氷紫", "氷紫", "02LI", "LI" },
+            { 0xff2f1f34, 0xff1c131e, 0xfff43868, 0xffc88ca8, 0xfffcecf4, "03黒姫", "黒姫", "03NR", "NR" },
+            { 0xfff2fcf9, 0xffd4efe6, 0xff229a82, 0xffcfa262, 0xff163830, "04翡翠", "翡翠", "04MT", "MT" },
+            { 0xfffff8f1, 0xfffce0c8, 0xffe66b30, 0xffda9c48, 0xff462416, "05白桃", "白桃", "05PC", "PC" }
         };
+        static const SwatchDef kOceanSw[5] = {
+            { 0xff181648, 0xff070a24, 0xfffde047, 0xffa855f7, 0xfffffaed, "01銀河", "銀河", "01MW", "MW" },
+            { 0xff0077b6, 0xff032b44, 0xff00f5d4, 0xff72efdd, 0xfff2feff, "02碧海", "碧海", "02AQ", "AQ" },
+            { 0xff5a1e48, 0xff2b1432, 0xffffbe0b, 0xffff6b8b, 0xfffff8f2, "03朝焼", "朝焼", "03DW", "DW" },
+            { 0xff2b2236, 0xff161828, 0xffe11d48, 0xffbae6fd, 0xfff9f3ec, "04晩秋", "晩秋", "04AU", "AU" },
+            { 0xff0d2864, 0xff05102e, 0xfff2c94c, 0xff3b82f6, 0xfffff8eb, "05蒼劇", "蒼劇", "05OP", "OP" }
+        };
+        const bool isCoutureSw = liverTheme() || (overviewLayoutMode == 1 && ! oceanStarTheme() && themeMode != 2 && themeMode != 4);
         for (int c = 0; c < 5; ++c)
         {
             const auto sr = coutureSwatchRects[(size_t) c];
             const auto srf = sr.toFloat();
             const float sRad = srf.getHeight() * 0.5f;
-            const bool active = (themeMode == Palette::themeOfCouture (c));
-            const auto& d = kSw[c];
+            const bool active = isCoutureSw ? (themeMode == Palette::themeOfCouture (c))
+                                            : (themeMode == Palette::themeOfOceanStar (c));
+            const auto& d = isCoutureSw ? kSw[c] : kOceanSw[c];
 
             if (! liteMode)
             {
@@ -1929,8 +2356,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             g.drawRoundedRectangle (srf.reduced (0.6f), sRad, active ? 2.0f : 1.2f);
 
             g.setColour (juce::Colour (d.ink));
-            fitText (g, juce::String::fromUTF8 (language->english ? d.en : d.ja),
-                     sr.withTrimmedLeft (12).reduced (1, 0), juce::Justification::centred, 14.0f, true);
+            const bool compactSw = (sr.getWidth() < 52);
+            const char* swTxt = language->english ? (compactSw ? d.enShort : d.en)
+                                                  : (compactSw ? d.jaShort : d.ja);
+            fitText (g, juce::String::fromUTF8 (swTxt),
+                     sr.withTrimmedLeft (11).reduced (1, 0), juce::Justification::centred, 14.0f, true);
         }
     }
 
@@ -1969,6 +2399,54 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             g.drawLine (cx, cy, ox, oy, 2.0f);
             g.setColour (isLiverStyle ? Palette::salmon : Palette::yellow);
             g.fillEllipse (ox - 9.0f, oy - 9.0f, 18.0f, 18.0f);
+        }
+        else if (accessMode > 0)
+        {
+            // ★ ユニバーサル・アクセシビリティ 2Dパッド描画（反射・眩しさゼロ、明快な4方向ガイド＆大型ターゲット）
+            g.setColour (Palette::bgTop);
+            g.fillRoundedRectangle (padF, 12.0f);
+            g.setColour (Palette::panelLn);
+            g.drawRoundedRectangle (padF.reduced (0.8f), 12.0f, (accessMode == 1) ? 2.2f : 1.4f);
+
+            // 同心円リファレンスリングと十字軸
+            g.setColour (Palette::panel2);
+            g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+            g.setColour (Palette::panelLn.withAlpha ((accessMode == 1) ? 0.85f : 0.55f));
+            g.drawEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f, (accessMode == 1) ? 2.2f : 1.4f);
+            g.drawEllipse (cx - ballR * 0.55f, cy - ballR * 0.55f, ballR * 1.1f, ballR * 1.1f, 1.1f);
+            g.drawLine (cx - ballR, cy, cx + ballR, cy, (accessMode == 1) ? 1.6f : 1.1f);
+            g.drawLine (cx, cy - ballR, cx, cy + ballR, (accessMode == 1) ? 1.6f : 1.1f);
+
+            // 中心から現在位置への太いベクトルラインと大型ターゲットマーカー
+            g.setColour (Palette::ice);
+            g.drawLine (cx, cy, ox, oy, (accessMode == 1) ? 3.6f : 2.2f);
+            const float puckR = (accessMode == 1) ? 13.0f : 10.5f;
+            g.setColour ((accessMode == 3) ? Palette::green : Palette::yellow);
+            g.fillEllipse (ox - puckR, oy - puckR, puckR * 2.0f, puckR * 2.0f);
+            g.setColour ((accessMode == 1) ? juce::Colours::white : Palette::bgTop);
+            g.drawEllipse (ox - puckR, oy - puckR, puckR * 2.0f, puckR * 2.0f, (accessMode == 1) ? 2.6f : 1.8f);
+            g.setColour (Palette::bgTop);
+            g.fillEllipse (ox - 3.5f, oy - 3.5f, 7.0f, 7.0f);
+
+            // 上下左右の4方向ラベル（老眼モードは特大・高コントラスト、ASDモードは文字通りの機能名）
+            g.setColour (Palette::ink);
+            const float dirFont = (accessMode == 1) ? 15.0f : 13.5f;
+            fitText (g, (accessMode == 3) ? language->T ("▲ Y+: 近接・高密度", "▲ UP: NEAR")
+                                          : language->T ("▲ 上: 近い声・耳元", "▲ UP: CLOSE"),
+                     juce::Rectangle<int> ((int) padF.getX() + 8, (int) padF.getY() + 2, (int) padF.getWidth() - 16, 20),
+                     juce::Justification::centred, dirFont, true);
+            fitText (g, (accessMode == 3) ? language->T ("▼ Y-: 左右空間拡大", "▼ DOWN: WIDTH")
+                                          : language->T ("▼ 下: 立体的に広がる", "▼ DOWN: WIDE"),
+                     juce::Rectangle<int> ((int) padF.getX() + 8, (int) padF.getBottom() - 22, (int) padF.getWidth() - 16, 20),
+                     juce::Justification::centred, dirFont, true);
+            g.setColour (Palette::salmon);
+            fitText (g, (accessMode == 3) ? language->T ("◀倍音", "◀WARM") : language->T ("◀温かさ", "◀WARM"),
+                     juce::Rectangle<int> ((int) padF.getX() + 4, (int) cy - 11, 68, 22),
+                     juce::Justification::centredLeft, dirFont, true);
+            g.setColour (Palette::ice);
+            fitText (g, (accessMode == 3) ? language->T ("高域▶", "AIR▶") : language->T ("明るさ▶", "AIR▶"),
+                     juce::Rectangle<int> ((int) padF.getRight() - 72, (int) cy - 11, 68, 22),
+                     juce::Justification::centredRight, dirFont, true);
         }
         else if (isLiverStyle)
         {
@@ -2377,30 +2855,56 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             //   - isStudioStyle (Studio Pro): 真鍮ベゼル＆琥珀色リサジュー位相ゴニオメーター
             //   - isSciFiStyle (Argon/Neon): 削り出しチタン・ジンバル＆3D回転トラッカーボール
             // =========================================================================
-            const auto deckBgTop = pastelTheme() ? Palette::panel2.darker (0.04f) : Palette::bgTop.darker (0.48f);
-            const auto deckBgBot = pastelTheme() ? Palette::panel.darker  (0.08f) : Palette::panel.darker (0.30f);
+            const auto deckBgTop = oceanStarTheme() ? Palette::mirrorTop.withAlpha (0.36f)
+                                 : pastelTheme()    ? Palette::panel2.darker (0.04f) : Palette::bgTop.darker (0.48f);
+            const auto deckBgBot = oceanStarTheme() ? Palette::mirrorBot.withAlpha (0.48f)
+                                 : pastelTheme()    ? Palette::panel.darker  (0.08f) : Palette::panel.darker (0.30f);
             g.setGradientFill (juce::ColourGradient (deckBgTop, padF.getX(), padF.getY(),
                                                      deckBgBot, padF.getRight(), padF.getBottom(), false));
             g.fillRoundedRectangle (padF, 14.0f);
-            g.setColour (isStudioStyle ? Palette::yellow.withAlpha (0.55f) : Palette::panelLn.withAlpha (0.65f));
+            g.setColour (oceanStarTheme() ? Palette::metalMid.withAlpha (0.68f)
+                       : isStudioStyle    ? Palette::yellow.withAlpha (0.55f) : Palette::panelLn.withAlpha (0.65f));
             g.drawRoundedRectangle (padF.reduced (0.5f), 14.0f, 1.2f);
 
-            // 外周の3D回転ガイド軌道アーク
-            const auto rimAccent = (isStudioStyle || themeMode == 3) ? Palette::yellow : Palette::ice;
+            // 外周の3D回転ガイド軌道アーク ＆ 32バンド・ポーラースペクトラム光冠ハロー
+            const auto rimAccent = oceanStarTheme() ? Palette::metalHi
+                                 : (isStudioStyle || themeMode == 3) ? Palette::yellow : Palette::ice;
             for (int q = 0; q < 4; ++q)
             {
                 const float qa = (float) q * juce::MathConstants<float>::halfPi + 0.785f;
                 juce::Path orbitArc;
-                orbitArc.addCentredArc (cx, cy, socketR + 5.5f, socketR + 5.5f, 0.0f,
-                                        qa - 0.32f, qa + 0.32f, true);
-                g.setColour (rimAccent.withAlpha (0.32f));
-                g.strokePath (orbitArc, juce::PathStrokeType (1.2f));
+                orbitArc.addCentredArc (cx, cy, socketR + 6.5f, socketR + 6.5f, 0.0f,
+                                        qa - 0.34f, qa + 0.34f, true);
+                g.setColour (rimAccent.withAlpha (0.45f));
+                g.strokePath (orbitArc, juce::PathStrokeType (1.4f));
+            }
+            // ★ 32本の放射状ポーラー倍音スペクトラム・ハローバー（歌声と4軸エネルギーに呼応して天球外周が脈動）
+            for (int sb = 0; sb < 32; ++sb)
+            {
+                const float sa = (float) sb * juce::MathConstants<float>::twoPi / 32.0f;
+                const float dirW = 0.5f + 0.5f * std::cos (sa - std::atan2 (oy - cy, ox - cx));
+                const float waveMod = 0.5f + 0.5f * std::sin ((float) sb * 1.7f + (vVal + sVal) * 0.05f);
+                const float barEnergy = juce::jlimit (0.15f, 1.0f,
+                    0.22f + 0.42f * dirW + 0.25f * waveMod + (vAct + fAct + sAct + hAct) * 0.25f);
+                const float rIn  = socketR + 1.8f;
+                const float rOut = rIn + 2.5f + barEnergy * 7.5f;
+                const juce::Colour barCol = (sb % 4 == 0) ? Palette::yellow
+                                          : (sb % 2 == 0) ? Palette::ice : Palette::salmon;
+                g.setColour (barCol.withAlpha (0.32f + barEnergy * 0.52f));
+                g.drawLine (cx + std::cos (sa) * rIn,  cy + std::sin (sa) * rIn,
+                            cx + std::cos (sa) * rOut, cy + std::sin (sa) * rOut,
+                            (sb % 4 == 0) ? 2.0f : 1.3f);
             }
 
-            // 2. ソケットリング（Studio/Brandは真鍮ゴールド、Natureはエメラルド/ゴールド、Argonはチタン）
+            // 2. ソケットリング（OceanStarは天球アストロラーベ金環、Studio/Brandは真鍮ゴールド、Natureはエメラルド/ゴールド、Argonはチタン）
             g.setColour (juce::Colours::black.withAlpha (pastelTheme() ? 0.18f : 0.55f));
             g.fillEllipse (cx - socketR - 2.0f, cy - socketR + 2.0f, (socketR + 2.0f) * 2.0f, (socketR + 2.0f) * 2.0f);
-            if (isStudioStyle || themeMode == 3)
+            if (oceanStarTheme())
+            {
+                g.setGradientFill (juce::ColourGradient (Palette::metalHi,   cx - socketR, cy - socketR,
+                                                         Palette::metalDark, cx + socketR, cy + socketR, false));
+            }
+            else if (isStudioStyle || themeMode == 3)
             {
                 g.setGradientFill (juce::ColourGradient (juce::Colour (0xffd8b268), cx - socketR, cy - socketR,
                                                          juce::Colour (0xff59421c), cx + socketR, cy + socketR, false));
@@ -2457,16 +2961,80 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                 juce::Graphics::ScopedSaveState clipState (g);
                 g.reduceClipRegion (sphereClip);
 
-                const auto spTop = (themeMode == 2) ? juce::Colour (0xffe8f6ee)
-                                 : isStudioStyle    ? juce::Colour (0xff2c2419)
-                                                    : Palette::panel2.brighter (0.20f);
-                const auto spBot = (themeMode == 2) ? juce::Colour (0xffb8dec8)
-                                 : isStudioStyle    ? juce::Colour (0xff120e0a)
-                                                    : Palette::bgBot.darker (0.68f);
+                const auto spTop = (themeMode == 15) ? juce::Colour (0xff00f5d4)
+                                 : oceanStarTheme()  ? Palette::mirrorTop.brighter (0.18f)
+                                 : (themeMode == 2)  ? juce::Colour (0xffe8f6ee)
+                                 : isStudioStyle     ? juce::Colour (0xff2c2419)
+                                                     : Palette::panel2.brighter (0.20f);
+                const auto spBot = (themeMode == 15) ? juce::Colour (0xff023e8a)
+                                 : oceanStarTheme()  ? Palette::mirrorBot.darker (0.25f)
+                                 : (themeMode == 2)  ? juce::Colour (0xffb8dec8)
+                                 : isStudioStyle     ? juce::Colour (0xff120e0a)
+                                                     : Palette::bgBot.darker (0.68f);
                 g.setGradientFill (juce::ColourGradient (
                     spTop, ox * 0.6f + cx * 0.4f, oy * 0.6f + cy * 0.4f,
                     spBot, cx + (cx - ox) * 0.9f, cy + (cy - oy) * 0.9f, true));
                 g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+
+                // 🌌🌊🌅🍁👑 風景・季節コレクション専用：中央3Dオーブ内の世界観ジオラマ描画
+                if (themeMode == 15)
+                {
+                    // 🌊 02 瑞々しい碧海: ぷるんとした水球内のコースティクス水紋＋下部メニスカス反射＋6個の気泡
+                    ThemePainter::drawCausticWaveMesh (g, { cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f },
+                                                       juce::Colour (0xffcaf0f8), 0.46f, 2);
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0xaa90f1ef), cx, cy + ballR * 0.92f,
+                                                             juce::Colours::transparentBlack, cx, cy + ballR * 0.15f, false));
+                    g.fillEllipse (cx - ballR * 0.88f, cy - ballR * 0.50f, ballR * 1.76f, ballR * 1.40f);
+                    for (int b = 0; b < 6; ++b)
+                    {
+                        const float bx = cx + (ThemePainter::hash01 (b * 19 + 3) - 0.5f) * ballR * 1.35f;
+                        const float by = cy + (ThemePainter::hash01 (b * 19 + 11) - 0.5f) * ballR * 1.35f;
+                        ThemePainter::drawWaterDroplet (g, bx, by, 3.2f + 4.5f * ThemePainter::hash01 (b * 19 + 23),
+                                                        juce::Colour (0xff48cae4), 0.85f);
+                    }
+                }
+                else if (themeMode == 14)
+                {
+                    // 🌌 01 天の川銀河: 球体内部を斜めに横切る天の川ネビュラと星屑
+                    juce::Path galBand;
+                    galBand.startNewSubPath (cx - ballR * 0.9f, cy + ballR * 0.65f);
+                    galBand.quadraticTo (cx, cy - ballR * 0.10f, cx + ballR * 0.9f, cy - ballR * 0.65f);
+                    g.setColour (juce::Colour (0x55ec4899));
+                    g.strokePath (galBand, juce::PathStrokeType (ballR * 0.42f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    g.setColour (juce::Colour (0x6638bdf8));
+                    g.strokePath (galBand, juce::PathStrokeType (ballR * 0.22f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    for (int s = 0; s < 24; ++s)
+                    {
+                        const float sx = cx + (ThemePainter::hash01 (s * 17 + 5) - 0.5f) * ballR * 1.6f;
+                        const float sy = cy + (ThemePainter::hash01 (s * 17 + 13) - 0.5f) * ballR * 1.6f;
+                        g.setColour ((s % 3 == 0) ? juce::Colour (0xfffef08a) : juce::Colours::white);
+                        g.fillEllipse (sx - 1.2f, sy - 1.2f, 2.4f, 2.4f);
+                    }
+                }
+                else if (themeMode == 16)
+                {
+                    // 🌅 03 朝焼けの海: 球体赤道から昇る黄金の朝日と海面リフレクション
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0x99ffbe0b), cx, cy + ballR * 0.12f,
+                                                             juce::Colours::transparentBlack, cx + ballR * 0.78f, cy + ballR * 0.12f, true));
+                    g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+                    for (int rp = 0; rp < 7; ++rp)
+                    {
+                        const float ry = cy + ballR * (0.16f + 0.10f * (float) rp);
+                        const float rw = ballR * (0.68f - 0.06f * (float) rp);
+                        g.setColour (juce::Colour (0xfffff3b0).withAlpha (0.58f - (float) rp * 0.06f));
+                        g.drawLine (cx - rw, ry, cx + rw, ry, 1.6f);
+                    }
+                }
+                else if (themeMode == 17)
+                {
+                    // 🍁 04 晩秋〜初冬: 球体内に舞う紅葉（🍁）と初雪の結晶（❄）と水鏡波紋
+                    g.setColour (juce::Colour (0x55bae6fd));
+                    g.drawEllipse (cx - ballR * 0.65f, cy + ballR * 0.18f, ballR * 1.30f, ballR * 0.34f, 1.2f);
+                    ThemePainter::drawMapleLeaf   (g, cx - ballR * 0.35f, cy - ballR * 0.18f, 7.5f, -0.4f, juce::Colour (0xffe11d48), 0.88f);
+                    ThemePainter::drawMapleLeaf   (g, cx + ballR * 0.32f, cy + ballR * 0.25f, 6.8f,  0.6f, juce::Colour (0xfff59e0b), 0.85f);
+                    ThemePainter::drawSnowCrystal (g, cx + ballR * 0.28f, cy - ballR * 0.34f, 6.2f,  0.2f, juce::Colour (0xffe0f2fe), 0.88f);
+                    ThemePainter::drawSnowCrystal (g, cx - ballR * 0.24f, cy + ballR * 0.32f, 5.4f,  0.7f, juce::Colour (0xffbae6fd), 0.82f);
+                }
 
                 // Studio Pro: ヴィンテージCRTゴニオメーターのX/Y軸＆位相対角線目盛り
                 if (isStudioStyle)
@@ -2558,6 +3126,30 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                     g.strokePath (lonPath, juce::PathStrokeType (isPrime ? 1.8f : 1.0f));
                 }
 
+                // ★ 球体中心 (cx, cy) から操作極 (ox, oy) へ伸びる「コメット・テイル（彗星軌道・水流ストリーム）」
+                if (std::hypot (ox - cx, oy - cy) > 4.0f)
+                {
+                    const float ctrlX = (cx + ox) * 0.5f - (oy - cy) * 0.22f;
+                    const float ctrlY = (cy + oy) * 0.5f + (ox - cx) * 0.22f;
+                    juce::Path cometArc;
+                    cometArc.startNewSubPath (cx, cy);
+                    cometArc.quadraticTo (ctrlX, ctrlY, ox, oy);
+                    g.setColour (Palette::ice.withAlpha (0.35f));
+                    g.strokePath (cometArc, juce::PathStrokeType (4.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    g.setColour (Palette::yellow.withAlpha (0.85f));
+                    g.strokePath (cometArc, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    for (int tn = 1; tn <= 5; ++tn)
+                    {
+                        const float tt = (float) tn / 6.0f;
+                        const float omt = 1.0f - tt;
+                        const float tx = omt * omt * cx + 2.0f * omt * tt * ctrlX + tt * tt * ox;
+                        const float ty = omt * omt * cy + 2.0f * omt * tt * ctrlY + tt * tt * oy;
+                        const float tr = 1.4f + tt * 2.2f;
+                        g.setColour (juce::Colours::white.withAlpha (0.35f + tt * 0.55f));
+                        g.fillEllipse (tx - tr, ty - tr, tr * 2.0f, tr * 2.0f);
+                    }
+                }
+
                 // 球面上の操作極 (ox, oy) を囲む3Dエネルギー・レティクル（Natureでは多重水紋リング）
                 const float inLv = juce::jlimit (0.0f, 1.0f, processor.getInputLevel() * 3.5f);
                 const float pulseR = 14.0f + (vAct + fAct + sAct + hAct + inLv) * 10.0f;
@@ -2627,24 +3219,46 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             g.drawEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f, 1.6f);
         }
 
-        // 四隅・上下のHUD軸ラベル（球体ソケットと重ならないよう上下22px帯と下隅に配置）
-        const bool compactPad = (argonPadRect.getWidth() < 240);
-        g.setColour (Palette::ink.withAlpha (0.92f));
-        fitText (g, compactPad ? language->T ("◀倍音", "<VELV") : language->T ("◀ ベルベット", "< VELVET"),
-                 argonPadRect.withWidth (compactPad ? 62 : 94).withHeight (20).translated (6, (int) (padF.getHeight() - 40.0f)),
-                 juce::Justification::centredLeft, 14.0f, true);
-        fitText (g, compactPad ? language->T ("空気▶", "SILK>") : language->T ("シルク空気 ▶", "SILK AIR >"),
-                 argonPadRect.withX (argonPadRect.getRight() - (compactPad ? 68 : 100)).withWidth (compactPad ? 62 : 94).withHeight (20).translated (0, (int) (padF.getHeight() - 40.0f)),
-                 juce::Justification::centredRight, 14.0f, true);
-        fitText (g, language->T ("▲ 声芯フォーカス・近接", "^ FOCUS & ASMR"),
-                 argonPadRect.withHeight (20).reduced (10, 0).translated (0, 2),
-                 juce::Justification::centred, 14.0f, true);
-        fitText (g, language->T ("▼ 3D立体ステージハロー", "v 3D STAGE HALO"),
-                 argonPadRect.withY (argonPadRect.getBottom() - 21).withHeight (20).reduced (10, 0),
-                 juce::Justification::centred, 14.0f, true);
+        // ★ Red Dot 四隅マイクロテレメトリ・インジケーターバー（左上=VELVET、右上=SILK、左下=FOCUS、右下=HALO）
+        if (! liteMode && argonPadRect.getWidth() >= 230)
+        {
+            const float cVals[4] = { vVal, sVal, fVal, hVal };
+            const juce::Colour cCols[4] = { Palette::salmon, Palette::ice, Palette::yellow, Palette::blue };
+            const float cxs[4] = { padF.getX() + 8.0f, padF.getRight() - 46.0f, padF.getX() + 8.0f, padF.getRight() - 46.0f };
+            const float cys[4] = { padF.getY() + 24.0f, padF.getY() + 24.0f, padF.getBottom() - 46.0f, padF.getBottom() - 46.0f };
+            for (int c = 0; c < 4; ++c)
+            {
+                const juce::Rectangle<float> cr (cxs[c], cys[c], 38.0f, 5.0f);
+                g.setColour (Palette::bgTop.darker (0.45f).withAlpha (0.72f));
+                g.fillRoundedRectangle (cr, 2.5f);
+                g.setColour (cCols[c].withAlpha (0.88f));
+                g.fillRoundedRectangle (cr.withWidth (juce::jmax (4.0f, cr.getWidth() * juce::jlimit (0.0f, 1.0f, cVals[c] * 0.01f))), 2.5f);
+                g.setColour (Palette::metalMid.withAlpha (0.55f));
+                g.drawRoundedRectangle (cr, 2.5f, 0.8f);
+            }
+        }
+
+        // 四隅・上下のHUD軸ラベル（球体ソケットと重ならないよう上下22px帯と下隅に配置。アクセシビリティ時は専用ラベルを描画済み）
+        if (accessMode == 0)
+        {
+            const bool compactPad = (argonPadRect.getWidth() < 240);
+            g.setColour (Palette::ink.withAlpha (0.92f));
+            fitText (g, compactPad ? language->T ("◀倍音", "<VELV") : language->T ("◀ ベルベット", "< VELVET"),
+                     argonPadRect.withWidth (compactPad ? 62 : 94).withHeight (20).translated (6, (int) (padF.getHeight() - 40.0f)),
+                     juce::Justification::centredLeft, 14.0f, true);
+            fitText (g, compactPad ? language->T ("空気▶", "SILK>") : language->T ("シルク空気 ▶", "SILK AIR >"),
+                     argonPadRect.withX (argonPadRect.getRight() - (compactPad ? 68 : 100)).withWidth (compactPad ? 62 : 94).withHeight (20).translated (0, (int) (padF.getHeight() - 40.0f)),
+                     juce::Justification::centredRight, 14.0f, true);
+            fitText (g, language->T ("▲ 声芯フォーカス・近接", "^ FOCUS & ASMR"),
+                     argonPadRect.withHeight (20).reduced (10, 0).translated (0, 2),
+                     juce::Justification::centred, 14.0f, true);
+            fitText (g, language->T ("▼ 3D立体ステージハロー", "v 3D STAGE HALO"),
+                     argonPadRect.withY (argonPadRect.getBottom() - 21).withHeight (20).reduced (10, 0),
+                     juce::Justification::centred, 14.0f, true);
+        }
     }
 
-    // ---- ★ Argon Velvet Engine 4本のフェーダー（ペルソナ別にハート宝石チャーム／マカロンキャンディ／3Dメカトリガーを描き分け） ----
+    // ---- ★ Argon Velvet Engine 4本のフェーダー（ペルソナ別にハート宝石チャーム／マカロンキャンディ／24セグメント光導波路フェーダーを描き分け） ----
     if (! argonBarRects[0].isEmpty())
     {
         const float vals[4] = { vVal, fVal, sVal, hVal };
@@ -2674,13 +3288,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             else if (kawaiiBars)
             {
                 // ♥🍰 V-Liver / Yuru-fuwa: クチュール・リップグロス／リキッドファンデーション・ガラスバイアル（貴金属キャップ付き）
-                // 1. ガラスバイアル外筒（厚手クリスタルガラスの奥行きとクッションファンデ／ベルベット色）
                 g.setGradientFill (juce::ColourGradient (
                     nightTheme() ? Palette::panel2.darker (0.18f) : Palette::panel.brighter (0.05f), rf.getX(), rf.getY(),
                     nightTheme() ? Palette::panel.darker (0.08f)  : Palette::panel2,                 rf.getX(), rf.getBottom(), false));
                 g.fillRoundedRectangle (rf, barRad);
 
-                // 2. 左端のフルーテッド貴金属・アプリケーターキャップ（ローズゴールド／プラチナ／アンティーク／シャンパン／24Kハニー）
                 const float goldCapW = 10.0f;
                 const juce::Rectangle<float> goldCapR (rf.getX() + 1.0f, rf.getY() + 1.0f, goldCapW, rf.getHeight() - 2.0f);
                 g.setGradientFill (juce::ColourGradient (Palette::metalHi,  goldCapR.getX(), goldCapR.getY(),
@@ -2689,7 +3301,6 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                 g.setColour (Palette::metalDark.withAlpha (0.65f));
                 g.drawLine (goldCapR.getRight(), goldCapR.getY() + 1.5f, goldCapR.getRight(), goldCapR.getBottom() - 1.5f, 1.2f);
 
-                // 3. リキッド・グロス／サテンピグメント充填バー
                 const float tubeX = rf.getX() + goldCapW + 1.5f;
                 const float tubeMaxW = juce::jmax (8.0f, rf.getRight() - tubeX - 3.0f);
                 const int fillW = juce::roundToInt (tubeMaxW * norm);
@@ -2700,7 +3311,6 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                                                              barCols[b].withAlpha (0.78f), fillRf.getRight(), fillRf.getY(), false));
                     g.fillRoundedRectangle (fillRf, (rf.getHeight() - 4.4f) * 0.45f);
 
-                    // グロス液面の斜めシマースパークル帯
                     juce::Path clipP;
                     clipP.addRoundedRectangle (fillRf, (rf.getHeight() - 4.4f) * 0.45f);
                     juce::Graphics::ScopedSaveState ss (g);
@@ -2710,14 +3320,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                         g.drawLine (sx, fillRf.getBottom(), sx + 9.0f, fillRf.getY(), 2.4f);
                 }
 
-                // 4. クリスタルガラス管の上部ハイグロス反射ストリップ
                 g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (nightTheme() ? 0.24f : 0.78f),
                                                          tubeX + 4.0f, rf.getY() + 1.8f,
                                                          juce::Colours::transparentWhite,
                                                          tubeX + 4.0f, rf.getY() + rf.getHeight() * 0.48f, false));
                 g.fillRoundedRectangle (tubeX + 2.0f, rf.getY() + 1.8f, tubeMaxW - 6.0f, rf.getHeight() * 0.36f, 3.0f);
 
-                // 5. スライダーチャームつまみ（V-Liverは貴金属縁ハート宝石、ゆるふわは焦がしキャラメル縁マカロン）
                 const float cxCap = tubeX + 6.0f + norm * (tubeMaxW - 12.0f);
                 const float cyCap = rf.getCentreY();
                 if (isLiverStyle)
@@ -2741,62 +3349,82 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             }
             else
             {
-                // フェーダーベゼル外枠と上下のガイドレール（中央テキスト帯を横切る黒溝を廃止し文字の視認性を100%確保）
-                g.setColour (pastelTheme() ? Palette::panel2.darker (0.05f) : Palette::bgTop.darker (0.28f).withAlpha (0.90f));
+                // ★ Red Dot 仕様: 24セグメント・オプティカルライトパイプ・タッチフェーダー
+                g.setColour (pastelTheme() ? Palette::panel2.darker (0.05f) : Palette::bgTop.darker (0.48f).withAlpha (0.94f));
                 g.fillRoundedRectangle (rf, 6.5f);
-                g.setColour (Palette::panelLn.withAlpha (0.45f));
-                g.fillRect (rf.getX() + 6.0f, rf.getY() + 1.5f, rf.getWidth() - 12.0f, 1.2f);
-                g.fillRect (rf.getX() + 6.0f, rf.getBottom() - 2.7f, rf.getWidth() - 12.0f, 1.2f);
 
-                // 上下の精密フェーダー目盛り刻み
-                g.setColour (Palette::inkSoft.withAlpha (0.32f));
-                for (int t = 1; t < 10; ++t)
+                // 24個のマイクロLEDライトパイプセル（ラベル領域と右端%表示の間を精密切削）
+                const float lblW = juce::jmin (90.0f, rf.getWidth() * 0.44f);
+                const float pctW = 46.0f;
+                const float trkX = rf.getX() + lblW + 3.0f;
+                const float trkW = juce::jmax (24.0f, rf.getWidth() - lblW - pctW - 6.0f);
+                const int numCells = (trkW >= 72.0f) ? 20 : 10;
+                const float cellStep = trkW / (float) numCells;
+                const float cellW    = juce::jmax (1.8f, cellStep - 1.4f);
+                for (int c = 0; c < numCells; ++c)
                 {
-                    const float tx = rf.getX() + (rf.getWidth() * (float) t) / 10.0f;
-                    g.drawVerticalLine ((int) tx, rf.getY() + 1.5f, rf.getY() + 4.2f);
-                    g.drawVerticalLine ((int) tx, rf.getBottom() - 4.2f, rf.getBottom() - 1.5f);
-                }
-
-                const int fillW = juce::roundToInt ((rf.getWidth() - 12.0f) * norm);
-                if (fillW > 2)
-                {
-                    const juce::Rectangle<float> fillRf (rf.getX() + 2.0f, rf.getY() + 2.5f, (float) fillW + 4.0f, rf.getHeight() - 5.0f);
-                    g.setGradientFill (juce::ColourGradient (barCols[b].darker (0.12f).withAlpha (0.42f), fillRf.getX(), fillRf.getY(),
-                                                             barCols[b].brighter (0.18f).withAlpha (0.72f), fillRf.getRight(), fillRf.getY(), false));
-                    g.fillRoundedRectangle (fillRf, 4.5f);
+                    const float cNorm = (float) (c + 1) / (float) numCells;
+                    const bool lit = (norm >= cNorm - (0.5f / (float) numCells));
+                    const juce::Colour cellCol = barCols[b].interpolatedWith (Palette::yellow, cNorm * 0.32f);
+                    const float cxCell = trkX + (float) c * cellStep;
+                    g.setColour (lit ? cellCol.withAlpha (0.62f) : cellCol.withAlpha (0.12f));
+                    g.fillRoundedRectangle (cxCell, rf.getY() + 2.4f, cellW, rf.getHeight() - 4.8f, 1.8f);
+                    if (lit)
+                    {
+                        g.setColour (cellCol.brighter (0.38f).withAlpha (0.92f));
+                        g.fillRect (cxCell, rf.getY() + 2.0f, cellW, 2.0f);
+                        g.fillRect (cxCell, rf.getBottom() - 4.0f, cellW, 2.0f);
+                    }
                 }
 
                 // 実音倍音ピーク輝線
                 if (acts[b] > 0.02f)
                 {
                     const float liveNorm = juce::jlimit (0.0f, 1.0f, norm * 0.7f + acts[b] * 0.6f);
-                    const float peakX = rf.getX() + 4.0f + liveNorm * (rf.getWidth() - 12.0f);
+                    const float peakX = trkX + liveNorm * (trkW - 4.0f);
                     g.setColour (barCols[b].brighter (0.45f));
-                    g.fillRoundedRectangle (peakX, rf.getY() + 2.0f, 3.0f, rf.getHeight() - 4.0f, 1.5f);
+                    g.fillRoundedRectangle (peakX, rf.getY() + 2.0f, 2.8f, rf.getHeight() - 4.0f, 1.4f);
                 }
 
-                // ★ 3Dバイレベル・メカニカルトリガーキャリッジ（上下のスライド爪＋中央レーザーカーソル刃）
-                const float capW = 12.0f;
-                const float capX = rf.getX() + 2.0f + norm * (rf.getWidth() - capW - 4.0f);
+                // 3Dオプティカルプリズム・フェーダーキャリッジ（上下の貴金属/チタン爪＋中央ホワイトホットレーザー刃）
+                const float capW = 11.0f;
+                const float capX = trkX + norm * juce::jmax (2.0f, trkW - capW);
                 const float cxCap = capX + capW * 0.5f;
-                g.setColour (Palette::panel2.brighter (0.35f));
+                g.setColour (oceanStarTheme() ? Palette::metalHi : Palette::panel2.brighter (0.38f));
                 g.fillRoundedRectangle (capX, rf.getY() + 0.5f, capW, 4.8f, 2.0f);
                 g.fillRoundedRectangle (capX, rf.getBottom() - 5.3f, capW, 4.8f, 2.0f);
                 g.setColour (barCols[b]);
                 g.drawRoundedRectangle (capX, rf.getY() + 0.5f, capW, 4.8f, 2.0f, 1.1f);
                 g.drawRoundedRectangle (capX, rf.getBottom() - 5.3f, capW, 4.8f, 2.0f, 1.1f);
-                g.setColour (barCols[b].withAlpha (0.85f));
-                g.fillRect (cxCap - 1.2f, rf.getY() + 3.0f, 2.4f, rf.getHeight() - 6.0f);
+                g.setColour (juce::Colours::white.withAlpha (0.95f));
+                g.fillRect (cxCap - 1.0f, rf.getY() + 2.5f, 2.0f, rf.getHeight() - 5.0f);
+
+                // 左端のダーククリスタル・ラベルカプセル下地（文字の視認性を100%保証）
+                const juce::Rectangle<float> lblPill (rf.getX() + 2.2f, rf.getY() + 2.2f, lblW - 1.0f, rf.getHeight() - 4.4f);
+                g.setColour (Palette::bgTop.darker (0.58f).withAlpha (0.86f));
+                g.fillRoundedRectangle (lblPill, 4.5f);
+                g.setColour (barCols[b].withAlpha (0.52f));
+                g.drawRoundedRectangle (lblPill, 4.5f, 0.9f);
+
+                // 右端のOLEDパーセント表示カプセル下地
+                const juce::Rectangle<float> pctPill (rf.getRight() - pctW, rf.getY() + 2.2f, pctW - 2.2f, rf.getHeight() - 4.4f);
+                g.setColour (Palette::bgTop.darker (0.58f).withAlpha (0.86f));
+                g.fillRoundedRectangle (pctPill, 4.5f);
+                g.setColour (barCols[b].withAlpha (0.58f));
+                g.drawRoundedRectangle (pctPill, 4.5f, 0.9f);
             }
 
-            g.setColour (kawaiiBars ? Palette::metalMid : barCols[b].withAlpha (0.88f));
+            g.setColour (kawaiiBars ? Palette::metalMid : (oceanStarTheme() ? Palette::metalMid.withAlpha (0.85f) : barCols[b].withAlpha (0.88f)));
             g.drawRoundedRectangle (rf.reduced (0.5f), barRad, 1.3f);
             g.setColour (Palette::ink);
+            const int lblRectW = kawaiiBars ? (r.getWidth() - 52)
+                                            : juce::roundToInt (juce::jmin (90.0f, rf.getWidth() * 0.44f));
             fitText (g, juce::String::fromUTF8 (language->english ? barEn[b] : barJa[b]),
-                     r.reduced (kawaiiBars ? 14 : 8, 0).withTrimmedRight (48),
-                     juce::Justification::centredLeft, 14.0f, true);
+                     r.withWidth (lblRectW).reduced (kawaiiBars ? 12 : 6, 1),
+                     juce::Justification::centredLeft, 13.5f, true);
             fitText (g, juce::String (juce::roundToInt (vals[b])) + "%",
-                     r.reduced (6, 0).withTrimmedLeft (r.getWidth() - 56), juce::Justification::centredRight, 14.0f, true);
+                     r.withTrimmedLeft (r.getWidth() - 46).reduced (4, 1),
+                     juce::Justification::centredRight, 13.5f, true);
         }
     }
 
@@ -2906,7 +3534,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                          ? (overviewOutput.getWidth() - 236)
                          : (overviewOutput.getWidth() - 24);
         const int numRows = (overviewLayoutMode == 3) ? 3 : 5;
-        const int rowStep = (overviewLayoutMode == 3) ? 18 : 32;
+        const int rowStep = (overviewLayoutMode == 3) ? 18 : ((oceanStarTheme() && overviewLayoutMode == 0) ? 30 : 32);
+        const int rowStartY = (oceanStarTheme() && overviewLayoutMode == 0) ? 39 : 42;
         const bool kawaiiMeters = (isLiverStyle || isYuruStyle);
 
         struct MeterRow { juce::String name; float norm; juce::String valTxt; juce::Colour col; bool levelZone; };
@@ -2935,7 +3564,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         };
         for (int i = 0; i < numRows; ++i)
         {
-            const int ry = overviewOutput.getY() + 42 + i * rowStep;
+            const int ry = overviewOutput.getY() + rowStartY + i * rowStep;
             auto labR = juce::Rectangle<int> (overviewOutput.getX() + 14, ry, 44, 18);
             auto valR = juce::Rectangle<int> (overviewOutput.getX() + 14 + meterW - 52, ry, 52, 18);
             const int barH = (overviewLayoutMode == 3) ? 8 : 11;
@@ -3024,106 +3653,841 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         }
     }
 
-    const char* namesJa[] = { "01 整える", "02 声をつくる", "03 空間をつくる" };
-    const char* namesEn[] = { "01 CLEAN",  "02 CHARACTER",  "03 SPACE" };
+    // ---- ★ ユニバーサル・アクセシビリティ専用：中段「視覚サポート案内 ＆ ワンタッチ4モード切替デッキ」 ----
+    if (accessMode > 0 && overviewLayoutMode == 0)
+    {
+        const auto leftVista  = juce::Rectangle<float> ((float) tuner.getX(),          (float) (tuner.getBottom() + 5),
+                                                        (float) tuner.getWidth(),      (float) (overviewCards[0].getY() - tuner.getBottom() - 10));
+        const auto rightVista = juce::Rectangle<float> ((float) overviewOutput.getX(), (float) (overviewOutput.getBottom() + 5),
+                                                        (float) overviewOutput.getWidth(), (float) (overviewCards[2].getY() - overviewOutput.getBottom() - 10));
+
+        const float dnPct   = processor.apvts.getRawParameterValue ("denoise")->load();
+        const float mudDb   = processor.apvts.getRawParameterValue ("mud")->load();
+        const float compPct = processor.apvts.getRawParameterValue ("comp2")->load();
+        const float revPct  = processor.apvts.getRawParameterValue ("revmix")->load();
+
+        // 1. 左デッキ：スタイル別の視覚ガイド（◉くっきり大文字＝形状記号＆特大文字凡例 / ★かんたん3ステップ＝順路チャート / ●マット・具体表記＝フラット数値一覧）
+        if (leftVista.getHeight() >= 48.0f)
+        {
+            g.setColour (Palette::panel);
+            g.fillRoundedRectangle (leftVista, 12.0f);
+            g.setColour ((accessMode == 1) ? Palette::yellow : Palette::panelLn);
+            g.drawRoundedRectangle (leftVista.reduced (0.8f), 12.0f, (accessMode == 1) ? 2.2f : 1.4f);
+
+            if (accessMode == 1)
+            {
+                // ◉ くっきり・大文字モード：色だけでなく「形（▼/▲/○）」と極太文字で判別できる高コントラスト案内
+                g.setColour (Palette::yellow);
+                fitText (g, language->T ("◉ くっきり・大文字モード（超高コントラスト・太針・形記号表示）",
+                                         "◉ HIGH CONTRAST & LARGE TEXT MODE (BOLD NEEDLE & SHAPE ICONS)"),
+                         leftVista.toNearestInt().reduced (12, 4).withHeight (24), juce::Justification::centredLeft, 15.0f, true);
+
+                struct ShapeGuide { juce::String txt; juce::Colour col; };
+                const ShapeGuide guides[3] = {
+                    { language->T ("▼ 削る・抑える (雑音 ", "▼ CUT / CLEAN (") + juce::String (juce::roundToInt (dnPct)) + "%)", Palette::green },
+                    { language->T ("▲ 足す・揃える (声量 ", "▲ BOOST / LEVEL (") + juce::String (juce::roundToInt (compPct)) + "%)", Palette::yellow },
+                    { language->T ("○ 待機中 (0% / 変化なし)", "○ STANDBY (0%)"), Palette::inkSoft }
+                };
+                const float gGap = 6.0f;
+                const float gW = (leftVista.getWidth() - 20.0f - gGap * 2.0f) / 3.0f;
+                for (int gi = 0; gi < 3; ++gi)
+                {
+                    const juce::Rectangle<float> gr (leftVista.getX() + 10.0f + (float) gi * (gW + gGap), leftVista.getY() + 32.0f, gW, 34.0f);
+                    g.setColour (Palette::bgTop);
+                    g.fillRoundedRectangle (gr, 7.0f);
+                    g.setColour (guides[gi].col);
+                    g.drawRoundedRectangle (gr, 7.0f, 2.0f);
+                    g.setColour (Palette::ink);
+                    fitText (g, guides[gi].txt, gr.toNearestInt().reduced (6, 2), juce::Justification::centred, 14.5f, true);
+                }
+            }
+            else if (accessMode == 2)
+            {
+                // ★ かんたん3ステップ・ガイドモード：次にどこを触ればいいか一目で分かる「STEP 1 ➔ STEP 2 ➔ STEP 3」順路チャート
+                g.setColour (Palette::yellow);
+                fitText (g, language->T ("★ かんたん3ステップ・ガイド（★印の主役ノブ3つを順番に回すだけで完成！）",
+                                         "★ 3-STEP QUICK GUIDE (TURN THE 3 ★ HERO KNOBS IN ORDER)"),
+                         leftVista.toNearestInt().reduced (12, 4).withHeight (22), juce::Justification::centredLeft, 14.5f, true);
+
+                struct StepBox { juce::String step; juce::String desc; juce::Colour col; bool done; };
+                const StepBox steps[3] = {
+                    { "STEP 1", language->T ("★ノイズ除去で雑音消し", "1. Clean Noise"), Palette::green,  dnPct > 1.0f },
+                    { "STEP 2", language->T ("★音量そろえで声量均一", "2. Level Voice"), Palette::blue,   compPct > 1.0f },
+                    { "STEP 3", language->T ("★残響の量で余韻を足す", "3. Add Reverb"),  Palette::yellow, revPct > 1.0f }
+                };
+                const float sGap = 14.0f;
+                const float sW = (leftVista.getWidth() - 20.0f - sGap * 2.0f) / 3.0f;
+                for (int si = 0; si < 3; ++si)
+                {
+                    const juce::Rectangle<float> sr (leftVista.getX() + 10.0f + (float) si * (sW + sGap), leftVista.getY() + 30.0f, sW, 36.0f);
+                    g.setColour (steps[si].done ? steps[si].col.withAlpha (0.20f) : Palette::bgTop);
+                    g.fillRoundedRectangle (sr, 8.0f);
+                    g.setColour (steps[si].col);
+                    g.drawRoundedRectangle (sr, 8.0f, steps[si].done ? 2.0f : 1.2f);
+                    g.setColour (steps[si].col);
+                    fitText (g, steps[si].step, sr.toNearestInt().withHeight (16).reduced (6, 1), juce::Justification::centredLeft, 12.0f, true);
+                    g.setColour (Palette::ink);
+                    fitText (g, steps[si].desc, sr.toNearestInt().withTrimmedTop (15).reduced (6, 1), juce::Justification::centredLeft, 13.0f, true);
+                    if (si < 2)
+                    {
+                        g.setColour (Palette::yellow);
+                        fitText (g, juce::String::fromUTF8 ("▶"),
+                                 juce::Rectangle<int> ((int) sr.getRight(), (int) sr.getY() + 6, (int) sGap, 24),
+                                 juce::Justification::centred, 12.5f, true);
+                    }
+                }
+            }
+            else
+            {
+                // ● マット・具体表記モード：光やアニメを抑えた静かなフラット数値ステータス表
+                g.setColour (Palette::ink);
+                fitText (g, language->T ("● マット・具体表記モード（発光や点滅を抑えた配色 ／ 具体的な機能名で統一）",
+                                         "● MATTE & CONCRETE LABELS MODE (LOW GLARE / LITERAL LABELS)"),
+                         leftVista.toNearestInt().reduced (12, 4).withHeight (22), juce::Justification::centredLeft, 14.0f, true);
+
+                struct CalmStat { juce::String label; juce::String val; bool active; };
+                const CalmStat stats[4] = {
+                    { language->T ("背景ノイズ除去", "Denoise"),   juce::String (juce::roundToInt (dnPct)) + "%",   dnPct > 1.0f },
+                    { language->T ("中低域(250Hz)",  "250Hz EQ"),  juce::String (mudDb, 1) + "dB",                  std::abs (mudDb) > 0.1f },
+                    { language->T ("音量の均一化",   "Leveling"),  juce::String (juce::roundToInt (compPct)) + "%", compPct > 1.0f },
+                    { language->T ("残響ブレンド",   "Reverb"),    juce::String (juce::roundToInt (revPct)) + "%",  revPct > 1.0f }
+                };
+                const float cGap = 6.0f;
+                const float cW = (leftVista.getWidth() - 20.0f - cGap * 3.0f) / 4.0f;
+                for (int ci = 0; ci < 4; ++ci)
+                {
+                    const juce::Rectangle<float> cr (leftVista.getX() + 10.0f + (float) ci * (cW + cGap), leftVista.getY() + 30.0f, cW, 36.0f);
+                    g.setColour (Palette::bgTop);
+                    g.fillRoundedRectangle (cr, 6.0f);
+                    g.setColour (stats[ci].active ? Palette::green : Palette::panelLn);
+                    g.drawRoundedRectangle (cr, 6.0f, stats[ci].active ? 1.5f : 1.0f);
+                    g.setColour (Palette::inkSoft);
+                    fitText (g, stats[ci].label, cr.toNearestInt().withHeight (17).reduced (4, 1), juce::Justification::centred, 12.0f, false);
+                    g.setColour (stats[ci].active ? Palette::ink : Palette::inkSoft);
+                    fitText (g, stats[ci].val, cr.toNearestInt().withTrimmedTop (16).reduced (4, 1), juce::Justification::centred, 13.5f, stats[ci].active);
+                }
+            }
+        }
+
+        // 2. 右デッキ：画面の見やすさ・操作スタイル 4モード・ワンタッチ切替バー（いつでも1クリックで切替可能）
+        if (rightVista.getHeight() >= 48.0f)
+        {
+            g.setColour (Palette::panel);
+            g.fillRoundedRectangle (rightVista, 12.0f);
+            g.setColour ((accessMode == 1) ? Palette::ice : Palette::panelLn);
+            g.drawRoundedRectangle (rightVista.reduced (0.8f), 12.0f, (accessMode == 1) ? 2.2f : 1.4f);
+
+            const juce::String rightHeader = (accessMode == 1)
+                ? language->T ("画面の見やすさ・操作スタイル切替（現在：◉ くっきり大文字）", "DISPLAY & CONTROL STYLE (HIGH CONTRAST)")
+                : (accessMode == 2)
+                ? language->T ("画面の見やすさ・操作スタイル切替（現在：★ かんたん3ステップ）", "DISPLAY & CONTROL STYLE (3-STEP GUIDE)")
+                : language->T ("画面の見やすさ・操作スタイル切替（現在：● マット・具体表記）", "DISPLAY & CONTROL STYLE (MATTE & CONCRETE)");
+            g.setColour (Palette::ink);
+            fitText (g, rightHeader, rightVista.toNearestInt().reduced (12, 5).withHeight (22), juce::Justification::centredLeft, 14.0f, true);
+
+            const char* modeJa[4] = { "標準デザイン", "◉ くっきり大文字", "★ かんたん3ステップ", "● マット・具体表記" };
+            const char* modeEn[4] = { "Standard",     "◉ High Contrast",  "★ 3-Step Guide",      "● Matte & Concrete" };
+            const juce::Colour modeCols[4] = { Palette::inkSoft, Palette::yellow, Palette::blue, Palette::green };
+            for (int a = 0; a < 4; ++a)
+            {
+                const auto pr = accessPillRects[(size_t) a];
+                if (pr.isEmpty()) continue;
+                const auto prf = pr.toFloat();
+                const bool isCur = (accessMode == a);
+                g.setColour (isCur ? modeCols[a].withAlpha ((accessMode == 3) ? 0.28f : 0.35f) : Palette::bgTop);
+                g.fillRoundedRectangle (prf, 7.0f);
+                g.setColour (isCur ? modeCols[a] : Palette::panelLn);
+                g.drawRoundedRectangle (prf.reduced (0.5f), 7.0f, isCur ? 2.2f : 1.1f);
+                g.setColour (isCur ? Palette::ink : Palette::inkSoft);
+                fitText (g, juce::String::fromUTF8 (language->english ? modeEn[a] : modeJa[a]),
+                         pr.reduced (4, 1), juce::Justification::centred, (accessMode == 1) ? 14.0f : 13.0f, isCur);
+            }
+        }
+    }
+
+    // ---- ✦ 風景・季節コレクション専用：中段「水平線・星空パノラマウィンドウ (Open Sky & Sea Horizon Vista)」 ----
+    if (oceanStarTheme() && accessMode == 0 && overviewLayoutMode == 0 && ! liteMode)
+    {
+        const auto leftVista  = juce::Rectangle<float> ((float) tuner.getX(),          (float) (tuner.getBottom() + 5),
+                                                        (float) tuner.getWidth(),      (float) (overviewCards[0].getY() - tuner.getBottom() - 10));
+        const auto rightVista = juce::Rectangle<float> ((float) overviewOutput.getX(), (float) (overviewOutput.getBottom() + 5),
+                                                        (float) overviewOutput.getWidth(), (float) (overviewCards[2].getY() - overviewOutput.getBottom() - 10));
+
+        // 1. 左パノラマ窓：背景の絶景を素通しで見せつつ世界観ごとの象徴モチーフを添える
+        if (leftVista.getHeight() >= 48.0f)
+        {
+            g.setGradientFill (juce::ColourGradient (Palette::bgTop.withAlpha (0.12f), leftVista.getX(), leftVista.getY(),
+                                                     Palette::mirrorBot.withAlpha (0.18f), leftVista.getX(), leftVista.getBottom(), false));
+            g.fillRoundedRectangle (leftVista, 13.0f);
+            g.setColour (Palette::metalMid.withAlpha (0.62f));
+            g.drawRoundedRectangle (leftVista.reduced (0.6f), 13.0f, 1.2f);
+            g.setColour (Palette::metalHi.withAlpha (0.28f));
+            g.drawRoundedRectangle (leftVista.reduced (3.2f), 10.5f, 0.8f);
+
+            const float hy = leftVista.getBottom() - 15.0f;
+            if (themeMode == 15)
+            {
+                // 🌊 02 瑞々しい碧海: パノラマ水紋コースティクス＆ぷるんと浮かぶ8つの立体3D水滴・気泡
+                ThemePainter::drawCausticWaveMesh (g, leftVista.reduced (6.0f, 4.0f), Palette::ice, 0.36f, 5);
+                for (int d = 0; d < 8; ++d)
+                {
+                    const float dx = leftVista.getX() + 28.0f + (leftVista.getWidth() - 56.0f) * ((float) d / 7.0f);
+                    const float dy = leftVista.getY() + 26.0f + std::sin ((float) d * 1.5f) * 12.0f;
+                    const float dr = (d % 2 == 0) ? 7.2f : 4.6f;
+                    ThemePainter::drawWaterDroplet (g, dx, dy, dr, (d % 3 == 0) ? Palette::green : Palette::ice, 0.90f);
+                }
+            }
+            else if (themeMode == 16)
+            {
+                // 🌅 03 朝焼けの海: 水平線から昇る太陽コロナ・光芒＆朝焼け彩雲
+                const float sunCx = leftVista.getCentreX();
+                for (int ray = -3; ray <= 3; ++ray)
+                {
+                    const float rx = sunCx + (float) ray * 42.0f;
+                    g.setColour (juce::Colour (0x55ffea9f));
+                    g.drawLine (sunCx, hy, rx, leftVista.getY() + 18.0f, 2.2f);
+                }
+                {
+                    juce::Graphics::ScopedSaveState ss (g);
+                    g.reduceClipRegion (leftVista.toNearestInt().withBottom ((int) hy));
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffffffff), sunCx, hy - 4.0f,
+                                                             juce::Colour (0xffff9e00), sunCx + 24.0f, hy, true));
+                    g.fillEllipse (sunCx - 22.0f, hy - 18.0f, 44.0f, 36.0f);
+                }
+                for (int cl = 0; cl < 4; ++cl)
+                {
+                    const float cx = leftVista.getX() + 65.0f + (float) cl * 105.0f;
+                    const float cy = leftVista.getY() + 34.0f + (cl % 2) * 8.0f;
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0x88ff6b8b), cx, cy - 8.0f,
+                                                             juce::Colour (0xccffbe0b), cx, cy + 8.0f, false));
+                    g.fillRoundedRectangle (cx - 38.0f, cy - 6.0f, 76.0f, 12.0f, 6.0f);
+                }
+                g.setColour (juce::Colour (0xffffea9f).withAlpha (0.85f));
+                g.drawLine (leftVista.getX() + 16.0f, hy, leftVista.getRight() - 16.0f, hy, 1.8f);
+            }
+            else if (themeMode == 17)
+            {
+                // 🍁 04 晩秋から初冬へ: 白い朝靄・川霧と舞い散る紅葉（🍁）＆初雪の結晶（❄）
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0x48e2e8f0), leftVista.getCentreX(), hy - 10.0f,
+                                                         juce::Colours::transparentWhite, leftVista.getCentreX(), hy + 10.0f, false));
+                g.fillRect (leftVista.getX() + 10.0f, hy - 12.0f, leftVista.getWidth() - 20.0f, 22.0f);
+                for (int m = 0; m < 7; ++m)
+                {
+                    const float px = leftVista.getX() + 36.0f + (leftVista.getWidth() - 72.0f) * ((float) m / 6.0f);
+                    const float py = leftVista.getY() + 33.0f + std::sin ((float) m * 1.7f) * 10.0f;
+                    if (m % 2 == 0)
+                        ThemePainter::drawMapleLeaf (g, px, py, 11.2f, (float) m * 0.7f,
+                                                     (m % 4 == 0) ? juce::Colour (0xffff2e4c) : juce::Colour (0xffff9e00), 0.96f);
+                    else
+                        ThemePainter::drawSnowCrystal (g, px, py, 7.8f, (float) m * 0.5f, juce::Colour (0xffe0f2fe), 0.94f);
+                }
+            }
+            else
+            {
+                // 🌌 01 天の川銀河 / 👑 05 蒼海オペラ座: 星座アストロラーベ天球図＆流星
+                g.setGradientFill (juce::ColourGradient (juce::Colours::transparentWhite, leftVista.getX() + 12.0f, hy,
+                                                         Palette::metalHi.withAlpha (0.55f), leftVista.getCentreX(), hy, false));
+                g.fillRect (leftVista.getX() + 12.0f, hy, leftVista.getWidth() * 0.5f - 12.0f, 1.1f);
+                g.setGradientFill (juce::ColourGradient (Palette::metalHi.withAlpha (0.55f), leftVista.getCentreX(), hy,
+                                                         juce::Colours::transparentWhite, leftVista.getRight() - 12.0f, hy, false));
+                g.fillRect (leftVista.getCentreX(), hy, leftVista.getWidth() * 0.5f - 12.0f, 1.1f);
+
+                const float stX[7] = { 0.08f, 0.21f, 0.36f, 0.51f, 0.66f, 0.80f, 0.92f };
+                const float stY[7] = { 0.64f, 0.44f, 0.56f, 0.30f, 0.48f, 0.36f, 0.60f };
+                juce::Path constel;
+                for (int s = 0; s < 7; ++s)
+                {
+                    const float px = leftVista.getX() + leftVista.getWidth() * stX[s];
+                    const float py = leftVista.getY() + leftVista.getHeight() * stY[s];
+                    if (s == 0) constel.startNewSubPath (px, py);
+                    else        constel.lineTo (px, py);
+                }
+                g.setColour (Palette::metalHi.withAlpha (0.52f));
+                g.strokePath (constel, juce::PathStrokeType (1.2f));
+                for (int s = 0; s < 7; ++s)
+                {
+                    const float px = leftVista.getX() + leftVista.getWidth() * stX[s];
+                    const float py = leftVista.getY() + leftVista.getHeight() * stY[s];
+                    ThemePainter::drawStar8 (g, px, py, (s == 3) ? 6.8f : 4.8f, (s % 2 == 0) ? Palette::yellow : Palette::ice);
+                }
+            }
+
+            const juce::String themePoem = (themeMode == 14) ? language->T ("🌌 01 星降る天の川銀河と蛍火の夜 — GALACTIC MILKY WAY", "🌌 01 GALACTIC MILKY WAY & FIREFLY")
+                                         : (themeMode == 15) ? language->T ("🌊 02 瑞々しい碧海と水紋ラグーン — LUSH AQUA CAUSTICS", "🌊 02 LUSH AQUA SEA & CAUSTICS")
+                                         : (themeMode == 16) ? language->T ("🌅 03 朝焼けの海と暁の水平線 — RADIANT DAWN SUNRISE", "🌅 03 RADIANT DAWN & SUNRISE SEA")
+                                         : (themeMode == 17) ? language->T ("🍁 04 晩秋から初冬へ・茜空と初雪の水鏡 — AUTUMN TO WINTER", "🍁 04 LATE AUTUMN & FIRST SNOW")
+                                                             : language->T ("👑 05 蒼海オペラ座と黄金シャンデリア — GRAND OPERA SAPPHIRE", "👑 05 GRAND OPERA SAPPHIRE");
+            const juce::Rectangle<float> leftTitlePill (leftVista.getX() + 8.0f, leftVista.getY() + 4.0f, leftVista.getWidth() - 136.0f, 20.0f);
+            g.setColour (Palette::bgTop.darker (0.48f).withAlpha (0.72f));
+            g.fillRoundedRectangle (leftTitlePill, 9.0f);
+            g.setColour (Palette::ink.withAlpha (0.98f));
+            fitText (g, themePoem, leftTitlePill.toNearestInt().reduced (8, 0), juce::Justification::centredLeft, 14.0f, true);
+
+            // 右上のインタラクティブ・タッチオーラバッジ
+            const juce::Rectangle<float> auraBadge (leftVista.getRight() - 122.0f, leftVista.getY() + 4.0f, 112.0f, 20.0f);
+            g.setColour (Palette::bgTop.darker (0.45f).withAlpha (0.82f));
+            g.fillRoundedRectangle (auraBadge, 10.0f);
+            g.setColour (Palette::metalHi.withAlpha (0.72f));
+            g.drawRoundedRectangle (auraBadge, 10.0f, 1.0f);
+            g.setColour (Palette::yellow);
+            static const char* const kMoodBadge[3] = { "✦ TOUCH AURA", "✦ PRISM WAVE", "✦ DEEP ECHO" };
+            fitText (g, juce::String::fromUTF8 (kMoodBadge[g_vistaMood % 3]), auraBadge.toNearestInt().reduced (4, 0), juce::Justification::centred, 14.0f, true);
+
+            // ★ 音の変化ビジュアライザー (Before 原音ノイズ波形 vs After 整音・美声波形 ＆ 4連リアルタイム効果カプセル)
+            {
+                const float dnPct   = processor.apvts.getRawParameterValue ("denoise")->load();
+                const float mudDb   = processor.apvts.getRawParameterValue ("mud")->load();
+                const float compPct = processor.apvts.getRawParameterValue ("comp2")->load();
+                const float velvPct = juce::jmax (vVal, fVal);
+
+                // 中段：Before（点線の荒れた原音波形）→ After（滑らかに整音・声量均一化された発光波形）のリアルタイム比較
+                const float waveY = leftVista.getY() + 40.0f;
+                const float waveX0 = leftVista.getX() + 14.0f;
+                const float waveW  = leftVista.getWidth() - 28.0f;
+                juce::Path rawWave, cleanWave;
+                for (int wi = 0; wi <= 56; ++wi)
+                {
+                    const float t = (float) wi / 56.0f;
+                    const float wx = waveX0 + waveW * t;
+                    const float env = std::sin (t * juce::MathConstants<float>::pi);
+                    // 原音（ノイズのギザギザ＋音量ムラ）
+                    const float jitter = std::sin (t * 85.0f) * 3.2f + std::cos (t * 43.0f) * 2.4f;
+                    const float rawDy  = (std::sin (t * 18.0f) * 8.5f + jitter) * env;
+                    // 処理後（雑音が消え、声量が揃い、倍音の艶が乗った滑らかな正弦波）
+                    const float cleanAmp = 7.2f * (0.75f + 0.25f * (compPct * 0.01f));
+                    const float cleanDy  = std::sin (t * 18.0f + 0.25f) * cleanAmp * env;
+                    if (wi == 0)
+                    {
+                        rawWave.startNewSubPath (wx, waveY + rawDy);
+                        cleanWave.startNewSubPath (wx, waveY + cleanDy);
+                    }
+                    else
+                    {
+                        rawWave.lineTo (wx, waveY + rawDy);
+                        cleanWave.lineTo (wx, waveY + cleanDy);
+                    }
+                }
+                g.setColour (Palette::inkSoft.withAlpha (0.45f));
+                g.strokePath (rawWave, juce::PathStrokeType (1.1f));
+                g.setColour (Palette::green.withAlpha (0.32f));
+                g.strokePath (cleanWave, juce::PathStrokeType (4.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.setGradientFill (juce::ColourGradient (Palette::green, waveX0, waveY,
+                                                         Palette::yellow, waveX0 + waveW, waveY, false));
+                g.strokePath (cleanWave, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                // 下段：今どの処理がどれだけ効いているか一目で分かる4連「音の変化カプセル」
+                struct EffChip { juce::String text; float norm; juce::Colour col; };
+                const EffChip chips[4] = {
+                    { language->T ("🧹雑音 ", "🧹NR ")   + juce::String (juce::roundToInt (dnPct)) + "%",
+                      juce::jlimit (0.0f, 1.0f, dnPct / 60.0f), Palette::green },
+                    { language->T ("💎こもり ", "💎MUD ") + juce::String (mudDb, 1) + "dB",
+                      juce::jlimit (0.0f, 1.0f, std::abs (mudDb) / 6.0f), Palette::ice },
+                    { language->T ("⚖声量 ", "⚖COMP ")  + juce::String (juce::roundToInt (compPct)) + "%",
+                      juce::jlimit (0.0f, 1.0f, compPct / 80.0f), Palette::blue },
+                    { language->T ("✨倍音 ", "✨GLOW ")  + juce::String (juce::roundToInt (velvPct)) + "%",
+                      juce::jlimit (0.0f, 1.0f, velvPct / 90.0f), Palette::yellow }
+                };
+                const float chipGap = 5.0f;
+                const float chipW = (leftVista.getWidth() - 16.0f - chipGap * 3.0f) / 4.0f;
+                const float chipY = leftVista.getBottom() - 25.0f;
+                for (int cIdx = 0; cIdx < 4; ++cIdx)
+                {
+                    const float cx = leftVista.getX() + 8.0f + (float) cIdx * (chipW + chipGap);
+                    const juce::Rectangle<float> cr (cx, chipY, chipW, 20.0f);
+                    const bool on = chips[cIdx].norm > 0.04f;
+                    g.setColour (Palette::bgTop.darker (0.55f).withAlpha (0.86f));
+                    g.fillRoundedRectangle (cr, 6.0f);
+                    if (on)
+                    {
+                        g.setColour (chips[cIdx].col.withAlpha (0.30f));
+                        g.fillRoundedRectangle (cr.getX() + 2.0f, cr.getBottom() - 3.2f, (cr.getWidth() - 4.0f) * chips[cIdx].norm, 2.2f, 1.0f);
+                    }
+                    g.setColour (on ? chips[cIdx].col.withAlpha (0.85f) : Palette::panelLn.withAlpha (0.45f));
+                    g.drawRoundedRectangle (cr, 6.0f, on ? 1.2f : 0.8f);
+                    g.setColour (on ? Palette::ink : Palette::inkSoft);
+                    fitText (g, chips[cIdx].text, cr.toNearestInt().reduced (4, 0), juce::Justification::centred, 14.0f, on);
+                }
+            }
+        }
+
+        // 2. 右パノラマ窓：水鏡リフレクション音響波紋＋32バンド・ウォーターミラー倍音ファウンテン＋立体空間の広がりカプセル
+        if (rightVista.getHeight() >= 48.0f)
+        {
+            g.setGradientFill (juce::ColourGradient (Palette::bgTop.withAlpha (0.12f), rightVista.getX(), rightVista.getY(),
+                                                     Palette::mirrorBot.withAlpha (0.20f), rightVista.getX(), rightVista.getBottom(), false));
+            g.fillRoundedRectangle (rightVista, 13.0f);
+            g.setColour (Palette::metalMid.withAlpha (0.62f));
+            g.drawRoundedRectangle (rightVista.reduced (0.6f), 13.0f, 1.2f);
+            g.setColour (Palette::metalHi.withAlpha (0.28f));
+            g.drawRoundedRectangle (rightVista.reduced (3.2f), 10.5f, 0.8f);
+
+            const float wy = rightVista.getY() + rightVista.getHeight() * 0.48f;
+            const float wx0 = rightVista.getX() + 18.0f;
+            const float ww  = rightVista.getWidth() - 36.0f;
+            const float amp = rightVista.getHeight() * 0.24f;
+
+            const float revMixPct = processor.apvts.getRawParameterValue ("revmix")->load();
+            const float dlyPct    = processor.apvts.getRawParameterValue ("delay")->load();
+            const float widPct    = processor.apvts.getRawParameterValue ("width")->load();
+
+            // ★ 立体音場ウイング＆やまびこリング（Width・Reverb・Delayの効き具合で左右の翼と残響リングが広がる！）
+            {
+                const float vcx = rightVista.getCentreX();
+                const float wingSpan = 42.0f + juce::jlimit (0.0f, 1.0f, std::abs (widPct) / 80.0f) * (ww * 0.42f);
+                g.setGradientFill (juce::ColourGradient (Palette::ice.withAlpha (0.34f), vcx, wy,
+                                                         Palette::ice.withAlpha (0.0f),  vcx - wingSpan, wy, false));
+                g.fillEllipse (vcx - wingSpan, wy - 14.0f, wingSpan * 2.0f, 28.0f);
+                if (dlyPct > 1.0f)
+                {
+                    for (int ec = 1; ec <= 3; ++ec)
+                    {
+                        const float er = 22.0f + (float) ec * 26.0f * (0.4f + 0.6f * (dlyPct / 60.0f));
+                        g.setColour (Palette::yellow.withAlpha (0.42f / (float) ec));
+                        g.drawEllipse (vcx - er, wy - er * 0.28f, er * 2.0f, er * 0.56f, 1.2f);
+                    }
+                }
+            }
+
+            juce::Path skyWave, seaMirror;
+            skyWave.startNewSubPath (wx0, wy);
+            seaMirror.startNewSubPath (wx0, wy);
+            for (int p = 0; p <= 48; ++p)
+            {
+                const float t = (float) p / 48.0f;
+                const float px = wx0 + ww * t;
+                const float env = std::sin (t * juce::MathConstants<float>::pi);
+                const float wv  = (0.52f * std::sin (t * 18.8f + vVal * 0.04f)
+                                 + 0.30f * std::cos (t * 31.4f - sVal * 0.03f)
+                                 + 0.18f * std::sin (t * 9.4f)) * env;
+                const float dy = std::abs (wv) * amp + 2.0f * env;
+                skyWave.lineTo (px, wy - dy);
+                seaMirror.lineTo (px, wy + dy * 0.78f);
+            }
+            skyWave.lineTo (wx0 + ww, wy);
+            skyWave.closeSubPath();
+            seaMirror.lineTo (wx0 + ww, wy);
+            seaMirror.closeSubPath();
+
+            g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.48f), rightVista.getCentreX(), wy - amp,
+                                                     Palette::ice.withAlpha (0.12f),    rightVista.getCentreX(), wy, false));
+            g.fillPath (skyWave);
+            g.setColour (Palette::yellow.withAlpha (0.85f));
+            g.strokePath (skyWave, juce::PathStrokeType (1.3f));
+
+            g.setGradientFill (juce::ColourGradient (Palette::salmon.withAlpha (0.38f), rightVista.getCentreX(), wy,
+                                                     Palette::blue.withAlpha (0.08f),   rightVista.getCentreX(), wy + amp, false));
+            g.fillPath (seaMirror);
+            g.setColour (Palette::ice.withAlpha (0.65f));
+            g.strokePath (seaMirror, juce::PathStrokeType (1.0f));
+
+            // ★ 32バンド・シンメトリック水鏡スペクトラム・ファウンテン（水平線の上下に光の柱が鏡面反射する）
+            for (int b = 0; b < 32; ++b)
+            {
+                const float t = ((float) b + 0.5f) / 32.0f;
+                const float bx = wx0 + ww * t;
+                const float env = std::sin (t * juce::MathConstants<float>::pi);
+                const float bh  = (0.28f + 0.72f * std::abs (std::sin (t * 15.7f + (vVal + fVal) * 0.03f))) * amp * 0.85f * env;
+                const juce::Colour bCol = (b % 3 == 0) ? Palette::yellow : (b % 2 == 0) ? Palette::ice : Palette::salmon;
+                g.setColour (bCol.withAlpha (0.62f));
+                g.fillRoundedRectangle (bx - 1.5f, wy - bh, 3.0f, bh, 1.2f);
+                g.setColour (bCol.withAlpha (0.32f));
+                g.fillRoundedRectangle (bx - 1.5f, wy + 1.5f, 3.0f, bh * 0.68f, 1.2f);
+            }
+
+            g.setColour (Palette::metalHi.withAlpha (0.85f));
+            g.drawLine (wx0, wy, wx0 + ww, wy, 1.4f);
+
+            if (themeMode == 15)
+            {
+                for (int b = 0; b < 5; ++b)
+                    ThemePainter::drawWaterDroplet (g, wx0 + 40.0f + (float) b * 82.0f, wy - 6.0f + (b % 2) * 12.0f,
+                                                    4.2f + (b % 2) * 2.2f, Palette::green, 0.85f);
+            }
+            else if (themeMode == 17)
+            {
+                g.setColour (juce::Colour (0x77fde6c4));
+                g.drawEllipse (rightVista.getCentreX() - 48.0f, wy + 2.0f, 96.0f, 14.0f, 1.1f);
+                ThemePainter::drawMapleLeaf   (g, rightVista.getCentreX() - 12.0f, wy + 7.0f, 7.5f, 0.9f, juce::Colour (0xffe11d48), 0.90f);
+                ThemePainter::drawSnowCrystal (g, rightVista.getRight() - 42.0f, wy - 14.0f, 6.2f, 0.3f, juce::Colour (0xffe0f2fe), 0.85f);
+            }
+
+            const juce::String rightTitle = (themeMode == 15) ? language->T ("💧 水紋コースティクス ＆ 瑞々しい倍音ストリーム", "💧 AQUA CAUSTICS & HARMONIC STREAM")
+                                          : (themeMode == 16) ? language->T ("🌅 朝日の光の道 ＆ 暁の倍音リフレクション", "🌅 SUNRISE GOLDEN PATH & HARMONICS")
+                                          : (themeMode == 17) ? language->T ("🍁 散り紅葉と初雪が溶け合う静寂の水鏡波紋", "🍁 FALLING MAPLE & FIRST SNOW RIPPLES")
+                                                              : language->T ("🌊 水鏡の倍音・残響リフレクション — SEA-MIRROR HORIZON", "🌊 SEA-MIRROR HARMONIC HORIZON");
+            const juce::Rectangle<float> rightTitlePill (rightVista.getX() + 8.0f, rightVista.getY() + 4.0f, rightVista.getWidth() - 136.0f, 20.0f);
+            g.setColour (Palette::bgTop.darker (0.48f).withAlpha (0.72f));
+            g.fillRoundedRectangle (rightTitlePill, 9.0f);
+            g.setColour (Palette::ink.withAlpha (0.98f));
+            fitText (g, rightTitle, rightTitlePill.toNearestInt().reduced (8, 0), juce::Justification::centredLeft, 14.0f, true);
+
+            const juce::Rectangle<float> rtaBadge (rightVista.getRight() - 122.0f, rightVista.getY() + 4.0f, 112.0f, 20.0f);
+            g.setColour (Palette::bgTop.darker (0.45f).withAlpha (0.82f));
+            g.fillRoundedRectangle (rtaBadge, 10.0f);
+            g.setColour (Palette::metalHi.withAlpha (0.72f));
+            g.drawRoundedRectangle (rtaBadge, 10.0f, 1.0f);
+            g.setColour (Palette::ice);
+            fitText (g, juce::String::fromUTF8 ("✦ MIRROR 32ch"), rtaBadge.toNearestInt().reduced (4, 0), juce::Justification::centred, 14.0f, true);
+
+            // 下段：空間・残響・やまびこ・左右の広がりがどう効いているか一目で伝わる3連「空間変化カプセル」
+            {
+                struct SpChip { juce::String text; float norm; juce::Colour col; };
+                const SpChip spChips[3] = {
+                    { language->T ("🏛残響余韻 ", "🏛REV ")  + juce::String (juce::roundToInt (revMixPct)) + "%",
+                      juce::jlimit (0.0f, 1.0f, revMixPct / 50.0f), Palette::yellow },
+                    { language->T ("🔊やまびこ ", "🔊ECHO ") + juce::String (juce::roundToInt (dlyPct)) + "%",
+                      juce::jlimit (0.0f, 1.0f, dlyPct / 55.0f), Palette::salmon },
+                    { language->T ("↔左右拡大 +", "↔WIDE +") + juce::String (juce::roundToInt (widPct)) + "%",
+                      juce::jlimit (0.0f, 1.0f, std::abs (widPct) / 70.0f), Palette::ice }
+                };
+                const float chipGap = 6.0f;
+                const float chipW = (rightVista.getWidth() - 16.0f - chipGap * 2.0f) / 3.0f;
+                const float chipY = rightVista.getBottom() - 25.0f;
+                for (int cIdx = 0; cIdx < 3; ++cIdx)
+                {
+                    const float cx = rightVista.getX() + 8.0f + (float) cIdx * (chipW + chipGap);
+                    const juce::Rectangle<float> cr (cx, chipY, chipW, 20.0f);
+                    const bool on = spChips[cIdx].norm > 0.04f;
+                    g.setColour (Palette::bgTop.darker (0.55f).withAlpha (0.86f));
+                    g.fillRoundedRectangle (cr, 6.0f);
+                    if (on)
+                    {
+                        g.setColour (spChips[cIdx].col.withAlpha (0.30f));
+                        g.fillRoundedRectangle (cr.getX() + 2.0f, cr.getBottom() - 3.2f, (cr.getWidth() - 4.0f) * spChips[cIdx].norm, 2.2f, 1.0f);
+                    }
+                    g.setColour (on ? spChips[cIdx].col.withAlpha (0.85f) : Palette::panelLn.withAlpha (0.45f));
+                    g.drawRoundedRectangle (cr, 6.0f, on ? 1.2f : 0.8f);
+                    g.setColour (on ? Palette::ink : Palette::inkSoft);
+                    fitText (g, spChips[cIdx].text, cr.toNearestInt().reduced (4, 0), juce::Justification::centred, 14.0f, on);
+                }
+            }
+        }
+
+        // 3. ★ インタラクティブ・タッチ水紋＆パーティクルバースト描画（クリック・ドラッグ位置から広がる波紋と世界観粒子）
+        const juce::uint32 nowMs = juce::Time::getMillisecondCounter();
+        bool anyRipple = false;
+        for (const auto& rp : g_ripples)
+            if (rp.active) anyRipple = true;
+        if (! anyRipple && leftVista.getHeight() >= 48.0f)
+        {
+            g_ripples[0] = { leftVista.getCentreX() + 28.0f,  leftVista.getY() + leftVista.getHeight() * 0.54f,  nowMs - 480u, 1u, true };
+            g_ripples[1] = { rightVista.getCentreX() - 36.0f, rightVista.getY() + rightVista.getHeight() * 0.50f, nowMs - 720u, 4u, true };
+        }
+        for (auto& rp : g_ripples)
+        {
+            if (! rp.active) continue;
+            const float ageSec = (float) (nowMs - rp.birthMs) * 0.001f;
+            if (ageSec < 0.0f || ageSec > 1.85f)
+            {
+                rp.active = false;
+                continue;
+            }
+            const float prog  = ageSec / 1.85f;
+            const float alpha = (1.0f - prog) * (1.0f - prog);
+            const float rad1  = 10.0f + prog * 78.0f;
+            const float rad2  = 4.0f  + prog * 46.0f;
+            g.setColour (Palette::ice.withAlpha (alpha * 0.65f));
+            g.drawEllipse (rp.x - rad1, rp.y - rad1 * 0.55f, rad1 * 2.0f, rad1 * 1.10f, 1.6f);
+            g.setColour (Palette::yellow.withAlpha (alpha * 0.55f));
+            g.drawEllipse (rp.x - rad2, rp.y - rad2 * 0.55f, rad2 * 2.0f, rad2 * 1.10f, 1.2f);
+            for (int p = 0; p < 4; ++p)
+            {
+                const float pa = (float) p * juce::MathConstants<float>::halfPi + prog * 2.2f + (float) (rp.seed % 7);
+                const float px = rp.x + std::cos (pa) * (12.0f + prog * 48.0f);
+                const float py = rp.y + std::sin (pa) * (8.0f  + prog * 28.0f) - prog * 16.0f;
+                if (themeMode == 15)
+                    ThemePainter::drawWaterDroplet (g, px, py, 4.2f * (1.0f - prog * 0.4f), Palette::ice, alpha * 0.90f);
+                else if (themeMode == 17)
+                {
+                    if (p % 2 == 0)
+                        ThemePainter::drawMapleLeaf (g, px, py, 6.8f, pa, juce::Colour (0xffe11d48), alpha * 0.90f);
+                    else
+                        ThemePainter::drawSnowCrystal (g, px, py, 5.5f, pa, juce::Colour (0xffe0f2fe), alpha * 0.90f);
+                }
+                else
+                    ThemePainter::drawStar8 (g, px, py, 5.2f * (1.0f - prog * 0.3f), Palette::yellow.withAlpha (alpha));
+            }
+        }
+    }
+
+    const char* namesJaStd[]      = { "01 整える",           "02 声をつくる",       "03 空間をつくる" };
+    const char* namesJaStep[]     = { "STEP 1 雑音を消す",   "STEP 2 声を揃える",   "STEP 3 残響を足す" };
+    const char* namesJaConcrete[] = { "01 雑音・不要帯域除去", "02 音量均一・周波数", "03 残響・空間幅" };
+    const char* namesEn[]         = { "01 CLEAN",            "02 CHARACTER",        "03 SPACE" };
     // V-Liver時は 01=ピーチコーラルチーク, 02=モーヴアイシャドウ, 03=ベリーローズティント のコスメ3色パレットに統一
     const juce::Colour accents[] = {
         Palette::green,
-        isLiverStyle ? Palette::yellow : Palette::blue,
-        isLiverStyle ? Palette::blue   : Palette::yellow
+        (isLiverStyle && accessMode == 0) ? Palette::yellow : Palette::blue,
+        (isLiverStyle && accessMode == 0) ? Palette::blue   : Palette::yellow
     };
+
+    // ★ Red Dot 仕様: セクションカード間を結ぶ「オプティカル信号フロー・ライトパイプ (01 ➔ 02 ➔ 03)」
+    if (! liteMode && accessMode != 3)
+    {
+        auto drawBridge = [&] (const juce::Rectangle<int>& cL, const juce::Rectangle<int>& cR, juce::Colour colL, juce::Colour colR)
+        {
+            const float x0 = (float) cL.getRight() + 1.0f;
+            const float x1 = (float) cR.getX() - 1.0f;
+            const float ym = (float) (cL.getY() + 26);
+            if (x1 > x0 + 2.0f && (x1 - x0) <= 28.0f)
+            {
+                g.setGradientFill (juce::ColourGradient (colL.withAlpha (0.85f), x0, ym,
+                                                         colR.withAlpha (0.85f), x1, ym, false));
+                g.fillRoundedRectangle (x0, ym - 2.0f, x1 - x0, 4.0f, 2.0f);
+                const float xm = (x0 + x1) * 0.5f;
+                g.setColour (juce::Colours::white.withAlpha (0.90f));
+                g.fillEllipse (xm - 2.2f, ym - 2.2f, 4.4f, 4.4f);
+            }
+        };
+        drawBridge (overviewCards[0], overviewCards[1], accents[0], accents[1]);
+        drawBridge (overviewCards[1], overviewCards[2], accents[1], accents[2]);
+        if (! overviewMonitor.isEmpty())
+        {
+            drawBridge (overviewCards[1], overviewMonitor, accents[1], Palette::salmon);
+            drawBridge (overviewMonitor, overviewCards[2], Palette::salmon, accents[2]);
+        }
+    }
+
+    Knob* const cardKnobs[3][4] = {
+        { &denoiseK, &gate,   &lowCut,    &mudK    },
+        { &comp2K,   &deessK, &presenceK, &warmthK },
+        { &revMixK,  &revSizeK, &delayK,  &widthK  }
+    };
+
     for (int i = 0; i < 3; ++i)
     {
         auto r = overviewCards[(size_t) i];
         card (r, accents[i]);
 
-        // ★ 3ウイング配置 (overviewLayoutMode == 0): 主役ノブ台座＆3連サテライトカプセルもペルソナ別に描き分け
-        if (overviewLayoutMode == 0 && ! liteMode)
+        // 各カード内の4つのツマミが「いま音を変えているか (effInt > 0.02f)」を集計
+        float kEff[4] = {};
+        int   kDir[4] = {};
+        juce::String kTagJa[4], kTagEn[4];
+        int activeKnobCount = 0;
+        float sumEff = 0.0f;
+        for (int kIdx = 0; kIdx < 4; ++kIdx)
         {
-            const bool softPedestal = (isLiverStyle || isYuruStyle || pastelTheme());
-            if (i == 0 || i == 2)
+            auto& sl = cardKnobs[i][kIdx]->slider;
+            const float pos = (float) sl.valueToProportionOfLength (sl.getValue());
+            GzzioLnF::queryKnobEffect (sl, pos, kEff[kIdx], kDir[kIdx], kTagJa[kIdx], kTagEn[kIdx]);
+            if (! sl.isEnabled()) kEff[kIdx] = 0.0f;
+            if (kEff[kIdx] > 0.02f)
             {
-                auto body = r.reduced (14).withTrimmedTop (122);
-                const int heroW = body.getWidth() * 51 / 100;
-                const auto heroRect = body.removeFromLeft (heroW).reduced (2).toFloat();
-                body.removeFromLeft (6);
+                ++activeKnobCount;
+                sumEff += kEff[kIdx];
+            }
+        }
 
-                if (softPedestal)
+        // ★ 3ウイング配置 / 天球・水鏡ホライズン配置 (overviewLayoutMode == 0): ペルソナ別にノブ台座＆軌道を装飾
+        //   さらに「効いているツマミ」の台座だけオーラ発光し、「待機中(0% / 0dB / -80dB)」の台座は静かに沈む！
+        if ((overviewLayoutMode == 0 || (accessMode > 0 && overviewLayoutMode != 2)) && ! liteMode)
+        {
+            if (accessMode > 0)
+            {
+                // ★ 見やすさ・操作スタイルモード専用の水平4連ノブ台座＆優先度コールアウト描画
+                auto body = r.reduced ((i == 1) ? 12 : 10).withTrimmedTop (120);
+                const int cw = body.getWidth() / 4;
+                for (int kIdx = 0; kIdx < 4; ++kIdx)
                 {
-                    // ♥🍰 プレストチーク・サテンクッション台座＆貴金属リム
-                    g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.20f), heroRect.getX(), heroRect.getY(),
-                                                             Palette::panel2.withAlpha (0.82f), heroRect.getCentreX(), heroRect.getBottom(), false));
-                    g.fillRoundedRectangle (heroRect, 16.0f);
-                    g.setColour (isLiverStyle ? Palette::metalMid : accents[i].withAlpha (0.52f));
-                    g.drawRoundedRectangle (heroRect.reduced (0.8f), 16.0f, 1.4f);
-                    g.setColour ((themeMode == 11) ? Palette::metalHi.withAlpha (0.35f) : juce::Colours::white.withAlpha (0.80f));
-                    g.drawRoundedRectangle (heroRect.reduced (3.0f), 13.5f, 1.0f);
+                    const int kx0 = body.getX() + kIdx * cw;
+                    const int kw  = (kIdx == 3) ? (body.getRight() - kx0) : cw;
+                    const auto cellF = juce::Rectangle<int> (kx0, body.getY(), kw, body.getHeight()).reduced (3, 1).toFloat();
+                    const bool kOn = (kEff[kIdx] > 0.02f);
+                    const bool isPrimaryHero = (kIdx == 0) || (i == 1 && kIdx == 2);
 
-                    const int satH = body.getHeight() / 3;
-                    for (int s = 0; s < 3; ++s)
+                    if (accessMode == 1)
                     {
-                        const auto satR = juce::Rectangle<int> (body.getX(), body.getY() + s * satH, body.getWidth(), satH).reduced (2, 3).toFloat();
-                        g.setGradientFill (juce::ColourGradient (
-                            nightTheme() ? Palette::panel2.brighter (0.06f).withAlpha (0.88f) : Palette::panel.brighter (0.04f).withAlpha (0.88f), satR.getX(), satR.getY(),
-                            Palette::panel2.withAlpha (0.88f), satR.getX(), satR.getBottom(), false));
-                        g.fillRoundedRectangle (satR, 12.0f);
-                        g.setColour (isLiverStyle ? Palette::metalMid.withAlpha (0.72f) : accents[i].withAlpha (0.45f));
-                        g.drawRoundedRectangle (satR, 12.0f, 1.2f);
-                        drawHeartShape (satR.getX() + 6.5f, satR.getCentreY(), 3.8f, accents[i].withAlpha (0.75f));
+                        // ◉ くっきり大文字モード：背景と明確に分離する高コントラスト・ソリッド枠台座
+                        g.setColour (Palette::bgTop);
+                        g.fillRoundedRectangle (cellF, 8.0f);
+                        const juce::Colour bCol = kOn ? ((kDir[kIdx] < 0) ? Palette::green : Palette::yellow) : Palette::panelLn.withAlpha (0.55f);
+                        g.setColour (bCol);
+                        g.drawRoundedRectangle (cellF.reduced (0.5f), 8.0f, kOn ? 2.2f : 1.1f);
                     }
-                }
-                else
-                {
-                    // 左側: 大型主役ノブ専用の8角形凹みリアクター台座
-                    const auto pedPath = makeChamferPath (heroRect, 10.0f);
-                    g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (0.28f).withAlpha (0.68f), heroRect.getX(), heroRect.getY(),
-                                                             accents[i].withAlpha (0.10f), heroRect.getCentreX(), heroRect.getBottom(), false));
-                    g.fillPath (pedPath);
-                    g.setColour (accents[i].withAlpha (0.42f));
-                    g.strokePath (pedPath, juce::PathStrokeType (1.2f));
-
-                    // 右側: 3連サテライトノブのハードウェア・モジュールカプセル枠
-                    const int satH = body.getHeight() / 3;
-                    for (int s = 0; s < 3; ++s)
+                    else if (accessMode == 2)
                     {
-                        const auto satR = juce::Rectangle<int> (body.getX(), body.getY() + s * satH, body.getWidth(), satH).reduced (2, 3).toFloat();
-                        g.setColour (Palette::bgTop.darker (0.24f).withAlpha (0.58f));
-                        g.fillRoundedRectangle (satR, 8.0f);
-                        g.setColour (Palette::panelLn.withAlpha (0.55f));
-                        g.drawRoundedRectangle (satR, 8.0f, 1.0f);
-                        g.setColour (accents[i].withAlpha (0.55f));
-                        g.fillRoundedRectangle (satR.getX() + 3.0f, satR.getY() + 8.0f, 2.5f, satR.getHeight() - 16.0f, 1.2f);
+                        // ★ かんたん3ステップモード：主役ノブ（★まずここ）を強調枠で囲み、待機ノブは静かに減光
+                        if (isPrimaryHero || kOn)
+                        {
+                            g.setColour (kOn ? accents[i].withAlpha (0.14f) : Palette::panel2.withAlpha (0.65f));
+                            g.fillRoundedRectangle (cellF, 9.0f);
+                            g.setColour (kOn ? accents[i] : Palette::yellow.withAlpha (0.75f));
+                            g.drawRoundedRectangle (cellF.reduced (0.6f), 9.0f, isPrimaryHero ? 2.0f : 1.4f);
+                        }
+                        if (kIdx == 0)
+                        {
+                            // 各ステップで一番最初に触るべき主役ノブの最上段（ラベルの上）に「★まずここ」ピルを表示
+                            const juce::Rectangle<float> starBadge (cellF.getX() + 6.0f, cellF.getY() + 2.5f, cellF.getWidth() - 12.0f, 14.5f);
+                            g.setColour (Palette::yellow);
+                            g.fillRoundedRectangle (starBadge, 4.0f);
+                            g.setColour (Palette::bgTop);
+                            fitText (g, language->T ("★まずここ", "★START HERE"), starBadge.toNearestInt().reduced (2, 0), juce::Justification::centred, 11.0f, true);
+                        }
+                    }
+                    else
+                    {
+                        // ● マット・具体表記モード：完全水平・均一なマット枠台座（光・グラデーション一切なし）
+                        g.setColour (Palette::bgTop.withAlpha (0.65f));
+                        g.fillRoundedRectangle (cellF, 6.0f);
+                        g.setColour (kOn ? accents[i].withAlpha (0.85f) : Palette::panelLn.withAlpha (0.55f));
+                        g.drawRoundedRectangle (cellF.reduced (0.5f), 6.0f, kOn ? 1.5f : 1.0f);
                     }
                 }
             }
-            else if (i == 1)
+            else if (oceanStarTheme())
             {
-                // 中央下 Card 1: 大・小段違い4連コンソールの主役台座＆信号コンジットライン
-                auto body = r.reduced (12).withTrimmedTop (122);
-                const int wHero = body.getWidth() * 27 / 100;
-                const int wSub  = (body.getWidth() - wHero * 2) / 2;
-                const int ws[4] = { wHero, wSub, wHero, wSub };
-                const bool isH[4] = { true, false, true, false };
-                int cx = body.getX();
-                g.setColour (accents[i].withAlpha (0.32f));
-                g.drawHorizontalLine (body.getCentreY() + 10, (float) body.getX() + 24.0f, (float) body.getRight() - 24.0f);
+                // ✦ 風景・季節コレクション専用：4基のノブを結ぶ軌道と世界観別エフェクト（水紋・紅葉・雪・星雲・朝日）
+                auto body = r.reduced ((i == 1) ? 12 : 10).withTrimmedTop (120);
+                const int cw = body.getWidth() / 4;
+                const int dy[4] = { 10, -4, -4, 10 };
+                juce::Path arcOrbit;
                 for (int kIdx = 0; kIdx < 4; ++kIdx)
                 {
-                    if (isH[kIdx])
+                    const float kx = (float) (body.getX() + kIdx * cw + cw / 2);
+                    const float ky = (float) (body.getY() + 24 + (body.getHeight() - 46) / 2 + dy[kIdx]);
+                    if (kIdx == 0) arcOrbit.startNewSubPath (kx, ky);
+                    else           arcOrbit.lineTo (kx, ky);
+
+                    const float haloR = (i == 1) ? 42.0f : 36.0f;
+                    const bool kOn = (kEff[kIdx] > 0.02f);
+                    const juce::Colour kCol = (kDir[kIdx] < 0) ? accents[i].interpolatedWith (Palette::ice, 0.35f)
+                                                               : accents[i].interpolatedWith (Palette::yellow, 0.35f);
+                    if (kOn)
                     {
-                        const auto hr = juce::Rectangle<int> (cx, body.getY(), ws[kIdx], body.getHeight()).reduced (3, 2).toFloat();
-                        g.setColour (softPedestal ? accents[i].withAlpha (0.16f) : Palette::bgTop.darker (0.24f).withAlpha (0.55f));
-                        g.fillRoundedRectangle (hr, softPedestal ? 15.0f : 10.0f);
-                        g.setColour (isLiverStyle ? Palette::metalMid : accents[i].withAlpha (0.45f));
-                        g.drawRoundedRectangle (hr, softPedestal ? 15.0f : 10.0f, 1.3f);
+                        g.setGradientFill (juce::ColourGradient (kCol.withAlpha (0.28f + 0.22f * kEff[kIdx]), kx, ky - haloR,
+                                                                 Palette::mirrorBot.withAlpha (0.34f), kx, ky + haloR, false));
+                        g.fillEllipse (kx - haloR, ky - haloR, haloR * 2.0f, haloR * 2.0f);
+                        g.setColour (kCol.withAlpha (0.72f + 0.25f * kEff[kIdx]));
+                        g.drawEllipse (kx - haloR, ky - haloR, haloR * 2.0f, haloR * 2.0f, 1.5f);
+                        // 効いているノブの外周に広がる音響波紋リング
+                        g.setColour (kCol.withAlpha (0.36f * kEff[kIdx]));
+                        g.drawEllipse (kx - haloR - 4.5f, ky - haloR - 4.5f, (haloR + 4.5f) * 2.0f, (haloR + 4.5f) * 2.0f, 1.1f);
                     }
-                    cx += ws[kIdx];
+                    else
+                    {
+                        // 待機中（0% / -80dB / 0dB）は静かなスリープ台座
+                        g.setColour (Palette::bgTop.darker (0.45f).withAlpha (0.38f));
+                        g.fillEllipse (kx - haloR, ky - haloR, haloR * 2.0f, haloR * 2.0f);
+                        g.setColour (Palette::panelLn.withAlpha (0.28f));
+                        g.drawEllipse (kx - haloR, ky - haloR, haloR * 2.0f, haloR * 2.0f, 0.9f);
+                    }
+                }
+                g.setColour (Palette::metalHi.withAlpha (0.45f));
+                g.strokePath (arcOrbit, juce::PathStrokeType (1.2f));
+                for (int kIdx = 0; kIdx < 3; ++kIdx)
+                {
+                    const float mx = (float) (body.getX() + (kIdx + 1) * cw);
+                    const float my = (float) (body.getY() + 24 + (body.getHeight() - 46) / 2 + (dy[kIdx] + dy[kIdx + 1]) / 2);
+                    if (themeMode == 15)
+                        ThemePainter::drawWaterDroplet (g, mx, my, 4.8f, Palette::ice, 0.88f);
+                    else if (themeMode == 17)
+                    {
+                        if (kIdx % 2 == 0)
+                            ThemePainter::drawMapleLeaf (g, mx, my, 6.2f, 0.4f, juce::Colour (0xffe11d48), 0.86f);
+                        else
+                            ThemePainter::drawSnowCrystal (g, mx, my, 5.4f, 0.2f, juce::Colour (0xffe0f2fe), 0.86f);
+                    }
+                    else
+                        drawSparkle4 (mx, my, 4.4f, Palette::metalHi.withAlpha (0.82f));
+                }
+            }
+            else
+            {
+                const bool softPedestal = (isLiverStyle || isYuruStyle || pastelTheme());
+                if (i == 0 || i == 2)
+                {
+                    auto body = r.reduced (14).withTrimmedTop (122);
+                    const int heroW = body.getWidth() * 51 / 100;
+                    const auto heroRect = body.removeFromLeft (heroW).reduced (2).toFloat();
+                    body.removeFromLeft (6);
+                    const bool heroOn = (kEff[0] > 0.02f);
+
+                    if (softPedestal)
+                    {
+                        // ♥🍰 プレストチーク・サテンクッション台座＆貴金属リム（効いている時は華やかに発光）
+                        g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (heroOn ? (0.26f + 0.16f * kEff[0]) : 0.08f), heroRect.getX(), heroRect.getY(),
+                                                                 Palette::panel2.withAlpha (0.84f), heroRect.getCentreX(), heroRect.getBottom(), false));
+                        g.fillRoundedRectangle (heroRect, 16.0f);
+                        g.setColour (isLiverStyle ? Palette::metalMid.withAlpha (heroOn ? 0.95f : 0.45f) : accents[i].withAlpha (heroOn ? 0.72f : 0.28f));
+                        g.drawRoundedRectangle (heroRect.reduced (0.8f), 16.0f, heroOn ? 1.8f : 1.1f);
+                        g.setColour ((themeMode == 11) ? Palette::metalHi.withAlpha (0.35f) : juce::Colours::white.withAlpha (0.80f));
+                        g.drawRoundedRectangle (heroRect.reduced (3.0f), 13.5f, 1.0f);
+
+                        const int satH = body.getHeight() / 3;
+                        for (int s = 0; s < 3; ++s)
+                        {
+                            const bool satOn = (kEff[s + 1] > 0.02f);
+                            const auto satR = juce::Rectangle<int> (body.getX(), body.getY() + s * satH, body.getWidth(), satH).reduced (2, 3).toFloat();
+                            g.setGradientFill (juce::ColourGradient (
+                                satOn ? accents[i].withAlpha (0.22f + 0.14f * kEff[s + 1])
+                                      : (nightTheme() ? Palette::panel2.darker (0.15f).withAlpha (0.68f) : Palette::panel2.withAlpha (0.68f)),
+                                satR.getX(), satR.getY(),
+                                Palette::panel2.withAlpha (0.88f), satR.getX(), satR.getBottom(), false));
+                            g.fillRoundedRectangle (satR, 12.0f);
+                            g.setColour (satOn ? accents[i].withAlpha (0.85f)
+                                               : (isLiverStyle ? Palette::metalMid.withAlpha (0.38f) : Palette::panelLn.withAlpha (0.45f)));
+                            g.drawRoundedRectangle (satR, 12.0f, satOn ? 1.6f : 1.0f);
+                            drawHeartShape (satR.getX() + 6.5f, satR.getCentreY(), 3.8f,
+                                            satOn ? accents[i].withAlpha (0.95f) : Palette::inkSoft.withAlpha (0.35f));
+                        }
+                    }
+                    else
+                    {
+                        // 左側: 大型主役ノブ専用の8角形凹みリアクター台座
+                        const auto pedPath = makeChamferPath (heroRect, 10.0f);
+                        g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (0.28f).withAlpha (0.68f), heroRect.getX(), heroRect.getY(),
+                                                                 accents[i].withAlpha (heroOn ? (0.18f + 0.18f * kEff[0]) : 0.04f), heroRect.getCentreX(), heroRect.getBottom(), false));
+                        g.fillPath (pedPath);
+                        g.setColour (heroOn ? accents[i].withAlpha (0.68f) : Palette::panelLn.withAlpha (0.35f));
+                        g.strokePath (pedPath, juce::PathStrokeType (heroOn ? 1.5f : 1.0f));
+
+                        // 右側: 3連サテライトノブのハードウェア・モジュールカプセル枠（効いているモジュールだけ左端LEDバーが鮮烈に点灯！）
+                        const int satH = body.getHeight() / 3;
+                        for (int s = 0; s < 3; ++s)
+                        {
+                            const bool satOn = (kEff[s + 1] > 0.02f);
+                            const auto satR = juce::Rectangle<int> (body.getX(), body.getY() + s * satH, body.getWidth(), satH).reduced (2, 3).toFloat();
+                            g.setColour (Palette::bgTop.darker (satOn ? 0.18f : 0.35f).withAlpha (satOn ? 0.72f : 0.48f));
+                            g.fillRoundedRectangle (satR, 8.0f);
+                            g.setColour (satOn ? accents[i].withAlpha (0.68f) : Palette::panelLn.withAlpha (0.35f));
+                            g.drawRoundedRectangle (satR, 8.0f, satOn ? 1.3f : 0.9f);
+                            g.setColour (satOn ? accents[i].brighter (0.20f).withAlpha (0.95f) : Palette::inkSoft.withAlpha (0.22f));
+                            g.fillRoundedRectangle (satR.getX() + 3.0f, satR.getY() + 8.0f, satOn ? 3.2f : 2.0f, satR.getHeight() - 16.0f, 1.4f);
+                        }
+                    }
+                }
+                else if (i == 1)
+                {
+                    // 中央下 Card 1: 大・小段違い4連コンソールの主役台座＆信号コンジットライン
+                    auto body = r.reduced (12).withTrimmedTop (122);
+                    const int wHero = body.getWidth() * 27 / 100;
+                    const int wSub  = (body.getWidth() - wHero * 2) / 2;
+                    const int ws[4] = { wHero, wSub, wHero, wSub };
+                    const bool isH[4] = { true, false, true, false };
+                    int cx = body.getX();
+                    g.setColour (accents[i].withAlpha (0.32f));
+                    g.drawHorizontalLine (body.getCentreY() + 10, (float) body.getX() + 24.0f, (float) body.getRight() - 24.0f);
+                    for (int kIdx = 0; kIdx < 4; ++kIdx)
+                    {
+                        const bool kOn = (kEff[kIdx] > 0.02f);
+                        if (isH[kIdx])
+                        {
+                            const auto hr = juce::Rectangle<int> (cx, body.getY(), ws[kIdx], body.getHeight()).reduced (3, 2).toFloat();
+                            g.setColour (softPedestal ? accents[i].withAlpha (kOn ? 0.22f : 0.08f)
+                                                      : Palette::bgTop.darker (0.24f).withAlpha (kOn ? 0.65f : 0.42f));
+                            g.fillRoundedRectangle (hr, softPedestal ? 15.0f : 10.0f);
+                            g.setColour (kOn ? (isLiverStyle ? Palette::metalMid : accents[i].withAlpha (0.68f))
+                                             : Palette::panelLn.withAlpha (0.35f));
+                            g.drawRoundedRectangle (hr, softPedestal ? 15.0f : 10.0f, kOn ? 1.5f : 1.0f);
+                        }
+                        cx += ws[kIdx];
+                    }
                 }
             }
         }
 
-        // ♥ V-LIVER STAGE 配置では下段12連コスメパレットの背後に貴金属の五線譜とカメオ装飾を添える
-        if (overviewLayoutMode == 1 && ! liteMode)
+        // ♥ V-LIVER STAGE 配置では下段12連コスメパレットの背後に貴金属の五線譜とカメオ装飾＋効いているノブのオーラハローを添える
+        if (overviewLayoutMode == 1 && ! liteMode && accessMode == 0)
         {
             g.setColour ((isLiverStyle ? Palette::metalMid : accents[i]).withAlpha (0.22f));
             const int staffY = r.getY() + 190;
@@ -3133,22 +4497,87 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             {
                 const float nx = (float) r.getX() + 56.0f + (float) n * ((float) (r.getWidth() - 112) / 3.0f);
                 const float ny = (float) staffY + (float) ((n + i) % 4) * 9.0f;
-                g.setColour (accents[i].withAlpha (0.35f));
+                const bool kOn = (kEff[n] > 0.02f);
+                if (kOn)
+                {
+                    const auto sb = cardKnobs[i][n]->slider.getBounds().toFloat();
+                    const float scx = sb.getCentreX(), scy = sb.getCentreY() - 10.0f;
+                    g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.26f * kEff[n]), scx, scy,
+                                                             accents[i].withAlpha (0.0f), scx + 42.0f, scy, true));
+                    g.fillEllipse (scx - 42.0f, scy - 42.0f, 84.0f, 84.0f);
+                }
+                g.setColour (accents[i].withAlpha (kOn ? 0.55f : 0.25f));
                 g.fillEllipse (nx - 4.2f, ny - 3.2f, 8.4f, 6.4f);
                 g.drawLine (nx + 3.6f, ny, nx + 3.6f, ny - 16.0f, 1.4f);
                 g.drawLine (nx + 3.6f, ny - 16.0f, nx + 9.0f, ny - 12.5f, 1.4f);
                 if (n % 2 == 0)
-                    drawHeartShape (nx + 24.0f, (float) staffY - 6.0f, 4.8f, accents[i].withAlpha (0.42f));
+                    drawHeartShape (nx + 24.0f, (float) staffY - 6.0f, 4.8f, accents[i].withAlpha (kOn ? 0.65f : 0.30f));
                 else
-                    drawSparkle4 (nx + 24.0f, (float) staffY + 42.0f, 4.8f, Palette::metalMid.withAlpha (0.65f));
+                    drawSparkle4 (nx + 24.0f, (float) staffY + 42.0f, 4.8f, Palette::metalMid.withAlpha (kOn ? 0.80f : 0.45f));
+            }
+        }
+        else if (overviewLayoutMode >= 2 && ! liteMode && accessMode == 0)
+        {
+            for (int n = 0; n < 4; ++n)
+            {
+                const auto sb = cardKnobs[i][n]->slider.getBounds().toFloat();
+                const float scx = sb.getCentreX(), scy = sb.getCentreY() - 10.0f;
+                const float rad = juce::jmin (sb.getWidth(), sb.getHeight()) * 0.44f;
+                if (kEff[n] > 0.02f)
+                {
+                    g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.24f * kEff[n]), scx, scy,
+                                                             accents[i].withAlpha (0.0f), scx + rad, scy, true));
+                    g.fillEllipse (scx - rad, scy - rad, rad * 2.0f, rad * 2.0f);
+                }
             }
         }
 
-        auto titleR = juce::Rectangle<int> (r.getX() + 26, r.getY() + 8,
-                                            juce::jmax (60, overviewSectionPower[(size_t) i].getX() - (r.getX() + 30)), 36);
-        g.setColour (Palette::ink);
-        fitText (g, juce::String::fromUTF8 (language->english ? namesEn[i] : namesJa[i]),
-                 titleR, juce::Justification::centredLeft, 18.0f, true);
+        const int pwrX = overviewSectionPower[(size_t) i].getX();
+        const int titleMaxW = (overviewLayoutMode == 2) ? juce::jmax (60, pwrX - (r.getX() + 30))
+                            : (accessMode == 2 || accessMode == 3) ? (i == 1 ? 168 : 150)
+                                                                   : (i == 1 ? 138 : 112);
+        auto titleR = juce::Rectangle<int> (r.getX() + 26, r.getY() + 8, titleMaxW, 34);
+        g.setColour ((accessMode == 2) ? accents[i] : Palette::ink);
+        const char* curJa = (accessMode == 2) ? namesJaStep[i] : (accessMode == 3) ? namesJaConcrete[i] : namesJaStd[i];
+        fitText (g, juce::String::fromUTF8 (language->english ? namesEn[i] : curJa),
+                 titleR, juce::Justification::centredLeft, (accessMode == 1) ? 19.0f : 18.0f, true);
+
+        // ★ 各セクション見出し横の「リアルタイム音変化ステータス・ピル」:
+        //   そのセクションで今どんな変化が起きているか（雑音・こもり除去 / 声量均一＆倍音 / 残響＆やまびこ）を視覚表示！
+        const int badgeX = titleR.getRight() + 4;
+        const int badgeW = pwrX - badgeX - 6;
+        if (badgeW >= 68 && ! liteMode)
+        {
+            const juce::Rectangle<float> stPill ((float) badgeX, (float) (r.getY() + 13), (float) badgeW, 24.0f);
+            const bool secActive = (activeKnobCount > 0);
+            const float avgEff = secActive ? juce::jlimit (0.15f, 1.0f, sumEff / (float) activeKnobCount) : 0.0f;
+            const juce::String secSummary = (accessMode == 3)
+                ? (secActive ? language->T ("● 動作中", "● ACTIVE") : language->T ("○ 待機中", "○ STANDBY"))
+                : (accessMode == 1)
+                ? (i == 0 ? language->T ("▼ 雑音・こもりカット", "▼ CUT")
+                 : i == 1 ? language->T ("▲ 声量・明るさ補正", "▲ TONE")
+                          : language->T ("▲ 残響・広がり付加", "▲ SPACE"))
+                : (i == 0)
+                ? (badgeW >= 118 ? language->T ("🧹 雑音・こもり除去", "🧹 CLEAN ACTIVE") : language->T ("🧹 整音中", "🧹 CLEAN"))
+                : (i == 1)
+                ? (badgeW >= 150 ? language->T ("✨ 声量均一＆美声ツヤ", "✨ LEVEL & TONE") : language->T ("✨ 美声中", "✨ TONE"))
+                : (badgeW >= 118 ? language->T ("🌊 残響・空間拡大", "🌊 3D SPACE ON")     : language->T ("🌊 空間ON", "🌊 SPACE"));
+
+            g.setColour (pastelTheme() && ! nightTheme() && accessMode == 0
+                         ? (secActive ? accents[i].withAlpha (0.22f) : Palette::panel2.withAlpha (0.75f))
+                         : Palette::bgTop.darker (0.48f).withAlpha (0.92f));
+            g.fillRoundedRectangle (stPill, (accessMode == 3) ? 6.0f : 12.0f);
+            if (secActive && accessMode != 3)
+            {
+                g.setColour (accents[i].withAlpha (0.35f));
+                g.fillRoundedRectangle (stPill.getX() + 8.0f, stPill.getBottom() - 3.2f,
+                                        (stPill.getWidth() - 16.0f) * avgEff, 2.2f, 1.1f);
+            }
+            g.setColour (secActive ? accents[i].withAlpha (0.90f) : Palette::panelLn.withAlpha (0.55f));
+            g.drawRoundedRectangle (stPill, (accessMode == 3) ? 6.0f : 12.0f, (accessMode == 1) ? 1.8f : (secActive ? 1.2f : 0.8f));
+            g.setColour (secActive ? Palette::ink : Palette::inkSoft);
+            fitText (g, secSummary, stPill.toNearestInt().reduced (6, 0), juce::Justification::centred, 14.0f, secActive);
+        }
     }
 
     // ---- 🌊 03 SPACE カード内: 実空間IR 音響減衰カーブ・オシロスコープ＆外部IR(.wav/.aiff)読込カプセル ----

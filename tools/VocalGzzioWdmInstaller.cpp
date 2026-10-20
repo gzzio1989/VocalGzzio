@@ -46,9 +46,150 @@ static const PROPERTYKEY PKEY_Adapter_Parent = {
     { 0xb3f8fa53, 0x0004, 0x438e, { 0x90, 0x03, 0x51, 0xa4, 0x6e, 0x13, 0x9b, 0xfc } }, 2
 };
 
+// PKEY_Device_FriendlyName: {a45c254e-df1c-4efd-8020-67d146a850e0}, 14
+static const PROPERTYKEY PKEY_Endpoint_FriendlyName = {
+    { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 14
+};
+
+// IPolicyConfig (Windows 7/10/11 既定オーディオエンドポイント設定用 COM インターフェース)
+static const CLSID CLSID_PolicyConfigClient_Custom = {
+    0x870af99c, 0x171d, 0x4f9e, { 0xaf, 0x0d, 0xe6, 0x3d, 0xf4, 0x0c, 0x2b, 0xc9 }
+};
+static const IID IID_IPolicyConfig_Custom = {
+    0xf8679f50, 0x850a, 0x41cf, { 0x9c, 0x72, 0x43, 0x0f, 0x29, 0x02, 0x90, 0xc8 }
+};
+
+MIDL_INTERFACE("f8679f50-850a-41cf-9c72-430f290290c8")
+IPolicyConfigCustom : public IUnknown {
+public:
+    virtual HRESULT STDMETHODCALLTYPE GetMixFormat(PCWSTR, void**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetDeviceFormat(PCWSTR, INT, void**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE ResetDeviceFormat(PCWSTR) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetDeviceFormat(PCWSTR, void*, void*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetProcessingPeriod(PCWSTR, INT, void*, void*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetProcessingPeriod(PCWSTR, void*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetShareMode(PCWSTR, void*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetShareMode(PCWSTR, void*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetPropertyValue(PCWSTR, BOOL, const void*, void*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetPropertyValue(PCWSTR, BOOL, const void*, const void*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetDefaultEndpoint(PCWSTR wszDeviceId, ERole role) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetEndpointVisibility(PCWSTR, INT) = 0;
+};
+
 static const wchar_t* VOCALGZZIO_WDM_ADAPTER_NAME = L"VocalGzzio Driver (WDM)";
 static const wchar_t* VOCALGZZIO_WDM_LINE_NAME    = L"ライン";
 static const wchar_t* VOCALGZZIO_WDM_FULL_NAME    = L"ライン (VocalGzzio Driver (WDM))";
+
+static bool IsVirtualCableNameW(const wchar_t* name) {
+    if (!name) return false;
+    return wcsstr(name, L"VocalGzzio") != NULL ||
+           wcsstr(name, L"GzzioRoom") != NULL ||
+           wcsstr(name, L"SYNCROOM") != NULL ||
+           wcsstr(name, L"VB-Audio") != NULL ||
+           wcsstr(name, L"CABLE") != NULL;
+}
+
+struct SavedDefaultEndpoints {
+    wchar_t renderIds[3][256];
+    wchar_t captureIds[3][256];
+};
+
+// 仮想ドライバ登録前に「本来のスピーカー・マイク（既定のデバイス）」を控え、
+// もし既に仮想ドライバに奪われていた場合は実ハードウェア（Roland Rubix / Realtek 等）を探す
+static void SnapshotRealDefaultEndpoints(SavedDefaultEndpoints* out) {
+    ZeroMemory(out, sizeof(SavedDefaultEndpoints));
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    IMMDeviceEnumerator* pEnum = NULL;
+    if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&pEnum)) || !pEnum)
+        return;
+
+    ERole roles[3] = { eConsole, eMultimedia, eCommunications };
+    EDataFlow flows[2] = { eRender, eCapture };
+    for (int f = 0; f < 2; ++f) {
+        wchar_t fallbackRealId[256] = {0};
+        IMMDeviceCollection* pCol = NULL;
+        if (SUCCEEDED(pEnum->EnumAudioEndpoints(flows[f], DEVICE_STATE_ACTIVE, &pCol)) && pCol) {
+            UINT count = 0;
+            pCol->GetCount(&count);
+            for (UINT i = 0; i < count; ++i) {
+                IMMDevice* pDev = NULL;
+                if (SUCCEEDED(pCol->Item(i, &pDev)) && pDev) {
+                    IPropertyStore* pStore = NULL;
+                    wchar_t friendly[256] = {0};
+                    if (SUCCEEDED(pDev->OpenPropertyStore(STGM_READ, &pStore)) && pStore) {
+                        PROPVARIANT pv;
+                        PropVariantInit(&pv);
+                        if (SUCCEEDED(pStore->GetValue(PKEY_Endpoint_FriendlyName, &pv)) && pv.vt == VT_LPWSTR && pv.pwszVal)
+                            wcscpy_s(friendly, pv.pwszVal);
+                        PropVariantClear(&pv);
+                        pStore->Release();
+                    }
+                    if (!IsVirtualCableNameW(friendly)) {
+                        LPWSTR idStr = NULL;
+                        if (SUCCEEDED(pDev->GetId(&idStr)) && idStr) {
+                            if (fallbackRealId[0] == 0 || wcsstr(friendly, L"Rubix") != NULL || wcsstr(friendly, L"Steinberg") != NULL || wcsstr(friendly, L"AG0") != NULL)
+                                wcscpy_s(fallbackRealId, idStr);
+                            CoTaskMemFree(idStr);
+                        }
+                    }
+                    pDev->Release();
+                }
+            }
+            pCol->Release();
+        }
+
+        for (int r = 0; r < 3; ++r) {
+            wchar_t* dst = (f == 0) ? out->renderIds[r] : out->captureIds[r];
+            IMMDevice* pDef = NULL;
+            if (SUCCEEDED(pEnum->GetDefaultAudioEndpoint(flows[f], roles[r], &pDef)) && pDef) {
+                IPropertyStore* pStore = NULL;
+                wchar_t friendly[256] = {0};
+                if (SUCCEEDED(pDef->OpenPropertyStore(STGM_READ, &pStore)) && pStore) {
+                    PROPVARIANT pv;
+                    PropVariantInit(&pv);
+                    if (SUCCEEDED(pStore->GetValue(PKEY_Endpoint_FriendlyName, &pv)) && pv.vt == VT_LPWSTR && pv.pwszVal)
+                        wcscpy_s(friendly, pv.pwszVal);
+                    PropVariantClear(&pv);
+                    pStore->Release();
+                }
+                LPWSTR idStr = NULL;
+                if (!IsVirtualCableNameW(friendly) && SUCCEEDED(pDef->GetId(&idStr)) && idStr) {
+                    wcscpy_s(dst, 256, idStr);
+                    CoTaskMemFree(idStr);
+                } else if (fallbackRealId[0] != 0) {
+                    wcscpy_s(dst, 256, fallbackRealId);
+                }
+                pDef->Release();
+            } else if (fallbackRealId[0] != 0) {
+                wcscpy_s(dst, 256, fallbackRealId);
+            }
+        }
+    }
+    pEnum->Release();
+}
+
+static void RestoreRealDefaultEndpoints(const SavedDefaultEndpoints* saved) {
+    if (!saved) return;
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    IPolicyConfigCustom* pPolicy = NULL;
+    if (SUCCEEDED(CoCreateInstance(CLSID_PolicyConfigClient_Custom, NULL, CLSCTX_ALL, IID_IPolicyConfig_Custom, (void**)&pPolicy)) && pPolicy) {
+        ERole roles[3] = { eConsole, eMultimedia, eCommunications };
+        for (int r = 0; r < 3; ++r) {
+            if (saved->renderIds[r][0] != 0)
+                pPolicy->SetDefaultEndpoint(saved->renderIds[r], roles[r]);
+            if (saved->captureIds[r][0] != 0)
+                pPolicy->SetDefaultEndpoint(saved->captureIds[r], roles[r]);
+        }
+        pPolicy->Release();
+    }
+    // Windowsの「通信アクティビティ検出時に他の音量を80%下げる」を「何もしない(3)」に設定し、cluster等の音量低下を防ぐ
+    HKEY hAudioKey = NULL;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Multimedia\\Audio", 0, NULL, 0, KEY_SET_VALUE, NULL, &hAudioKey, NULL) == ERROR_SUCCESS) {
+        DWORD noDuck = 3;
+        RegSetValueExW(hAudioKey, L"UserDuckingPreference", 0, REG_DWORD, (const BYTE*)&noDuck, sizeof(DWORD));
+        RegCloseKey(hAudioKey);
+    }
+}
 
 static void PrintUtf8(const wchar_t* wstr) {
     if (!wstr) return;
@@ -321,6 +462,9 @@ static bool FindExistingVocalGzzioWdmNode(wchar_t* outInstanceId, size_t maxCoun
 
 // VocalGzzio Driver (WDM) の新規作成・インストール
 static int InstallVocalGzzioWdmDriver() {
+    SavedDefaultEndpoints savedDefaults;
+    SnapshotRealDefaultEndpoints(&savedDefaults);
+
     wchar_t targetInstanceId[256] = {0};
 
     // 同梱の WHQL 署名済み WDM ループバックドライバ (driver\syncroom.inf + .cat + .sys) が存在すれば
@@ -439,6 +583,10 @@ static int InstallVocalGzzioWdmDriver() {
     // 確実な反映のためもう一度実行
     Sleep(200);
     RenameEndpointsForInstance(targetInstanceId, true);
+
+    // Windows が新規追加された仮想ドライバを勝手に「既定の再生デバイス（スピーカー）」へ昇格させ、
+    // cluster / VRChat / Discord の音が消えてしまう問題を防ぐため、元の実スピーカー・マイクへ即座に復元する
+    RestoreRealDefaultEndpoints(&savedDefaults);
 
     return PrintStatusJson();
 }

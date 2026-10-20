@@ -41,12 +41,22 @@ namespace Palette
     inline juce::Colour metalDark { 0xff8c523c };
     inline juce::Colour mirrorTop { 0xffde7da2 };
     inline juce::Colour mirrorBot { 0xff4f1830 };
+    inline int          currentTheme { 0 };
 
     inline bool isCoutureTheme (int m) noexcept { return m == 5 || (m >= 10 && m <= 13); }
     inline int  coutureIndex   (int m) noexcept { return (m >= 10 && m <= 13) ? (m - 9) : 0; }
     inline int  themeOfCouture (int idx) noexcept
     {
         constexpr int kModes[5] = { 5, 10, 11, 12, 13 };
+        return kModes[juce::jlimit (0, 4, idx)];
+    }
+
+    // 🌌🌊🌅🍁👑 風景・季節コレクション 5選 (14=天の川銀河 / 15=瑞々しい碧海 / 16=朝焼けの海 / 17=晩秋〜初冬の哀愁 / 18=蒼海オペラ座)
+    inline bool isOceanStarTheme (int m) noexcept { return m >= 14 && m <= 18; }
+    inline int  oceanStarIndex   (int m) noexcept { return (m >= 14 && m <= 18) ? (m - 14) : 0; }
+    inline int  themeOfOceanStar (int idx) noexcept
+    {
+        constexpr int kModes[5] = { 14, 15, 16, 17, 18 };
         return kModes[juce::jlimit (0, 4, idx)];
     }
 
@@ -86,6 +96,7 @@ namespace Palette
 
     inline void applyTheme (int mode)
     {
+        currentTheme = mode;
         // デフォルトのクチュール金具・鏡面色（各モードで上書き）
         metalHi   = juce::Colour (0xffffe6d4);
         metalMid  = juce::Colour (0xffd4967a);
@@ -361,6 +372,121 @@ namespace Palette
             track    = juce::Colour (0xff2c3944);
             badge    = juce::Colour (0xfff4f7f9);
         }
+        else if (mode == 14)  // 🌌 01 星降る天の川銀河と蛍火の夜 (Galactic Milky Way & Firefly Night)
+        {
+            bgTop    = juce::Colour (0xff05081d);   // 深宇宙のコズミック・ミッドナイト
+            bgBot    = juce::Colour (0xff101c42);   // 湖畔の森陰と星霧の藍色
+            panel    = juce::Colour (0xff0b1332);   // 天の川を透かすアストラル・サファイアガラス
+            panel2   = juce::Colour (0xff162352);   // 星雲のネビュラ・インディゴ内面
+            panelLn  = juce::Colour (0xff7282e0);   // 天の川アメジスト＆スターライト枠
+            ink      = juce::Colour (0xfffffaed);   // 温かな星あかりのアイボリー文字
+            inkSoft  = juce::Colour (0xffc2d4f8);   // 星雲のミルキーブルー副文字
+            yellow   = juce::Colour (0xfffde047);   // 黄金の蛍火＆一等星アンバー（主アクセント）
+            yellowDk = juce::Colour (0xffd97706);
+            green    = juce::Colour (0xff2dd4bf);   // バイオルミネセンス・星霧ティール（01区画＆ON）
+            salmon   = juce::Colour (0xfff472b6);   // ばら星雲のロゼット・マゼンタピンク（03区画）
+            blue     = juce::Colour (0xffa855f7);   // アンドロメダ銀河のネビュラ・バイオレット（02区画）
+            ice      = juce::Colour (0xff38bdf8);   // ベガ＆流星のスターライト・シアン
+            track    = juce::Colour (0xff1f2f68);
+            badge    = juce::Colour (0xfffffaed);
+            metalHi   = juce::Colour (0xfffef08a);  // 天球儀のスターライト・シャンパンゴールド金具
+            metalMid  = juce::Colour (0xfff59e0b);
+            metalDark = juce::Colour (0xff78350f);
+            mirrorTop = juce::Colour (0xff3b2d88);  // 銀河ネビュラ天球ドーム
+            mirrorBot = juce::Colour (0xff06091e);
+        }
+        else if (mode == 15)  // 🌊 02 瑞々しい碧海と水紋・アクアラグーン (Lush Aqua Sea & Caustic Ripples)
+        {
+            bgTop    = juce::Colour (0xff043b52);   // 陽光が降り注ぐ透明なターコイズ水面
+            bgBot    = juce::Colour (0xff041f36);   // 瑞々しいアクアマリン・ラグーンの深み
+            panel    = juce::Colour (0xff07344a);   // 水滴が弾けるウォータードロップ・クリスタルガラス
+            panel2   = juce::Colour (0xff0d4d68);   // 水紋コースティクスが揺らめくアクア内面
+            panelLn  = juce::Colour (0xff38e2f8);   // 煌めく水沫と水滴のブリリアント・アクアリム
+            ink      = juce::Colour (0xfff2feff);   // 澄み切ったウォーター・クリスタルホワイト文字
+            inkSoft  = juce::Colour (0xffa6f4ff);   // 瑞々しいシーフォーム・アクア副文字
+            yellow   = juce::Colour (0xffffe47a);   // 水面に反射するサンライト・パールゴールド（主アクセント）
+            yellowDk = juce::Colour (0xffd99b26);
+            green    = juce::Colour (0xff00f5d4);   // 瑞々しいルミナス・アクアミント（01区画＆ON）
+            salmon   = juce::Colour (0xffff7597);   // 珊瑚礁と水泡のコーラル・シェルピンク（03区画）
+            blue     = juce::Colour (0xff00bbf9);   // 透明感あふれるクリスタル・ラグーンブルー（02区画）
+            ice      = juce::Colour (0xff48cae4);   // 水紋コースティクスのピュア・アクアシアン
+            track    = juce::Colour (0xff125875);
+            badge    = juce::Colour (0xfff2feff);
+            metalHi   = juce::Colour (0xffe0fbfc);  // 水滴プラチナ＆アクアクリスタル金具
+            metalMid  = juce::Colour (0xff00d2e6);
+            metalDark = juce::Colour (0xff0a5c75);
+            mirrorTop = juce::Colour (0xff00b4d8);  // 瑞々しい水球アクア・オーブ鏡面
+            mirrorBot = juce::Colour (0xff032238);
+        }
+        else if (mode == 16)  // 🌅 03 朝焼けの海と暁の水平線 (Radiant Dawn & Sunrise Sea)
+        {
+            bgTop    = juce::Colour (0xff14163d);   // 暁の一番星が残るモーニング・インディゴ空
+            bgBot    = juce::Colour (0xff3a1c33);   // 朝焼けの彩雲と黄金の朝日を映す海面
+            panel    = juce::Colour (0xff211a3a);   // 朝焼けの光を透かすドーン・プリズムガラス
+            panel2   = juce::Colour (0xff382246);   // 暁のローズ・バイオレット内面
+            panelLn  = juce::Colour (0xfff79d65);   // 昇る朝日のサンライズ・コーラルゴールド枠
+            ink      = juce::Colour (0xfffff8f2);   // 朝露に輝くパール・アイボリー文字
+            inkSoft  = juce::Colour (0xfff7c6b8);   // 朝焼け雲のアプリコット・ロゼ副文字
+            yellow   = juce::Colour (0xffffbe0b);   // 水平線から昇る朝日のサンライズ・ゴールド（主アクセント）
+            yellowDk = juce::Colour (0xffe85d04);
+            green    = juce::Colour (0xff2ec4b6);   // 朝凪のクリア・エメラルドシー（01区画＆ON）
+            salmon   = juce::Colour (0xffff6b8b);   // 暁に染まる彩雲のロゼ・マゼンタコーラル（03区画）
+            blue     = juce::Colour (0xffa78bfa);   // 夜明け空のモーニング・ライラック（02区画）
+            ice      = juce::Colour (0xffff9e64);   // 朝日の光芒ゴールデン・アプリコット
+            track    = juce::Colour (0xff48294c);
+            badge    = juce::Colour (0xfffff8f2);
+            metalHi   = juce::Colour (0xffffebb3);  // サンライズ・シャンパンゴールド金具
+            metalMid  = juce::Colour (0xfff48c42);
+            metalDark = juce::Colour (0xff7c2d12);
+            mirrorTop = juce::Colour (0xffe76f51);  // 朝焼けの太陽コロナ鏡面
+            mirrorBot = juce::Colour (0xff241538);
+        }
+        else if (mode == 17)  // 🍁 04 晩秋から初冬へ・茜空と初雪の水鏡 (Late Autumn to Early Winter Melancholy)
+        {
+            bgTop    = juce::Colour (0xff121a2d);   // 初冬の冷気が降りてくるウィンター・スレートインディゴ空
+            bgBot    = juce::Colour (0xff21171f);   // 散り紅葉と初雪が溶け合う静寂の湖面水鏡
+            panel    = juce::Colour (0xff1a2132);   // 夕茜と霜の結晶を宿すフロスト・アンバーガラス
+            panel2   = juce::Colour (0xff2c212c);   // 哀愁の茜色と冬霞が交わるサーフェス
+            panelLn  = juce::Colour (0xffd97757);   // 紅葉の唐紅（からくれない）＆霜銀リム
+            ink      = juce::Colour (0xfff9f3ec);   // 初雪と和紙のウォーム・フロストホワイト文字
+            inkSoft  = juce::Colour (0xffd8c2b2);   // 枯野と川霧のセピア・トープ副文字
+            yellow   = juce::Colour (0xfff59e0b);   // 散りゆく銀杏と夕茜の琥珀ゴールド（主アクセント）
+            yellowDk = juce::Colour (0xffb45309);
+            green    = juce::Colour (0xff67c7d4);   // 初冬の氷晶・フロストアイスブルー（01区画＆ON）
+            salmon   = juce::Colour (0xffe04f44);   // 晩秋のもみじ・唐紅クリムゾン（03区画）
+            blue     = juce::Colour (0xff8ea4d2);   // 遠山を包む冬霞のスレート・ペリウィンクル（02区画）
+            ice      = juce::Colour (0xffbae6fd);   // 舞い降りる初雪のクリスタル・スノーホワイト
+            track    = juce::Colour (0xff3b2c37);
+            badge    = juce::Colour (0xfff9f3ec);
+            metalHi   = juce::Colour (0xfffde6c4);  // 琥珀金と氷晶シルバーのアンティーク金具
+            metalMid  = juce::Colour (0xffd97742);
+            metalDark = juce::Colour (0xff6b2d1a);
+            mirrorTop = juce::Colour (0xffa83e36);  // 茜空と冬霞を映す水鏡ドーム
+            mirrorBot = juce::Colour (0xff111929);
+        }
+        else if (mode == 18)  // 👑 05 蒼海オペラ座と黄金シャンデリア (Grand Opera Sapphire & Chandelier)
+        {
+            bgTop    = juce::Colour (0xff040f2d);   // 深海ロイヤル・ウルトラマリン
+            bgBot    = juce::Colour (0xff0b2058);   // 蒼海オペラ座のベルベットドレープ
+            panel    = juce::Colour (0xff091a45);   // ロイヤル・サファイアベルベット筐体
+            panel2   = juce::Colour (0xff122b6b);   // 深いコバルト・サテン内面
+            panelLn  = juce::Colour (0xffd4af37);   // 24K アンティーク・シャンデリア金枠
+            ink      = juce::Colour (0xfffff8eb);   // シャンパン・アイボリー文字
+            inkSoft  = juce::Colour (0xffb8cae8);   // ロイヤル・シルバーブルー副文字
+            yellow   = juce::Colour (0xfff2c94c);   // シャンデリア・アンティークゴールド（主アクセント）
+            yellowDk = juce::Colour (0xffb4833e);
+            green    = juce::Colour (0xff2ec4b6);   // アビサル・エメラルドラグーン（01区画＆ON）
+            salmon   = juce::Colour (0xffe07a5f);   // オペラ劇場のローズアンバー＆テラコッタ（03区画）
+            blue     = juce::Colour (0xff3b82f6);   // エレクトリック・アビサルサファイア（02区画）
+            ice      = juce::Colour (0xff60a5fa);   // 蒼海のスポットライト・アズール
+            track    = juce::Colour (0xff19357a);
+            badge    = juce::Colour (0xfffff8eb);
+            metalHi   = juce::Colour (0xfffbe6a2);  // アンティーク・オペラゴールド金具
+            metalMid  = juce::Colour (0xffd4af37);
+            metalDark = juce::Colour (0xff6e4f1a);
+            mirrorTop = juce::Colour (0xff1d4ed8);  // 蒼海サファイア＆シャンデリア鏡面
+            mirrorBot = juce::Colour (0xff050e29);
+        }
         else
         {
             bgTop    = juce::Colour (0xff111719);
@@ -378,6 +504,82 @@ namespace Palette
             ice      = juce::Colour (0xffd4f87b);
             track    = juce::Colour (0xff303c40);
             badge    = juce::Colour (0xfffdfcf7);
+        }
+    }
+
+    // ★ ユニバーサル・アクセシビリティ配慮パレット上書き:
+    //   1 = 👓 老眼・くっきり大文字 (WCAG AAA 12:1 超高コントラスト・漆黒マット下地・純白＆黄金文字)
+    //   2 = 🧭 ADHD 集中・3ステップ (視覚ノイズを抑えたディープスレート下地・明確な3色ステップ配色)
+    //   3 = 🌿 ASD・感覚過敏 低刺激 (眩しさ・発光・高彩度を排したウォームスレート＆セージグリーン配色)
+    inline void applyAccessOverride (int accessMode) noexcept
+    {
+        if (accessMode == 1)        // 👓 老眼・くっきり大文字モード (WCAG AAA High-Clarity)
+        {
+            bgTop     = juce::Colour (0xff070b10);
+            bgBot     = juce::Colour (0xff05080c);
+            panel     = juce::Colour (0xff0e1520);
+            panel2    = juce::Colour (0xff172234);
+            panelLn   = juce::Colour (0xffb0c8e4);
+            ink       = juce::Colour (0xffffffff);
+            inkSoft   = juce::Colour (0xffe6f0fa);
+            yellow    = juce::Colour (0xffffd600);
+            yellowDk  = juce::Colour (0xffe6b800);
+            green     = juce::Colour (0xff00e699);
+            salmon    = juce::Colour (0xffff6b8b);
+            blue      = juce::Colour (0xff58b8ff);
+            ice       = juce::Colour (0xff38bdf8);
+            track     = juce::Colour (0xff28384d);
+            badge     = juce::Colour (0xffffffff);
+            metalHi   = juce::Colour (0xffffea80);
+            metalMid  = juce::Colour (0xffffc400);
+            metalDark = juce::Colour (0xff8c6d1f);
+            mirrorTop = juce::Colour (0xff1a2b45);
+            mirrorBot = juce::Colour (0xff080d16);
+        }
+        else if (accessMode == 2)   // 🧭 ADHD 集中・迷わない3ステップモード
+        {
+            bgTop     = juce::Colour (0xff0d1522);
+            bgBot     = juce::Colour (0xff090e18);
+            panel     = juce::Colour (0xff141f30);
+            panel2    = juce::Colour (0xff1d2c42);
+            panelLn   = juce::Colour (0xff4e688a);
+            ink       = juce::Colour (0xfff8fafc);
+            inkSoft   = juce::Colour (0xffcbd5e1);
+            green     = juce::Colour (0xff34d399);
+            blue      = juce::Colour (0xff60a5fa);
+            yellow    = juce::Colour (0xfffbbf24);
+            yellowDk  = juce::Colour (0xffd97706);
+            salmon    = juce::Colour (0xfff87171);
+            ice       = juce::Colour (0xff38bdf8);
+            track     = juce::Colour (0xff263750);
+            metalHi   = juce::Colour (0xffe2e8f0);
+            metalMid  = juce::Colour (0xff94a3b8);
+            metalDark = juce::Colour (0xff475569);
+            mirrorTop = juce::Colour (0xff1e3a5f);
+            mirrorBot = juce::Colour (0xff0d1624);
+        }
+        else if (accessMode == 3)   // 🌿 ASD・感覚過敏 やさしい低刺激モード (Zero-Glare Matte Sage & Slate)
+        {
+            bgTop     = juce::Colour (0xff1c2226);
+            bgBot     = juce::Colour (0xff171c20);
+            panel     = juce::Colour (0xff242c31);
+            panel2    = juce::Colour (0xff2d373d);
+            panelLn   = juce::Colour (0xff5c6d75);
+            ink       = juce::Colour (0xffeceae2);
+            inkSoft   = juce::Colour (0xffbec0b9);
+            green     = juce::Colour (0xff7eb39b);
+            blue      = juce::Colour (0xff80a6c2);
+            yellow    = juce::Colour (0xffd1b582);
+            yellowDk  = juce::Colour (0xffa88d5c);
+            salmon    = juce::Colour (0xffc99090);
+            ice       = juce::Colour (0xff86b3b8);
+            track     = juce::Colour (0xff38444a);
+            badge     = juce::Colour (0xffeceae2);
+            metalHi   = juce::Colour (0xffcfd6d9);
+            metalMid  = juce::Colour (0xff8b99a1);
+            metalDark = juce::Colour (0xff4c585e);
+            mirrorTop = juce::Colour (0xff324047);
+            mirrorBot = juce::Colour (0xff1d2529);
         }
     }
 }
@@ -553,6 +755,37 @@ public:
             g.setColour (juce::Colours::white.withAlpha (0.95f));
             g.strokePath (chev, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
+        else if (s_knobStyle == 6)
+        {
+            // 🌌🌊🌅🍁👑 風景・季節コレクション: 背景の銀河・碧海・朝焼け・紅葉と初雪が透けるクリスタルガラス・カプセル
+            g.setColour (juce::Colours::black.withAlpha (0.28f));
+            g.fillRoundedRectangle (r.translated (0.0f, 1.8f), rad);
+            g.setGradientFill (juce::ColourGradient (Palette::panel2.withAlpha (0.52f), r.getX(), r.getY(),
+                                                     Palette::panel.withAlpha  (0.62f), r.getX(), r.getBottom(), false));
+            g.fillRoundedRectangle (r, rad);
+            // 上半分の水滴・クリスタルガラス反射ハイライト
+            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.24f), r.getX(), r.getY() + 1.0f,
+                                                     juce::Colours::transparentWhite,        r.getX(), r.getY() + r.getHeight() * 0.48f, false));
+            g.fillRoundedRectangle (r.reduced (2.0f, 1.0f).withHeight (r.getHeight() * 0.45f), rad * 0.85f);
+            g.setColour (Palette::metalMid.withAlpha (isButtonDown ? 0.92f : 0.68f));
+            g.drawRoundedRectangle (r, rad, 1.3f);
+
+            const float bx = r.getRight() - 15.0f;
+            const float by = r.getCentreY();
+            const float badgeR = juce::jmin (8.5f, r.getHeight() * 0.34f);
+            g.setGradientFill (juce::ColourGradient (Palette::metalHi.withAlpha (0.40f), bx - badgeR, by - badgeR,
+                                                     Palette::metalDark.withAlpha (0.55f), bx + badgeR, by + badgeR, false));
+            g.fillEllipse (bx - badgeR, by - badgeR, badgeR * 2.0f, badgeR * 2.0f);
+            g.setColour (Palette::metalHi.withAlpha (0.78f));
+            g.drawEllipse (bx - badgeR, by - badgeR, badgeR * 2.0f, badgeR * 2.0f, 1.0f);
+
+            juce::Path chev;
+            chev.startNewSubPath (bx - 3.8f, by - 1.5f);
+            chev.lineTo          (bx,        by + 2.4f);
+            chev.lineTo          (bx + 3.8f, by - 1.5f);
+            g.setColour (Palette::ink);
+            g.strokePath (chev, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
         else
         {
             // ダーク系（Argon / Studio / Neon）: 3Dリセスト・ハードウェアセレクター
@@ -596,11 +829,14 @@ public:
     static void setKawaiiTypeface (juce::Typeface::Ptr tf) { s_kawaiiFace = tf; }
     static void setUseKawaiiFont  (bool b)                 { s_useKawaii  = b; }
     static void setKnobStyle      (int style)              { s_knobStyle  = style; }
+    static int  getKnobStyle      () noexcept              { return s_knobStyle; }
+    static void setAccessMode     (int m) noexcept         { s_accessMode = juce::jlimit (0, 3, m); }
+    static int  getAccessMode     () noexcept              { return s_accessMode; }
     static void bumpJuicePhase    (float d)                { s_juicePhase += d; }
 
     juce::Typeface::Ptr getTypefaceForFont (const juce::Font& f) override
     {
-        if (s_useKawaii && s_kawaiiFace != nullptr)
+        if (s_useKawaii && s_kawaiiFace != nullptr && s_accessMode == 0)
             return s_kawaiiFace;
         return juce::LookAndFeel_V4::getTypefaceForFont (f);
     }
@@ -611,7 +847,7 @@ public:
     static juce::Font uiFont (float height, bool bold)
     {
         FontProbe::note (height);
-        if (s_useKawaii && s_kawaiiFace != nullptr)
+        if (s_useKawaii && s_kawaiiFace != nullptr && s_accessMode == 0)
             return juce::Font (s_kawaiiFace).withHeight (height);  // rounded font (single weight)
 
         juce::FontOptions o;
@@ -627,75 +863,386 @@ public:
 
     juce::Font getLabelFont (juce::Label& l) override
     {
-        // A ComboBox draws its closed value through this same drawLabel path, so its
-        // text was being fitted into the fixed label box and shrank at high scales.
-        // Give combo labels a larger base (and taller boxes in resized()) so the
-        // "voice / mic / EQ preset" text actually grows with the text-size slider.
         float base = (float) l.getProperties().getWithDefault ("fontH", 14.0);
         if (dynamic_cast<juce::ComboBox*> (l.getParentComponent()) != nullptr)
             base = 15.5f;
-        const bool bold = (bool) l.getProperties().getWithDefault ("bold", false);
-        return uiFont (base * fontScale, bold);
+        bool bold = (bool) l.getProperties().getWithDefault ("bold", false);
+        if (s_accessMode == 1)  // ◉ くっきり大文字モード: 全ラベルを太字＋大型化
+        {
+            base = juce::jmax (16.2f, base * 1.15f);
+            bold = true;
+        }
+        else if (s_accessMode == 2 || s_accessMode == 3)
+        {
+            base = juce::jmax (15.0f, base * 1.06f);
+            bold = true;
+        }
+        float wantH = base * fontScale;
+        if (l.getHeight() >= 12)
+            wantH = juce::jmin (wantH, juce::jmax (14.0f, (float) l.getHeight() * 0.84f));
+        return uiFont (wantH, bold);
     }
 
-    // v2.12.0 ★「文字が省略されるのは論外」への、最後の砦。
-    //  箱に入らないとき JUCE は 横に潰す → それでも無理なら「…」で切る、
-    //  という順で動く。切られると**名前そのものが消える**。
-    //  そこで、切る前に**その文字だけ小さくして、必ず全部出す**。
-    //  文字を大きくした結果ツマミの名前が消えるくらいなら、その名前だけ
-    //  少し小さいほうがいい（それでも 100% のときより大きい）。
-    //  下限は 0.62 倍。ここから先は横の潰し(最大0.7)に任せる＝実効 0.43 倍まで
-    //  入るので、日本語5文字が59pxの枠でも「…」にならない。
-    //  下限は「絶対に読める大きさ」= 12px。ここを下回るなら箱のほうが間違って
-    //  いるので、tools/ui_fit がそれを **小さすぎ** として報告する。
-    //  §4 文字の規律: 100%表示時に 14px を下回らせない。
-    //  ★ここが 12.0f だったせいで、箱に入らない文字が黙って 12px まで縮んでいた。
-    //   「入らないなら縮める」は、読めなくなる方向に必ず倒れる。
-    static constexpr float kFitMinPx = 14.0f;
+    static constexpr float kFitMinPx = 12.0f;
     static juce::Font fitFont (juce::Font f, const juce::String& t, int w)
     {
         if (t.isEmpty() || w <= 0) return f;
         const int need = juce::GlyphArrangement::getStringWidthInt (f, t);
         if (need <= w) return f;
-        //  縮めた結果も測る。ここが「気づかないうちに小さくなる」いちばんの入口。
         const float shrunk = juce::jmax (kFitMinPx, f.getHeight() * (float) w / (float) need);
         FontProbe::note (shrunk);
         return f.withHeight (shrunk);
+    }
+
+    // ★ 各ツマミが「いま音をどう変えているか（効き目の強さ・方向・感覚ワード）」を判定する共通ヘルパー
+    //    outIntensity: 0.0 (待機/変化なし) .. 1.0 (強く効いている)
+    //    outDir      : -1 (不要な音を削る・抑える・整える) / +1 (輝き・厚み・空間・音量を足す) / 0 (変化なし)
+    static void queryKnobEffect (const juce::Slider& sl, float pos, float& outIntensity, int& outDir,
+                                 juce::String& outTagJa, juce::String& outTagEn)
+    {
+        outIntensity = 0.0f;
+        outDir = 0;
+        outTagJa.clear();
+        outTagEn.clear();
+        if (! sl.isEnabled()) return;
+
+        const juce::String id = sl.getProperties().getWithDefault ("paramID", "").toString();
+        const double val = sl.getValue();
+        const float liveMeter = (float) sl.getProperties().getWithDefault ("liveMeter", 0.0);
+        const bool literalMode = (s_accessMode == 3); // ● マット・具体表記モード: 比喩・絵文字を排し具体的・機能的な言葉で統一
+
+        if (id == "denoise")
+        {
+            outIntensity = val > 1.0 ? juce::jlimit (0.22f, 1.0f, (float) val / 60.0f + liveMeter * 0.35f) : 0.0f;
+            outDir = -1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "背景ノイズ除去: 動作中" : "🧹 雑音カット");
+            outTagEn = "DENOISE";
+        }
+        else if (id == "gate")
+        {
+            outIntensity = val > -75.0 ? juce::jlimit (0.22f, 1.0f, (float) (val + 80.0) / 50.0f) : 0.0f;
+            outDir = -1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "無音時ミュート: 動作中" : "🔇 無音遮断");
+            outTagEn = "GATE";
+        }
+        else if (id == "lowcut")
+        {
+            outIntensity = val > 25.0 ? juce::jlimit (0.22f, 1.0f, (float) (val - 20.0) / 150.0f) : 0.0f;
+            outDir = -1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "超低域カット: 動作中" : "✂ 低音スッキリ");
+            outTagEn = "LOW CUT";
+        }
+        else if (id == "mud")
+        {
+            outIntensity = std::abs (val) > 0.2 ? juce::jlimit (0.24f, 1.0f, (float) std::abs (val) / 6.0f) : 0.0f;
+            outDir = (val < 0.0 ? -1 : 1);
+            outTagJa = juce::String::fromUTF8 (literalMode ? (val < 0.0 ? "250Hz帯 減衰中" : "250Hz帯 増幅中")
+                                                           : (val < 0.0 ? "💎 こもり解消" : "🔥 中低音UP"));
+            outTagEn = val < 0.0 ? "DE-MUD" : "LOW-MID+";
+        }
+        else if (id == "harsh")
+        {
+            outIntensity = std::abs (val) > 0.2 ? juce::jlimit (0.22f, 1.0f, (float) std::abs (val) / 6.0f) : 0.0f;
+            outDir = (val < 0.0 ? -1 : 1);
+            outTagJa = juce::String::fromUTF8 (literalMode ? "3.5kHz帯 減衰中" : (val < 0.0 ? "🌿 耳ざわり減" : "✨ 高域強調"));
+            outTagEn = "HARSH";
+        }
+        else if (id == "comp2" || id == "comp1")
+        {
+            outIntensity = val > 1.0 ? juce::jlimit (0.25f, 1.0f, (float) val / 70.0f + liveMeter * 0.35f) : 0.0f;
+            outDir = -1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "音量均一化: 動作中" : "⚖ 声量ピタッ");
+            outTagEn = "LEVELING";
+        }
+        else if (id == "deess")
+        {
+            outIntensity = val > 1.0 ? juce::jlimit (0.24f, 1.0f, (float) val / 65.0f + liveMeter * 0.35f) : 0.0f;
+            outDir = -1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "歯擦音(サ行)抑制: 動作中" : "🛡 サ行おさえ");
+            outTagEn = "DE-ESS";
+        }
+        else if (id == "presence")
+        {
+            outIntensity = std::abs (val) > 0.2 ? juce::jlimit (0.24f, 1.0f, (float) std::abs (val) / 6.0f) : 0.0f;
+            outDir = (val >= 0.0 ? 1 : -1);
+            outTagJa = juce::String::fromUTF8 (literalMode ? "中高域(明瞭度): 動作中" : (val >= 0.0 ? "✨ 輪郭くっきり" : "🌙 優しい輪郭"));
+            outTagEn = "PRESENCE";
+        }
+        else if (id == "air")
+        {
+            outIntensity = std::abs (val) > 0.2 ? juce::jlimit (0.24f, 1.0f, (float) std::abs (val) / 10.0f) : 0.0f;
+            outDir = (val >= 0.0 ? 1 : -1);
+            outTagJa = juce::String::fromUTF8 (literalMode ? "10kHz高域: 動作中" : (val >= 0.0 ? "✨ 空気ツヤUP" : "🌙 高音落ち着き"));
+            outTagEn = "AIR";
+        }
+        else if (id == "drive")
+        {
+            outIntensity = val > 1.0 ? juce::jlimit (0.22f, 1.0f, (float) val / 40.0f) : 0.0f;
+            outDir = 1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "倍音付加: 動作中" : "🔥 温かい厚み");
+            outTagEn = "WARMTH";
+        }
+        else if (id == "revmix")
+        {
+            outIntensity = val > 1.0 ? juce::jlimit (0.25f, 1.0f, (float) val / 55.0f) : 0.0f;
+            outDir = 1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "残響ブレンド: 動作中" : "🏛 残響の余韻");
+            outTagEn = "REVERB";
+        }
+        else if (id == "revsize")
+        {
+            outIntensity = val > 1.0 ? juce::jlimit (0.22f, 1.0f, (float) val / 85.0f) : 0.0f;
+            outDir = 1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "残響空間サイズ: 設定中" : "🌌 空間の広さ");
+            outTagEn = "SPACE SIZE";
+        }
+        else if (id == "delay")
+        {
+            outIntensity = val > 1.0 ? juce::jlimit (0.25f, 1.0f, (float) val / 60.0f) : 0.0f;
+            outDir = 1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "反響ディレイ: 動作中" : "🔊 やまびこ");
+            outTagEn = "ECHO";
+        }
+        else if (id == "width")
+        {
+            outIntensity = std::abs (val) > 1.0 ? juce::jlimit (0.25f, 1.0f, (float) std::abs (val) / 75.0f) : 0.0f;
+            outDir = 1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "左右ステレオ幅: 動作中" : "↔ 左右パノラマ");
+            outTagEn = "STEREO";
+        }
+        else if (id == "in_gain")
+        {
+            outIntensity = std::abs (val) > 0.2 ? juce::jlimit (0.22f, 1.0f, (float) std::abs (val) / 12.0f) : 0.0f;
+            outDir = (val >= 0.0 ? 1 : -1);
+            outTagJa = juce::String::fromUTF8 (literalMode ? "入力ゲイン調整中" : (val >= 0.0 ? "🎤 入力増幅" : "🎤 入力減衰"));
+            outTagEn = "IN GAIN";
+        }
+        else if (id == "makeup")
+        {
+            outIntensity = std::abs (val) > 0.2 ? juce::jlimit (0.25f, 1.0f, (float) std::abs (val) / 8.0f) : 0.0f;
+            outDir = (val >= 0.0 ? 1 : -1);
+            outTagJa = juce::String::fromUTF8 (literalMode ? "出力ゲイン調整中" : (val >= 0.0 ? "🔊 音量UP中" : "🔉 音量抑制"));
+            outTagEn = "OUT GAIN";
+        }
+        else if (id == "hum")
+        {
+            outIntensity = val > 1.0 ? juce::jlimit (0.22f, 1.0f, (float) val / 50.0f) : 0.0f;
+            outDir = -1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "電源ハム除去: 動作中" : "⚡ ジー音除去");
+            outTagEn = "DE-HUM";
+        }
+        else if (id == "attack" || id == "release" || id == "mix")
+        {
+            outIntensity = 0.28f;
+            outDir = 0;
+        }
+        else
+        {
+            outIntensity = std::abs (val) > 0.5 ? juce::jlimit (0.20f, 1.0f, pos) : 0.0f;
+            outDir = 1;
+            outTagJa = juce::String::fromUTF8 (literalMode ? "動作中" : "✦ 効き目ON");
+            outTagEn = "ACTIVE";
+        }
     }
 
     void drawLabel (juce::Graphics& g, juce::Label& l) override
     {
         if (l.isBeingEdited()) return;
         const auto area = l.getBorderSize().subtractedFrom (l.getLocalBounds());
-        const auto f = fitFont (getLabelFont (l), l.getText(), area.getWidth());
+        int leftLedPad = 0;
+
+        // ★ ロータリーノブの数値ボックス描画（標準＝OLEDカプセル / ◉くっきり＝超高コントラスト＋形状記号 / ★3ステップ＝待機減光 / ●マット＝無発光箱）
+        if (auto* parentSlider = dynamic_cast<juce::Slider*> (l.getParentComponent()))
+        {
+            if (s_knobStyle != 5 && area.getWidth() >= 36 && area.getHeight() >= 14)
+            {
+                const auto rf = l.getLocalBounds().toFloat().reduced (1.5f, 0.8f);
+                const float rad = (s_accessMode > 0) ? 6.0f : (s_useKawaii ? rf.getHeight() * 0.48f : 5.5f);
+                const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
+                const int group = (int) parentSlider->getProperties().getWithDefault ("signalGroup", 2);
+                const juce::Colour acc = ! parentSlider->isEnabled() ? Palette::inkSoft
+                                       : (group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc);
+                const float prop = (float) juce::jlimit (0.0, 1.0, parentSlider->valueToProportionOfLength (parentSlider->getValue()));
+
+                float effInt = 0.0f; int effDir = 0; juce::String tagJa, tagEn;
+                queryKnobEffect (*parentSlider, prop, effInt, effDir, tagJa, tagEn);
+                const bool isWorking = (effInt > 0.02f);
+                const juce::Colour effCol = (effDir < 0) ? Palette::green.interpolatedWith (Palette::ice, 0.38f)
+                                          : (effDir > 0) ? Palette::yellow.interpolatedWith (Palette::salmon, 0.35f)
+                                                         : acc;
+
+                if (s_accessMode == 1)  // ◉ くっきり大文字モード: 漆黒ソリッド下地＋太枠＋形状記号 (▼削る / ▲足す / ○待機)
+                {
+                    g.setColour (juce::Colour (0xff04070b));
+                    g.fillRoundedRectangle (rf, rad);
+                    g.setColour (isWorking ? (effDir < 0 ? Palette::green : Palette::yellow) : Palette::panelLn.withAlpha (0.75f));
+                    g.drawRoundedRectangle (rf.reduced (0.5f), rad, isWorking ? 2.2f : 1.4f);
+
+                    const bool hasSym = (rf.getWidth() >= 68.0f);
+                    if (hasSym)
+                    {
+                        const float sx = rf.getX() + 9.0f;
+                        const float sy = rf.getCentreY();
+                        if (isWorking)
+                        {
+                            juce::Path sym;
+                            if (effDir < 0) // ▼ 削る・抑える
+                            {
+                                sym.addTriangle (sx - 4.5f, sy - 3.5f, sx + 4.5f, sy - 3.5f, sx, sy + 4.5f);
+                                g.setColour (Palette::green);
+                            }
+                            else            // ▲ 足す・広げる
+                            {
+                                sym.addTriangle (sx - 4.5f, sy + 4.0f, sx + 4.5f, sy + 4.0f, sx, sy - 4.2f);
+                                g.setColour (Palette::yellow);
+                            }
+                            g.fillPath (sym);
+                        }
+                        else
+                        {
+                            g.setColour (Palette::panelLn.withAlpha (0.65f));
+                            g.drawEllipse (sx - 3.2f, sy - 3.2f, 6.4f, 6.4f, 1.5f);
+                        }
+                    }
+
+                    const auto textRect = area.withTrimmedLeft (hasSym ? 15 : 2).withTrimmedRight (2);
+                    const float maxH = juce::jmin (rf.getHeight() * 0.80f, 15.5f * fontScale);
+                    const auto f = fitFont (uiFont (maxH, true), l.getText(), textRect.getWidth());
+                    g.setFont (f);
+                    g.setColour (isWorking ? juce::Colours::white : Palette::inkSoft);
+                    g.drawFittedText (l.getText(), textRect, juce::Justification::centred, 1, 0.85f);
+                    return;
+                }
+                else if (s_accessMode == 3) // ● マット・具体表記モード: 発光・反射・グラデーション完全ゼロの静穏マットカプセル
+                {
+                    g.setColour (Palette::bgBot);
+                    g.fillRoundedRectangle (rf, 5.0f);
+                    g.setColour (isWorking ? acc : Palette::panelLn.withAlpha (0.65f));
+                    g.drawRoundedRectangle (rf.reduced (0.5f), 5.0f, isWorking ? 1.6f : 1.0f);
+                    const bool hasSq = (isWorking && rf.getWidth() >= 68.0f);
+                    if (hasSq)
+                    {
+                        g.setColour (acc);
+                        g.fillRoundedRectangle (rf.getX() + 5.5f, rf.getCentreY() - 3.0f, 6.0f, 6.0f, 1.5f);
+                    }
+                    const auto textRect = area.withTrimmedLeft (hasSq ? 12 : 2).withTrimmedRight (2);
+                    const auto f = fitFont (getLabelFont (l), l.getText(), textRect.getWidth());
+                    g.setFont (f);
+                    g.setColour (isWorking ? Palette::ink : Palette::inkSoft.withAlpha (0.80f));
+                    g.drawFittedText (l.getText(), textRect, juce::Justification::centred, 1, 0.85f);
+                    return;
+                }
+
+                // 標準 または ★ かんたん3ステップモード (3ステップ時は待機カプセルを減光して作動中だけに視線を集中させる)
+                const float adhdDim = (s_accessMode == 2 && ! isWorking) ? 0.38f : 1.0f;
+
+                // 0. 効いているツマミのOLEDカプセル背面オーラ
+                if (isWorking)
+                {
+                    g.setColour (effCol.withAlpha (0.18f + 0.18f * effInt));
+                    g.fillRoundedRectangle (rf.expanded (1.6f, 1.2f), rad + 1.2f);
+                }
+
+                // 1. ディスプレイ深層キャビティ背景
+                if (lightPanel)
+                {
+                    g.setGradientFill (juce::ColourGradient (Palette::panel2.darker (0.04f).withAlpha (0.90f * adhdDim), rf.getX(), rf.getY(),
+                                                             Palette::panel.brighter (0.04f).withAlpha (0.94f * adhdDim), rf.getX(), rf.getBottom(), false));
+                }
+                else
+                {
+                    g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (isWorking ? 0.38f : 0.55f).withAlpha (0.90f * adhdDim), rf.getX(), rf.getY(),
+                                                             Palette::panel2.darker (isWorking ? 0.16f : 0.32f).withAlpha (0.92f * adhdDim), rf.getX(), rf.getBottom(), false));
+                }
+                g.fillRoundedRectangle (rf, rad);
+
+                // 2. 上部ガラス反射マイクロハイライト
+                g.setColour (juce::Colours::white.withAlpha ((lightPanel ? 0.55f : (isWorking ? 0.22f : 0.08f)) * adhdDim));
+                g.drawHorizontalLine (juce::roundToInt (rf.getY() + 1.0f), rf.getX() + rad, rf.getRight() - rad);
+
+                // 3. 下辺のライブ・オプティカル進捗ライトパイプバー (効いている時のみ鮮やかに発光)
+                const float barMaxW = juce::jmax (8.0f, rf.getWidth() - 10.0f);
+                const float barX    = rf.getX() + 5.0f;
+                const float barY    = rf.getBottom() - 2.6f;
+                g.setColour (Palette::track.withAlpha (0.45f * adhdDim));
+                g.fillRoundedRectangle (barX, barY, barMaxW, 1.6f, 0.8f);
+                if (isWorking && prop > 0.01f)
+                {
+                    const float fillW = juce::jmax (4.0f, barMaxW * prop);
+                    g.setGradientFill (juce::ColourGradient (acc.withAlpha (0.90f), barX, barY,
+                                                             effCol.brighter (0.25f), barX + fillW, barY, false));
+                    g.fillRoundedRectangle (barX, barY, fillW, 2.0f, 1.0f);
+                }
+
+                // 4. 左端の「稼働中ジュエルLEDドット (●)」(幅に余裕がある総合画面カプセルで点灯)
+                if (isWorking && rf.getWidth() >= 68.0f)
+                {
+                    const float lx = rf.getX() + 6.8f;
+                    const float ly = rf.getCentreY() - 0.5f;
+                    g.setColour (effCol.withAlpha (0.45f));
+                    g.fillEllipse (lx - 3.6f, ly - 3.6f, 7.2f, 7.2f);
+                    g.setColour (effCol.brighter (0.25f));
+                    g.fillEllipse (lx - 2.2f, ly - 2.2f, 4.4f, 4.4f);
+                    g.setColour (juce::Colours::white);
+                    g.fillEllipse (lx - 0.9f, ly - 0.9f, 1.8f, 1.8f);
+                    leftLedPad = 11;
+                }
+
+                // 5. 精密ベゼルリム（効いているツマミは発光リム、待機中ツマミは静かなダークリム）
+                g.setColour (isWorking ? effCol.withAlpha (0.85f)
+                           : s_knobStyle == 6 ? Palette::metalMid.withAlpha (0.32f * adhdDim)
+                                              : Palette::panelLn.withAlpha (0.38f * adhdDim));
+                g.drawRoundedRectangle (rf.reduced (0.4f), rad, isWorking ? 1.35f : 0.85f);
+            }
+        }
+
+        const auto textArea = (leftLedPad > 0) ? area.withTrimmedLeft (leftLedPad).withTrimmedRight (2) : area;
+        const auto f = fitFont (getLabelFont (l), l.getText(), textArea.getWidth());
         juce::Colour textCol = l.findColour (juce::Label::textColourId);
         if (auto* parentCombo = dynamic_cast<juce::ComboBox*> (l.getParentComponent()))
             textCol = parentCombo->findColour (juce::ComboBox::textColourId);
-        g.setColour (textCol.withMultipliedAlpha (l.isEnabled() ? 1.0f : 0.5f));
+        float textAlpha = l.isEnabled() ? 1.0f : 0.5f;
+        if (s_accessMode == 2)
+        {
+            if (auto* parentSlider = dynamic_cast<juce::Slider*> (l.getParentComponent()))
+            {
+                float effInt = 0.0f; int effDir = 0; juce::String tj, te;
+                const float prop = (float) juce::jlimit (0.0, 1.0, parentSlider->valueToProportionOfLength (parentSlider->getValue()));
+                queryKnobEffect (*parentSlider, prop, effInt, effDir, tj, te);
+                if (effInt <= 0.02f) textAlpha *= 0.42f;
+            }
+        }
+        g.setColour (textCol.withMultipliedAlpha (textAlpha));
         g.setFont (f);
-        g.drawFittedText (l.getText(), area, l.getJustificationType(),
-                          juce::jmax (1, (int) ((float) area.getHeight() / f.getHeight())),
+        g.drawFittedText (l.getText(), textArea.withTrimmedBottom (1), l.getJustificationType(),
+                          juce::jmax (1, (int) ((float) textArea.getHeight() / f.getHeight())),
                           l.getMinimumHorizontalScale());
     }
 
     juce::Font getTextButtonFont (juce::TextButton& b, int h) override
     {
-        // v2.4.0: 大きなボタン(かんたんモードのうた自動など)は "fontH" プロパティで
-        // 文字サイズを指定できる。既定は従来どおり高さの60%(上限15.5px)。
         const float want = (float) b.getProperties().getWithDefault ("fontH", 0.0);
-        if (want > 0.0f)
-            return uiFont (want * fontScale, true);
-        return uiFont (juce::jmin ((float) h * 0.60f, 15.5f) * fontScale, true);
+        const float boost = (s_accessMode == 1) ? 1.12f : 1.0f;
+        const float baseH = (want > 0.0f) ? (want * fontScale * boost)
+                                          : ((s_accessMode == 1 ? 15.5f : 14.5f) * fontScale);
+        const float maxH = (h > 0) ? juce::jmax (14.0f, (float) h * 0.72f) : baseH;
+        return uiFont (juce::jmin (maxH, baseH), true);
     }
 
-    juce::Font getComboBoxFont (juce::ComboBox&) override
+    juce::Font getComboBoxFont (juce::ComboBox& box) override
     {
-        return uiFont (14.0f * fontScale, false);
+        const float wantH = (s_accessMode == 1 ? 16.0f : 14.0f) * fontScale;
+        const float maxH  = (box.getHeight() > 0) ? juce::jmax (14.0f, (float) box.getHeight() * 0.72f) : wantH;
+        const auto f = uiFont (juce::jmin (maxH, wantH), s_accessMode == 1);
+        const auto txt = box.getText().isNotEmpty() ? box.getText() : box.getTextWhenNothingSelected();
+        if (box.getWidth() > 40 && txt.isNotEmpty())
+            return fitFont (f, txt, box.getWidth() - 36);
+        return f;
     }
 
     juce::Font getPopupMenuFont() override
     {
-        return uiFont (15.0f * fontScale, false);
+        return uiFont ((s_accessMode == 1 ? 16.5f : 15.0f) * fontScale, s_accessMode == 1);
     }
 
 private:
@@ -756,23 +1303,196 @@ public:
     void drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                            float pos, float startAngle, float endAngle, juce::Slider& sl) override
     {
-        if (s_knobStyle == 1)   // yuru-kawa: draw a juice glass (fill = value)
+        if (s_knobStyle == 1 && s_accessMode == 0)   // yuru-kawa: draw a juice glass (fill = value)
         {
             drawJuiceKnob (g, juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height),
                            pos, (int) sl.getProperties().getWithDefault ("juice", 0),
                            (bool) sl.getProperties().getWithDefault ("wideGlass", false));
             return;
         }
-        // 目盛り・値の弧・指針だけで読めるダイヤル。待機中のアニメーションは不要。
         const bool isHero = (bool) sl.getProperties().getWithDefault ("heroKnob", false);
-        auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height).reduced (isHero ? 6.0f : 7.0f);
+        const float dialInset = (s_accessMode == 1) ? 12.2f : (isHero ? 11.2f : 9.4f);
+        auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height).reduced (dialInset);
         const float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
         const auto  c      = bounds.getCentre();
         const float angle  = startAngle + pos * (endAngle - startAngle);
         const float ring   = juce::jmax (isHero ? 4.8f : 3.4f, radius * (isHero ? 0.082f : 0.068f));
         const int group = (int) sl.getProperties().getWithDefault ("signalGroup", 2);
         const auto groupAccent = group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc;
-        const auto accent = sl.isEnabled() ? groupAccent : Palette::inkSoft;
+
+        float effInt = 0.0f;
+        int   effDir = 1;
+        juce::String effTagJa, effTagEn;
+        queryKnobEffect (sl, pos, effInt, effDir, effTagJa, effTagEn);
+        const bool isWorking = sl.isEnabled() && (effInt > 0.02f);
+        const juce::Colour dirTint = (effDir < 0) ? Palette::ice : Palette::yellow;
+        const auto accent = ! sl.isEnabled() ? Palette::inkSoft
+                          : isWorking        ? groupAccent.interpolatedWith (dirTint, 0.24f * effInt).brighter (0.14f * effInt)
+                                             : groupAccent.interpolatedWith (Palette::inkSoft, 0.52f).withAlpha (0.58f);
+
+        // =========================================================================
+        // ★ ユニバーサル・アクセシビリティ専用ロータリーダイヤル描画 (s_accessMode == 1, 2, 3)
+        // =========================================================================
+        if (s_accessMode == 1)  // 👓 老眼・くっきり大文字モード (WCAG AAA 12:1・極太8目盛り・巨大白金ポインター針)
+        {
+            const float thickRing = ring * 1.38f;
+            const juce::Colour hiCol = isWorking ? (effDir < 0 ? Palette::green : (group == 1 ? Palette::blue : Palette::yellow))
+                                                 : Palette::panelLn.withAlpha (0.55f);
+
+            // 1. 外周8分割の極太・高コントラスト目盛り（32本の細かい目盛りを廃止し、老眼でも一目で位置がわかる大目盛り）
+            for (int tick = 0; tick <= 8; ++tick)
+            {
+                const float tNorm = (float) tick / 8.0f;
+                const float a = startAngle + (endAngle - startAngle) * tNorm;
+                const bool major = (tick == 0 || tick == 4 || tick == 8);
+                const bool passed = isWorking && (tNorm <= pos + 0.01f);
+                const float rIn  = radius + 4.2f;
+                const float rOut = radius + (major ? 12.0f : 8.5f);
+                g.setColour (passed ? Palette::yellow : (major ? juce::Colours::white.withAlpha (0.90f) : Palette::panelLn.withAlpha (0.75f)));
+                g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
+                            c.x + rOut * std::sin (a), c.y - rOut * std::cos (a),
+                            major ? 3.4f : 2.2f);
+            }
+
+            // 2. 極太トラック溝＆高輝度ソリッド値アーク
+            juce::Path track;
+            track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+            g.setColour (juce::Colour (0xff03060a));
+            g.strokePath (track, juce::PathStrokeType (thickRing + 3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour (Palette::track);
+            g.strokePath (track, juce::PathStrokeType (thickRing, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            if (isWorking)
+            {
+                juce::Path valArc;
+                valArc.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                g.setColour (hiCol);
+                g.strokePath (valArc, juce::PathStrokeType (thickRing, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
+
+            // 3. 漆黒マット文字盤（内部の歯車や反射グロスを完全排除し、針の視認性を極限まで高める）
+            const float kr = radius - thickRing * 0.75f - 3.5f;
+            if (kr >= 6.0f)
+            {
+                g.setColour (juce::Colour (0xff060a10));
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                g.setColour (isWorking ? hiCol : Palette::panelLn);
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 2.6f : 2.0f);
+
+                // 4. 超大型・極太5.2px 純白＆黄金くさびポインター針（先端に大きな三角マーカー付き）
+                const float pIn  = kr * 0.14f;
+                const float pOut = kr * 0.88f;
+                const float sinA = std::sin (angle), cosA = std::cos (angle);
+                g.setColour (juce::Colours::black.withAlpha (0.85f));
+                g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA, c.x + pOut * sinA, c.y - pOut * cosA, isHero ? 7.5f : 6.2f);
+                g.setColour (isWorking ? juce::Colours::white : Palette::inkSoft);
+                g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA, c.x + pOut * sinA, c.y - pOut * cosA, isHero ? 5.0f : 4.2f);
+
+                // 先端の黄金デルタマーカー
+                const float tipX = c.x + (kr * 0.90f) * sinA;
+                const float tipY = c.y - (kr * 0.90f) * cosA;
+                g.setColour (isWorking ? Palette::yellow : Palette::inkSoft);
+                g.fillEllipse (tipX - 4.5f, tipY - 4.5f, 9.0f, 9.0f);
+                g.setColour (juce::Colours::white);
+                g.fillEllipse (c.x - 4.2f, c.y - 4.2f, 8.4f, 8.4f);
+            }
+            return;
+        }
+        else if (s_accessMode == 2) // 🧭 ADHD 集中・迷わない3ステップモード (非稼働ノブは静かに減光、稼働ノブと主役ノブだけくっきり表示)
+        {
+            const float focusAlpha = isWorking ? 1.0f : (isHero ? 0.55f : 0.25f);
+            if (isWorking)
+            {
+                const float coronaR = radius + (isHero ? 9.0f : 6.5f);
+                g.setGradientFill (juce::ColourGradient (groupAccent.withAlpha (0.24f), c.x, c.y,
+                                                         groupAccent.withAlpha (0.0f), c.x + coronaR, c.y, true));
+                g.fillEllipse (c.x - coronaR, c.y - coronaR, coronaR * 2.0f, coronaR * 2.0f);
+            }
+            for (int tick = 0; tick <= 12; ++tick)
+            {
+                const float tNorm = (float) tick / 12.0f;
+                const float a = startAngle + (endAngle - startAngle) * tNorm;
+                const bool major = (tick % 3 == 0);
+                const bool passed = isWorking && (tNorm <= pos + 0.01f);
+                const float rIn  = radius + 3.5f;
+                const float rOut = radius + (major ? 9.0f : 6.0f);
+                g.setColour ((passed ? groupAccent : Palette::inkSoft).withAlpha ((passed ? 0.95f : (major ? 0.45f : 0.20f)) * focusAlpha));
+                g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
+                            c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), major ? 2.2f : 1.3f);
+            }
+            juce::Path track;
+            track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+            g.setColour (Palette::track.withAlpha (focusAlpha));
+            g.strokePath (track, juce::PathStrokeType (ring * 1.15f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            if (isWorking)
+            {
+                juce::Path valArc;
+                valArc.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                g.setColour (groupAccent);
+                g.strokePath (valArc, juce::PathStrokeType (ring * 1.20f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
+
+            const float kr = radius - ring - 3.2f;
+            if (kr >= 6.0f)
+            {
+                g.setColour (Palette::panel2.darker (isWorking ? 0.10f : 0.45f).withAlpha (focusAlpha));
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                g.setColour ((isWorking ? groupAccent : Palette::panelLn).withAlpha (focusAlpha));
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 2.2f : 1.4f);
+
+                const float sinA = std::sin (angle), cosA = std::cos (angle);
+                g.setColour ((isWorking ? juce::Colours::white : Palette::inkSoft).withAlpha (focusAlpha));
+                g.drawLine (c.x + kr * 0.20f * sinA, c.y - kr * 0.20f * cosA,
+                            c.x + kr * 0.85f * sinA, c.y - kr * 0.85f * cosA, isHero ? 3.8f : 3.0f);
+                g.setColour (groupAccent.withAlpha (focusAlpha));
+                g.fillEllipse (c.x - 3.5f, c.y - 3.5f, 7.0f, 7.0f);
+            }
+            return;
+        }
+        else if (s_accessMode == 3) // 🌿 ASD・感覚過敏 やさしい低刺激モード (発光ゼロ・反射ゼロ・グラデーションゼロの完全マット設計)
+        {
+            for (int tick = 0; tick <= 8; ++tick)
+            {
+                const float tNorm = (float) tick / 8.0f;
+                const float a = startAngle + (endAngle - startAngle) * tNorm;
+                const bool major = (tick % 2 == 0);
+                const float rIn  = radius + 3.5f;
+                const float rOut = radius + (major ? 8.0f : 5.5f);
+                g.setColour (Palette::inkSoft.withAlpha (major ? 0.55f : 0.30f));
+                g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
+                            c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), major ? 1.8f : 1.2f);
+            }
+            juce::Path track;
+            track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+            g.setColour (Palette::track);
+            g.strokePath (track, juce::PathStrokeType (ring * 1.1f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            if (isWorking)
+            {
+                juce::Path valArc;
+                valArc.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                g.setColour (groupAccent);
+                g.strokePath (valArc, juce::PathStrokeType (ring * 1.1f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
+
+            const float kr = radius - ring - 3.2f;
+            if (kr >= 6.0f)
+            {
+                g.setColour (Palette::panel2);
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                g.setColour (isWorking ? groupAccent : Palette::panelLn);
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 1.6f);
+
+                const float sinA = std::sin (angle), cosA = std::cos (angle);
+                g.setColour (isWorking ? Palette::ink : Palette::inkSoft);
+                g.drawLine (c.x + kr * 0.22f * sinA, c.y - kr * 0.22f * cosA,
+                            c.x + kr * 0.84f * sinA, c.y - kr * 0.84f * cosA, 3.2f);
+                g.setColour (isWorking ? groupAccent : Palette::panelLn);
+                g.fillEllipse (c.x - 3.2f, c.y - 3.2f, 6.4f, 6.4f);
+            }
+            return;
+        }
 
         // ⚡ 軽量モード (s_knobStyle == 5): グラデーション・影・画像転写を一切使わない超高速フラットベクター描画
         if (s_knobStyle == 5)
@@ -802,6 +1522,25 @@ public:
             return;
         }
 
+        // ★ アクティブ音響コロナ (Active Sonic Corona):
+        //   ツマミが効いている時だけ、効き具合 (effInt) に比例して外周に多層光輪ハローと
+        //   音の方向性リング (カット・整音＝氷晶シアン / ブースト・空間・艶＝琥珀ゴールド) が浮かび上がる！
+        if (isWorking)
+        {
+            const float coronaR = radius + (isHero ? 12.0f : 9.5f);
+            const juce::Colour glowCol = groupAccent.interpolatedWith (dirTint, 0.38f);
+            g.setGradientFill (juce::ColourGradient (glowCol.withAlpha ((0.20f + 0.28f * effInt) * (isHero ? 1.15f : 1.0f)), c.x, c.y,
+                                                     glowCol.withAlpha (0.0f), c.x + coronaR, c.y, true));
+            g.fillEllipse (c.x - coronaR, c.y - coronaR, coronaR * 2.0f, coronaR * 2.0f);
+
+            // 効き始め〜現在の角度までを結ぶ外周「ソニック・インパクト・リング」
+            juce::Path impactArc;
+            const float impR = radius + (isHero ? 5.6f : 4.6f);
+            impactArc.addCentredArc (c.x, c.y, impR, impR, 0.0f, startAngle, angle, true);
+            g.setColour (glowCol.withAlpha (0.35f + 0.45f * effInt));
+            g.strokePath (impactArc, juce::PathStrokeType (isHero ? 2.2f : 1.7f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+
         // ★ 主役ノブ(heroKnob)専用: 外周クロノグラフ・タービンベゼル (またはV-Liverクチュール・ティアラハロー)
         if (isHero && radius > 34.0f)
         {
@@ -810,24 +1549,27 @@ public:
             {
                 // ♥ V-Liver / Kawaii 主役ノブ専用: クチュール宝飾メタルのティアラハロー＆4方位ジュエル
                 const juce::Colour goldCol = Palette::metalMid;
-                g.setColour (goldCol.withAlpha (0.55f));
+                g.setColour (goldCol.withAlpha (isWorking ? 0.68f : 0.28f));
                 g.drawEllipse (c.x - outerR, c.y - outerR, outerR * 2.0f, outerR * 2.0f, 2.0f);
                 for (int q = 0; q < 4; ++q)
                 {
                     const float qa = (float) q * juce::MathConstants<float>::halfPi + juce::MathConstants<float>::pi * 0.25f;
                     const float gx = c.x + (outerR + 0.5f) * std::sin (qa);
                     const float gy = c.y - (outerR + 0.5f) * std::cos (qa);
-                    g.setColour (goldCol);
+                    g.setColour (goldCol.withAlpha (isWorking ? 1.0f : 0.45f));
                     g.fillEllipse (gx - 4.4f, gy - 4.4f, 8.8f, 8.8f);
-                    g.setColour (accent.withAlpha (0.95f));
+                    g.setColour (accent.withAlpha (isWorking ? 0.95f : 0.45f));
                     g.fillEllipse (gx - 3.0f, gy - 3.0f, 6.0f, 6.0f);
-                    g.setColour (juce::Colours::white.withAlpha (0.95f));
-                    g.fillEllipse (gx - 1.3f, gy - 1.3f, 2.6f, 2.6f);
+                    if (isWorking)
+                    {
+                        g.setColour (juce::Colours::white.withAlpha (0.95f));
+                        g.fillEllipse (gx - 1.3f, gy - 1.3f, 2.6f, 2.6f);
+                    }
                 }
             }
             else
             {
-                g.setColour (Palette::bgTop.darker (0.45f).withAlpha (0.55f));
+                g.setColour (Palette::bgTop.darker (0.45f).withAlpha (isWorking ? 0.65f : 0.35f));
                 g.drawEllipse (c.x - outerR, c.y - outerR, outerR * 2.0f, outerR * 2.0f, 3.2f);
                 // 4方位の重厚なメカ・ロックブラケット爪
                 for (int q = 0; q < 4; ++q)
@@ -835,83 +1577,127 @@ public:
                     const float qa = (float) q * juce::MathConstants<float>::halfPi + juce::MathConstants<float>::pi * 0.25f;
                     juce::Path claw;
                     claw.addCentredArc (c.x, c.y, outerR + 1.2f, outerR + 1.2f, 0.0f, qa - 0.18f, qa + 0.18f, true);
-                    g.setColour (accent.withAlpha (0.42f));
+                    g.setColour (accent.withAlpha (isWorking ? (0.45f + 0.35f * effInt) : 0.20f));
                     g.strokePath (claw, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::butt));
                 }
             }
         }
 
-        // 外周の精密スケール目盛り（現在値までの目盛りがアクセント色で点灯する意匠）
+        // ★ Red Dot Design Award 仕様: 外周32ステップ・クロノグラフ精密クリック目盛り＆5方位ジュエルインデックス
         const int numTicks = isHero ? 32 : 24;
         for (int tick = 0; tick <= numTicks; ++tick)
         {
             const float tNorm = (float) tick / (float) numTicks;
             const float a = startAngle + (endAngle - startAngle) * tNorm;
-            const bool activeTick = sl.isEnabled() && (tNorm <= pos + 0.005f);
+            const bool activeTick = isWorking && (tNorm <= pos + 0.005f);
             const bool majorTick  = (tick % (isHero ? 8 : 6) == 0);
+            const juce::Colour tickAccent = accent.interpolatedWith (dirTint, tNorm * 0.48f);
             if (s_knobStyle == 2)   // V-Liver: クチュール宝飾メタル台座＋ジュエル・ドット目盛り
             {
                 const float dotR = radius + 6.2f;
-                const float sz = majorTick ? 4.2f : 2.5f;
+                const float sz = majorTick ? 4.4f : 2.5f;
                 const float dx = c.x + dotR * std::sin (a);
                 const float dy = c.y - dotR * std::cos (a);
                 if (activeTick && majorTick)
                 {
-                    g.setColour (Palette::metalMid.withAlpha (0.85f));
-                    g.fillEllipse (dx - sz * 0.72f, dy - sz * 0.72f, sz * 1.44f, sz * 1.44f);
+                    g.setColour (Palette::metalMid.withAlpha (0.90f));
+                    g.fillEllipse (dx - sz * 0.78f, dy - sz * 0.78f, sz * 1.56f, sz * 1.56f);
                 }
-                g.setColour (activeTick ? accent.withAlpha (0.95f) : Palette::metalMid.withAlpha (majorTick ? 0.65f : 0.35f));
+                g.setColour (activeTick ? tickAccent.withAlpha (0.98f)
+                                        : Palette::metalMid.withAlpha (isWorking ? (majorTick ? 0.58f : 0.30f) : (majorTick ? 0.32f : 0.15f)));
                 g.fillEllipse (dx - sz * 0.5f, dy - sz * 0.5f, sz, sz);
             }
             else
             {
-                const float inner = radius + (isHero ? 4.2f : 3.6f);
-                const float outer = radius + (majorTick ? (isHero ? 10.5f : 8.6f) : (isHero ? 7.2f : 5.8f));
-                g.setColour (activeTick ? accent.withAlpha (majorTick ? 0.98f : 0.74f)
-                                        : Palette::inkSoft.withAlpha (majorTick ? 0.55f : 0.24f));
-                g.drawLine (c.x + inner * std::sin (a), c.y - inner * std::cos (a),
-                            c.x + outer * std::sin (a), c.y - outer * std::cos (a),
-                            majorTick ? (isHero ? 2.0f : 1.6f) : 1.1f);
+                const float inner = radius + (isHero ? 4.0f : 3.4f);
+                const float outer = radius + (majorTick ? (isHero ? 11.2f : 9.2f) : (isHero ? 7.6f : 6.0f));
+                if (activeTick)
+                {
+                    g.setColour (tickAccent.withAlpha (majorTick ? 1.0f : 0.85f));
+                    g.drawLine (c.x + inner * std::sin (a), c.y - inner * std::cos (a),
+                                c.x + outer * std::sin (a), c.y - outer * std::cos (a),
+                                majorTick ? (isHero ? 2.4f : 1.9f) : 1.3f);
+                    if (majorTick)
+                    {
+                        const float jx = c.x + (outer + 1.4f) * std::sin (a);
+                        const float jy = c.y - (outer + 1.4f) * std::cos (a);
+                        g.setColour (juce::Colours::white.withAlpha (0.95f));
+                        g.fillEllipse (jx - 1.5f, jy - 1.5f, 3.0f, 3.0f);
+                    }
+                }
+                else
+                {
+                    g.setColour ((s_knobStyle == 6 ? Palette::metalHi : Palette::inkSoft)
+                                   .withAlpha (isWorking ? (majorTick ? 0.48f : 0.22f) : (majorTick ? 0.24f : 0.10f)));
+                    g.drawLine (c.x + inner * std::sin (a), c.y - inner * std::cos (a),
+                                c.x + outer * std::sin (a), c.y - outer * std::cos (a),
+                                majorTick ? (isHero ? 1.6f : 1.3f) : 0.9f);
+                }
             }
         }
 
-        // 彫り込みトラック溝＋マルチレイヤー発光アーク（V-Liverではクチュール金具縁のサテン溝）
+        // 彫り込みトラック溝＋デュアルトーン・オプティカルライトパイプ発光アーク
         juce::Path track;
         track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
         g.setColour ((s_knobStyle == 2)
-                     ? Palette::metalMid.withAlpha (0.55f)
-                     : (s_useKawaii ? accent.withAlpha (0.24f) : Palette::bgTop.darker (0.45f).withAlpha (0.78f)));
-        g.strokePath (track, juce::PathStrokeType (ring + 2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        g.setColour (Palette::track);
+                     ? Palette::metalMid.withAlpha (isWorking ? 0.55f : 0.28f)
+                     : (s_useKawaii ? accent.withAlpha (0.24f) : Palette::bgTop.darker (0.48f).withAlpha (0.84f)));
+        g.strokePath (track, juce::PathStrokeType (ring + 2.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (Palette::track.withAlpha (isWorking ? 1.0f : 0.62f));
         g.strokePath (track, juce::PathStrokeType (ring, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-        juce::Path value;
-        value.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
-        if (sl.isEnabled())   // アクティブアークの2層ソフトグロー
+        if (isWorking)
         {
-            const float glowAlpha = (s_knobStyle == 4) ? 0.40f : (isHero ? 0.28f : 0.20f);
+            juce::Path value;
+            value.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+            const float glowAlpha = ((s_knobStyle == 4 || s_knobStyle == 6) ? 0.42f : (isHero ? 0.36f : 0.28f)) * (0.55f + 0.45f * effInt);
             g.setColour (accent.withAlpha (glowAlpha));
-            g.strokePath (value, juce::PathStrokeType (ring * 2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.strokePath (value, juce::PathStrokeType (ring * 3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            const float tipX0 = c.x + radius * std::sin (startAngle), tipY0 = c.y - radius * std::cos (startAngle);
+            const float tipX1 = c.x + radius * std::sin (angle),      tipY1 = c.y - radius * std::cos (angle);
+            g.setGradientFill (juce::ColourGradient (groupAccent, tipX0, tipY0,
+                                                     accent.interpolatedWith (dirTint, 0.50f).brighter (0.28f), tipX1, tipY1, false));
+            g.strokePath (value, juce::PathStrokeType (ring * 1.12f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour (juce::Colours::white.withAlpha (0.55f + 0.30f * effInt));
+            g.strokePath (value, juce::PathStrokeType (ring * 0.42f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            // アーク先端の3Dジュエルコロナ・レーザービーコン（効いているツマミだけが鮮烈に輝く）
+            const float tipX = c.x + radius * std::sin (angle), tipY = c.y - radius * std::cos (angle);
+            const float beaconScale = 1.0f + 0.35f * effInt;
+            g.setColour (accent.withAlpha (0.55f));
+            g.fillEllipse (tipX - ring * 1.6f * beaconScale, tipY - ring * 1.6f * beaconScale, ring * 3.2f * beaconScale, ring * 3.2f * beaconScale);
+            g.setColour (accent.brighter (0.48f));
+            g.fillEllipse (tipX - ring * 0.88f * beaconScale, tipY - ring * 0.88f * beaconScale, ring * 1.76f * beaconScale, ring * 1.76f * beaconScale);
+            g.setColour (juce::Colours::white.withAlpha (0.98f));
+            g.fillEllipse (tipX - ring * 0.42f * beaconScale, tipY - ring * 0.42f * beaconScale, ring * 0.84f * beaconScale, ring * 0.84f * beaconScale);
         }
-        g.setColour (accent);
-        g.strokePath (value, juce::PathStrokeType (ring, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        if (sl.isEnabled())
+        else
         {
-            g.setColour (juce::Colours::white.withAlpha (0.48f));
-            g.strokePath (value, juce::PathStrokeType (ring * 0.36f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            // 待機中（0% / 0.0dB / -80dB）はアーク先端に控えめなスリープドットのみを表示し、効いているツマミを際立たせる
+            const float tipX = c.x + radius * std::sin (angle), tipY = c.y - radius * std::cos (angle);
+            g.setColour (Palette::inkSoft.withAlpha (0.42f));
+            g.fillEllipse (tipX - ring * 0.48f, tipY - ring * 0.48f, ring * 0.96f, ring * 0.96f);
         }
-        // アーク先端の3Dジュエルコロナ・ドット
-        const float tipX = c.x + radius * std::sin (angle), tipY = c.y - radius * std::cos (angle);
-        g.setColour (accent.withAlpha (0.38f));
-        g.fillEllipse (tipX - ring * 1.2f, tipY - ring * 1.2f, ring * 2.4f, ring * 2.4f);
-        g.setColour (accent.brighter (0.38f));
-        g.fillEllipse (tipX - ring * 0.72f, tipY - ring * 0.72f, ring * 1.44f, ring * 1.44f);
-        g.setColour (juce::Colours::white.withAlpha (0.90f));
-        g.fillEllipse (tipX - ring * 0.30f, tipY - ring * 0.30f, ring * 0.60f, ring * 0.60f);
 
         const float kr = radius - ring - (isHero ? 3.8f : 3.0f);
         if (kr < 5.0f)
             return;
+
+        // 待機中（音を変えていない）ツマミは最後に静かなダークベールを掛け、効いているツマミは発光リングを重ねる共通フィニッシャー
+        auto finishKnobStateOverlay = [&]()
+        {
+            if (! isWorking)
+            {
+                const bool darkBg = Palette::panel.getPerceivedBrightness() < 0.45f;
+                g.setColour ((darkBg ? Palette::bgTop.darker (0.55f) : Palette::panel2.darker (0.18f)).withAlpha (0.42f));
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+            }
+            else if (effInt > 0.15f)
+            {
+                g.setColour (accent.withAlpha (0.28f + 0.32f * effInt));
+                g.drawEllipse (c.x - kr + 0.8f, c.y - kr + 0.8f, (kr - 0.8f) * 2.0f, (kr - 0.8f) * 2.0f, isHero ? 1.8f : 1.3f);
+            }
+        };
 
         if (s_knobStyle == 2)   // ライバー (V-Liver: クチュール・プレストチーク＆香水瓶クリスタルカット＆宝飾メタル・ダイヤル)
         {
@@ -1048,6 +1834,7 @@ public:
             g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.62f), c.x, c.y - blushR,
                                                      juce::Colours::transparentWhite, c.x, c.y - blushR * 0.15f, false));
             g.fillEllipse (c.x - blushR * 0.72f, c.y - blushR * 0.88f, blushR * 1.44f, blushR * 0.68f);
+            finishKnobStateOverlay();
             return;
         }
         if (s_knobStyle == 3)   // スタジオ (Studio Pro): 真鍮ベゼル＆ローレット刻み＆精密ムーブメントダイヤル
@@ -1096,6 +1883,260 @@ public:
             g.fillEllipse (c.x - 3.6f, c.y - 3.6f, 7.2f, 7.2f);
             g.setColour (Palette::ink);
             g.fillEllipse (c.x - 1.5f, c.y - 1.5f, 3.0f, 3.0f);
+            finishKnobStateOverlay();
+            return;
+        }
+        if (s_knobStyle == 6)   // 🌌🌊🌅🍁👑 風景・季節コレクション: 5つの世界観ごとの専用質感オーブダイヤル
+        {
+            const int tm = Palette::currentTheme;
+            // 1. ドロップシャドウ＋世界観オーラ発光
+            g.setColour (juce::Colours::black.withAlpha (0.48f));
+            g.fillEllipse (c.x - kr, c.y - kr + 3.6f, kr * 2.0f, kr * 2.0f);
+            g.setColour (accent.withAlpha (0.26f));
+            g.fillEllipse (c.x - kr - 2.0f, c.y - kr - 2.0f, (kr + 2.0f) * 2.0f, (kr + 2.0f) * 2.0f);
+
+            // 2. 外周ベゼル（15=瑞々しい水滴アクアガラスリング、その他=貴金属アストロラーベ・シャンデリア金環）
+            if (tm == 15)
+            {
+                // 🌊 02 碧海: 半透明の瑞々しいウォータードロップ・アクアクリスタル外輪
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0fbfc), c.x - kr * 0.7f, c.y - kr * 0.7f,
+                                                         juce::Colour (0xff0077b6), c.x + kr * 0.7f, c.y + kr * 0.7f, false));
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                g.setColour (juce::Colour (0xff90e0ef).withAlpha (0.85f));
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 1.5f);
+            }
+            else
+            {
+                g.setGradientFill (juce::ColourGradient (Palette::metalHi,  c.x - kr * 0.7f, c.y - kr * 0.7f,
+                                                         Palette::metalDark, c.x + kr * 0.7f, c.y + kr * 0.7f, false));
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                for (int p = 0; p < 24; ++p)
+                {
+                    const float pa = (float) p * juce::MathConstants<float>::twoPi / 24.0f + angle * 0.20f;
+                    g.setColour ((p % 2 == 0) ? Palette::metalHi.withAlpha (0.76f)
+                                              : Palette::metalDark.darker (0.35f).withAlpha (0.65f));
+                    g.drawLine (c.x + kr * 0.85f * std::sin (pa), c.y - kr * 0.85f * std::cos (pa),
+                                c.x + kr * 0.99f * std::sin (pa), c.y - kr * 0.99f * std::cos (pa), 1.3f);
+                }
+                g.setColour (Palette::metalMid.brighter (0.20f));
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 1.3f);
+            }
+
+            // 3. 球体オーブ内面の世界観別テクスチャ描画
+            const float orbR = kr * 0.86f;
+            if (tm == 15)
+            {
+                // 🌊 02 瑞々しい碧海: ぷるんと透き通る水球（ウォータードロップ・オーブ）＋内部の水紋コースティクス＋気泡
+                juce::ColourGradient aquaOrb (juce::Colour (0xff00f5d4), c.x - orbR * 0.35f, c.y - orbR * 0.55f,
+                                              juce::Colour (0xff023e8a), c.x + orbR * 0.35f, c.y + orbR * 0.65f, true);
+                aquaOrb.addColour (0.48, juce::Colour (0xff00b4d8));
+                aquaOrb.addColour (0.82, juce::Colour (0xff0077b6));
+                g.setGradientFill (aquaOrb);
+                g.fillEllipse (c.x - orbR, c.y - orbR, orbR * 2.0f, orbR * 2.0f);
+
+                // 下部の三日月状・水滴内部屈折（エメラルドシアン発光メニスカス）
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0xcc90f1ef), c.x, c.y + orbR * 0.92f,
+                                                         juce::Colours::transparentBlack, c.x, c.y + orbR * 0.10f, false));
+                g.fillEllipse (c.x - orbR * 0.84f, c.y - orbR * 0.60f, orbR * 1.68f, orbR * 1.48f);
+
+                // 水球内部で揺らめく3本の水紋コースティクス波ライン
+                for (int wv = 0; wv < 3; ++wv)
+                {
+                    juce::Path waveP;
+                    const float wy0 = c.y - orbR * 0.28f + (float) wv * (orbR * 0.28f);
+                    for (int xi = -6; xi <= 6; ++xi)
+                    {
+                        const float wx = c.x + (float) xi * (orbR * 0.12f);
+                        const float wy = wy0 + std::sin ((float) xi * 0.75f + angle + (float) wv * 1.4f) * (orbR * 0.10f);
+                        if (xi == -6) waveP.startNewSubPath (wx, wy); else waveP.lineTo (wx, wy);
+                    }
+                    g.setColour (juce::Colour (0xffcaf0f8).withAlpha (0.46f - (float) wv * 0.08f));
+                    g.strokePath (waveP, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                }
+
+                // 水球の中に浮かぶ4つの立体気泡（バブル）
+                static const float kBubbles[4][3] = {
+                    { -0.38f,  0.22f, 0.16f },
+                    {  0.34f,  0.30f, 0.13f },
+                    { -0.20f,  0.52f, 0.10f },
+                    {  0.26f, -0.24f, 0.11f }
+                };
+                for (int b = 0; b < 4; ++b)
+                {
+                    const float bx = c.x + kBubbles[b][0] * orbR;
+                    const float by = c.y + kBubbles[b][1] * orbR;
+                    const float br = juce::jmax (2.0f, kBubbles[b][2] * orbR);
+                    g.setColour (juce::Colour (0x55caf0f8));
+                    g.fillEllipse (bx - br, by - br, br * 2.0f, br * 2.0f);
+                    g.setColour (juce::Colours::white.withAlpha (0.85f));
+                    g.drawEllipse (bx - br, by - br, br * 2.0f, br * 2.0f, 1.0f);
+                    g.fillEllipse (bx - br * 0.55f, by - br * 0.55f, br * 0.5f, br * 0.5f);
+                }
+            }
+            else if (tm == 14)
+            {
+                // 🌌 01 星降る天の川銀河: 渦巻銀河（スパイラル・ギャラクシー）とマゼンタ＆シアンの星雲コア
+                juce::ColourGradient galOrb (juce::Colour (0xff1e1b4b), c.x - orbR * 0.3f, c.y - orbR * 0.3f,
+                                             juce::Colour (0xff050716), c.x + orbR * 0.6f, c.y + orbR * 0.6f, true);
+                galOrb.addColour (0.50, juce::Colour (0xff11163b));
+                g.setGradientFill (galOrb);
+                g.fillEllipse (c.x - orbR, c.y - orbR, orbR * 2.0f, orbR * 2.0f);
+
+                // 2本の対数渦巻腕（Spiral Galaxy Arms）
+                for (int arm = 0; arm < 2; ++arm)
+                {
+                    juce::Path spiral;
+                    const float armOffset = (float) arm * juce::MathConstants<float>::pi + angle * 0.5f;
+                    for (int st = 0; st <= 18; ++st)
+                    {
+                        const float t = (float) st / 18.0f;
+                        const float sr = orbR * (0.10f + 0.68f * t);
+                        const float sa = armOffset + t * 3.6f;
+                        const float sx = c.x + sr * std::cos (sa);
+                        const float sy = c.y + sr * std::sin (sa);
+                        if (st == 0) spiral.startNewSubPath (sx, sy); else spiral.lineTo (sx, sy);
+                    }
+                    g.setColour ((arm == 0 ? juce::Colour (0xffec4899) : juce::Colour (0xff38bdf8)).withAlpha (0.48f));
+                    g.strokePath (spiral, juce::PathStrokeType (orbR * 0.18f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    g.setColour (juce::Colours::white.withAlpha (0.55f));
+                    g.strokePath (spiral, juce::PathStrokeType (1.3f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                }
+                // 銀河中心バルジの黄金グロー
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0x99fde047), c.x, c.y,
+                                                         juce::Colours::transparentBlack, c.x + orbR * 0.55f, c.y, true));
+                g.fillEllipse (c.x - orbR * 0.55f, c.y - orbR * 0.55f, orbR * 1.1f, orbR * 1.1f);
+            }
+            else if (tm == 16)
+            {
+                // 🌅 03 朝焼けの海と暁の水平線: インディゴ空〜ロゼ〜昇る黄金の太陽と12本の光芒
+                juce::ColourGradient dawnOrb (juce::Colour (0xff1d1848), c.x, c.y - orbR,
+                                              juce::Colour (0xff3d1832), c.x, c.y + orbR, false);
+                dawnOrb.addColour (0.38, juce::Colour (0xff8a2be2).interpolatedWith (juce::Colour (0xffe84a7f), 0.65f));
+                dawnOrb.addColour (0.58, juce::Colour (0xffff9e44));
+                dawnOrb.addColour (0.72, juce::Colour (0xffc83e5b));
+                g.setGradientFill (dawnOrb);
+                g.fillEllipse (c.x - orbR, c.y - orbR, orbR * 2.0f, orbR * 2.0f);
+
+                // 水平線から放射する10本の朝日光芒
+                const float sunY = c.y + orbR * 0.14f;
+                for (int rIdx = 0; rIdx < 10; ++rIdx)
+                {
+                    const float ra = -1.35f + (float) rIdx * (2.70f / 9.0f);
+                    g.setColour (juce::Colour (0xffffea9f).withAlpha (0.32f));
+                    g.drawLine (c.x, sunY, c.x + orbR * 0.88f * std::sin (ra), sunY - orbR * 0.88f * std::cos (ra), 1.8f);
+                }
+                // 昇る朝日コア
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0xfffff3b0), c.x, sunY,
+                                                         juce::Colour (0x00ff9e00), c.x + orbR * 0.55f, sunY, true));
+                g.fillEllipse (c.x - orbR * 0.55f, sunY - orbR * 0.55f, orbR * 1.10f, orbR * 1.10f);
+            }
+            else if (tm == 17)
+            {
+                // 🍁 04 晩秋から初冬へ: 初冬のスレート藍空×茜色の水鏡×波紋×氷晶＆紅葉モチーフ
+                juce::ColourGradient autOrb (juce::Colour (0xff162138), c.x, c.y - orbR,
+                                             juce::Colour (0xff1c141c), c.x, c.y + orbR, false);
+                autOrb.addColour (0.45, juce::Colour (0xffa83834));
+                autOrb.addColour (0.56, juce::Colour (0xffe07a3c));
+                autOrb.addColour (0.72, juce::Colour (0xff5c2832));
+                g.setGradientFill (autOrb);
+                g.fillEllipse (c.x - orbR, c.y - orbR, orbR * 2.0f, orbR * 2.0f);
+
+                // 水鏡の同心楕円波紋（2重）
+                g.setColour (juce::Colour (0xffbae6fd).withAlpha (0.42f));
+                g.drawEllipse (c.x - orbR * 0.64f, c.y + orbR * 0.10f, orbR * 1.28f, orbR * 0.36f, 1.1f);
+                g.setColour (juce::Colour (0xfff59e0b).withAlpha (0.45f));
+                g.drawEllipse (c.x - orbR * 0.42f, c.y + orbR * 0.18f, orbR * 0.84f, orbR * 0.22f, 1.0f);
+
+                // 6角の雪の結晶ライン（上半分）
+                const float snowX = c.x - orbR * 0.28f, snowY = c.y - orbR * 0.28f, snowR = orbR * 0.20f;
+                g.setColour (juce::Colour (0xffe0f2fe).withAlpha (0.78f));
+                for (int k = 0; k < 3; ++k)
+                {
+                    const float ka = (float) k * juce::MathConstants<float>::pi / 3.0f;
+                    g.drawLine (snowX - snowR * std::cos (ka), snowY - snowR * std::sin (ka),
+                                snowX + snowR * std::cos (ka), snowY + snowR * std::sin (ka), 1.2f);
+                }
+            }
+            else
+            {
+                // 👑 05 蒼海オペラ座と黄金シャンデリア: ロイヤルサファイア＆12面シャンデリア・クリスタルカット
+                juce::ColourGradient opOrb (juce::Colour (0xff2563eb), c.x - orbR * 0.35f, c.y - orbR * 0.45f,
+                                            juce::Colour (0xff050d26), c.x + orbR * 0.45f, c.y + orbR * 0.65f, true);
+                opOrb.addColour (0.55, juce::Colour (0xff112868));
+                g.setGradientFill (opOrb);
+                g.fillEllipse (c.x - orbR, c.y - orbR, orbR * 2.0f, orbR * 2.0f);
+                g.setColour (Palette::metalHi.withAlpha (0.28f));
+                for (int fc = 0; fc < 6; ++fc)
+                {
+                    const float fa = (float) fc * juce::MathConstants<float>::pi / 6.0f + angle * 0.25f;
+                    g.drawLine (c.x - orbR * 0.78f * std::cos (fa), c.y - orbR * 0.78f * std::sin (fa),
+                                c.x + orbR * 0.78f * std::cos (fa), c.y + orbR * 0.78f * std::sin (fa), 1.0f);
+                }
+            }
+
+            // 4. 内部リング＆方位ドット
+            const float ringR = orbR * 0.72f;
+            g.setColour (Palette::metalHi.withAlpha (tm == 15 ? 0.55f : 0.42f));
+            g.drawEllipse (c.x - ringR, c.y - ringR, ringR * 2.0f, ringR * 2.0f, 1.1f);
+            for (int s = 0; s < 8; ++s)
+            {
+                const float sa = angle * 0.4f + (float) s * juce::MathConstants<float>::pi * 0.25f;
+                const float sx = c.x + ringR * std::sin (sa);
+                const float sy = c.y - ringR * std::cos (sa);
+                const float dSz = (s % 2 == 0) ? 3.2f : 2.0f;
+                g.setColour ((s % 2 == 0) ? Palette::metalHi.withAlpha (0.88f) : accent.withAlpha (0.76f));
+                g.fillEllipse (sx - dSz * 0.5f, sy - dSz * 0.5f, dSz, dSz);
+            }
+
+            // 5. 中心の指針＆先端の4芒星／水滴フレア
+            const float pOut = orbR * 0.84f, pIn = orbR * 0.18f;
+            g.setColour (accent.withAlpha (0.50f));
+            g.drawLine (c.x + pIn * std::sin (angle), c.y - pIn * std::cos (angle),
+                        c.x + pOut * std::sin (angle), c.y - pOut * std::cos (angle),
+                        isHero ? 5.2f : 4.0f);
+            g.setColour (Palette::metalHi);
+            g.drawLine (c.x + pIn * std::sin (angle), c.y - pIn * std::cos (angle),
+                        c.x + pOut * std::sin (angle), c.y - pOut * std::cos (angle),
+                        isHero ? 2.4f : 1.9f);
+
+            const float px = c.x + (orbR * 0.68f) * std::sin (angle);
+            const float py = c.y - (orbR * 0.68f) * std::cos (angle);
+            const float sr = juce::jmax (4.4f, kr * 0.24f);
+            juce::Path star;
+            for (int i = 0; i < 8; ++i)
+            {
+                const float sa = angle + (float) i * juce::MathConstants<float>::pi * 0.25f;
+                const float rr = (i % 2 == 0) ? sr : sr * 0.30f;
+                const float sx = px + rr * std::sin (sa), sy = py - rr * std::cos (sa);
+                if (i == 0) star.startNewSubPath (sx, sy); else star.lineTo (sx, sy);
+            }
+            star.closeSubPath();
+            g.setColour (accent.withAlpha (0.60f));
+            g.fillEllipse (px - sr * 0.85f, py - sr * 0.85f, sr * 1.7f, sr * 1.7f);
+            g.setColour (Palette::metalHi);
+            g.fillPath (star);
+            g.setColour (juce::Colours::white);
+            g.fillEllipse (px - 1.8f, py - 1.8f, 3.6f, 3.6f);
+
+            // 中心ハブ
+            const float hubR = juce::jmax (3.8f, orbR * 0.20f);
+            g.setGradientFill (juce::ColourGradient (Palette::metalHi,  c.x - hubR, c.y - hubR,
+                                                     Palette::metalMid, c.x + hubR, c.y + hubR, false));
+            g.fillEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f);
+            g.setColour (Palette::metalDark);
+            g.drawEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f, 1.1f);
+
+            // 6. 球面ガラス・水球上部のツヤ・三日月スペキュラハイライト
+            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (tm == 15 ? 0.62f : 0.42f), c.x, c.y - orbR * 0.94f,
+                                                     juce::Colours::transparentWhite,                            c.x, c.y - orbR * 0.08f, false));
+            g.fillEllipse (c.x - orbR * 0.74f, c.y - orbR * 0.88f, orbR * 1.48f, orbR * 0.72f);
+            if (tm == 15)
+            {
+                // 水滴特有の左上ピンスポット純白ハイライト
+                g.setColour (juce::Colours::white.withAlpha (0.88f));
+                g.fillEllipse (c.x - orbR * 0.52f, c.y - orbR * 0.68f, orbR * 0.28f, orbR * 0.16f);
+            }
+            finishKnobStateOverlay();
             return;
         }
 
@@ -1179,6 +2220,7 @@ public:
         g.setColour (juce::Colours::white.withAlpha (0.88f));
         g.strokePath (pointer, juce::PathStrokeType (juce::jmax (1.3f, kr * 0.030f),
                                                      juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        finishKnobStateOverlay();
     }
 
     // ================= v1.7.0 yuru-kawa: juice-glass knobs =================
@@ -1445,6 +2487,33 @@ public:
             g.drawRoundedRectangle (r, rad, down ? 2.2f : 1.5f);
             return;
         }
+        else if (s_knobStyle == 6)
+        {
+            // 🌌🌊🌅🍁👑 風景・季節コレクション: 水滴や星雲・夕茜の光を通す半透明クリスタル・ジュエルピルボタン
+            const bool hasCustomCol = (col != Palette::panel2 && col != Palette::panel);
+            g.setColour (juce::Colours::black.withAlpha ((on || hasCustomCol) ? 0.34f : 0.22f));
+            g.fillRoundedRectangle (r.translated (0.0f, down ? 0.5f : 1.8f), rad);
+            if (on || (hasCustomCol && col.getAlpha() > 200))
+            {
+                g.setGradientFill (juce::ColourGradient (col.brighter (0.16f).withAlpha (0.88f), r.getX(), r.getY(),
+                                                         col.darker   (0.18f).withAlpha (0.88f), r.getX(), r.getBottom(), false));
+            }
+            else if (hasCustomCol)
+            {
+                g.setGradientFill (juce::ColourGradient (col.withMultipliedAlpha (over ? 1.35f : 1.10f), r.getX(), r.getY(),
+                                                         Palette::panel.withAlpha (over ? 0.72f : 0.58f), r.getX(), r.getBottom(), false));
+            }
+            else
+            {
+                g.setGradientFill (juce::ColourGradient (Palette::panel2.withAlpha (over ? 0.62f : 0.46f), r.getX(), r.getY(),
+                                                         Palette::panel.withAlpha  (over ? 0.72f : 0.56f), r.getX(), r.getBottom(), false));
+            }
+            g.fillRoundedRectangle (r, rad);
+            // 上部の水滴ガラス・スペキュラ反射帯
+            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (on ? 0.34f : 0.22f), r.getX(), r.getY() + 1.0f,
+                                                     juce::Colours::transparentWhite,                     r.getX(), r.getY() + r.getHeight() * 0.46f, false));
+            g.fillRoundedRectangle (r.reduced (2.0f, 1.0f).withHeight (r.getHeight() * 0.44f), rad * 0.85f);
+        }
         else
         {
             // 3D立体プッシュパッド＆ロッカーベゼル（Kawaii系はクチュール・エナメル＆ゴールド縁、ハード系は物理ストローク表現）
@@ -1476,30 +2545,32 @@ public:
         }
         const juce::Colour borderCol = s_useKawaii
             ? (on ? Palette::metalDark : ((s_knobStyle == 2) ? Palette::metalMid : Palette::panelLn.darker (0.12f)))
+            : (s_knobStyle == 6)
+            ? (on ? Palette::metalHi : Palette::metalMid.withAlpha (over ? 0.90f : 0.68f))
             : (on ? col.darker (0.35f) : Palette::panelLn.brighter (over ? 0.18f : 0.0f));
         g.setColour (borderCol);
         g.drawRoundedRectangle (r, rad, on ? 2.0f : 1.4f);
 
         if (! sw)
         {
-            // ★ 押すだけのトリガーパッドには下辺センターにマイクロ・トリガーバーを添えて「押すボタン」を表現
+            // ★ 押すだけのトリガーパッドには下辺センターにマイクロ・ライトパイプバーを添えて「押すボタン」を表現
             if (s_knobStyle != 5 && r.getWidth() >= 48.0f)
             {
-                const float barW = juce::jmin (22.0f, r.getWidth() * 0.28f);
-                g.setColour (Palette::inkSoft.withAlpha (over ? 0.65f : 0.32f));
-                g.fillRoundedRectangle (r.getCentreX() - barW * 0.5f, r.getBottom() - 3.0f, barW, 1.8f, 0.9f);
+                const float barW = juce::jmin (24.0f, r.getWidth() * 0.30f);
+                g.setColour ((s_knobStyle == 6 ? Palette::metalHi : Palette::inkSoft).withAlpha (over ? 0.78f : 0.42f));
+                g.fillRoundedRectangle (r.getCentreX() - barW * 0.5f, r.getBottom() - 3.2f, barW, 2.0f, 1.0f);
             }
             return;
         }
 
-        // ---- ★ ずらす・倒すスライドレール・トリガースイッチ (左端 kLampBox = 20px 内) ----
+        // ---- ★ Red Dot 精密オプティカル・スライドレール＆ジュエルLEDスイッチ (左端 kLampBox = 20px 内) ----
         const float slotW = 16.5f;
         const float slotH = juce::jmin (10.5f, r.getHeight() - 8.0f);
         const float cx    = r.getX() + 3.5f + kLampBox * 0.5f;
         const float cy    = r.getCentreY();
         const juce::Rectangle<float> slot (cx - slotW * 0.5f, cy - slotH * 0.5f, slotW, slotH);
 
-        // スライドレールの彫り込み溝（Kawaii時は黒くせずパステルピル溝にする）
+        // スライドレールの彫り込み溝
         if (s_useKawaii)
         {
             g.setColour (on ? col.darker (0.28f).withAlpha (0.88f) : Palette::track.darker (0.06f).withAlpha (0.90f));
@@ -1509,38 +2580,45 @@ public:
         }
         else
         {
-            g.setColour (on ? col.darker (0.52f).withAlpha (0.85f) : Palette::bgTop.darker (0.45f).withAlpha (0.85f));
+            g.setColour (on ? col.darker (0.52f).withAlpha (0.88f) : Palette::bgTop.darker (0.50f).withAlpha (0.88f));
             g.fillRoundedRectangle (slot, slotH * 0.5f);
-            g.setColour (on ? Palette::readableOn (col).withAlpha (0.55f) : Palette::inkSoft.withAlpha (0.45f));
+            g.setColour (on ? Palette::readableOn (col).withAlpha (0.62f)
+                            : (s_knobStyle == 6 ? Palette::metalMid.withAlpha (0.65f) : Palette::inkSoft.withAlpha (0.48f)));
             g.drawRoundedRectangle (slot, slotH * 0.5f, 1.1f);
         }
 
-        // スライドノブ（OFF=左端 [●──]、ON=右端 [──●] へ物理スライド！）
-        const float thumbD = slotH - 2.2f;
-        const float thumbX = on ? (slot.getRight() - thumbD - 1.2f) : (slot.getX() + 1.2f);
+        // スライドノブ（OFF=左端 [●──] スモークジュエルレンズ、ON=右端 [──●] 高輝度発光ジュエルへ物理スライド！）
+        const float thumbD = slotH - 2.0f;
+        const float thumbX = on ? (slot.getRight() - thumbD - 1.1f) : (slot.getX() + 1.1f);
         const juce::Rectangle<float> thumb (thumbX, cy - thumbD * 0.5f, thumbD, thumbD);
         if (on)
         {
             const auto lampCol = s_useKawaii ? juce::Colours::white : Palette::readableOn (col);
             if (s_knobStyle != 5)
             {
-                g.setColour (lampCol.withAlpha (0.35f));
-                g.fillEllipse (thumb.expanded (2.2f));
+                g.setColour (lampCol.withAlpha (0.38f));
+                g.fillEllipse (thumb.expanded (2.4f));
             }
             g.setColour (lampCol);
             g.fillEllipse (thumb);
             if (s_knobStyle != 5)
             {
-                g.setColour (juce::Colours::white.withAlpha (0.85f));
-                g.fillEllipse (thumb.getX() + thumbD * 0.22f, thumb.getY() + thumbD * 0.18f, thumbD * 0.32f, thumbD * 0.32f);
+                g.setColour (juce::Colours::white.withAlpha (0.92f));
+                g.fillEllipse (thumb.getX() + thumbD * 0.22f, thumb.getY() + thumbD * 0.18f, thumbD * 0.34f, thumbD * 0.34f);
             }
         }
         else
         {
-            g.setColour (s_useKawaii ? Palette::inkSoft.withAlpha (0.65f) : Palette::inkSoft.withAlpha (0.78f));
+            const auto offRim = (s_knobStyle == 6) ? Palette::metalHi.withAlpha (0.82f)
+                              : s_useKawaii        ? Palette::inkSoft.withAlpha (0.68f)
+                                                   : Palette::inkSoft.withAlpha (0.80f);
+            g.setColour (offRim);
             g.fillEllipse (thumb);
-            g.setColour (s_useKawaii ? juce::Colours::white.withAlpha (0.90f) : Palette::panel);
-            g.fillEllipse (thumb.reduced (2.0f));
+            g.setColour (s_useKawaii ? juce::Colours::white.withAlpha (0.90f)
+                       : (s_knobStyle == 6 ? Palette::mirrorTop.withAlpha (0.90f) : Palette::panel2.brighter (0.15f)));
+            g.fillEllipse (thumb.reduced (1.6f));
+            g.setColour (juce::Colours::white.withAlpha (0.65f));
+            g.fillEllipse (thumb.getX() + thumbD * 0.24f, thumb.getY() + thumbD * 0.20f, thumbD * 0.28f, thumbD * 0.28f);
         }
     }
 
@@ -1623,6 +2701,7 @@ private:
     static std::atomic<int>    s_instances;    // v2.3.0: 最後の1つが消えたらフォントを手放す
     static bool s_useKawaii;
     static int  s_knobStyle;                   // 0=standard, 1=juice, 2=liver, 3=studio, 4=neon
+    inline static int s_accessMode = 0;        // 0=標準, 1=👓老眼・大文字, 2=🧭ADHD集中, 3=🌿ASD低刺激
     static float s_juicePhase;                 // juice bubble/wobble animation phase
 };
 
@@ -1922,7 +3001,8 @@ public:
         if (mode == 2) { paintNature    (g); return true; }
         if (mode == 3) { paintBrand     (g); return true; }
         if (mode == 4) { paintAurora    (g); return true; }
-        if (Palette::isCoutureTheme (mode)) { paintVLiver (g); return true; }   // クチュール・コスメ5色展開
+        if (Palette::isCoutureTheme (mode))   { paintVLiver    (g); return true; }   // クチュール・コスメ5色展開
+        if (Palette::isOceanStarTheme (mode)) { paintOceanStar (g); return true; }   // 🌌🌊 星空・海・黄昏コレクション5色展開
         if (mode == 6) { paintCyberNeon (g); return true; }   // 配信サイバーネオン
         if (mode == 9) { paintStudioPro (g); return true; }   // プロスタジオ・コンソール
         return false;
@@ -2847,8 +3927,764 @@ public:
         g.drawImageAt (studioCache, area.getX(), area.getY());
     }
 
-    juce::Image brandCache, brandFgCache, auroraCache, liverCache, neonCache, studioCache;
-    int         liverCacheMode { -1 };
+    // ---- 🌌🌊🌅🍁👑 風景・季節コレクション 5選 (14=天の川銀河 / 15=瑞々しい碧海 / 16=朝焼けの海 / 17=晩秋〜初冬の哀愁 / 18=蒼海オペラ座) ----
+    static void drawLensBokeh (juce::Graphics& g, float cx, float cy, float rad, juce::Colour col, float alpha)
+    {
+        // 大口径レンズの玉ボケ（ふんわり外周ハロー＋半透明ボケ円盤＋明るいエッジリング）
+        g.setGradientFill (juce::ColourGradient (col.withAlpha (alpha * 0.45f), cx, cy,
+                                                 col.withAlpha (0.0f), cx + rad * 1.50f, cy, true));
+        g.fillEllipse (cx - rad * 1.50f, cy - rad * 1.50f, rad * 3.0f, rad * 3.0f);
+        g.setColour (col.withAlpha (alpha * 0.38f));
+        g.fillEllipse (cx - rad, cy - rad, rad * 2.0f, rad * 2.0f);
+        g.setColour (col.brighter (0.38f).withAlpha (alpha * 0.78f));
+        g.drawEllipse (cx - rad, cy - rad, rad * 2.0f, rad * 2.0f, juce::jmax (1.0f, rad * 0.08f));
+    }
+
+    static void drawStar8 (juce::Graphics& g, float cx, float cy, float rad, juce::Colour col)
+    {
+        // 天体写真の8芒星クロス回折スパイク（長短の十字＋X字光条＋中心ハロ）
+        g.setGradientFill (juce::ColourGradient (col.withAlpha (0.55f), cx, cy,
+                                                 col.withAlpha (0.0f), cx + rad * 1.2f, cy, true));
+        g.fillEllipse (cx - rad * 1.2f, cy - rad * 1.2f, rad * 2.4f, rad * 2.4f);
+        g.setColour (col);
+        g.drawLine (cx - rad * 1.45f, cy, cx + rad * 1.45f, cy, 1.5f);
+        g.drawLine (cx, cy - rad * 1.45f, cx, cy + rad * 1.45f, 1.5f);
+        const float d = rad * 0.72f;
+        g.drawLine (cx - d, cy - d, cx + d, cy + d, 1.1f);
+        g.drawLine (cx - d, cy + d, cx + d, cy - d, 1.1f);
+        g.setColour (juce::Colours::white.withAlpha (col.getFloatAlpha()));
+        g.fillEllipse (cx - 2.0f, cy - 2.0f, 4.0f, 4.0f);
+    }
+
+    static void drawWaterDroplet (juce::Graphics& g, float cx, float cy, float rad, juce::Colour aquaCol, float alpha)
+    {
+        // ぷるんと瑞々しい3D水滴・気泡（ドロップシャドウ＋透明感グラデ＋右下内部屈折＋左上純白ハイライト）
+        g.setColour (juce::Colour (0xff011627).withAlpha (alpha * 0.42f));
+        g.fillEllipse (cx - rad + rad * 0.12f, cy - rad + rad * 0.22f, rad * 2.0f, rad * 2.0f);
+
+        juce::ColourGradient dropGrad (aquaCol.brighter (0.45f).withAlpha (alpha * 0.28f), cx - rad * 0.35f, cy - rad * 0.35f,
+                                       aquaCol.darker   (0.30f).withAlpha (alpha * 0.62f), cx + rad * 0.55f, cy + rad * 0.55f, true);
+        g.setGradientFill (dropGrad);
+        g.fillEllipse (cx - rad, cy - rad, rad * 2.0f, rad * 2.0f);
+
+        // 右下の三日月型・水滴内部反射（メニスカス発光）
+        g.setColour (juce::Colour (0xff90f1ef).withAlpha (alpha * 0.75f));
+        g.drawEllipse (cx - rad * 0.88f, cy - rad * 0.88f, rad * 1.76f, rad * 1.76f, juce::jmax (1.1f, rad * 0.12f));
+
+        // 外周のクリスタル輪郭
+        g.setColour (juce::Colours::white.withAlpha (alpha * 0.72f));
+        g.drawEllipse (cx - rad, cy - rad, rad * 2.0f, rad * 2.0f, juce::jmax (1.0f, rad * 0.09f));
+
+        // 左上のピンスポット純白スペキュラハイライト（大・小2点）
+        const float hlR = juce::jmax (1.4f, rad * 0.28f);
+        g.setColour (juce::Colours::white.withAlpha (juce::jmin (0.98f, alpha * 1.15f)));
+        g.fillEllipse (cx - rad * 0.52f, cy - rad * 0.54f, hlR * 1.35f, hlR * 0.95f);
+        if (rad >= 6.0f)
+            g.fillEllipse (cx - rad * 0.22f, cy - rad * 0.64f, hlR * 0.55f, hlR * 0.55f);
+    }
+
+    static void drawCausticWaveMesh (juce::Graphics& g, juce::Rectangle<float> box, juce::Colour col, float alpha, int seedOffset = 0)
+    {
+        // 水面・水底の網目状の光の揺らぎ（コースティクス・水紋メッシュ）
+        const int numRows = juce::jlimit (4, 14, (int) (box.getHeight() / 42.0f));
+        const int segs = 24;
+        for (int row = 0; row < numRows; ++row)
+        {
+            const float baseY = box.getY() + box.getHeight() * ((float) row + 0.5f) / (float) numRows;
+            juce::Path p1, p2;
+            for (int s = 0; s <= segs; ++s)
+            {
+                const float t = (float) s / (float) segs;
+                const float x = box.getX() + box.getWidth() * t;
+                const float ph1 = t * 12.5f + (float) (row * 1.7f + seedOffset * 0.9f);
+                const float ph2 = t * 10.2f - (float) (row * 2.1f + seedOffset * 0.5f);
+                const float y1 = baseY + std::sin (ph1) * 14.0f + std::cos (ph2 * 0.7f) * 6.0f;
+                const float y2 = baseY + std::cos (ph2) * 14.0f + std::sin (ph1 * 0.8f) * 6.0f;
+                if (s == 0)
+                {
+                    p1.startNewSubPath (x, y1);
+                    p2.startNewSubPath (x, y2);
+                }
+                else
+                {
+                    p1.lineTo (x, y1);
+                    p2.lineTo (x, y2);
+                }
+            }
+            g.setColour (col.withAlpha (alpha * 0.45f));
+            g.strokePath (p1, juce::PathStrokeType (3.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.strokePath (p2, juce::PathStrokeType (2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour (juce::Colours::white.withAlpha (alpha * 0.52f));
+            g.strokePath (p1, juce::PathStrokeType (1.1f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    }
+
+    static void drawMapleLeaf (juce::Graphics& g, float cx, float cy, float sz, float rot, juce::Colour col, float alpha)
+    {
+        // 🍁 日本の5裂カエデ（もみじ）の葉シルエット＋鮮やかな紅〜黄金グラデーション＋金葉脈ハイライト
+        juce::Path leaf, veins;
+        static const float kAngles[5]  = { -1.5708f, -0.82f, -2.32f, -0.18f, -2.96f };
+        static const float kLengths[5] = {  1.12f,    0.96f,  0.96f,  0.72f,  0.72f };
+        for (int k = 0; k < 5; ++k)
+        {
+            const float an = kAngles[k];
+            const float len = sz * kLengths[k];
+            const float tx = std::cos (an) * len, ty = std::sin (an) * len;
+            const float lx = std::cos (an - 0.34f) * len * 0.54f, ly = std::sin (an - 0.34f) * len * 0.54f;
+            const float rx = std::cos (an + 0.34f) * len * 0.54f, ry = std::sin (an + 0.34f) * len * 0.54f;
+            juce::Path lobe;
+            lobe.startNewSubPath (0.0f, sz * 0.12f);
+            lobe.quadraticTo (lx * 1.22f, ly * 1.22f, tx, ty);
+            lobe.quadraticTo (rx * 1.22f, ry * 1.22f, 0.0f, sz * 0.12f);
+            lobe.closeSubPath();
+            leaf.addPath (lobe);
+            veins.startNewSubPath (0.0f, sz * 0.10f);
+            veins.lineTo (tx * 0.78f, ty * 0.78f);
+        }
+        // 葉柄（茎）
+        leaf.addRectangle (-sz * 0.045f, sz * 0.08f, sz * 0.09f, sz * 0.55f);
+        auto xf = juce::AffineTransform::rotation (rot).translated (cx, cy);
+        g.setColour (juce::Colours::black.withAlpha (alpha * 0.42f));
+        g.fillPath (leaf, xf.translated (1.5f, 2.0f));
+        g.setGradientFill (juce::ColourGradient (col.brighter (0.28f).withAlpha (alpha), cx, cy - sz,
+                                                 juce::Colour (0xfffbbf24).withAlpha (alpha * 0.92f), cx, cy + sz * 0.6f, false));
+        g.fillPath (leaf, xf);
+        g.setColour (juce::Colour (0xfffff3b0).withAlpha (alpha * 0.75f));
+        g.strokePath (leaf, juce::PathStrokeType (0.95f), xf);
+        g.setColour (juce::Colour (0xfffde68a).withAlpha (alpha * 0.65f));
+        g.strokePath (veins, juce::PathStrokeType (0.85f), xf);
+    }
+
+    static void drawSnowCrystal (juce::Graphics& g, float cx, float cy, float sz, float rot, juce::Colour col, float alpha)
+    {
+        // ❄ 初冬の六花（6角樹枝状の雪の結晶）＋氷晶ハロー
+        g.setGradientFill (juce::ColourGradient (col.withAlpha (alpha * 0.38f), cx, cy,
+                                                 col.withAlpha (0.0f), cx + sz * 1.35f, cy, true));
+        g.fillEllipse (cx - sz * 1.35f, cy - sz * 1.35f, sz * 2.7f, sz * 2.7f);
+        g.setColour (col.withAlpha (alpha));
+        for (int k = 0; k < 6; ++k)
+        {
+            const float an = rot + (float) k * juce::MathConstants<float>::pi / 3.0f;
+            const float dx = std::cos (an), dy = std::sin (an);
+            g.drawLine (cx, cy, cx + dx * sz, cy + dy * sz, 1.4f);
+            const float px = -dy, py = dx;
+            for (float f : { 0.45f, 0.72f })
+            {
+                const float bx = cx + dx * sz * f, by = cy + dy * sz * f;
+                const float bLen = sz * (f < 0.6f ? 0.30f : 0.22f);
+                g.drawLine (bx, by, bx + (dx * 0.7f + px * 0.7f) * bLen, by + (dy * 0.7f + py * 0.7f) * bLen, 1.1f);
+                g.drawLine (bx, by, bx + (dx * 0.7f - px * 0.7f) * bLen, by + (dy * 0.7f - py * 0.7f) * bLen, 1.1f);
+            }
+        }
+        g.setColour (juce::Colours::white.withAlpha (alpha));
+        g.fillEllipse (cx - 1.8f, cy - 1.8f, 3.6f, 3.6f);
+    }
+
+    void paintOceanStar (juce::Graphics& g)
+    {
+        auto r = area.toFloat();
+        if (! oceanStarCache.isValid()
+            || oceanStarCacheMode         != mode
+            || oceanStarCache.getWidth()  != area.getWidth()
+            || oceanStarCache.getHeight() != area.getHeight())
+        {
+            oceanStarCacheMode = mode;
+            oceanStarCache = juce::Image (juce::Image::ARGB,
+                                          juce::jmax (1, area.getWidth()),
+                                          juce::jmax (1, area.getHeight()), true);
+            juce::Graphics cg (oceanStarCache);
+            auto rz = r.withZeroOrigin();
+            const float W = rz.getWidth(), H = rz.getHeight();
+            const float maxD = juce::jmax (W, H);
+
+            if (mode == 14)
+            {
+                // =========================================================================
+                // 🌌 Mode 14: 星降る天の川銀河と蛍火の夜 (Galactic Milky Way & Firefly Night)
+                //   画面を斜めに横断する圧倒的な天の川銀河コア（星雲ガス＋暗黒星雲ダストレーン＋420個の星屑＋流星）
+                //   ＋湖畔の森シルエットから舞い上がる黄金の蛍火
+                // =========================================================================
+                juce::ColourGradient sky (juce::Colour (0xff030514), 0.0f, 0.0f,
+                                          juce::Colour (0xff0d1b3e), 0.0f, H, false);
+                sky.addColour (0.45, juce::Colour (0xff080f2c));
+                sky.addColour (0.78, juce::Colour (0xff122452));
+                cg.setGradientFill (sky);
+                cg.fillRect (rz);
+
+                // 1. 対角線（左下 -> 右上）を貫く天の川銀河の多層星雲クラウド（28層）
+                static const juce::uint32 kNebulaCols[5] = {
+                    0xff9333ea, 0xffec4899, 0xff38bdf8, 0xff6366f1, 0xfff59e0b
+                };
+                for (int n = 0; n < 28; ++n)
+                {
+                    const float t = (float) n / 27.0f;
+                    const float baseX = W * (0.04f + 0.92f * t);
+                    const float baseY = H * (0.86f - 0.78f * t);
+                    const float jitterX = (hash01 (n * 19 + 5) - 0.5f) * (W * 0.22f);
+                    const float jitterY = (hash01 (n * 19 + 13) - 0.5f) * (H * 0.22f);
+                    const float nx = baseX + jitterX;
+                    const float ny = baseY + jitterY;
+                    const float nr = maxD * (0.14f + 0.14f * hash01 (n * 19 + 29));
+                    const juce::Colour nc (kNebulaCols[n % 5]);
+                    const float na = (n % 5 == 4) ? 0.26f : 0.34f;
+                    cg.setGradientFill (juce::ColourGradient (nc.withAlpha (na), nx, ny,
+                                                              nc.withAlpha (0.0f), nx + nr, ny, true));
+                    cg.fillEllipse (nx - nr, ny - nr, nr * 2.0f, nr * 2.0f);
+                }
+
+                // 2. 天の川中心部の黄金・ミルキーホワイト銀河バルジ発光帯
+                for (int core = 0; core < 12; ++core)
+                {
+                    const float t = (float) core / 11.0f;
+                    const float cx = W * (0.12f + 0.76f * t) + std::sin (t * 6.0f) * 28.0f;
+                    const float cy = H * (0.78f - 0.64f * t) + std::cos (t * 5.0f) * 20.0f;
+                    const float cr = maxD * (0.09f + 0.05f * std::sin (t * 3.14f));
+                    const juce::Colour cc = (core % 2 == 0) ? juce::Colour (0x44fef08a) : juce::Colour (0x3ce0f2fe);
+                    cg.setGradientFill (juce::ColourGradient (cc, cx, cy, cc.withAlpha (0.0f), cx + cr, cy, true));
+                    cg.fillEllipse (cx - cr, cy - cr, cr * 2.0f, cr * 2.0f);
+                }
+
+                // 3. 天の川の立体感を際立たせる暗黒星雲ダストレーン（Dark Rift）
+                juce::Path dustRift;
+                dustRift.startNewSubPath (W * 0.10f, H * 0.80f);
+                dustRift.cubicTo (W * 0.35f, H * 0.62f, W * 0.58f, H * 0.34f, W * 0.88f, H * 0.14f);
+                cg.setColour (juce::Colour (0xff04071a).withAlpha (0.58f));
+                cg.strokePath (dustRift, juce::PathStrokeType (28.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                // 4. 銀河面に密集する420粒の星屑（Milky Way Star Cloud）
+                for (int i = 0; i < 420; ++i)
+                {
+                    float sx, sy;
+                    if (i < 260)
+                    {
+                        // 天の川ベルト上に密集配置
+                        const float t = hash01 (i * 17 + 3);
+                        const float spread = (hash01 (i * 17 + 11) - 0.5f) * (hash01 (i * 17 + 19) * 0.36f);
+                        sx = W * (0.02f + 0.96f * t + spread * 0.6f);
+                        sy = H * (0.88f - 0.80f * t + spread);
+                    }
+                    else
+                    {
+                        sx = W * hash01 (i * 13 + 7);
+                        sy = H * hash01 (i * 13 + 23) * 0.92f;
+                    }
+                    const float sr = 0.7f + 2.1f * hash01 (i * 13 + 31);
+                    const juce::Colour sc = (i % 6 == 0) ? juce::Colour (0xfffef08a)
+                                          : (i % 5 == 0) ? juce::Colour (0xff7dd3fc)
+                                          : (i % 4 == 0) ? juce::Colour (0xfff9a8d4)
+                                          : (i % 7 == 0) ? juce::Colour (0xffc4b5fd)
+                                                         : juce::Colours::white;
+                    cg.setColour (sc.withAlpha (0.35f + 0.62f * hash01 (i * 7 + 3)));
+                    cg.fillEllipse (sx - sr * 0.5f, sy - sr * 0.5f, sr, sr);
+                }
+
+                // 5. 夜空を切り裂く4本の流星（Shooting Stars）
+                static const float kMeteors[4][4] = {
+                    { 0.24f, 0.12f, 0.12f, 0.24f },
+                    { 0.78f, 0.08f, 0.64f, 0.22f },
+                    { 0.52f, 0.16f, 0.41f, 0.27f },
+                    { 0.88f, 0.34f, 0.76f, 0.46f }
+                };
+                for (int m = 0; m < 4; ++m)
+                {
+                    const float x0 = W * kMeteors[m][0], y0 = H * kMeteors[m][1];
+                    const float x1 = W * kMeteors[m][2], y1 = H * kMeteors[m][3];
+                    cg.setGradientFill (juce::ColourGradient (juce::Colours::transparentWhite, x0, y0,
+                                                              juce::Colour (0xffe0f2fe), x1, y1, false));
+                    cg.drawLine (x0, y0, x1, y1, 2.2f);
+                    drawStar8 (cg, x1, y1, 6.5f, juce::Colour (0xff7dd3fc));
+                }
+
+                // 6. 一等星の8芒星クロス回折スパイク（18個）
+                for (int s = 0; s < 18; ++s)
+                {
+                    const float sx = W * (0.05f + 0.90f * hash01 (s * 43 + 9));
+                    const float sy = H * (0.06f + 0.78f * hash01 (s * 43 + 17));
+                    const float sr = 6.5f + 9.5f * hash01 (s * 43 + 27);
+                    const juce::Colour sc = (s % 3 == 0) ? juce::Colour (0xfffef08a)
+                                          : (s % 3 == 1) ? juce::Colour (0xff38bdf8)
+                                                         : juce::Colour (0xfff472b6);
+                    drawStar8 (cg, sx, sy, sr, sc.withAlpha (0.85f));
+                }
+
+                // 7. 下辺の湖畔の針葉樹林シルエット＆水面から舞い上がる黄金の蛍火ボケ（26個）
+                juce::Path forest;
+                forest.startNewSubPath (0.0f, H);
+                for (int x = 0; x <= 48; ++x)
+                {
+                    const float px = W * (float) x / 48.0f;
+                    const float treePeak = (x % 2 == 0) ? 26.0f + 18.0f * hash01 (x * 19 + 3) : 12.0f;
+                    const float py = H - treePeak - 14.0f * std::sin ((float) x * 0.35f);
+                    forest.lineTo (px, py);
+                }
+                forest.lineTo (W, H);
+                forest.closeSubPath();
+                cg.setColour (juce::Colour (0xff020510).withAlpha (0.86f));
+                cg.fillPath (forest);
+
+                for (int b = 0; b < 26; ++b)
+                {
+                    const float bx = W * (0.04f + 0.92f * hash01 (b * 29 + 11));
+                    const float by = H * (0.42f + 0.54f * hash01 (b * 29 + 23));
+                    const float br = 7.0f + 26.0f * hash01 (b * 29 + 41);
+                    const juce::Colour bc = (b % 4 == 0) ? juce::Colour (0xff2dd4bf)
+                                          : (b % 3 == 0) ? juce::Colour (0xfffde047)
+                                                         : juce::Colour (0xfff59e0b);
+                    drawLensBokeh (cg, bx, by, br, bc, 0.32f + 0.34f * hash01 (b * 17 + 5));
+                }
+            }
+            else if (mode == 15)
+            {
+                // =========================================================================
+                // 🌊 Mode 15: 瑞々しい碧海と水紋・アクアラグーン (Lush Aqua Sea & Caustic Ripples)
+                //   「海なら水々しさ」— 陽光が降り注ぐ透明なエメラルド・ターコイズ海面＋水底コースティクス水紋メッシュ
+                //   ＋立体的な水滴＆沸き立つ気泡（48個）＋透き通る波頭と水紋リング
+                // =========================================================================
+                juce::ColourGradient aquaSea (juce::Colour (0xff0096c7), 0.0f, 0.0f,
+                                              juce::Colour (0xff02203c), 0.0f, H, false);
+                aquaSea.addColour (0.18, juce::Colour (0xff00b4d8));   // 陽光きらめく浅瀬のアクアターコイズ
+                aquaSea.addColour (0.45, juce::Colour (0xff0077b6));   // 澄み切ったマリンブルー
+                aquaSea.addColour (0.75, juce::Colour (0xff033e6b));   // 深いサファイアラグーン
+                cg.setGradientFill (aquaSea);
+                cg.fillRect (rz);
+
+                // 1. 海面中央から降り注ぐ瑞々しい太陽光のハイライトブルーム
+                cg.setGradientFill (juce::ColourGradient (juce::Colour (0x8890f1ef), W * 0.50f, H * 0.04f,
+                                                          juce::Colour (0x0000b4d8), W * 0.50f + maxD * 0.55f, H * 0.04f, true));
+                cg.fillRect (rz);
+
+                // 2. 海中へ斜めに差し込む12本の陽光ゴッドレイ（Sunbeams）
+                for (int ray = 0; ray < 12; ++ray)
+                {
+                    const float topX = W * (0.06f + 0.082f * (float) ray);
+                    const float botX = topX + (ray - 5.5f) * (W * 0.045f);
+                    const float bwTop = 14.0f + 16.0f * hash01 (ray * 13 + 3);
+                    const float bwBot = 48.0f + 42.0f * hash01 (ray * 13 + 7);
+                    juce::Path shaft;
+                    shaft.startNewSubPath (topX - bwTop, 0.0f);
+                    shaft.lineTo (topX + bwTop, 0.0f);
+                    shaft.lineTo (botX + bwBot, H);
+                    shaft.lineTo (botX - bwBot, H);
+                    shaft.closeSubPath();
+                    const juce::Colour rc = (ray % 2 == 0) ? juce::Colour (0x38caf0f8) : juce::Colour (0x2c00f5d4);
+                    cg.setGradientFill (juce::ColourGradient (rc, topX, 0.0f, rc.withAlpha (0.0f), botX, H * 0.92f, false));
+                    cg.fillPath (shaft);
+                }
+
+                // 3. 画面全体に広がる網目状の水紋コースティクス（Caustic Light Lace）
+                drawCausticWaveMesh (cg, rz, juce::Colour (0xff72efdd), 0.42f, 0);
+
+                // 4. 幾重にも重なる透明な波のうねり（Translucent Rolling Wave Crests）
+                for (int wv = 0; wv < 6; ++wv)
+                {
+                    const float wyBase = H * (0.16f + 0.14f * (float) wv);
+                    juce::Path waveFill, waveCrest;
+                    waveFill.startNewSubPath (0.0f, H);
+                    waveFill.lineTo (0.0f, wyBase);
+                    waveCrest.startNewSubPath (0.0f, wyBase);
+                    for (int s = 1; s <= 24; ++s)
+                    {
+                        const float wx = W * (float) s / 24.0f;
+                        const float wy = wyBase + std::sin ((float) s * 0.65f + (float) wv * 1.4f) * (10.0f + wv * 2.0f)
+                                                + std::cos ((float) s * 1.15f - (float) wv) * 5.0f;
+                        waveFill.lineTo (wx, wy);
+                        waveCrest.lineTo (wx, wy);
+                    }
+                    waveFill.lineTo (W, H);
+                    waveFill.closeSubPath();
+                    cg.setGradientFill (juce::ColourGradient (juce::Colour (0x2448cae4), 0.0f, wyBase,
+                                                              juce::Colours::transparentBlack, 0.0f, wyBase + 95.0f, false));
+                    cg.fillPath (waveFill);
+                    cg.setColour (juce::Colour (0xffcaf0f8).withAlpha (0.58f - (float) wv * 0.06f));
+                    cg.strokePath (waveCrest, juce::PathStrokeType (2.0f - (float) wv * 0.15f, juce::PathStrokeType::curved));
+                }
+
+                // 5. 水面に広がる同心円の水紋リング（Water Ripples）
+                for (int rp = 0; rp < 7; ++rp)
+                {
+                    const float rx = W * (0.12f + 0.76f * hash01 (rp * 29 + 5));
+                    const float ry = H * (0.18f + 0.68f * hash01 (rp * 29 + 17));
+                    const float rw = 36.0f + 68.0f * hash01 (rp * 29 + 23);
+                    const float rh = rw * 0.34f;
+                    cg.setColour (juce::Colour (0xffcaf0f8).withAlpha (0.38f));
+                    cg.drawEllipse (rx - rw, ry - rh, rw * 2.0f, rh * 2.0f, 1.3f);
+                    cg.setColour (juce::Colour (0xff00f5d4).withAlpha (0.26f));
+                    cg.drawEllipse (rx - rw * 0.62f, ry - rh * 0.62f, rw * 1.24f, rh * 1.24f, 1.0f);
+                }
+
+                // 6. ぷるんと弾ける立体3D水滴＆立ち昇る気泡ストリーム（48個）
+                for (int d = 0; d < 48; ++d)
+                {
+                    const float dx = W * (0.03f + 0.94f * hash01 (d * 23 + 9));
+                    const float dy = H * (0.05f + 0.90f * hash01 (d * 23 + 21));
+                    const float dr = (d % 5 == 0) ? (10.0f + 11.0f * hash01 (d * 23 + 33))
+                                                  : (2.8f + 6.5f * hash01 (d * 23 + 33));
+                    const juce::Colour dc = (d % 3 == 0) ? juce::Colour (0xff00f5d4)
+                                          : (d % 3 == 1) ? juce::Colour (0xff48cae4)
+                                                         : juce::Colour (0xff90e0ef);
+                    drawWaterDroplet (cg, dx, dy, dr, dc, 0.65f + 0.30f * hash01 (d * 11 + 3));
+                }
+
+                // 7. 水面の陽光スパークル（18個）
+                for (int s = 0; s < 18; ++s)
+                {
+                    const float sx = W * (0.08f + 0.84f * hash01 (s * 31 + 7));
+                    const float sy = H * (0.04f + 0.42f * hash01 (s * 31 + 19));
+                    drawStar8 (cg, sx, sy, 6.0f + 7.0f * hash01 (s * 31 + 29), juce::Colour (0xfffff3b0).withAlpha (0.80f));
+                }
+            }
+            else if (mode == 16)
+            {
+                // =========================================================================
+                // 🌅 Mode 16: 朝焼けの海と暁の水平線 (Radiant Dawn & Sunrise Sea)
+                //   「朝焼け」— 暁のインディゴ〜ロイヤルパープル〜マゼンタロゼ〜黄金に輝く水平線
+                //   ＋昇る朝日と16本の放射光芒（Crepuscular Rays）＋朝焼けの彩雲＋海面の黄金の光の道
+                // =========================================================================
+                const float horizonY = H * 0.48f;
+
+                // 1. 暁の空〜水平線〜朝焼けの海の7段グラデーション
+                juce::ColourGradient dawnSky (juce::Colour (0xff0f1035), 0.0f, 0.0f,
+                                              juce::Colour (0xff1e0e24), 0.0f, H, false);
+                dawnSky.addColour (0.16, juce::Colour (0xff2e1a54));   // 夜明け前のロイヤル・バイオレット
+                dawnSky.addColour (0.30, juce::Colour (0xff882963));   // 暁のクリムゾン・マゼンタロゼ
+                dawnSky.addColour (0.41, juce::Colour (0xffe85d56));   // 朝焼けのコーラル・バーミリオン
+                dawnSky.addColour (0.48, juce::Colour (0xffffd166));   // 水平線のブリリアント・サンライズゴールド
+                dawnSky.addColour (0.56, juce::Colour (0xffd9534f));   // 海面に映る朝焼けロゼ
+                dawnSky.addColour (0.76, juce::Colour (0xff4a1f43));   // 朝凪のディープ・ワインバイオレット海面
+                cg.setGradientFill (dawnSky);
+                cg.fillRect (rz);
+
+                // 2. 水平線から天頂へ向かって扇状に広がる16本の朝日の光芒（Crepuscular Sunbeams）
+                const float sunX = W * 0.50f;
+                for (int ray = 0; ray < 16; ++ray)
+                {
+                    const float angle0 = -1.42f + (float) ray * (2.84f / 15.0f) - 0.045f;
+                    const float angle1 = angle0 + 0.09f;
+                    const float rayLen = maxD * 0.85f;
+                    juce::Path beam;
+                    beam.startNewSubPath (sunX, horizonY);
+                    beam.lineTo (sunX + std::sin (angle0) * rayLen, horizonY - std::cos (angle0) * rayLen);
+                    beam.lineTo (sunX + std::sin (angle1) * rayLen, horizonY - std::cos (angle1) * rayLen);
+                    beam.closeSubPath();
+                    const juce::Colour beamCol = (ray % 2 == 0) ? juce::Colour (0x36ffea9f) : juce::Colour (0x28ff758f);
+                    cg.setGradientFill (juce::ColourGradient (beamCol, sunX, horizonY,
+                                                              beamCol.withAlpha (0.0f),
+                                                              sunX + std::sin (angle0) * rayLen * 0.75f,
+                                                              horizonY - std::cos (angle0) * rayLen * 0.75f, false));
+                    cg.fillPath (beam);
+                }
+
+                // 3. 水平線から昇る黄金の太陽（Rising Sun Disc & Triple Corona）
+                cg.setGradientFill (juce::ColourGradient (juce::Colour (0x99ffbe0b), sunX, horizonY,
+                                                          juce::Colour (0x00ff6b8b), sunX + W * 0.42f, horizonY, true));
+                cg.fillRect (rz);
+                {
+                    juce::Graphics::ScopedSaveState ss (cg);
+                    cg.reduceClipRegion (0, 0, (int) W, (int) horizonY + 2);
+                    const float sunR = juce::jmin (W, H) * 0.115f;
+                    cg.setGradientFill (juce::ColourGradient (juce::Colour (0xffffffff), sunX, horizonY - sunR * 0.25f,
+                                                              juce::Colour (0xffff9e00), sunX + sunR, horizonY, true));
+                    cg.fillEllipse (sunX - sunR, horizonY - sunR * 0.82f, sunR * 2.0f, sunR * 2.0f);
+                }
+
+                // 4. 朝日に下から黄金・ロゼ色に照らされる彩雲（Sunlit Dawn Clouds — 10個）
+                for (int cl = 0; cl < 10; ++cl)
+                {
+                    const float cx = W * (0.06f + 0.88f * hash01 (cl * 23 + 5));
+                    const float cy = horizonY * (0.22f + 0.68f * hash01 (cl * 23 + 13));
+                    const float cw = 90.0f + 140.0f * hash01 (cl * 23 + 19);
+                    const float ch = 16.0f + 22.0f * hash01 (cl * 23 + 29);
+                    juce::Path cloud;
+                    cloud.addRoundedRectangle (cx - cw * 0.5f, cy - ch * 0.5f, cw, ch, ch * 0.5f);
+                    cloud.addEllipse (cx - cw * 0.32f, cy - ch * 0.95f, cw * 0.42f, ch * 1.2f);
+                    cloud.addEllipse (cx - cw * 0.02f, cy - ch * 1.15f, cw * 0.38f, ch * 1.4f);
+                    cg.setGradientFill (juce::ColourGradient (juce::Colour (0xff4a1f52).withAlpha (0.58f), cx, cy - ch,
+                                                              juce::Colour (0xffffb703).withAlpha (0.72f), cx, cy + ch * 0.5f, false));
+                    cg.fillPath (cloud);
+                }
+
+                // 5. 天頂に残る暁の一番星と星屑（36粒）
+                for (int i = 0; i < 36; ++i)
+                {
+                    const float sx = W * hash01 (i * 17 + 9);
+                    const float sy = horizonY * 0.55f * hash01 (i * 17 + 23);
+                    const float sr = 1.0f + 1.8f * hash01 (i * 17 + 31);
+                    cg.setColour (juce::Colour (0xfffff8f2).withAlpha ((1.0f - sy / (horizonY * 0.6f)) * 0.78f));
+                    cg.fillEllipse (sx - sr * 0.5f, sy - sr * 0.5f, sr, sr);
+                }
+                drawStar8 (cg, W * 0.22f, horizonY * 0.22f, 9.5f, juce::Colour (0xfffff3b0)); // 暁の明星（金星）
+
+                // 6. 海面（horizonY .. H）に輝く朝日の光の道（Golden Sunrise Shimmer Path — 90本）
+                for (int rp = 0; rp < 90; ++rp)
+                {
+                    const float t = (float) rp / 89.0f;
+                    const float ry = horizonY + (H - horizonY) * (t * t * 0.80f + t * 0.20f);
+                    const float spread = W * (0.08f + 0.58f * t);
+                    const float jitter = (hash01 (rp * 13 + 7) - 0.5f) * spread * 0.35f;
+                    const float rx0 = sunX + jitter - spread * (0.35f + 0.65f * hash01 (rp * 11 + 3));
+                    const float rx1 = sunX + jitter + spread * (0.35f + 0.65f * hash01 (rp * 11 + 9));
+                    const juce::Colour rc = (rp % 3 == 0) ? juce::Colour (0xfffff3b0)
+                                          : (rp % 3 == 1) ? juce::Colour (0xffffbe0b)
+                                                          : juce::Colour (0xffff6b8b);
+                    const float ra = (1.0f - t * 0.55f) * 0.58f;
+                    const float rh = 1.6f + t * 2.8f;
+                    cg.setGradientFill (juce::ColourGradient (rc.withAlpha (0.0f), rx0, ry,
+                                                              rc.withAlpha (ra), sunX + jitter, ry, false));
+                    cg.fillRect (rx0, ry, (sunX + jitter) - rx0, rh);
+                    cg.setGradientFill (juce::ColourGradient (rc.withAlpha (ra), sunX + jitter, ry,
+                                                              rc.withAlpha (0.0f), rx1, ry, false));
+                    cg.fillRect (sunX + jitter, ry, rx1 - (sunX + jitter), rh);
+                }
+
+                // 7. 海面のダイヤモンド・サンライズグリッター（24個）
+                for (int sp = 0; sp < 24; ++sp)
+                {
+                    const float t = hash01 (sp * 19 + 5);
+                    const float sx = sunX + (hash01 (sp * 19 + 11) - 0.5f) * W * (0.16f + 0.60f * t);
+                    const float sy = horizonY + 8.0f + t * (H - horizonY - 16.0f);
+                    drawStar4 (cg, sx, sy, 4.5f + 5.5f * hash01 (sp * 19 + 23), juce::Colour (0xfffff8eb).withAlpha (0.82f));
+                }
+            }
+            else if (mode == 17)
+            {
+                // =========================================================================
+                // 🍁 Mode 17: 晩秋から初冬へ・茜空と初雪の水鏡 (Late Autumn to Early Winter Melancholy)
+                //   「これから冬が近づく秋の哀愁ある感じ」
+                //   冷たい初冬のスレート藍空と晩秋の夕茜が交わる空＋遠山の霞シルエットと白い川霧
+                //   ＋左右上隅から枝垂れる紅葉の枝＋舞い散る5裂カエデ（🍁）と初雪の結晶（❄）＋静寂の湖面波紋
+                // =========================================================================
+                const float horizonY = H * 0.50f;
+
+                // 1. 初冬の冷たい藍空〜晩秋の茜色〜静寂の湖面水鏡グラデーション
+                juce::ColourGradient autumnWinter (juce::Colour (0xff0c1324), 0.0f, 0.0f,
+                                                   juce::Colour (0xff120e16), 0.0f, H, false);
+                autumnWinter.addColour (0.22, juce::Colour (0xff1e2942));   // 初冬の冷たいウィンター・スレートブルー
+                autumnWinter.addColour (0.36, juce::Colour (0xff5e2c3e));   // 暮れゆく晩秋のトワイライト・プラム
+                autumnWinter.addColour (0.45, juce::Colour (0xffc84b31));   // 哀愁の夕茜（あかね）バーミリオン
+                autumnWinter.addColour (0.50, juce::Colour (0xfff0944d));   // 遠山の端に残る琥珀の残照
+                autumnWinter.addColour (0.58, juce::Colour (0xff8c3832));   // 湖面に映る茜色の水鏡
+                autumnWinter.addColour (0.78, juce::Colour (0xff241c2c));   // 冬の影が落ちる深淵の湖底
+                cg.setGradientFill (autumnWinter);
+                cg.fillRect (rz);
+
+                // 2. 遠山の3層シルエット（Misty Distant Mountain Ridges）＋山あいを流れる白い朝靄・川霧
+                for (int mt = 0; mt < 3; ++mt)
+                {
+                    juce::Path ridge;
+                    const float baseY = horizonY - (2 - mt) * 18.0f;
+                    ridge.startNewSubPath (0.0f, horizonY + 10.0f);
+                    for (int x = 0; x <= 36; ++x)
+                    {
+                        const float px = W * (float) x / 36.0f;
+                        const float h1 = std::sin ((float) x * 0.22f + (float) mt * 1.8f) * (28.0f - mt * 6.0f);
+                        const float h2 = std::cos ((float) x * 0.55f - (float) mt * 0.9f) * (14.0f - mt * 3.0f);
+                        const float py = baseY - std::abs (h1 + h2);
+                        ridge.lineTo (px, py);
+                    }
+                    ridge.lineTo (W, horizonY + 10.0f);
+                    ridge.closeSubPath();
+                    const juce::Colour mc = (mt == 0) ? juce::Colour (0xff4a2c3d).withAlpha (0.65f)
+                                          : (mt == 1) ? juce::Colour (0xff2e1d2d).withAlpha (0.80f)
+                                                      : juce::Colour (0xff181220).withAlpha (0.92f);
+                    cg.setColour (mc);
+                    cg.fillPath (ridge);
+
+                    // 山裾をたなびく白い初冬の川霧・冬霞（Winter River Mist）
+                    cg.setGradientFill (juce::ColourGradient (juce::Colour (0x38e2e8f0), 0.0f, baseY - 4.0f,
+                                                              juce::Colours::transparentWhite, 0.0f, baseY + 26.0f, false));
+                    cg.fillRect (0.0f, baseY - 12.0f, W, 38.0f);
+                }
+
+                // 3. 湖面（horizonY .. H）に広がる静寂の波紋と水面に浮かぶ落ち葉
+                for (int rp = 0; rp < 8; ++rp)
+                {
+                    const float rx = W * (0.10f + 0.80f * hash01 (rp * 23 + 7));
+                    const float ry = horizonY + 24.0f + (H - horizonY - 36.0f) * hash01 (rp * 23 + 17);
+                    const float rw = 42.0f + 85.0f * hash01 (rp * 23 + 29);
+                    const float rh = rw * 0.24f;
+                    cg.setColour (juce::Colour (0xfffde6c4).withAlpha (0.30f));
+                    cg.drawEllipse (rx - rw, ry - rh, rw * 2.0f, rh * 2.0f, 1.2f);
+                    cg.setColour (juce::Colour (0xffbae6fd).withAlpha (0.22f));
+                    cg.drawEllipse (rx - rw * 0.58f, ry - rh * 0.58f, rw * 1.16f, rh * 1.16f, 0.9f);
+                }
+
+                // 4. 左右上隅（ヘッダ直下 H*0.14〜0.38）から画面へ枝垂れる晩秋の紅葉枝シルエット
+                for (int side : { 0, 1 })
+                {
+                    const float sx = (side == 0) ? 0.0f : W;
+                    const float dir = (side == 0) ? 1.0f : -1.0f;
+                    juce::Path branch;
+                    branch.startNewSubPath (sx, H * 0.14f);
+                    branch.quadraticTo (sx + dir * W * 0.14f, H * 0.22f, sx + dir * W * 0.26f, H * 0.34f);
+                    cg.setColour (juce::Colour (0xff241018).withAlpha (0.85f));
+                    cg.strokePath (branch, juce::PathStrokeType (3.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    for (int lf = 0; lf < 12; ++lf)
+                    {
+                        const float t = (float) lf / 11.0f;
+                        const float lx = sx + dir * (W * 0.02f + t * W * 0.24f) + (hash01 (lf * 13 + side * 7) - 0.5f) * 28.0f;
+                        const float ly = H * (0.14f + t * 0.22f) + (hash01 (lf * 13 + side * 19) - 0.5f) * 26.0f;
+                        const juce::Colour lc = (lf % 3 == 0) ? juce::Colour (0xffff2e4c)
+                                              : (lf % 3 == 1) ? juce::Colour (0xffff9e00)
+                                                              : juce::Colour (0xffef233c);
+                        drawMapleLeaf (cg, lx, ly, 11.5f + 6.0f * hash01 (lf * 7), (float) lf * 0.8f, lc, 0.92f);
+                    }
+                }
+
+                // 5. 秋風に舞い散る紅葉（28枚）× 空から舞い降りる初雪の結晶（26個）の邂逅
+                for (int m = 0; m < 28; ++m)
+                {
+                    const float mx = W * (0.04f + 0.92f * hash01 (m * 31 + 5));
+                    const float my = H * (0.14f + 0.80f * hash01 (m * 31 + 19));
+                    const float mSz = 10.0f + 9.5f * hash01 (m * 31 + 29);
+                    const float mRot = hash01 (m * 31 + 37) * 6.28f;
+                    const juce::Colour mc = (m % 3 == 0) ? juce::Colour (0xffff2e4c)   // 深紅のもみじ
+                                          : (m % 3 == 1) ? juce::Colour (0xffff7b00)   // 茜オレンジ
+                                                         : juce::Colour (0xffffbe0b);  // 黄金の銀杏・琥珀葉
+                    drawMapleLeaf (cg, mx, my, mSz, mRot, mc, 0.88f);
+                }
+                for (int sn = 0; sn < 26; ++sn)
+                {
+                    const float sx = W * (0.04f + 0.92f * hash01 (sn * 29 + 11));
+                    const float sy = H * (0.08f + 0.78f * hash01 (sn * 29 + 23));
+                    const float sSz = 6.5f + 8.5f * hash01 (sn * 29 + 31);
+                    const float sRot = hash01 (sn * 29 + 43) * 3.14f;
+                    drawSnowCrystal (cg, sx, sy, sSz, sRot, juce::Colour (0xffe0f2fe), 0.86f);
+                }
+            }
+            else
+            {
+                // =========================================================================
+                // 👑 Mode 18: 蒼海オペラ座と黄金シャンデリア (Grand Opera Sapphire & Chandelier)
+                //   ロイヤルサファイアの深海オペラ舞台＋左右のベルベット幕＆金のタッセルロープ
+                //   ＋天頂中央の豪華な24Kゴールド＆クリスタル・シャンデリア＋黄金玉ボケ
+                // =========================================================================
+                juce::ColourGradient stage (juce::Colour (0xff030a1e), 0.0f, 0.0f,
+                                            juce::Colour (0xff061538), 0.0f, H, false);
+                stage.addColour (0.50, juce::Colour (0xff0c266e));
+                cg.setGradientFill (stage);
+                cg.fillRect (rz);
+
+                // 1. 舞台中央のエレクトリック・ロイヤルサファイア背面スポットライト
+                cg.setGradientFill (juce::ColourGradient (juce::Colour (0x802563eb), W * 0.50f, H * 0.44f,
+                                                          juce::Colour (0x00040b20), W * 0.50f + maxD * 0.48f, H * 0.44f, true));
+                cg.fillRect (rz);
+                cg.setGradientFill (juce::ColourGradient (juce::Colour (0x55fde68a), W * 0.50f, H * 0.10f,
+                                                          juce::Colour (0x00d4af37), W * 0.50f + maxD * 0.32f, H * 0.10f, true));
+                cg.fillRect (rz);
+
+                // 2. 天井から降り注ぐシャンデリア＆オペラ座の光条（9本）
+                for (int ray = -4; ray <= 4; ++ray)
+                {
+                    const float topX = W * 0.50f + (float) ray * (W * 0.055f);
+                    const float botX = W * 0.50f + (float) ray * (W * 0.16f);
+                    juce::Path beam;
+                    beam.startNewSubPath (topX - 18.0f, 0.0f);
+                    beam.lineTo (topX + 18.0f, 0.0f);
+                    beam.lineTo (botX + 64.0f, H);
+                    beam.lineTo (botX - 64.0f, H);
+                    beam.closeSubPath();
+                    const juce::Colour rayCol = (std::abs (ray) <= 1) ? juce::Colour (0x28f2c94c) : juce::Colour (0x203b82f6);
+                    cg.setGradientFill (juce::ColourGradient (rayCol, topX, 0.0f, rayCol.withAlpha (0.0f), botX, H * 0.90f, false));
+                    cg.fillPath (beam);
+                }
+
+                // 3. 左右のロイヤル・サファイアベルベット劇場ドレープ幕＋金のタッセルロープ
+                for (int side : { 0, 1 })
+                {
+                    const float dir = (side == 0) ? 1.0f : -1.0f;
+                    const float edgeX = (side == 0) ? 0.0f : W;
+                    for (int fold = 0; fold < 5; ++fold)
+                    {
+                        const float fw = 24.0f + (float) fold * 18.0f;
+                        const float fx = (side == 0) ? (float) fold * 16.0f : W - fw - (float) fold * 16.0f;
+                        cg.setGradientFill (juce::ColourGradient (
+                            juce::Colour (0xff03091c).withAlpha (0.78f - fold * 0.12f), fx, 0.0f,
+                            juce::Colour (0xff1d4ed8).withAlpha (0.32f), fx + fw, 0.0f, false));
+                        cg.fillRect (fx, 0.0f, fw, H);
+                    }
+                    // 金のタッセル編みロープ
+                    juce::Path rope;
+                    rope.startNewSubPath (edgeX, H * 0.36f);
+                    rope.quadraticTo (edgeX + dir * 58.0f, H * 0.44f, edgeX + dir * 92.0f, H * 0.38f);
+                    cg.setColour (juce::Colour (0xffd4af37).withAlpha (0.85f));
+                    cg.strokePath (rope, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                }
+
+                // 4. 天頂中央のグラン・クリスタルシャンデリア（3段ガラスガーランド＆キャンドル光輪）
+                const float chX = W * 0.50f;
+                for (int tier = 0; tier < 3; ++tier)
+                {
+                    const float tw = (220.0f - tier * 54.0f);
+                    const float ty = 12.0f + tier * 24.0f;
+                    cg.setColour (juce::Colour (0xffd4af37).withAlpha (0.82f));
+                    cg.drawLine (chX - tw * 0.5f, ty, chX + tw * 0.5f, ty, 2.0f);
+                    const int drops = 9 - tier * 2;
+                    for (int d = 0; d < drops; ++d)
+                    {
+                        const float dx = chX - tw * 0.5f + tw * (float) d / (float) (drops - 1);
+                        cg.setColour (juce::Colour (0xfffef08a).withAlpha (0.85f));
+                        cg.fillEllipse (dx - 2.5f, ty + 3.0f, 5.0f, 8.0f);
+                        if (d < drops - 1)
+                        {
+                            const float nx = chX - tw * 0.5f + tw * (float) (d + 1) / (float) (drops - 1);
+                            juce::Path swag;
+                            swag.startNewSubPath (dx, ty);
+                            swag.quadraticTo ((dx + nx) * 0.5f, ty + 14.0f, nx, ty);
+                            cg.setColour (juce::Colour (0x99fef08a));
+                            cg.strokePath (swag, juce::PathStrokeType (1.2f));
+                        }
+                    }
+                }
+                drawStar8 (cg, chX, 44.0f, 14.0f, juce::Colour (0xfffef08a));
+
+                // 5. シャンデリアの黄金ボケ＆深海サファイアジュエルボケ（32個）
+                for (int b = 0; b < 32; ++b)
+                {
+                    const float bx = W * (0.06f + 0.88f * hash01 (b * 31 + 5));
+                    const float by = H * (0.05f + 0.88f * hash01 (b * 31 + 19));
+                    const float br = 7.0f + 28.0f * hash01 (b * 31 + 37);
+                    const juce::Colour bc = (b % 3 == 0) ? juce::Colour (0xfff2c94c)
+                                          : (b % 3 == 1) ? juce::Colour (0xff3b82f6)
+                                                         : juce::Colour (0xfffbe6a2);
+                    drawLensBokeh (cg, bx, by, br, bc, 0.28f + 0.32f * hash01 (b * 13 + 7));
+                }
+            }
+        }
+        g.drawImageAt (oceanStarCache, area.getX(), area.getY());
+
+        // 声と時間(animT)に連動してリアルタイムにきらめく世界観別パーティクル演出
+        const float voiceBoost = 0.65f + 0.85f * level;
+        for (int f = 0; f < 10; ++f)
+        {
+            const float phase = animT * (0.6f + 0.08f * (float) f) + (float) f * 1.7f;
+            const float fx = r.getX() + r.getWidth()  * (0.08f + 0.84f * hash01 (f * 37 + 13)) + std::sin (phase) * 14.0f;
+            const float fy = r.getY() + r.getHeight() * (0.12f + 0.76f * hash01 (f * 37 + 29)) + std::cos (phase * 0.8f) * 10.0f;
+            const float pulse = (0.45f + 0.55f * std::sin (phase * 1.8f)) * voiceBoost;
+            const float fr = (5.0f + 9.0f * hash01 (f * 19 + 3)) * (0.8f + 0.35f * pulse);
+            if (mode == 15)
+            {
+                drawWaterDroplet (g, fx, fy, fr * 0.65f, Palette::ice, juce::jmin (0.85f, 0.45f * pulse));
+            }
+            else if (mode == 17)
+            {
+                if (f % 2 == 0)
+                    drawMapleLeaf (g, fx, fy, fr * 0.90f, phase * 0.5f, Palette::salmon, juce::jmin (0.85f, 0.50f * pulse));
+                else
+                    drawSnowCrystal (g, fx, fy, fr * 0.75f, phase * 0.3f, Palette::ice, juce::jmin (0.85f, 0.50f * pulse));
+            }
+            else
+            {
+                const juce::Colour fc = (f % 2 == 0) ? Palette::yellow : Palette::ice;
+                g.setGradientFill (juce::ColourGradient (fc.withAlpha (juce::jmin (0.55f, 0.24f * pulse)), fx, fy,
+                                                         fc.withAlpha (0.0f), fx + fr * 2.2f, fy, true));
+                g.fillEllipse (fx - fr * 2.2f, fy - fr * 2.2f, fr * 4.4f, fr * 4.4f);
+                drawStar8 (g, fx, fy, fr * 0.85f, fc.brighter (0.3f).withAlpha (juce::jmin (0.88f, 0.48f * pulse)));
+            }
+        }
+    }
+
+    juce::Image brandCache, brandFgCache, auroraCache, liverCache, neonCache, studioCache, oceanStarCache;
+    int         liverCacheMode { -1 }, oceanStarCacheMode { -1 };
 
     // ---- ライブ (大型機材) ----
     // ---- ペンライトの海 (5人ユニゾンON演出) ----
@@ -2957,6 +4793,69 @@ public:
                 const float sr = (4.5f + 4.5f * hash01 (i * 7)) * (0.7f + 0.5f * pulse);
                 const juce::Colour sc = (i % 2 == 0) ? Palette::salmon : Palette::blue;
                 drawStar4 (g, sx, sy, sr, sc.withAlpha (0.14f + 0.14f * pulse));
+            }
+        }
+        else if (Palette::isOceanStarTheme (mode))
+        {
+            // 🌌🌊🌅🍁👑 風景・季節コレクション: ガラスカードの上にも世界観の空気感（水滴・紅葉・初雪・朝焼け光芒・銀河星屑）を繊細に重ねる
+            const int oIdx = Palette::oceanStarIndex (mode);
+            if (oIdx == 1)
+            {
+                // 🌊 02 瑞々しい碧海: ガラスカードや画面の端に付着するぷるんとした水滴と細かな気泡
+                for (int d = 0; d < 18; ++d)
+                {
+                    const float dx = r.getX() + r.getWidth()  * (0.02f + 0.96f * hash01 (d * 37 + 7));
+                    const float dy = r.getY() + r.getHeight() * (0.08f + 0.88f * hash01 (d * 37 + 19));
+                    const float dr = 3.5f + 7.5f * hash01 (d * 37 + 29);
+                    drawWaterDroplet (g, dx, dy, dr, Palette::ice, 0.36f);
+                }
+            }
+            else if (oIdx == 2)
+            {
+                // 🌅 03 朝焼けの海: 水平線のサンライズ・ゴールドアンバー光彩ベール
+                const float horY = r.getY() + r.getHeight() * 0.48f;
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0x24ffbe0b), r.getCentreX(), horY,
+                                                         juce::Colours::transparentBlack, r.getCentreX(), horY - r.getHeight() * 0.25f, false));
+                g.fillRect (r.getX(), horY - r.getHeight() * 0.25f, r.getWidth(), r.getHeight() * 0.25f);
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0x20ff6b8b), r.getCentreX(), horY,
+                                                         juce::Colours::transparentBlack, r.getCentreX(), horY + r.getHeight() * 0.25f, false));
+                g.fillRect (r.getX(), horY, r.getWidth(), r.getHeight() * 0.25f);
+            }
+            else if (oIdx == 3)
+            {
+                // 🍁 04 晩秋から初冬へ: パネルの周縁を舞う紅葉（🍁）と初雪の結晶（❄）
+                for (int i = 0; i < 12; ++i)
+                {
+                    const float px = r.getX() + r.getWidth()  * (0.02f + 0.96f * hash01 (i * 41 + 5));
+                    const float py = r.getY() + r.getHeight() * (0.08f + 0.88f * hash01 (i * 41 + 17));
+                    if (i % 2 == 0)
+                        drawMapleLeaf (g, px, py, 7.5f + 5.0f * hash01 (i * 13), hash01 (i * 29) * 6.28f,
+                                       (i % 4 == 0) ? juce::Colour (0xffe11d48) : juce::Colour (0xfff59e0b), 0.34f);
+                    else
+                        drawSnowCrystal (g, px, py, 5.5f + 4.5f * hash01 (i * 19), hash01 (i * 31) * 3.14f,
+                                         juce::Colour (0xffe0f2fe), 0.36f);
+                }
+            }
+            else
+            {
+                for (int b = 0; b < 12; ++b)
+                {
+                    const float bx = r.getX() + r.getWidth()  * (0.06f + 0.88f * hash01 (b * 37 + oIdx * 13 + 5));
+                    const float by = r.getY() + r.getHeight() * (0.08f + 0.84f * hash01 (b * 37 + oIdx * 13 + 19));
+                    const float br = 16.0f + 32.0f * hash01 (b * 37 + 29);
+                    const juce::Colour bc = (b % 3 == 0) ? Palette::yellow
+                                          : (b % 3 == 1) ? Palette::ice : Palette::salmon;
+                    drawLensBokeh (g, bx, by, br, bc, 0.08f + 0.04f * (float) (b % 2));
+                }
+            }
+            for (int i = 0; i < 18; ++i)
+            {
+                const float sx = r.getX() + r.getWidth()  * hash01 (i * 23 + 7);
+                const float sy = r.getY() + r.getHeight() * hash01 (i * 23 + 13);
+                const float pulse = 0.5f + 0.5f * std::sin (animT * 2.0f + (float) i * 1.1f);
+                const float sr = (4.0f + 4.8f * hash01 (i * 9 + 3)) * (0.75f + 0.45f * pulse);
+                const juce::Colour sc = (i % 3 == 0) ? Palette::yellow : (i % 3 == 1 ? Palette::ice : Palette::salmon);
+                drawStar4 (g, sx, sy, sr, sc.withAlpha (0.14f + 0.12f * pulse));
             }
         }
         else if (mode == 6)
@@ -3248,16 +5147,19 @@ public:
     //   4 ライブ / 6 ジャニーズ → 1 へ   (v2.4.0)
     //   5 軽量                  → 0 へ   (v2.12.0)
     void setThemeMode (int m);
+    void setAccessMode (int m);                             // 0=標準, 1=👓老眼・大文字, 2=🧭ADHD集中, 3=🌿ASD低刺激
+    int  getAccessMode() const noexcept { return accessMode; }
     void refreshLanguage();                                 // v1.8.0: JP <-> EN re-label
     void forceSeason (int s);                               // test hook (GZ_SEASON)
     int  getThemeMode() const { return themeMode; }
     // v2.11.0: よる(8)も「ゆるふわの仲間」。丸文字・ジュースツマミ・ぷにぐじは共通で、
     //          変わるのは配色と背景だけ。ここを 1 だけにしておくと、よるで急に
     //          角ばった文字に戻って別テーマに見えてしまう。
-    bool liverTheme()  const { return Palette::isCoutureTheme (themeMode); }
-    bool pastelTheme() const { return themeMode == 1 || themeMode == 8 || liverTheme(); }
-    bool juiceTheme()  const { return ! liteMode && (themeMode == 1 || themeMode == 8); }
-    bool nightTheme()  const { return themeMode == 8 || themeMode == 11; }   // ゆるふわ・よる / ノワール・ロリータ
+    bool liverTheme()     const { return Palette::isCoutureTheme (themeMode); }
+    bool oceanStarTheme() const { return Palette::isOceanStarTheme (themeMode); }
+    bool pastelTheme()    const { return themeMode == 1 || themeMode == 8 || liverTheme(); }
+    bool juiceTheme()     const { return ! liteMode && accessMode == 0 && (themeMode == 1 || themeMode == 8); }
+    bool nightTheme()     const { return themeMode == 8 || themeMode == 11 || oceanStarTheme(); }   // ゆるふわ・よる / ノワール・ロリータ / 星空・海・黄昏
     void  setAdvanced (bool a) { advancedMode = a; applyModeVisibility(); if (onUiStateChange) onUiStateChange ("ui_advanced", a ? 1 : 0); }
     VocalTuner& getTuner() { return tuner; }
 
@@ -3274,7 +5176,10 @@ public:
     void fitText (juce::Graphics& g, const juce::String& t, juce::Rectangle<int> r,
                   juce::Justification j, float h, bool bold) const
     {
-        g.setFont (GzzioLnF::fitFont (cfont (h, bold), t, r.getWidth() - 2));
+        auto f = cfont (h, bold);
+        if (r.getHeight() > 0 && f.getHeight() > (float) r.getHeight() * 0.86f)
+            f = f.withHeight (juce::jmax (14.0f, (float) r.getHeight() * 0.86f));
+        g.setFont (GzzioLnF::fitFont (f, t, r.getWidth() - 2));
         g.drawText (t, r, j);
     }
 
@@ -3304,9 +5209,12 @@ private:
     int  overviewLayoutMode { 0 };     // 0=Argon Cockpit, 1=V-Liver Stage, 2=Studio Rack, 3=Classic
     bool overviewLayoutManual { false };
     bool liteMode { false };           // ⚡ 軽量モード (FFT・背景パーティクル・透過重なり休止 / 音声DSPは100%最高品質)
+    int  accessMode { 0 };             // ★ ユニバーサル配慮モード: 0=標準, 1=👓老眼・大文字, 2=🧭ADHD集中3ステップ, 3=🌿ASD・感覚過敏低刺激
     std::array<juce::Rectangle<int>, 4> archPillRects;
-    std::array<juce::Rectangle<int>, 5> coutureSwatchRects;   // 💄 クチュール・コスメ 5色ワンタッチ切替ピル
+    std::array<juce::Rectangle<int>, 4> accessPillRects;    // ★ ユニバーサル配慮モード切替ピル (標準 / 👓老眼 / 🧭ADHD / 🌿ASD)
+    std::array<juce::Rectangle<int>, 5> coutureSwatchRects;   // 💄 クチュール・コスメ / 🌌 星空・海 5色ワンタッチ切替ピル
     int  lastCoutureTheme { 5 };                              // 最後に選んだクチュール・カラーバリエーション
+    int  lastOceanStarTheme { 14 };                           // 最後に選んだ星空・海・黄昏カラーバリエーション
     juce::Rectangle<int> litePillRect;
     juce::Rectangle<int> routePillRect;   // 🎯 中央寄せ・モノラル出力ピル
     juce::Rectangle<int> streamPillRect;  // 📡 外部出力 (SYNCROOM / VB-CABLE 等) ピル

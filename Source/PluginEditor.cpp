@@ -533,6 +533,16 @@ void VocalTuner::paint (juce::Graphics& g)
         g.setColour (juce::Colours::white.withAlpha (0.85f));
         g.drawRoundedRectangle (full.reduced (2.4f), 12.5f, 1.0f);
     }
+    else if (GzzioLnF::getKnobStyle() == 6)
+    {
+        g.setGradientFill (juce::ColourGradient (Palette::panel.withAlpha (0.58f), 0.0f, full.getY(),
+                                                 Palette::mirrorBot.withAlpha (0.56f), 0.0f, full.getBottom(), false));
+        g.fillRoundedRectangle (full, 14.0f);
+        g.setColour (Palette::metalHi.withAlpha (0.42f));
+        g.drawRoundedRectangle (full.reduced (3.5f), 11.5f, 1.0f);
+        g.setColour (Palette::metalMid.withAlpha (0.72f));
+        g.drawRoundedRectangle (full.reduced (0.5f), 14.0f, 1.3f);
+    }
     else
     {
         g.setColour (Palette::panel);
@@ -548,6 +558,16 @@ void VocalTuner::paint (juce::Graphics& g)
     {
         return GzzioLnF::uiFont (size * (0.85f + fs * 0.15f), bold);
     };
+    if (hold <= 0 && proc.getInputLevel() > 0.005f)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            analyse();
+            updatePitchDisplay();
+        }
+        dispIn  = proc.getInputLevel();
+        dispOut = proc.getOutputLevel();
+    }
     const auto secondary = Palette::accentOn (Palette::inkSoft, Palette::panel);
     const bool show = hold > 0;
     const bool inTune = displayInTune();
@@ -573,8 +593,58 @@ void VocalTuner::paint (juce::Graphics& g)
 
     const float noteWidth = juce::jlimit (95.0f, 128.0f, reading.getWidth() * 0.30f);
     auto note = reading.removeFromLeft (noteWidth).reduced (0.0f, 3.0f);
-    g.setColour (inTune ? Palette::green.withAlpha (0.14f) : Palette::panel2);
-    g.fillRoundedRectangle (note, 10.0f);
+    {
+        // ★ Red Dot 仕様: ダーククリスタル・ストロボピッチダイヤル窓
+        const bool isScenic = (GzzioLnF::getKnobStyle() == 6);
+        g.setGradientFill (juce::ColourGradient (
+            inTune ? Palette::green.withAlpha (0.28f)
+                   : (lightTheme ? Palette::panel2 : Palette::bgTop.darker (0.42f).withAlpha (0.88f)),
+            note.getX(), note.getY(),
+            inTune ? Palette::green.darker (0.35f).withAlpha (0.24f)
+                   : (lightTheme ? Palette::panel.darker (0.04f) : Palette::panel2.darker (0.18f).withAlpha (0.90f)),
+            note.getX(), note.getBottom(), false));
+        g.fillRoundedRectangle (note, 11.0f);
+
+        // 上部の半円ストロボ・ピッチアーク目盛り
+        const float arcCx = note.getCentreX();
+        const float arcCy = note.getY() + note.getHeight() * 0.56f;
+        const float arcR  = juce::jmin (note.getWidth() * 0.42f, note.getHeight() * 0.44f);
+        if (arcR >= 18.0f)
+        {
+            juce::Path bgArc;
+            bgArc.addCentredArc (arcCx, arcCy, arcR, arcR, 0.0f, -1.25f, 1.25f, true);
+            g.setColour (Palette::track.withAlpha (0.65f));
+            g.strokePath (bgArc, juce::PathStrokeType (2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            for (int t = -6; t <= 6; ++t)
+            {
+                const float ta = (float) t / 6.0f * 1.22f;
+                const bool isZero = (t == 0);
+                const float r0 = arcR + (isZero ? 2.0f : 2.5f);
+                const float r1 = arcR + (isZero ? 6.2f : 4.6f);
+                g.setColour (isZero ? Palette::green : Palette::inkSoft.withAlpha (0.45f));
+                g.drawLine (arcCx + r0 * std::sin (ta), arcCy - r0 * std::cos (ta),
+                            arcCx + r1 * std::sin (ta), arcCy - r1 * std::cos (ta),
+                            isZero ? 1.8f : 1.0f);
+            }
+            if (show)
+            {
+                const float cAng = juce::jlimit (-1.22f, 1.22f, (dispCents / 50.0f) * 1.22f);
+                juce::Path actArc;
+                actArc.addCentredArc (arcCx, arcCy, arcR, arcR, 0.0f, juce::jmin (0.0f, cAng), juce::jmax (0.0f, cAng), true);
+                g.setColour (stateColour);
+                g.strokePath (actArc, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
+        }
+
+        // 上縁ガラスのスペキュラ反射帯
+        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (lightTheme ? 0.55f : 0.18f), note.getX(), note.getY() + 1.0f,
+                                                 juce::Colours::transparentWhite, note.getX(), note.getY() + 16.0f, false));
+        g.fillRoundedRectangle (note.reduced (2.0f, 1.0f).withHeight (14.0f), 9.0f);
+
+        g.setColour (inTune ? Palette::green : (isScenic ? Palette::metalMid.withAlpha (0.78f) : Palette::panelLn.brighter (0.15f)));
+        g.drawRoundedRectangle (note.reduced (0.5f), 11.0f, inTune ? 1.8f : 1.2f);
+    }
     auto noteText = note.withTrimmedBottom (21.0f);
     g.setColour (Palette::ink);
     g.setFont (font (juce::jlimit (28.0f, 48.0f, noteText.getHeight() * 0.72f), true));
@@ -585,23 +655,68 @@ void VocalTuner::paint (juce::Graphics& g)
                 note.removeFromBottom (22.0f), juce::Justification::centred);
 
     reading.removeFromLeft (14.0f);
-    auto status = reading.removeFromTop (juce::jmin (34.0f, reading.getHeight() * 0.42f));
+
+    // ★ 下段に「7白鍵 (C D E F G A B) ＋ 5黒鍵ジュエル」のシンセサイザー・クロマチックネオン鍵盤を描画
+    const int activePc = show && displayMidi >= 0 ? (((displayMidi % 12) + 12) % 12) : 9;
+    if (reading.getWidth() >= 190.0f && reading.getHeight() >= 54.0f)
+    {
+        auto keyStrip = reading.removeFromBottom (20.0f).reduced (0.0f, 1.0f);
+        const float kw = keyStrip.getWidth() / 7.0f;
+        static const int kWhitePc[7] = { 0, 2, 4, 5, 7, 9, 11 };
+        static const char* const kWhiteName[7] = { "C", "D", "E", "F", "G", "A", "B" };
+        g.setFont (GzzioLnF::uiFont (14.0f, true));
+        for (int w = 0; w < 7; ++w)
+        {
+            const int pc = kWhitePc[w];
+            const juce::Rectangle<float> kr (keyStrip.getX() + (float) w * kw + 1.2f,
+                                             keyStrip.getY(),
+                                             juce::jmax (14.0f, kw - 2.4f),
+                                             keyStrip.getHeight());
+            const bool isCurrent = show && (pc == activePc);
+            const bool isRefA    = (! show) && (pc == 9);
+            const juce::Colour kCol = isCurrent ? (inTune ? Palette::green : Palette::yellow)
+                                    : isRefA    ? Palette::ice.withAlpha (0.38f)
+                                                : Palette::bgTop.darker (0.35f).withAlpha (0.82f);
+            g.setColour (kCol);
+            g.fillRoundedRectangle (kr, 3.5f);
+            g.setColour (isCurrent ? juce::Colours::white : Palette::panelLn.withAlpha (0.72f));
+            g.drawRoundedRectangle (kr, 3.5f, isCurrent ? 1.4f : 0.9f);
+            g.setColour (isCurrent ? juce::Colour (0xff061018) : Palette::ink.withAlpha (0.92f));
+            g.drawText (kWhiteName[w], kr.toNearestInt(), juce::Justification::centred, false);
+        }
+        // 白鍵の境界上部に5つの黒鍵（シャープ音: C#, D#, F#, G#, A#）のジュエルLEDを配置
+        static const int kBlackAfterWhite[5] = { 0, 1, 3, 4, 5 };
+        static const int kBlackPc[5]         = { 1, 3, 6, 8, 10 };
+        for (int b = 0; b < 5; ++b)
+        {
+            const int pc = kBlackPc[b];
+            const bool isCurrent = show && (pc == activePc);
+            const float bx = keyStrip.getX() + (float) (kBlackAfterWhite[b] + 1) * kw;
+            const juce::Rectangle<float> br (bx - 3.5f, keyStrip.getY() - 1.0f, 7.0f, 6.5f);
+            g.setColour (isCurrent ? (inTune ? Palette::green : Palette::yellow) : Palette::panel2.brighter (0.25f));
+            g.fillRoundedRectangle (br, 2.0f);
+            g.setColour (isCurrent ? juce::Colours::white : Palette::metalMid.withAlpha (0.85f));
+            g.drawRoundedRectangle (br, 2.0f, 0.9f);
+        }
+    }
+
+    auto status = reading.removeFromTop (juce::jmin (26.0f, reading.getHeight() * 0.48f));
     juce::String state = ! show ? (isInstrumentMode() ? language->T ("1本ずつ鳴らす", "Play one string") : language->T ("声を出してください", "Sing a note"))
                        : ! hasPitch ? language->T ("もう一度鳴らす", "Play again")
                        : ! pitchStable ? language->T ("音の安定を待っています", "Waiting for a steady note")
                        : inTune ? language->T ("ぴったり・安定", "In tune / stable")
                        : dispCents < 0.0f ? language->T ("低い  ↑ 上げる", "Flat  /  tune up") : language->T ("高い  ↓ 下げる", "Sharp  /  tune down");
     g.setColour (hasPitch ? stateColour : secondary);
-    g.setFont (font (pitchStable ? 23.0f : 18.0f, true));
+    g.setFont (font (pitchStable ? 20.0f : 18.0f, true));
     g.drawText (state, status, juce::Justification::centredLeft);
-    auto amount = reading.removeFromTop (juce::jmin (32.0f, reading.getHeight()));
+    auto amount = reading.removeFromTop (juce::jmin (26.0f, reading.getHeight()));
     g.setColour (Palette::ink);
-    g.setFont (font (24.0f, true));
+    g.setFont (font (20.0f, true));
     g.drawText (show ? ((dispCents >= 0 ? "+" : "") + juce::String (juce::roundToInt (dispCents))
                         + language->T (" セント", " cents"))
                     : (isInstrumentMode() ? language->T ("標準チューニング", "Standard tuning") : language->T ("補正前の音程", "Input pitch")),
                 amount, juce::Justification::centredLeft);
-    if (reading.getHeight() >= 19.0f)
+    if (reading.getHeight() >= 16.0f)
     {
         juce::String detail = language->T ("中央が正しい音程", "Aim for the centre");
         if (isInstrumentMode())
@@ -618,34 +733,56 @@ void VocalTuner::paint (juce::Graphics& g)
         else if (rangeChecking || rangeHi >= 0)
             detail = rangeChecking ? language->range_capturing() : rangeResultText();
         g.setColour (secondary);
-        g.setFont (font (16.0f));
+        g.setFont (font (15.0f));
         g.drawText (detail, reading, juce::Justification::centredLeft);
     }
 
     if (! gauge.isEmpty())
     {
-        // The scale text and the needle have separate rows; meaning is conveyed
-        // by position, signed cents and words, not green/red alone.
+        // ★ 31セグメント・バイディレクショナル・ストロボLEDセントゲージ (-50c .. 0 .. +50c)
         auto labels = gauge.removeFromTop (20.0f);
         g.setColour (secondary);
         g.setFont (font (16.0f, true));
         g.drawText (language->T ("低い  −50", "Flat  -50"), labels.removeFromLeft (116.0f), juce::Justification::centredLeft);
         g.drawText (language->T ("+50  高い", "+50  Sharp"), labels.removeFromRight (116.0f), juce::Justification::centredRight);
         g.drawText ("0", labels, juce::Justification::centred);
-        auto track = gauge.reduced (8.0f, 5.0f);
-        g.setColour (Palette::track);
-        g.fillRoundedRectangle (track, 4.0f);
-        g.setColour (Palette::accentOn (Palette::green, Palette::track));
-        g.fillRoundedRectangle (track.withWidth (track.getWidth() * 0.10f).withCentre (track.getCentre()), 4.0f);
+        auto track = gauge.reduced (8.0f, 3.5f);
+        g.setColour (lightTheme ? Palette::track.darker (0.06f) : Palette::bgTop.darker (0.48f).withAlpha (0.88f));
+        g.fillRoundedRectangle (track, 5.0f);
+        g.setColour (Palette::panelLn.withAlpha (0.70f));
+        g.drawRoundedRectangle (track.reduced (0.5f), 5.0f, 1.0f);
+
+        const int numSegs = 31;
+        const float padX  = 4.0f;
+        const float segStep = (track.getWidth() - padX * 2.0f) / (float) numSegs;
+        const float segW    = juce::jmax (2.0f, segStep - 1.8f);
+        const float normCents = show ? juce::jlimit (-1.0f, 1.0f, dispCents / 50.0f) : 0.0f;
+        for (int s = 0; s < numSegs; ++s)
+        {
+            const float sPos = ((float) s / (float) (numSegs - 1)) * 2.0f - 1.0f; // -1 .. +1
+            const bool isCenter = (std::abs (s - numSegs / 2) <= 1);
+            const bool isLit = isCenter ? true
+                             : (show && ((normCents < 0.0f && sPos >= normCents && sPos <= 0.0f)
+                                      || (normCents > 0.0f && sPos <= normCents && sPos >= 0.0f)));
+            const juce::Colour segCol = isCenter ? Palette::green
+                                      : (std::abs (sPos) > 0.65f ? Palette::salmon : Palette::ice);
+            g.setColour (isLit ? segCol.withAlpha (isCenter && ! show ? 0.68f : 0.95f)
+                               : segCol.withAlpha (0.16f));
+            g.fillRoundedRectangle (track.getX() + padX + (float) s * segStep, track.getY() + 2.0f,
+                                    segW, track.getHeight() - 4.0f, 1.5f);
+        }
+
         g.setColour (Palette::ink);
-        g.drawVerticalLine ((int) track.getCentreX(), track.getY() - 4.0f, track.getBottom() + 4.0f);
+        g.drawVerticalLine ((int) track.getCentreX(), track.getY() - 3.0f, track.getBottom() + 3.0f);
         if (show)
         {
             const float x = track.getCentreX() + juce::jlimit (-50.0f, 50.0f, dispCents) / 100.0f * track.getWidth();
             g.setColour (hasPitch ? stateColour : secondary);
-            g.fillEllipse (x - 6.0f, track.getCentreY() - 6.0f, 12.0f, 12.0f);
+            g.fillEllipse (x - 6.5f, track.getCentreY() - 6.5f, 13.0f, 13.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.90f));
+            g.fillEllipse (x - 2.5f, track.getCentreY() - 2.5f, 5.0f, 5.0f);
             g.setColour (Palette::ink);
-            g.drawEllipse (x - 6.0f, track.getCentreY() - 6.0f, 12.0f, 12.0f, 1.3f);
+            g.drawEllipse (x - 6.5f, track.getCentreY() - 6.5f, 13.0f, 13.0f, 1.4f);
         }
     }
 
@@ -859,6 +996,9 @@ void EQGraph::paint (juce::Graphics& g)
     // ---- output spectrum (behind curves): skipped in Lite Mode for zero FFT/GPU load ----
     if (! liteMode)
     {
+        if (specDb[10] < -110.0f && proc.getInputLevel() > 0.005f)
+            updateSpectrum();
+
         const float floorDb = -78.0f;
         juce::Path line;
         for (int i = 0; i <= px; ++i)
@@ -878,26 +1018,38 @@ void EQGraph::paint (juce::Graphics& g)
         fillP.lineTo (plot.getX(),     plot.getBottom());
         fillP.closeSubPath();
 
-        // v1.4.0 stream-friendly look: rainbow spectrum, warm lows -> cool highs,
-        // drawn as soft glow + bright core so it reads well on a capture.
-        juce::ColourGradient rain (juce::Colour (0xffff6b5e), plot.getX(),     0.0f,
-                                   juce::Colour (0xff8b6bff), plot.getRight(), 0.0f, false);
-        rain.addColour (0.30, juce::Colour (0xffffc94d));
-        rain.addColour (0.52, juce::Colour (0xff4ade9e));
-        rain.addColour (0.75, juce::Colour (0xff58b6ff));
+        if (GzzioLnF::getAccessMode() == 3)
+        {
+            // 🌿 ASD・感覚過敏モード: 5色レインボーの明滅を避け、穏やかな単色マット波形に統一
+            g.setColour (Palette::blue.withAlpha (0.22f));
+            g.fillPath (fillP);
+            g.setColour (Palette::blue.withAlpha (0.85f));
+            g.strokePath (line, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded));
+        }
+        else
+        {
+            // v1.4.0 stream-friendly look: rainbow spectrum, warm lows -> cool highs,
+            // drawn as soft glow + bright core so it reads well on a capture.
+            juce::ColourGradient rain (juce::Colour (0xffff6b5e), plot.getX(),     0.0f,
+                                       juce::Colour (0xff8b6bff), plot.getRight(), 0.0f, false);
+            rain.addColour (0.30, juce::Colour (0xffffc94d));
+            rain.addColour (0.52, juce::Colour (0xff4ade9e));
+            rain.addColour (0.75, juce::Colour (0xff58b6ff));
 
-        auto fillGrad = rain; fillGrad.multiplyOpacity (0.26f);
-        g.setGradientFill (fillGrad);
-        g.fillPath (fillP);
+            auto fillGrad = rain; fillGrad.multiplyOpacity (0.28f);
+            g.setGradientFill (fillGrad);
+            g.fillPath (fillP);
 
-        auto glowGrad = rain; glowGrad.multiplyOpacity (0.28f);
-        g.setGradientFill (glowGrad);
-        g.strokePath (line, juce::PathStrokeType (4.6f, juce::PathStrokeType::curved,
-                                                  juce::PathStrokeType::rounded));
-        auto coreGrad = rain; coreGrad.multiplyOpacity (0.95f);
-        g.setGradientFill (coreGrad);
-        g.strokePath (line, juce::PathStrokeType (1.3f, juce::PathStrokeType::curved,
-                                                  juce::PathStrokeType::rounded));
+            auto glowGrad = rain; glowGrad.multiplyOpacity (0.32f);
+            g.setGradientFill (glowGrad);
+            g.strokePath (line, juce::PathStrokeType (4.6f, juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded));
+            auto coreGrad = rain; coreGrad.multiplyOpacity (0.95f);
+            g.setGradientFill (coreGrad);
+            g.strokePath (line, juce::PathStrokeType (1.4f, juce::PathStrokeType::curved,
+                                                      juce::PathStrokeType::rounded));
+        }
     }
 
     // ---- EQ curves: static corrective chain + current smart-EQ cuts ----
@@ -966,6 +1118,34 @@ void EQGraph::paint (juce::Graphics& g)
         return p;
     };
 
+    // ★ 音の変化を直感的に伝える「カット領域（氷晶シアン＝スッキリ除去）」と「ブースト領域（琥珀ロゼ＝輪郭・艶UP）」の塗り分け
+    if (! liteMode)
+    {
+        const float yZero = dbToY (0.0f);
+        juce::Path cutArea, boostArea;
+        cutArea.startNewSubPath (plot.getX(), yZero);
+        boostArea.startNewSubPath (plot.getX(), yZero);
+        for (int i = 0; i <= px; ++i)
+        {
+            const float x = plot.getX() + (float) i;
+            const float d = statDb[(size_t) i];
+            cutArea.lineTo   (x, d < 0.0f ? dbToY (d) : yZero);
+            boostArea.lineTo (x, d > 0.0f ? dbToY (d) : yZero);
+        }
+        cutArea.lineTo (plot.getRight(), yZero);
+        cutArea.closeSubPath();
+        boostArea.lineTo (plot.getRight(), yZero);
+        boostArea.closeSubPath();
+
+        g.setGradientFill (juce::ColourGradient (Palette::ice.withAlpha (0.06f), plot.getX(), yZero,
+                                                 Palette::ice.withAlpha (0.34f), plot.getX(), plot.getBottom(), false));
+        g.fillPath (cutArea);
+
+        g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.36f), plot.getX(), plot.getY(),
+                                                 Palette::salmon.withAlpha (0.08f), plot.getX(), yZero, false));
+        g.fillPath (boostArea);
+    }
+
     // cut region between the base curve and the live curve
     if (nAct > 0)
     {
@@ -976,13 +1156,18 @@ void EQGraph::paint (juce::Graphics& g)
         for (int i = px; i >= 0; --i)
             region.lineTo (plot.getX() + (float) i, dbToY (liveDb[(size_t) i]));
         region.closeSubPath();
-        g.setColour (Palette::salmon.withAlpha (0.30f));
+        g.setColour (Palette::salmon.withAlpha (0.32f));
         g.fillPath (region);
     }
 
     auto base = curveOf (statDb);
-    g.setColour (Palette::blue.withAlpha (nAct > 0 ? 0.75f : 1.0f));
-    g.strokePath (base, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved,
+    if (! liteMode)
+    {
+        g.setColour (Palette::ice.withAlpha (0.28f));
+        g.strokePath (base, juce::PathStrokeType (4.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+    g.setColour (Palette::blue.brighter (0.18f).withAlpha (nAct > 0 ? 0.85f : 1.0f));
+    g.strokePath (base, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved,
                                               juce::PathStrokeType::rounded));
 
     if (nAct > 0)
@@ -4639,8 +4824,43 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (cb);
                 }
 
+                // ---- 🌌🌊 星空・海・朝焼け・晩秋コレクション 5色ワンタッチ切替パレット ----
+                labOcean.setText (language->T ("🌌 星空・海・朝焼け・晩秋コレクション (ワンタッチ切替)", "🌌 Galaxy, Sea, Dawn & Autumn Collection (1-Click)"),
+                                  juce::dontSendNotification);
+                labOcean.getProperties().set ("fontH", 15.5);
+                labOcean.getProperties().set ("bold", true);
+                addAndMakeVisible (labOcean);
+                static const char* const kOceanJa[5] = { "01 銀河", "02 碧海", "03 朝焼", "04 晩秋", "05 蒼劇" };
+                static const char* const kOceanEn[5] = { "01 Galaxy", "02 Aqua", "03 Dawn", "04 Autumn", "05 Opera" };
+                for (int c = 0; c < 5; ++c)
+                {
+                    const int modeId = Palette::themeOfOceanStar (c);
+                    auto* ob = oceanBtns.add (new juce::TextButton (language->T (kOceanJa[c], kOceanEn[c])));
+                    ob->setClickingTogglesState (true);
+                    ob->setRadioGroupId (7803);
+                    ob->onClick = [this, modeId] { ow.setThemeMode (modeId); refresh(); };
+                    addAndMakeVisible (ob);
+                }
+
+                // ---- ✦ 画面の見やすさ・操作スタイル (ワンタッチ切替) ----
+                labStyle.setText (language->T ("✦ 画面の見やすさ・操作スタイル", "✦ Display & Control Style"),
+                                  juce::dontSendNotification);
+                labStyle.getProperties().set ("fontH", 15.5);
+                labStyle.getProperties().set ("bold", true);
+                addAndMakeVisible (labStyle);
+                static const char* const kStyleJa[4] = { "標準デザイン", "◉ くっきり大文字", "★ かんたん3ステップ", "● マット・具体表記" };
+                static const char* const kStyleEn[4] = { "Standard",     "◉ High Contrast",  "★ 3-Step Guide",      "● Matte & Concrete" };
+                for (int a = 0; a < 4; ++a)
+                {
+                    auto* sb = styleBtns.add (new juce::TextButton (language->T (kStyleJa[a], kStyleEn[a])));
+                    sb->setClickingTogglesState (true);
+                    sb->setRadioGroupId (7804);
+                    sb->onClick = [this, a] { ow.setAccessMode (a); refresh(); };
+                    addAndMakeVisible (sb);
+                }
+
                 refresh();
-                setSize (420, 428);   // テーマ9種＋クチュール5色パレット＋下部2スイッチが収まる高さ
+                setSize (420, 566);   // テーマ9種＋コスメ5色＋星空・海5色＋見やすさスタイル4種＋下部2スイッチが収まる高さ
             }
 
             // テーマを変えると Palette が丸ごと入れ替わるので、色も名前も貼り直す。
@@ -4677,6 +4897,45 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 labCouture.setText (language->T ("💄 ライバー・コスメ配色 (ワンタッチ切替)", "💄 Couture Cosmetics Colorways (1-Click)"),
                                     juce::dontSendNotification);
                 labCouture.setColour (juce::Label::textColourId, Palette::ink);
+
+                static const char* const kOceanJa[5] = { "01 銀河", "02 碧海", "03 朝焼", "04 晩秋", "05 蒼劇" };
+                static const char* const kOceanEn[5] = { "01 Galaxy", "02 Aqua", "03 Dawn", "04 Autumn", "05 Opera" };
+                static const juce::uint32 kOceanAccent[5] = {
+                    0xffc084fc, 0xff00f5d4, 0xffff9e44, 0xffef4444, 0xff3b82f6
+                };
+                for (int c = 0; c < oceanBtns.size(); ++c)
+                {
+                    auto* ob = oceanBtns[c];
+                    const int modeId = Palette::themeOfOceanStar (c);
+                    const juce::Colour swCol (kOceanAccent[c]);
+                    ob->setButtonText (language->T (kOceanJa[c], kOceanEn[c]));
+                    ob->setToggleState (ow.getThemeMode() == modeId, juce::dontSendNotification);
+                    ob->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
+                    ob->setColour (juce::TextButton::buttonOnColourId, swCol);
+                    ob->setColour (juce::TextButton::textColourOffId,  Palette::ink);
+                    ob->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (swCol));
+                }
+                labOcean.setText (language->T ("🌌 星空・海・朝焼け・晩秋コレクション (ワンタッチ切替)", "🌌 Galaxy, Sea, Dawn & Autumn Collection (1-Click)"),
+                                  juce::dontSendNotification);
+                labOcean.setColour (juce::Label::textColourId, Palette::ink);
+
+                static const char* const kStyleJa[4] = { "標準デザイン", "◉ くっきり大文字", "★ かんたん3ステップ", "● マット・具体表記" };
+                static const char* const kStyleEn[4] = { "Standard",     "◉ High Contrast",  "★ 3-Step Guide",      "● Matte & Concrete" };
+                const juce::Colour styleCols[4] = { Palette::inkSoft, Palette::yellow, Palette::blue, Palette::green };
+                for (int a = 0; a < styleBtns.size(); ++a)
+                {
+                    auto* sb = styleBtns[a];
+                    sb->setButtonText (language->T (kStyleJa[a], kStyleEn[a]));
+                    sb->setToggleState (ow.getAccessMode() == a, juce::dontSendNotification);
+                    sb->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
+                    sb->setColour (juce::TextButton::buttonOnColourId, styleCols[a]);
+                    sb->setColour (juce::TextButton::textColourOffId,  Palette::ink);
+                    sb->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (styleCols[a]));
+                }
+                labStyle.setText (language->T ("✦ 画面の見やすさ・操作スタイル", "✦ Display & Control Style"),
+                                  juce::dontSendNotification);
+                labStyle.setColour (juce::Label::textColourId, Palette::ink);
+
                 for (auto* tb : { &showAllBtn, &liteBtn })
                 {
                     tb->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
@@ -4702,6 +4961,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 g.setColour (Palette::panelLn.withAlpha (0.6f));
                 g.drawLine (10.0f, 118.0f, 410.0f, 118.0f, 1.0f);
                 g.drawLine (10.0f, 290.0f, 410.0f, 290.0f, 1.0f);
+                g.drawLine (10.0f, 360.0f, 410.0f, 360.0f, 1.0f);
+                g.drawLine (10.0f, 430.0f, 410.0f, 430.0f, 1.0f);
             }
             void resized() override
             {
@@ -4719,15 +4980,21 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 }
                 labCouture.setBounds (10, 296, 400, 22);
                 for (int c = 0; c < coutureBtns.size(); ++c)
-                    coutureBtns[c]->setBounds (10 + c * 81, 322, 76, 36);
-                showAllBtn.setBounds (10,  372, 196, 38);
-                liteBtn   .setBounds (214, 372, 196, 38);
+                    coutureBtns[c]->setBounds (10 + c * 81, 320, 76, 34);
+                labOcean.setBounds (10, 366, 400, 22);
+                for (int c = 0; c < oceanBtns.size(); ++c)
+                    oceanBtns[c]->setBounds (10 + c * 81, 390, 76, 34);
+                labStyle.setBounds (10, 436, 400, 22);
+                for (int a = 0; a < styleBtns.size(); ++a)
+                    styleBtns[a]->setBounds (10 + a * 101, 460, 97, 34);
+                showAllBtn.setBounds (10,  510, 196, 38);
+                liteBtn   .setBounds (214, 510, 196, 38);
             }
         private:
             VocalGzzioContent& ow;
             juce::Slider bigFont, bigZoom;
-            juce::Label  labFont, labZoom, labTheme, labCouture;
-            juce::OwnedArray<juce::TextButton> themeBtns, coutureBtns;
+            juce::Label  labFont, labZoom, labTheme, labCouture, labOcean, labStyle;
+            juce::OwnedArray<juce::TextButton> themeBtns, coutureBtns, oceanBtns, styleBtns;
             juce::TextButton showAllBtn, liteBtn;
         };
         auto panel = std::make_unique<SizePanel> (*this, fontSlider, zoomSlider);
@@ -5673,6 +5940,7 @@ void VocalGzzioContent::addKnob (Knob& k, const juce::String& paramID, const juc
     // v2.8.0: キーボードでも動かせるようにする(クリックしてから矢印キー)。
     // マウスが使いにくい人がまったく操作できない状態だった。
     k.slider.setWantsKeyboardFocus (true);
+    k.slider.getProperties().set ("paramID", paramID);
 
     addAndMakeVisible (k.slider);
 
@@ -5811,7 +6079,7 @@ void VocalGzzioContent::timerCallback()
         const auto mp = getMouseXYRelative();
         themePainter.update (0.05f, mp.x, mp.y,
                              juce::jlimit (0.0f, 1.0f, processor.getInputLevel() * 2.2f));
-        if (themeMode == 2 || themeMode == 4 || themeMode == 5 || themeMode == 6 || jnOnNow)
+        if (themeMode == 2 || themeMode == 4 || themeMode == 5 || themeMode == 6 || oceanStarTheme() || jnOnNow)
             if (((++themeAnimFrame) & 1) == 0) repaint();      // ~10fps
     }
 
@@ -6215,14 +6483,14 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     // v1.7.0: themed backdrop first. Yuru-kawa paints its own static background
     // (mint gradient + bokeh + mascot); when it does, we skip the neutral one so
     // the header bar and cards still draw ON TOP. No theme -> neutral dark bg.
-    if (! themePainter.paint (g))
+    if (accessMode > 0 || liteMode || ! themePainter.paint (g))
     {
         g.setGradientFill (juce::ColourGradient (Palette::bgTop, 0, 0,
                                                  Palette::bgBot, 0, (float) getHeight(), false));
         g.fillRect (getLocalBounds());
 
         // 標準画面には静かな面の奥行きだけを加える。
-        if (themeMode == 0)
+        if (themeMode == 0 && accessMode == 0)
         {
             g.setGradientFill (juce::ColourGradient (Palette::green.withAlpha (0.06f),
                 0.0f, (float) getHeight(), juce::Colours::transparentBlack,
@@ -6304,14 +6572,15 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     // yellow "good" zone; brief red is fine, constant red clips. Maps RMS dB.
     if (! updateNotice.isVisible())
     {
-        auto lm = lvMeterArea.toFloat();
+        auto lm = lvMeterArea;
+        const int topH = juce::jmax (12, lm.getHeight() * 38 / 100);
+        const int barH = juce::jmax (7,  lm.getHeight() * 22 / 100);
         // v2.0.0: どのモードでも背景に沈まない色へ(以前は淡色地でほぼ読めなかった)
         g.setColour (Palette::accentOn (Palette::inkSoft, Palette::bgTop));
-        g.setFont (cfont (9.5f, true));
-        g.drawText (language->lv_label(), lm.removeFromTop (11.0f).toNearestInt(),
-                    juce::Justification::centredLeft);
+        fitText (g, language->lv_label(), lm.removeFromTop (topH),
+                 juce::Justification::centredLeft, 9.5f, true);
 
-        auto bar = lm.removeFromTop (11.0f).reduced (0.0f, 1.0f);
+        auto bar = lm.removeFromTop (barH).toFloat().reduced (0.0f, 1.0f);
         // zone thresholds along the bar (relative): green .. yellow .. red
         const float gGood = 0.55f, gHot = 0.82f;
         g.setColour (Palette::green.withAlpha (0.30f));
@@ -6334,10 +6603,9 @@ void VocalGzzioContent::paint (juce::Graphics& g)
 
         // zone caption
         g.setColour (Palette::accentOn (Palette::inkSoft, Palette::bgTop));
-        g.setFont (cfont (9.34f, false));   // §4: 100%で実寸14.0px
         juce::String cap = clip ? juce::String::fromUTF8 ("\xe2\x9a\xa0 ") + language->lv_clip()
                           : t < gGood ? language->lv_low() : t < gHot ? language->lv_good() : language->lv_high();
-        g.drawText (cap, lm.toNearestInt(), juce::Justification::centredLeft);
+        fitText (g, cap, lm, juce::Justification::centredLeft, 9.34f, false);
     }
 
     // ---- v1.5.0 hero band: title + hint / latest auto-setup result ----
@@ -6350,19 +6618,18 @@ void VocalGzzioContent::paint (juce::Graphics& g)
         // v2.0.0: 明るいモードでは黄がクリーム地に溶けていたので読める濃さへ寄せる
         g.setColour (Palette::accentOn (Palette::yellow, Palette::panel2));
         // v2.12.0: 118px 固定の見出しで「おまか…」になっていた。fitText で受ける。
-        // v3.0-c: かんたんモードの席は resized() が実測で決める（ボタンと重ならない幅）。
-        fitText (g, language->hero_title(),
-                 heroBig && ! heroTitleArea.isEmpty()
-                     ? heroTitleArea
-                     : heroArea.withTrimmedLeft (16).withWidth (118),
-                 juce::Justification::centredLeft, heroBig ? 20.0f : 15.5f, true);
+        // 詳細画面 (!heroBig) では左端の席に「総合画面 (overviewReturn)」ボタンが居るので、
+        // その後ろに「おまかせ設定」を重ね描きしない（heroBig のときだけ見出しを描く）。
+        if (heroBig && ! heroTitleArea.isEmpty())
+            fitText (g, language->hero_title(), heroTitleArea,
+                     juce::Justification::centredLeft, 20.0f, true);
         g.setColour (autoSetupMsg.isNotEmpty() ? Palette::ink : Palette::inkSoft);
         g.setFont (cfont (heroBig ? 14.0f : 12.5f, autoSetupMsg.isNotEmpty()));
         // かんたんモードは中央の大ボタンの右側へ、結果/ヒントを描く
         // v2.9.0: 右端はセッション席(バッジの左)で止める。以前は帯の右端まで
         // 描いていたので、そのままだとバッジの下へ潜り込む。
         const int msgX = heroBig ? songSetupButton.getRight() + 18
-                                 : heroArea.getX() + 10 + 128 + 128 + 8 + 128 + 14;
+                                 : songSetupButton.getRight() + 14;
         const int msgR = srcModeLabelArea.isEmpty() ? checkupButton.getX() - 12
                                                     : srcModeLabelArea.getX() - 12;
         if (msgR > msgX + 40)
@@ -6387,15 +6654,13 @@ void VocalGzzioContent::paint (juce::Graphics& g)
             g.drawRoundedRectangle (br.reduced (0.6f), 8.0f, 1.2f);
             // ★メンバをそのまま removeFromTop すると毎回の再描画で領域が縮む。
             //   かならずコピーを削る。
-            auto badge = latBadgeArea;
+            auto badge = latBadgeArea.reduced (2, 1);
             g.setColour (Palette::inkSoft);
-            g.setFont (cfont (10.5f, false));
-            g.drawText (language->lat_badge_label(), badge.removeFromTop (14),
-                        juce::Justification::centred);
+            fitText (g, language->lat_badge_label(), badge.removeFromTop (15),
+                     juce::Justification::centred, 10.5f, false);
             g.setColour (Palette::accentOn (zero ? Palette::green : Palette::yellow, Palette::panel2));
-            g.setFont (cfont (heroBig ? 17.0f : 14.0f, true));
-            g.drawText ("+" + juce::String (lat * 1000.0 / sr, 1) + " ms",
-                        badge, juce::Justification::centred);
+            fitText (g, "+" + juce::String (lat * 1000.0 / sr, 1) + " ms",
+                     badge, juce::Justification::centred, heroBig ? 17.0f : 14.0f, true);
         }
     }
 
@@ -6403,23 +6668,60 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     {
         if (area.isEmpty()) return;      // v2.4.0 かんたんモードで使わないパネル
         auto r = area.toFloat();
-        const float panelA = (themeMode == 2 || themeMode == 4 || themeMode == 5 || themeMode == 6) ? 0.78f
+        const float panelA = (accessMode > 0) ? 1.0f
+                           : oceanStarTheme() ? 0.42f
+                           : (themeMode == 2 || themeMode == 4 || themeMode == 5 || themeMode == 6) ? 0.78f
                            : (themeMode == 9 ? 0.90f : 1.0f);
-        g.setColour (Palette::panel.withMultipliedAlpha (panelA));
-        g.fillRoundedRectangle (r, 14.0f);
-        g.setColour (juce::Colours::white.withAlpha (0.04f));   // top elevation highlight
-        g.fillRect (r.reduced (10.0f, 0.0f).withHeight (1.0f).translated (0.0f, 1.0f));
-        g.setColour (Palette::panelLn);
-        g.drawRoundedRectangle (r.reduced (0.5f), 14.0f, 1.2f);
+        if (oceanStarTheme() && accessMode == 0)
+        {
+            g.setGradientFill (juce::ColourGradient (Palette::panel.withMultipliedAlpha (panelA), r.getX(), r.getY(),
+                                                     Palette::mirrorBot.withMultipliedAlpha (panelA * 0.92f), r.getX(), r.getBottom(), false));
+            g.fillRoundedRectangle (r, 14.0f);
+
+            // 詳細画面でも各パネル内部に世界観モチーフを描く
+            {
+                juce::Graphics::ScopedSaveState ss (g);
+                juce::Path clipP;
+                clipP.addRoundedRectangle (r.reduced (1.0f), 13.0f);
+                g.reduceClipRegion (clipP);
+                if (themeMode == 15)
+                {
+                    ThemePainter::drawCausticWaveMesh (g, r, juce::Colour (0xff80ffdb), 0.14f, 3);
+                    ThemePainter::drawWaterDroplet (g, r.getRight() - 18.0f, r.getY() + 14.0f, 3.8f, juce::Colour (0xff00f5d4), 0.85f);
+                }
+                else if (themeMode == 17)
+                {
+                    ThemePainter::drawMapleLeaf (g, r.getRight() - 20.0f, r.getY() + 14.0f, 6.2f, 0.45f,
+                                                 juce::Colour (0xffef4444), 0.72f);
+                    ThemePainter::drawSnowCrystal (g, r.getRight() - 36.0f, r.getY() + 15.0f, 5.0f, 0.25f,
+                                                   juce::Colour (0xffe0f2fe), 0.78f);
+                }
+            }
+            g.setColour (Palette::metalHi.withAlpha (0.42f));
+            g.drawRoundedRectangle (r.reduced (3.4f), 11.5f, 1.0f);
+            g.setColour (Palette::metalMid.withAlpha (0.78f));
+            g.drawRoundedRectangle (r.reduced (0.5f), 14.0f, 1.35f);
+        }
+        else
+        {
+            g.setColour (Palette::panel.withMultipliedAlpha (panelA));
+            g.fillRoundedRectangle (r, 14.0f);
+            if (accessMode == 0)
+            {
+                g.setColour (juce::Colours::white.withAlpha (0.04f));   // top elevation highlight
+                g.fillRect (r.reduced (10.0f, 0.0f).withHeight (1.0f).translated (0.0f, 1.0f));
+            }
+            g.setColour ((accessMode == 1) ? Palette::yellow : Palette::panelLn);
+            g.drawRoundedRectangle (r.reduced (0.5f), 14.0f, (accessMode == 1) ? 2.2f : 1.2f);
+        }
         if (title.isNotEmpty())
         {
             g.setColour (Palette::yellow);                       // butter section chip
             g.fillRoundedRectangle ((float) area.getX() + 14.0f, (float) area.getY() + 8.0f,
                                     4.0f, 12.0f, 2.0f);
             g.setColour (Palette::ink);
-            g.setFont (cfont (13.5f, true));
-            g.drawText (title, area.withTrimmedLeft (24).withHeight (22).translated (0, 3),
-                        juce::Justification::centredLeft);
+            fitText (g, title, area.withTrimmedLeft (24).withWidth (164).withHeight (22).translated (0, 3),
+                     juce::Justification::centredLeft, 13.5f, true);
         }
     };
     // v2.10.0 音源モードの見出し（コンボの左に置く。どちらのモードでも出す）
@@ -6824,17 +7126,22 @@ void VocalGzzioContent::placeRow (juce::Rectangle<int> area, std::initializer_li
 
 void VocalGzzioContent::placeRowVec (juce::Rectangle<int> area, const std::vector<Knob*>& ks)
 {
-    area.removeFromTop (juce::roundToInt (22.0f * rowScale));   // panel header
+    const float hdrScale = juce::jmin (1.35f, juce::jmax (1.0f, fontScale / 1.5f));
+    const int headerTop = (rowScale > 1.05f)
+                        ? juce::roundToInt (22.0f * rowScale)
+                        : juce::jmax (26, juce::roundToInt (22.0f * hdrScale) + 5);
+    area.removeFromTop (headerTop);   // panel header (scales with header buttons so knob labels never touch header controls)
     area.reduce (8, 2);
     // v1.5.0: label / value boxes grow with the text-size slider (they used to be
     // fixed 16/18 px, which silently capped the font growth via drawFittedText).
     // v2.4.0: かんたんモードは rowScale で「文字も箱もまとめて」大きくする。
     //         箱だけ広げても drawFittedText の都合で字は大きくならないので、
     //         Label の "fontH" プロパティ(GzzioLnF::getLabelFont が読む)も上げる。
-    const float fs   = fontScale * rowScale;
-    const int   labH = juce::jlimit (16, 52, juce::roundToInt (13.0f * fs));
-    const int   valH = juce::jlimit (18, 52, juce::roundToInt (12.5f * fs));
-    const int   tbW  = juce::roundToInt (78.0f * rowScale);
+    const float fs     = fontScale * rowScale;
+    const int   maxBox = (rowScale > 1.05f) ? 48 : juce::jmax (20, area.getHeight() * 23 / 100);
+    const int   labH   = juce::jlimit (16, maxBox, juce::roundToInt (13.0f * fs));
+    const int   valH   = juce::jlimit (18, maxBox, juce::roundToInt (12.5f * fs));
+    const int   tbW    = juce::roundToInt (78.0f * rowScale);
     // v3.1 ★出していないツマミの席は詰める。
     //  「使いかた」で ことば・艶 などを画面から出さなくなったので、席を空けたままだと
     //  行の途中に穴が開いて、壊れて見える（実際そう見えた）。
@@ -6852,7 +7159,7 @@ void VocalGzzioContent::placeRowVec (juce::Rectangle<int> area, const std::vecto
         if (k != nullptr)   // nullptr = 空き枠(セル幅をそろえるための余白)
         {
             k->slider.getProperties().set ("wideGlass", rowScale > 1.05f);
-            k->slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, tbW, valH);
+            k->slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, juce::jmin (tbW, cw - 4), valH);
             juce::Rectangle<int> cell (area.getX() + i * cw, area.getY(), cw, area.getHeight());
             k->label.setBounds (cell.removeFromTop (labH));
             k->slider.setBounds (cell.reduced (1));
@@ -6882,14 +7189,15 @@ void VocalGzzioContent::resized()
     // cell placer without a panel header (shared by several sections)
     auto placeCells = [fs2 = fontScale] (juce::Rectangle<int> area, std::initializer_list<Knob*> ks)
     {
-        const int labH = juce::jlimit (15, 28, juce::roundToInt (12.0f * fs2));
-        const int valH = juce::jlimit (18, 28, juce::roundToInt (12.0f * fs2));
+        const int maxBox = juce::jmax (18, area.getHeight() * 24 / 100);
+        const int labH = juce::jlimit (15, maxBox, juce::roundToInt (12.0f * fs2));
+        const int valH = juce::jlimit (18, maxBox, juce::roundToInt (12.0f * fs2));
         const int n  = (int) ks.size();
         const int cw = area.getWidth() / juce::jmax (1, n);
         int i = 0;
         for (auto* k : ks)
         {
-            k->slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 76, valH);
+            k->slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, juce::jmin (76, cw - 4), valH);
             juce::Rectangle<int> cell (area.getX() + i * cw, area.getY(), cw, area.getHeight());
             k->label.setBounds (cell.removeFromTop (labH));
             k->slider.setBounds (cell.reduced (1));
@@ -6949,13 +7257,15 @@ void VocalGzzioContent::resized()
                                           : 152)
                         : 0;
     // コンボは「いま出ている文字」が切れない幅（矢印と余白で+46px）。
-    auto comboNeed = [this, lnf] (juce::ComboBox& c, const juce::String& placeholder)
+    auto comboNeed = [this, lnf, rowH] (juce::ComboBox& c, const juce::String& placeholder)
     {
         if (lnf == nullptr) return 165;
-        const auto  f = lnf->getComboBoxFont (c);
+        const float cFontH = juce::jmin ((float) (rowH + 2) * 0.72f,
+                                         (accessMode == 1 ? 16.0f : 14.0f) * fontScale);
+        const auto  f = GzzioLnF::uiFont (cFontH, accessMode == 1);
         const auto& t = c.getText().isNotEmpty() ? c.getText() : placeholder;
         return juce::jmax (juce::GlyphArrangement::getStringWidthInt (f, t),
-                           juce::GlyphArrangement::getStringWidthInt (f, placeholder)) + 46;
+                           juce::GlyphArrangement::getStringWidthInt (f, placeholder)) + 52;
     };
     const int comboNeedW = juce::jmax (comboNeed (voiceBox, language->voice_placeholder()),
                                        juce::jmax (comboNeed (micBox, language->mic_placeholder()),
@@ -7066,7 +7376,7 @@ void VocalGzzioContent::resized()
     heroBig  = ! advancedMode;
     heroTitleArea = {};                       // かんたんモードのときだけ resized が埋める
     heroArea = { pad, juce::jmax (78, yRow), W - pad * 2, heroBig ? 76 : 50 };
-    overviewReturn.setBounds (heroArea.getX() + 8, heroArea.getY() + 7, 120, 36);
+    overviewReturn.setBounds (heroArea.getX() + 8, heroArea.getY() + (heroArea.getHeight() - 36) / 2, 120, 36);
 
     // v2.9.0 セッションモード: ヒーロー帯の右端に「セッション」スイッチと
     // 「追加遅延 +0.0ms」バッジを置く。**かんたん/こだわりのどちらでも同じ位置**に
@@ -7105,19 +7415,18 @@ void VocalGzzioContent::resized()
         const int bw = 340, bh = 56;
         const int cx = (W - kSessBlockW) / 2;
         // v3.0-c ★「トーク自動」が見出し「おまかせ設定」に食い込んでいた。
-        //  見出しの席は 164px 固定、ボタンは中央から左へ 168+12 の固定引き算で、
-        //  どちらも相手を見ていなかった。見出しの実幅を測り、足りなければ
-        //  2つのボタンをまとめて右へずらす（縮めない・重ねない）。
+        //  さらに左端には「総合画面 (overviewReturn)」ボタンが居るので、見出しの開始位置は
+        //  overviewReturn の右隣から取り、2つのボタンをまとめて右へずらす。
         const int autoW = 168;
         int songX = cx - bw / 2;
         int autoX = songX - 12 - autoW;
         const int titleNeed = juce::GlyphArrangement::getStringWidthInt (
             cfont (20.0f, true), language->hero_title());
-        heroTitleArea = { heroArea.getX() + 22, heroArea.getY(),
-                          juce::jmax (164, titleNeed + 8), heroArea.getHeight() };
-        if (autoX < heroTitleArea.getRight() + 14)
+        heroTitleArea = { overviewReturn.getRight() + 10, heroArea.getY(),
+                          juce::jmax (132, titleNeed + 8), heroArea.getHeight() };
+        if (autoX < heroTitleArea.getRight() + 12)
         {
-            const int shift = heroTitleArea.getRight() + 14 - autoX;
+            const int shift = heroTitleArea.getRight() + 12 - autoX;
             autoX += shift; songX += shift;
         }
         // 右のセッション席へめり込まないところで止める
@@ -7133,7 +7442,7 @@ void VocalGzzioContent::resized()
     {
         const int bw = 128, bh = 36;
         auto hb = heroArea.reduced (10, (heroArea.getHeight() - bh) / 2);
-        hb.removeFromLeft (128);                       // painted title (hero_title)
+        hb.removeFromLeft (128);                       // overviewReturn button slot
         autoSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (bh));
         hb.removeFromLeft (8);
         songSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (bh));
@@ -7793,12 +8102,13 @@ void VocalGzzioContent::applyThemeToKnobs()
     {
         l->setThemeArc (Palette::ice);
         l->setUseKawaiiFont (pastelTheme());   // rounded font in yuru & V-Liver modes
-        const int kStyle = liteMode        ? 5   // ⚡ 軽量モード: 超高速フラットベクターダイヤル
-                         : juiceTheme()    ? 1
-                         : liverTheme()    ? 2   // V-Liver (Couture Cosmetics) jewel/star dial
-                         : themeMode == 9  ? 3   // Studio Pro movement dial
-                         : themeMode == 6  ? 4   // Cyber Neon dual-ring dial
-                                           : 0;
+        const int kStyle = liteMode           ? 5   // ⚡ 軽量モード: 超高速フラットベクターダイヤル
+                         : juiceTheme()       ? 1
+                         : liverTheme()       ? 2   // V-Liver (Couture Cosmetics) jewel/star dial
+                         : oceanStarTheme()   ? 6   // 🌌🌊 星空・海・黄昏コレクション: 天球ガラスオーブ＆アストロラーベ金環ダイヤル
+                         : themeMode == 9     ? 3   // Studio Pro movement dial
+                         : themeMode == 6     ? 4   // Cyber Neon dual-ring dial
+                                              : 0;
         l->setKnobStyle (kStyle);
     }
 
@@ -8188,9 +8498,10 @@ void VocalGzzioContent::refreshLanguage()
 
 void VocalGzzioContent::setThemeMode (int m)
 {
-    themeMode = juce::jlimit (0, 13, m);         // 0..9 + 10..13 (クチュール・コスメ5色展開)
+    themeMode = juce::jlimit (0, 18, m);         // 0..9 + 10..13 (クチュール5色) + 14..18 (星空・海・黄昏5色)
     if (themeMode == 1 || themeMode == 8) yuruNight = (themeMode == 8);
     if (Palette::isCoutureTheme (themeMode)) lastCoutureTheme = themeMode;
+    if (Palette::isOceanStarTheme (themeMode)) lastOceanStarTheme = themeMode;
     if (themeMode != 0) lastTheme = themeMode;   // 中央Nトグルの復帰先
 
     // テーマ選択に連動して画面配置アーキテクチャ自体も最適化する（手動固定していない場合）
@@ -8202,6 +8513,7 @@ void VocalGzzioContent::setThemeMode (int m)
     }
 
     Palette::applyTheme (themeMode);             // 7=色覚CUD もそのまま 1:1
+    if (accessMode > 0) Palette::applyAccessOverride (accessMode);
     // v1.9.0: ポップアップ/ツールチップ/ボタン/コンボボックス内部ラベルの色をテーマに追随させる
     if (auto* g = dynamic_cast<GzzioLnF*> (&getLookAndFeel())) g->refreshPaletteColours();
     sendLookAndFeelChange();
@@ -8331,6 +8643,7 @@ juce::String VocalGzzioContent::themeArmName (int i) const
 bool VocalGzzioContent::themeArmSelected (int i) const
 {
     // ゆるふわの席は ひる(1) と よる(8) のどちらでも「選択中」、ライバーの席はクチュール5色すべてで「選択中」
+    if (i == 4) return (themeMode == 4 || oceanStarTheme());
     if (i == 5) return liverTheme();
     return (themeMode == kThemeOfChip[i]) || (i == 1 && themeMode == 8);
 }
@@ -8345,6 +8658,15 @@ void VocalGzzioContent::chooseTheme (int i)
         const bool inYuru = (themeMode == 1 || themeMode == 8);
         if (inYuru) yuruNight = ! yuruNight;
         setThemeMode (yuruNight ? 8 : 1);
+    }
+    else if (i == 4)
+    {
+        if (oceanStarTheme())
+            setThemeMode (Palette::themeOfOceanStar ((Palette::oceanStarIndex (themeMode) + 1) % 5));
+        else if (themeMode == 4)
+            setThemeMode (lastOceanStarTheme);
+        else
+            setThemeMode (4);
     }
     else if (i == 5)
     {
@@ -8455,7 +8777,7 @@ void VocalGzzioContent::mouseExit (const juce::MouseEvent&)
 
 void VocalGzzioContent::paintOverChildren (juce::Graphics& g)
 {
-    if (! liteMode)
+    if (! liteMode && accessMode == 0)
     {
         themePainter.setBounds (getLocalBounds());
         // 総合画面・詳細画面ともテーマ前景オーバーレイ（桜・雪・ブランド紋章・キラキラ星・ペンライト等）を表示

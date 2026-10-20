@@ -103,7 +103,7 @@ int main()
            && ! clearNoise->getBounds().intersects (noiseStatus->getBounds()), "learned reset has a dedicated position beside its state");
     std::vector<float> soundSettings;
     for (auto* parameter : processor->getParameters()) soundSettings.push_back (parameter->getValue());
-    for (int theme : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 })
+    for (int theme : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 })
         for (float size : { 1.5f, 1.875f, 2.25f })
         {
             look.setFontScale (size); view.setFontScale (size); view.setThemeMode (theme);

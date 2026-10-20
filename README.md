@@ -1,11 +1,11 @@
-# VocalGzzio 4.8.0
+# VocalGzzio 4.9.0
 
 歌・話し声・アコースティックギター・VTuber配信・メタバース通話（cluster / VRChat / Discord / OBS / SYNCROOM）の音を整えるプラグイン＆単体起動アプリです。
-ノイズ除去、音量そろえ、音色（2D声質重力場オーブ＆4軸成形）、音程、空間IR残響、歌枠⇄雑談MCのワンクリック瞬間切替、5秒試聴ルーパー、カラオケ・BGMプレイヤー内蔵（キー変更＆自動ダッキング）、1クリックWAV録音＆直前30秒さかのぼり保存、5秒声質ターゲット診断、絶叫セーフティガード＆咳払い瞬間ミュート、そして**あらゆるオーディオインターフェース（サウンドハウス・Amazon主要60ブランド・160機種以上）に対応する自動クロック同期・IN1〜IN4マルチ入力中央化・外部配信ブリッジ**を総合画面から調整できます。
+ノイズ除去、音量そろえ、音色（2D声質重力場オーブ＆4軸成形）、音程、空間IR残響、歌枠⇄雑談MCのワンクリック瞬間切替、5秒試聴ルーパー、カラオケ・BGMプレイヤー内蔵（キー変更＆自動ダッキング）、1クリックWAV録音＆直前30秒さかのぼり保存、5秒声質ターゲット診断、絶叫セーフティガード＆咳払い瞬間ミュート、**「星空・海・黄昏」5大風景コレクション＆4つの表示・操作スタイル切替（標準デザイン／◉くっきり大文字／★かんたん3ステップ／●マット・具体表記）**、そして**あらゆるオーディオインターフェース（サウンドハウス・Amazon主要60ブランド・160機種以上）に対応する自動クロック同期・IN1〜IN4マルチ入力中央化・外部配信ブリッジ**を総合画面から調整できます。
 
-> **更新状況（2026年10月19日）**：**VocalGzzio 4.8.0（Stage & Studio / Universal Audio Interface Edition）** を公開しました。サウンドハウス・Amazonで流通する主要60ブランド・160機種以上のオーディオインターフェース／配信ミキサー／32bitフロート機／USBマイク／VR機器に完全対応しました。実際に入手できるファイルは[BOOTHの商品ページ](https://gzzio.booth.pm/items/8208045)で確認してください。Windows版とMac版は同じ購入に含まれ、既存購入者も追加購入なしで両方利用できます。
+> **更新状況（2026年10月20日）**：**VocalGzzio 4.9.0（Starry Sky & Universal Style Edition）** を公開しました。「01銀河・02碧海・03朝焼・04晩秋・05蒼劇」の5大風景コレクションと、4つの表示・操作スタイル切替（「標準デザイン」「◉ くっきり大文字」「★ かんたん3ステップ」「● マット・具体表記」）、文字サイズ（80%〜150%）・UIサイズ（85%〜125%）全域での縦横自動フィット、および仮想ドライバ導入時のWindows既定デバイス自動保護を搭載しました。実際に入手できるファイルは[BOOTHの商品ページ](https://gzzio.booth.pm/items/8208045)で確認してください。Windows版とMac版は同じ購入に含まれ、既存購入者も追加購入なしで両方利用できます。
 
-[商品と体験版](https://gzzio.booth.pm/items/8208045) · [使い方](docs/manual.html) · [4.7.0の変更記録](docs/updates-4.7.0.md) · [4.6.0の変更記録](docs/updates-4.6.0.md) · [4.5.0の変更記録](docs/updates-4.5.0.md) · [過去の画面](docs/archive-ui-history.md) · [Macの導入と起動警告](https://gzzio1989.github.io/apps/vocalgzzio/mac-install.html)
+[商品と体験版](https://gzzio.booth.pm/items/8208045) · [使い方](docs/manual.html) · [4.9.0の変更記録](docs/updates-4.9.0.md) · [4.8.0の変更記録](docs/updates-4.8.0.md) · [4.7.0の変更記録](docs/updates-4.7.0.md) · [4.6.0の変更記録](docs/updates-4.6.0.md) · [過去の画面](docs/archive-ui-history.md) · [Macの導入と起動警告](https://gzzio1989.github.io/apps/vocalgzzio/mac-install.html)
 
 ---
 
@@ -14,7 +14,7 @@
 
 お手持ちの機材がどのメーカー・どの端子構成であっても、VocalGzzio 単体起動版（Standalone）＋内蔵の専用仮想ドライバ **`ライン (VocalGzzio Driver (WDM))`** でそのままお使いいただけます。
 
-| カテゴリ / メーカー | 主な対応機種（サウンドハウス・Amazon 定番＆最新モデル） | ハードウェア仕様・端子特徴 | VocalGzzio v4.8 自動対応機能 |
+| カテゴリ / メーカー | 主な対応機種（サウンドハウス・Amazon 定番＆最新モデル） | ハードウェア仕様・端子特徴 | VocalGzzio v4.9 自動対応機能 |
 | :--- | :--- | :--- | :--- |
 | **① 配信・実況・ゲームミキサー**<br>YAMAHA / Roland / audio-technica | ・**YAMAHA**: `AG03MK2` / `AG06MK2` / `AG08` / `ZG01` / `ZG02` / `AG03` / `AG06`<br>・**audio-technica**: `AT-UMX3`（Amazonベストセラー1位）<br>・**Roland**: `BRIDGE CAST` / `BRIDGE CAST X` / `BRIDGE CAST ONE` / `VT-4` / `E-4` / `GO:MIXER PRO-X` | ・`IN 1` マイク入力＋本体 `LOOPBACK` スイッチ搭載<br>・`GAME` / `CHAT` / `VOICE` / `STREAM` 等複数のWindows仮想WDMバスを搭載<br>・`AT-UMX3` はドライバレス最大192kHz対応 | **◎ 完全対応（推奨）**<br>・複数WDMバスのサンプルレート（48kHz等）を一括自動統一し、`cluster` 等の音消えを防止<br>・本体 `LOOPBACK` ON時のハウリング発振を0.35秒で自動検知し耳への返しを自動ミュート |
 | **② DTM・歌枠・歌ってみた超定番**<br>Steinberg / Focusrite / Roland | ・**Steinberg**: `UR22C` / `UR12` / `UR24C` / `UR44C` / `UR816C` / `IXO12` / `IXO22` / `URX22C` / `URX44C` / `UR-RT2` / `UR-RT4`<br>・**Focusrite**: `Scarlett Solo` / `2i2` / `4i4` / `8i6` / `18i8` / `18i20`（第3〜第4世代） / `Vocaster One` / `Two` / `Clarett+`<br>・**Roland**: `Rubix22` / `Rubix24` / `Rubix44` | ・**`Scarlett Solo (第4世代)` はXLRマイク端子が右（`IN 2`）**<br>・**`Rubix44` / `UR44C` / `Scarlett 4i4` はマイク入力が `IN 1〜4`、サブヘッドホンが `OUT 3-4`** | **◎ 完全対応（推奨）**<br>・`IN 1〜IN 4` のどこにマイクを挿してもAC音声帯域検知で自動的に両耳中央（`L=R`）へ配置（手動固定も可）<br>・多ch機の `IN 1〜4` ＆ `OUT 1〜4`（2系統目ヘッドホン含む）を自動有効化 |

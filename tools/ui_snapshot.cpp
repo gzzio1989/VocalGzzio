@@ -64,9 +64,15 @@ int main (int argc, char** argv)
             }
             content.setOverview (content.isOverview());
         }
-        if (argc > 9 && std::atoi (argv[9]) != 0) content.setLiteMode (true);
+        if (argc > 9)
+        {
+            const int m9 = std::atoi (argv[9]);
+            if (m9 >= 1 && m9 <= 3) content.setAccessMode (m9);
+            else if (m9 != 0)       content.setLiteMode (true);
+        }
         content.resized();
-        auto picture = content.createComponentSnapshot (content.getLocalBounds());
+        const float uiScale = (argc > 10 && std::atof (argv[10]) > 0.1) ? (float) std::atof (argv[10]) : 1.0f;
+        auto picture = content.createComponentSnapshot (content.getLocalBounds(), true, uiScale);
         const auto target = juce::File::getCurrentWorkingDirectory().getChildFile (
             juce::String::fromUTF8 (argv[1]));
         target.getParentDirectory().createDirectory();

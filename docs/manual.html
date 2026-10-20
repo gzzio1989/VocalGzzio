@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VocalGzzio 4.8.0 説明書・対応インターフェース一覧</title>
+<title>VocalGzzio 4.9.0 説明書・対応インターフェース一覧</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><nav><strong>VocalGzzio 4.8.0</strong><a href="index.html">紹介</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a></nav></header>
+<header><nav><strong>VocalGzzio 4.9.0</strong><a href="index.html">紹介</a><a href="updates-4.9.0.md">4.9.0の変更点</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a></nav></header>
 <main>
-<aside class="note" aria-label="配布状況"><strong>VocalGzzio 4.8.0（Stage &amp; Studio Complete Edition）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
+<aside class="note" aria-label="配布状況"><strong>VocalGzzio 4.9.0（Starry Sky &amp; Universal Style Edition）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
 <h1>どんな機材でも、<br>迷わず最高の声へ。</h1>
-<p class="lead">総合画面で「仕上がり」や「🎯5秒AI声質診断」を選び、必要なところだけ調整します。カラオケ伴奏再生・直前30秒さかのぼり録音・cluster/通話との完全共存まで1画面で完結します。</p>
-<nav aria-label="目次"><a href="#start">はじめる</a><a href="#stage">伴奏・30秒録音・AI診断</a><a href="#interfaces">対応インターフェース・音消え対策</a><a href="#argon">声の質感</a><a href="#theme">画面と5色コスメ</a><a href="#level">音量・絶叫/咳ガード</a><a href="#noise">ノイズ</a><a href="#pitch">音程</a><a href="#space">残響・IR</a><a href="#install">導入</a></nav>
+<p class="lead">総合画面で「仕上がり」や「🎯5秒AI声質診断」を選び、必要なところだけ調整します。5大風景テーマ・4種の表示スタイル切替・カラオケ伴奏再生・直前30秒さかのぼり録音・cluster/通話との完全共存まで1画面で完結します。</p>
+<nav aria-label="目次"><a href="#start">はじめる</a><a href="#theme">風景テーマ・4種の表示スタイル</a><a href="#stage">伴奏・30秒録音・AI診断</a><a href="#interfaces">対応インターフェース・音消え対策</a><a href="#argon">声の質感</a><a href="#level">音量・絶叫/咳ガード</a><a href="#noise">ノイズ</a><a href="#pitch">音程</a><a href="#space">残響・IR</a><a href="#install">導入</a></nav>
 
 <h2 id="start">はじめの調整</h2>
 <ol>
@@ -22,7 +22,22 @@
 <li>「押して原音と比較」や「🔄5秒試聴ルーパー」で、処理前後の声を客観的に聴き比べます。</li>
 </ol>
 
-<h2 id="stage">v4.8.0 新機能：カラオケ伴奏・30秒さかのぼり録音・5秒AI声質診断</h2>
+<h2 id="theme">v4.9.0 新機能：星空・海・黄昏 5大風景コレクション ＆ 4つの表示・操作スタイル切替</h2>
+<ul>
+<li><strong>🌌「星空・海・黄昏」5大風景コレクション：</strong>総合画面中央の「01銀河」「02碧海」「03朝焼」「04晩秋」「05蒼劇」ピル、または上部の「文字・見た目」から5つの風景・季節テーマをワンタッチで切り替えられます。歌声の倍音と共鳴する水鏡リフレクションや水紋・流星・蛍火を描画します（「⚡軽量」ON時は自動休止）。</li>
+<li><strong>♥LIVER（クチュール5色）・☕ゆるふわ・🎛STUDIO・◎従来：</strong>上部の配置ボタンから「✦天球水鏡」「♥LIVER（01ロゼ・02氷紫・03黒姫・04翡翠・05白桃）」「🎛STUDIO」「◎従来」を1クリックで切り替えられます。</li>
+<li><strong>4つの「画面の見やすさ・操作スタイル切替」：</strong>総合画面の右中段バー、または上部の「文字・見た目」ポップアップからいつでも切り替えられます。
+  <ul>
+    <li><strong>標準デザイン：</strong>通常のテーマ配色・アニメーション・全コントロールを表示します。</li>
+    <li><strong>◉ くっきり大文字：</strong>背景透けゼロの漆黒×純白（WCAG AAA 12:1以上）、極太5px針、8分割大目盛り、特大太字、形状記号（<code>▼</code>削る・抑える / <code>▲</code>足す・揃える / <code>○</code>待機中）で小さな文字や目盛りを読みやすくします。</li>
+    <li><strong>★ かんたん3ステップ：</strong>「<code>STEP 1 雑音を消す ▶ STEP 2 声を揃える ▶ STEP 3 残響を足す</code>」の順路ガイドと、最初に触るべき主役ツマミの「<code>★まずここ</code>」バッジ、待機ツマミの減光で迷わず操作できます。</li>
+    <li><strong>● マット・具体表記：</strong>発光・反射・グラデーション・点滅をすべて抑えたマット配色と水平グリッド整列、比喩を排した具体的な機能名表記（<code>背景ノイズ除去</code>・<code>歯擦音(サ行)抑制</code>・<code>中高域(明瞭度)</code>等）に切り替えます。</li>
+  </ul>
+</li>
+<li><strong>文字サイズ（80%〜150%）・画面サイズ（85%〜125%）自動フィット：</strong>どの文字サイズ・画面倍率を選んでも、ラベルや数値カプセル、コンボボックスの文字が枠線と重なったり省略記号（<code>...</code>）で切れたりしない自動採寸設計です。</li>
+</ul>
+
+<h2 id="stage">カラオケ伴奏・30秒さかのぼり録音・5秒AI声質診断</h2>
 <ul>
 <li><strong>🎵内蔵カラオケ・BGMプレイヤー ＆ キー変更（±6半音）：</strong>上部の「🎵BGM・録音」から手持ちの伴奏音源（<code>.wav / .mp3 / .flac / .ogg / .aiff</code>）や内蔵J-POPカノン進行伴奏を再生できます。伴奏キー（-6〜+6半音）を変更すると、ボーカル側のピッチ補正・ハモリのキーも自動同期します。歌唱中は「声優先オートダッキング」で伴奏が自動で少し下がります。</li>
 <li><strong>🔴1クリックWAV録音 ＆ ⏪直前30秒さかのぼり保存：</strong>通常の24bit WAV録音に加え、録音していなかった時でも「⏪直前30秒を保存」を押すだけで直前30秒間の歌声を救出できます。常に「完成音（Wet）」と「無加工の素の声（Dry）」の2ファイルが同時保存されます。</li>
@@ -61,9 +76,6 @@
 </tbody>
 </table>
 
-<h2 id="theme">5つのペルソナ配置・クチュール5色・軽量表示</h2>
-<p>画面上部から「★ARGON」「♥LIVER（クチュール5色：01ロゼ・02氷紫・03黒姫・04翡翠・05白桃）」「☕ゆるふわ（昼・夜切替）」「🎛STUDIO」「◎従来」を1クリックで切り替えられます。「⚡軽量」を入れると描画負荷を抑えます。</p>
-
 <h2 id="level">音量そろえ・絶叫セーフティガード・咳ミュート</h2>
 <p>声を出している間に計器盤の音量補助ボタンを押すと、その時点の出力ピークから出力音量を補正します。突発的な叫び声やマイク衝突音は「🛡絶叫ガード」が0.2msで抑え込み、咳払いは「😷咳ミュート」でクリックノイズなく遮断できます。</p>
 
@@ -77,8 +89,8 @@
 <p>6種類の空間IR（おふろ・カラオケ箱・録音スタジオ・ライブハウス・コンサートホール・プレート）に加え、「📂IR読込」からお手持ちの <code>.wav</code> / <code>.aiff</code> IRファイルを読み込めます。「声優先ダッキング」を入れると歌っている最中だけ残響が自動で少し下がり、歌詞がくっきり聞こえます。</p>
 
 <h2 id="install">インストールと更新</h2>
-<p>録音ソフトと単体起動アプリを終了してから、配布物のインストーラーを実行します。WindowsではVST3・単体起動アプリ・専用仮想ドライバ「VocalGzzio Driver (WDM)」が導入されます。Macは同梱の「ここから始める.html」に沿って .pkg を実行します。</p>
+<p>録音ソフトと単体起動アプリを終了してから、配布物のインストーラーを実行します。WindowsではVST3・単体起動アプリ・専用仮想ドライバ「VocalGzzio Driver (WDM)」が導入されます（元の既定スピーカー・マイクは自動で保護・復元されます）。Macは同梱の「ここから始める.html」に沿って .pkg を実行します。</p>
 </main>
-<footer>VocalGzzio 4.8.0 · <a href="https://gzzio.booth.pm/items/8764003">商品・問い合わせ先</a></footer>
+<footer>VocalGzzio 4.9.0 · <a href="https://gzzio.booth.pm/items/8764003">商品・問い合わせ先</a></footer>
 </body>
 </html>
