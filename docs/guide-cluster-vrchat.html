@@ -3,23 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>【解決】cluster・VRChat・DiscordでマイクやASIOを使うと音が消える・片耳になる原因と1クリック修復法｜VocalGzzio 4.8.0</title>
-<meta name="description" content="clusterやVRChat、Discordでオーディオインターフェース（AG03・Scarlett・Rubix・BRIDGE CAST等）やASIOを使うとワールドの音や通話相手の声が消える原因を解説。VocalGzzio v4.8.0の「音消え一発修復」「全アプリ共存モード」で1クリック解決する方法。">
+<title>【解決】cluster・VRChat・DiscordでマイクやASIOを使うと音が消える・片耳になる原因と1クリック修復法｜VocalGzzio 5.0.0</title>
+<meta name="description" content="clusterやVRChat、Discordでオーディオインターフェース（AG03・Scarlett・Rubix・BRIDGE CAST等）やASIOを使うとワールドの音や通話相手の声が消える原因を解説。VocalGzzio v5.0.0の「音消え一発修復」「全アプリ共存モード」で1クリック解決する方法。">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><nav><strong>VocalGzzio 4.8.0</strong><a href="index.html">トップ</a><a href="manual.html">説明書・対応機種</a><a href="guide-utawaku-obs.html">OBS歌枠ガイド</a><a href="https://gzzio.booth.pm/items/8764003">無料体験版・BOOTH</a></nav></header>
+<header><nav><strong>VocalGzzio 5.0.0</strong><a href="index.html">トップ</a><a href="manual.html">説明書・対応機種</a><a href="guide-utawaku-obs.html">OBS歌枠ガイド</a><a href="https://gzzio.booth.pm/items/8764003">無料体験版・BOOTH</a></nav></header>
 <main>
 <p class="eyebrow">メタバース・VC通話 トラブル解決ガイド（cluster / VRChat / Discord 対応）</p>
 <h1>cluster・VRChatでマイクを使うと<br>「ワールドの音が消える」「片耳になる」を1クリックで直す方法</h1>
-<p class="lead">「スタンドアロンでエフェクトをかけてclusterで話そうとすると、clusterの音が消えてしまう」「ScarlettやAG03にマイクを挿すと左耳（または右耳）からしか聞こえない」——そんなWindows特有の音声競合を、<strong>VocalGzzio v4.8.0</strong> の新機能でわずか1秒で解決する手順を解説します。</p>
+<p class="lead">「スタンドアロンでエフェクトをかけてclusterで話そうとすると、clusterの音が消えてしまう」「ScarlettやAG03にマイクを挿すと左耳（または右耳）からしか聞こえない」——そんなWindows特有の音声競合を、<strong>VocalGzzio v5.0.0</strong> の専用修復ボタンでわずか1秒で解決する手順を解説します。</p>
 
 <div class="actions">
 <a class="button" href="https://gzzio.booth.pm/items/8764003">🛒 0円の無料体験版をダウンロード（BOOTH）</a>
 <a class="button secondary" href="https://youtu.be/3HBy-uGv6vo">📺 YouTubeで原音比較を聴く</a>
 </div>
 
-<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin:1.5rem 0;box-shadow:0 8px 28px rgba(0,0,0,0.18);"><iframe src="https://www.youtube.com/embed/3HBy-uGv6vo" title="VocalGzzio v4.8.0 原音比較＆機能紹介ムービー" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
+<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;margin:1.5rem 0;box-shadow:0 8px 28px rgba(0,0,0,0.18);"><iframe src="https://www.youtube.com/embed/3HBy-uGv6vo" title="VocalGzzio v5.0.0 原音比較＆機能紹介ムービー" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
 
 <h2>1. なぜ cluster や VRChat で「音が消える」のか？（4つの原因）</h2>
 <table>
@@ -32,8 +32,8 @@
 </tbody>
 </table>
 
-<h2>2. 『VocalGzzio v4.8.0』の3ボタンで1クリック解決する手順</h2>
-<p>『VocalGzzio v4.8.0』の単体起動アプリ（Standalone）を起動すると、画面上部に3つの専用修復ボタンが表示されています。</p>
+<h2>2. 『VocalGzzio v5.0.0』の3ボタンで1クリック解決する手順</h2>
+<p>『VocalGzzio v5.0.0』の単体起動アプリ（Standalone）を起動すると、画面上部に3つの専用修復ボタンが表示されています。</p>
 
 <div class="grid">
 <section class="card">
@@ -61,7 +61,7 @@
 
 <h2>4. 「マイクが左耳（または右耳）からしか聞こえない」片耳問題の自動解決</h2>
 <p>オーディオインターフェースの <code>IN 1</code>（XLR端子）にマイクを挿すと左耳だけ、<strong>Focusrite Scarlett Solo（第3・第4世代）</strong>のようにXLR端子が <code>IN 2</code> にある機種では右耳だけから声が鳴ってしまいます。<br>
-『VocalGzzio v4.8.0』の <strong><code>Auto Mono IN1-4</code></strong> モード（初期設定でON）は、<code>IN 1</code>〜<code>IN 4</code> のうち「人間の声が入っているチャンネル」だけを自動で追尾し、両耳の中央（L+R）へ揃えて出力します（MOTU M2/M4等の <code>IN 3-4</code> にあるPCループバック音は自動で除外します）。</p>
+『VocalGzzio v5.0.0』の <strong><code>Auto Mono IN1-4</code></strong> モード（初期設定でON）は、<code>IN 1</code>〜<code>IN 4</code> のうち「人間の声が入っているチャンネル」だけを自動で追尾し、両耳の中央（L+R）へ揃えて出力します（MOTU M2/M4等の <code>IN 3-4</code> にあるPCループバック音は自動で除外します）。</p>
 
 <img src="interface-compatibility-4.8.0.png" width="1600" height="1230" alt="VocalGzzio 4.8.0 対応オーディオインターフェース完全一覧表">
 

@@ -304,6 +304,18 @@ int main()
             && processor->apvts.getRawParameterValue ("argon_silk")->load()   == 0.0f
             && processor->apvts.getRawParameterValue ("argon_halo")->load()   == 0.0f,
                "2D Orb double-click resets Velvet, Focus, Silk, and Halo to 0%");
+
+        // Verify Tablet PC 1-Tap [↺ 0%] Reset pill (argonResetRect at top-right of argonPadRect: {797, 177})
+        check (view.handleOverviewMouseDown ({ 550, 200 }), "2D Gravity Orb mouseDown hits pad before 1-tap reset");
+        view.handleOverviewMouseDrag ({ 780, 340 });
+        check (processor->apvts.getRawParameterValue ("argon_silk")->load() > 50.0f, "2D Orb drag raises Silk Air before 1-tap reset");
+        check (view.overviewHelpAt ({ 797, 177 }).isNotEmpty(), "1-Tap Orb Reset pill has hover/touch help");
+        check (view.handleOverviewMouseDown ({ 797, 177 }), "1-Tap Orb Reset pill single tap is handled");
+        check (processor->apvts.getRawParameterValue ("argon_velvet")->load() == 0.0f
+            && processor->apvts.getRawParameterValue ("argon_focus")->load()  == 0.0f
+            && processor->apvts.getRawParameterValue ("argon_silk")->load()   == 0.0f
+            && processor->apvts.getRawParameterValue ("argon_halo")->load()   == 0.0f,
+               "1-Tap Orb Reset pill resets Velvet, Focus, Silk, and Halo to 0% without double-clicking");
         check (processor->apvts.getRawParameterValue ("presence")->load() == -2.0f
             && processor->apvts.getRawParameterValue ("drive")->load() == 12.0f
             && processor->apvts.getRawParameterValue ("revmix")->load() == 17.0f,
@@ -729,6 +741,411 @@ int main()
         processor->prepareToPlay (16000.0, 256);
         check (processor->runVoiceTargetDiagnosis (0), "Voice Target AI Diagnosis is Nyquist-safe even at 16kHz headset sample rate");
         processor->prepareToPlay (48000.0, 256);
+
+        // Verify v5.0.0 All-in-One Live & Cover Production Suite 4 Pillars:
+        //   Pillar 4: 1-Click Chorus Boost (chorusPillRect at footer right deck)
+        const juce::Point<int> chorusPt { 1120, 844 };
+        const juce::Point<int> se0Pt    { 1220, 844 };
+        const juce::Point<int> se1Pt    { 1313, 844 };
+        const juce::Point<int> se2Pt    { 1406, 844 };
+        const juce::Point<int> se3Pt    { 1499, 844 };
+        check (view.overviewHelpAt (chorusPt).isNotEmpty(), "hovering Chorus Boost pill shows explanation");
+        check (view.overviewHelpAt (se0Pt).isNotEmpty(),    "hovering Live SE Applause pill shows explanation");
+        check (! processor->getChorusBoostMode(), "Chorus Boost starts OFF");
+        check (view.handleOverviewMouseDown (chorusPt), "clicking Chorus Boost pill is handled");
+        check (processor->getChorusBoostMode(), "clicking Chorus Boost pill enables Chorus Boost");
+        check (view.handleOverviewMouseDown (chorusPt), "clicking Chorus Boost pill again is handled");
+        check (! processor->getChorusBoostMode(), "clicking Chorus Boost pill returns to verse balance");
+
+        //   Pillar 3: 4 Live SE Trigger Pads (Applause, Sparkle, Drumroll, Chime)
+        const juce::Point<int> sePts[4] = { se0Pt, se1Pt, se2Pt, se3Pt };
+        for (int s = 0; s < 4; ++s)
+        {
+            check (view.handleOverviewMouseDown (sePts[s]), "clicking Live SE pad triggers SE");
+            check (processor->getActiveLiveSe() == s, "activeLiveSe matches triggered SE index");
+            voiceBuf.clear();
+            processor->processBlock (voiceBuf, loopMidi);
+            const float mag0 = voiceBuf.getMagnitude (0, 256);
+            check (mag0 > 0.001f && mag0 <= 0.15f, "Live SE pad outputs gentle, non-clipping stereo audio in processBlock (peak <= 0.15)");
+        }
+        check (view.handleOverviewMouseDown (sePts[3]), "clicking active Live SE pad again stops SE");
+        check (processor->getActiveLiveSe() == -1, "Live SE returns to stopped (-1)");
+        check (view.overviewHelpAt ({ 100, 40 }).isNotEmpty(), "hovering top-left brand/version badge in Overview shows Legacy Time Machine help");
+
+        //   Pillar 1 & 2: 1-Click BGM Vocal Cancel (Karaoke) + -14 LUFS Auto-Master & FullMix Export
+        check (! processor->getBgmVocalCancel(), "BGM Vocal Cancel starts OFF");
+        processor->setBgmVocalCancel (true);
+        check (processor->getBgmVocalCancel(), "BGM Vocal Cancel turns ON");
+        processor->setBgmPlaying (true);
+        for (int b = 0; b < 40; ++b)
+        {
+            for (int i = 0; i < 256; ++i)
+            {
+                const float s = 0.22f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * (float) (b * 256 + i) / 48000.0f);
+                voiceBuf.setSample (0, i, s);
+                voiceBuf.setSample (1, i, s);
+            }
+            processor->processBlock (voiceBuf, loopMidi);
+        }
+        processor->setBgmPlaying (false);
+        processor->setBgmVocalCancel (false);
+        check (processor->getRecAutoMaster(), "-14 LUFS Auto-Mastering defaults to ON");
+        check (processor->saveRetroWavRecording(), "-14 LUFS Auto-Master + FullMix + Wet + Dry retroactive WAV save succeeds");
+        check (processor->getLastSavedWavStatus().contains (juce::String::fromUTF8 ("完パケMIX")),
+               "Saved status confirms 3-file FullMix (-14 LUFS) export when BGM was active");
+
+        // Verify Interactive Preset Palette (Hover-Before-Select Inspection + Click to Choose)
+        if (auto* resetBtn = dynamic_cast<juce::TextButton*> (find ("resetAll")))
+            resetBtn->onClick();
+        view.setThemeMode (14); // Galaxy theme for visual inspection
+        view.setOverview (true);
+        check (view.handleOverviewMouseDown ({ 50, 90 }), "clicking 3-Axis Preset badge opens Preset Palette");
+
+        juce::Component* paletteComp = nullptr;
+        juce::CallOutBox* paletteCallout = nullptr;
+        for (auto* c : view.getChildren())
+        {
+            if (auto* box = dynamic_cast<juce::CallOutBox*> (c))
+            {
+                paletteCallout = box;
+                paletteComp = box->findChildWithID ("presetPalette");
+            }
+        }
+        check (paletteComp != nullptr && paletteComp->isVisible(), "PresetPalettePopup is open and visible inside CallOutBox");
+        if (paletteComp != nullptr)
+        {
+            const int prevVoiceId = (int) processor->apvts.state.getProperty ("ui_voice_preset", 0);
+            check (prevVoiceId == 0, "no voice preset selected before hovering");
+
+            // Simulate mouseMove over card 0 (at {200, 145} inside PresetPalettePopup)
+            auto& desktop = juce::Desktop::getInstance();
+            juce::MouseEvent hoverEv (desktop.getMainMouseSource(),
+                                      juce::Point<float> (200.0f, 145.0f),
+                                      juce::ModifierKeys(),
+                                      0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                      paletteComp, paletteComp,
+                                      juce::Time::getCurrentTime(),
+                                      juce::Point<float> (200.0f, 145.0f),
+                                      juce::Time::getCurrentTime(),
+                                      0, false);
+            paletteComp->mouseMove (hoverEv);
+            check ((int) processor->apvts.state.getProperty ("ui_voice_preset", 0) == 0,
+                   "hovering over preset card does NOT prematurely select the preset");
+
+            auto savePaletteScreenshot = [&] (const char* filePath)
+            {
+                juce::Image snap (juce::Image::ARGB, view.getWidth(), view.getHeight(), true, juce::SoftwareImageType());
+                {
+                    juce::Graphics sg (snap);
+                    if (paletteCallout != nullptr) paletteCallout->setVisible (false);
+                    view.paintEntireComponent (sg, true);
+                    if (paletteCallout != nullptr) paletteCallout->setVisible (true);
+
+                    const auto palArea = view.getLocalArea (paletteComp, paletteComp->getLocalBounds());
+                    sg.setColour (juce::Colours::black.withAlpha (0.55f));
+                    sg.fillRoundedRectangle (palArea.expanded (10).toFloat().translated (0.0f, 6.0f), 18.0f);
+
+                    juce::Image palSnap (juce::Image::ARGB, paletteComp->getWidth(), paletteComp->getHeight(), true, juce::SoftwareImageType());
+                    {
+                        juce::Graphics pg (palSnap);
+                        paletteComp->paintEntireComponent (pg, true);
+                    }
+                    sg.setOpacity (1.0f);
+                    sg.drawImageAt (palSnap, palArea.getX(), palArea.getY());
+                }
+                juce::File outPng (filePath);
+                if (outPng.getParentDirectory().isDirectory())
+                {
+                    outPng.deleteFile();
+                    juce::FileOutputStream fos (outPng);
+                    if (fos.openedOk())
+                    {
+                        juce::PNGImageFormat pngFmt;
+                        pngFmt.writeImageToStream (snap, fos);
+                    }
+                }
+            };
+
+            // Render screenshot of the open Preset Palette while hovering over a card
+            savePaletteScreenshot ("C:/Users/silve/.gemini/antigravity/brain/8f2542b1-d681-42f3-92c9-1e836ae605e5/v5_preset_palette_hover.png");
+
+            // Now simulate mouseDown on that card to choose it ("気に入ったら選べる")
+            juce::MouseEvent clickEv (desktop.getMainMouseSource(),
+                                      juce::Point<float> (200.0f, 145.0f),
+                                      juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                      0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                      paletteComp, paletteComp,
+                                      juce::Time::getCurrentTime(),
+                                      juce::Point<float> (200.0f, 145.0f),
+                                      juce::Time::getCurrentTime(),
+                                      1, false);
+            paletteComp->mouseDown (clickEv);
+            check ((int) processor->apvts.state.getProperty ("ui_voice_preset", 0) == 1,
+                   "clicking hovered preset card in palette selects and applies the preset");
+
+            // Also switch to Tab 3 (Genre & Style, at {1040, 70}) and render a 2nd screenshot
+            juce::MouseEvent tabClickEv (desktop.getMainMouseSource(),
+                                         juce::Point<float> (1040.0f, 70.0f),
+                                         juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                         0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                         paletteComp, paletteComp,
+                                         juce::Time::getCurrentTime(),
+                                         juce::Point<float> (1040.0f, 70.0f),
+                                         juce::Time::getCurrentTime(),
+                                         1, false);
+            paletteComp->mouseDown (tabClickEv);
+
+            // Verify Tablet PC / Touch 2-Step Preview, Finger-Scrubbing (mouseDrag), and Dock Audition button:
+            // 1) Toggle keepOpen OFF ({1100, 24}) so we test standard close-on-confirm mode on a tablet
+            auto makeLeftClick = [&] (float x, float y)
+            {
+                return juce::MouseEvent (desktop.getMainMouseSource(),
+                                         juce::Point<float> (x, y),
+                                         juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                         0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                         paletteComp, paletteComp,
+                                         juce::Time::getCurrentTime(),
+                                         juce::Point<float> (x, y),
+                                         juce::Time::getCurrentTime(),
+                                         1, false);
+            };
+            paletteComp->mouseDown (makeLeftClick (1100.0f, 24.0f));
+            // 2) Unhovered 1st tap on Card 1 ({200, 185}) previews without selecting or closing
+            paletteComp->mouseDown (makeLeftClick (200.0f, 185.0f));
+            check ((int) processor->apvts.state.getProperty ("ui_eq_preset", 0) == 0,
+                   "Touch / unhovered 1st tap on preset card previews description & recipe without prematurely applying");
+            // 3) Finger-scrubbing (mouseDrag) across Card 2 ({200, 224}) updates preview without applying
+            paletteComp->mouseDrag (makeLeftClick (200.0f, 224.0f));
+            check ((int) processor->apvts.state.getProperty ("ui_eq_preset", 0) == 0,
+                   "Touch finger-scrubbing (mouseDrag) across cards updates preview without prematurely applying");
+            // 4) Tapping [🔊 開いたまま試聴] (dockAuditionRect at {1050, 580}) auditions the scrubbed Card 2 (1-based ID = 3)
+            paletteComp->mouseDown (makeLeftClick (1050.0f, 580.0f));
+            check ((int) processor->apvts.state.getProperty ("ui_eq_preset", 0) == 3,
+                   "Tapping [🔊 Audition Here] button in bottom dock applies the scrubbed preset while keeping palette open");
+            // 5) Test Fat-Finger [次へ ▶] ({840, 580}) and [◀ 前へ] ({730, 580}) stepper buttons in bottom dock:
+            paletteComp->mouseDown (makeLeftClick (840.0f, 580.0f));
+            check ((int) processor->apvts.state.getProperty ("ui_eq_preset", 0) == 4,
+                   "Tapping [Next ▶] stepper button in bottom dock steps to preset 4 and auditions immediately");
+            paletteComp->mouseDown (makeLeftClick (730.0f, 580.0f));
+            check ((int) processor->apvts.state.getProperty ("ui_eq_preset", 0) == 3,
+                   "Tapping [◀ Prev] stepper button in bottom dock steps back to preset 3 and auditions immediately");
+
+            // 6) Test Fat-Finger [🖐 特大カード (01-10)] ({550, 580}) Giant Card Mode (76px tall cards, 8px gap):
+            paletteComp->mouseDown (makeLeftClick (550.0f, 580.0f));
+            paletteComp->mouseMove (hoverEv);
+            savePaletteScreenshot ("C:/Users/silve/.gemini/antigravity/brain/8f2542b1-d681-42f3-92c9-1e836ae605e5/v5_preset_palette_fatfinger_large.png");
+            // Cycle back through Giant (11-20) -> All 20 View:
+            paletteComp->mouseDown (makeLeftClick (550.0f, 580.0f));
+            paletteComp->mouseDown (makeLeftClick (550.0f, 580.0f));
+
+            // Restore keepOpen ON ({1100, 24})
+            paletteComp->mouseDown (makeLeftClick (1100.0f, 24.0f));
+
+            paletteComp->mouseMove (hoverEv);
+            savePaletteScreenshot ("C:/Users/silve/.gemini/antigravity/brain/8f2542b1-d681-42f3-92c9-1e836ae605e5/v5_preset_palette_genre.png");
+
+            // Also switch to Tab 0 (Quick Finish 6 items, at {150, 70}) and render a 3rd screenshot
+            juce::MouseEvent tab0ClickEv (desktop.getMainMouseSource(),
+                                          juce::Point<float> (150.0f, 70.0f),
+                                          juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                          0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                          paletteComp, paletteComp,
+                                          juce::Time::getCurrentTime(),
+                                          juce::Point<float> (150.0f, 70.0f),
+                                          juce::Time::getCurrentTime(),
+                                          1, false);
+            paletteComp->mouseDown (tab0ClickEv);
+            juce::MouseEvent hover0Ev (desktop.getMainMouseSource(),
+                                       juce::Point<float> (200.0f, 220.0f),
+                                       juce::ModifierKeys(),
+                                       0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                       paletteComp, paletteComp,
+                                       juce::Time::getCurrentTime(),
+                                       juce::Point<float> (200.0f, 220.0f),
+                                       juce::Time::getCurrentTime(),
+                                       0, false);
+            paletteComp->mouseMove (hover0Ev);
+            savePaletteScreenshot ("C:/Users/silve/.gemini/antigravity/brain/8f2542b1-d681-42f3-92c9-1e836ae605e5/v5_preset_palette_finish.png");
+        }
+        if (paletteCallout != nullptr)
+        {
+            paletteCallout->setVisible (false);
+            view.removeChildComponent (paletteCallout);
+            paletteCallout->dismiss();
+        }
+
+        // Render screenshot of Fat-Finger Floating Touch Value Loupe while dragging a rotary knob on Ocean Star theme
+        view.setThemeMode (0);
+        juce::Slider* targetKnob = nullptr;
+        for (auto* c : view.getChildren())
+        {
+            if (auto* sl = dynamic_cast<juce::Slider*> (c))
+            {
+                if (sl->isVisible() && sl->getSliderStyle() == juce::Slider::RotaryHorizontalVerticalDrag
+                    && sl->getX() > 700 && sl->getX() < 950 && sl->getY() > 450)
+                {
+                    targetKnob = sl;
+                    break;
+                }
+            }
+        }
+        if (targetKnob != nullptr)
+        {
+            targetKnob->setValue (3.5, juce::sendNotificationSync);
+            if (targetKnob->onDragStart != nullptr)
+                targetKnob->onDragStart();
+            {
+                juce::Image loupeImg (juce::Image::ARGB, view.getWidth(), view.getHeight(), true, juce::SoftwareImageType());
+                {
+                    juce::Graphics lg (loupeImg);
+                    view.paintEntireComponent (lg, true);
+                }
+                juce::File outLoupe ("C:/Users/silve/.gemini/antigravity/brain/8f2542b1-d681-42f3-92c9-1e836ae605e5/v5_fatfinger_floating_loupe.png");
+                if (outLoupe.getParentDirectory().isDirectory())
+                {
+                    outLoupe.deleteFile();
+                    juce::FileOutputStream fos (outLoupe);
+                    if (fos.openedOk())
+                    {
+                        juce::PNGImageFormat pngFmt;
+                        pngFmt.writeImageToStream (loupeImg, fos);
+                    }
+                }
+            }
+            if (targetKnob->onDragEnd != nullptr)
+                targetKnob->onDragEnd();
+
+            // Verify Phase 2 Fat-Finger Fine-Tune Stepper Dock (fineTargetRect / fineMinusRect / finePlusRect / fineResetRect)
+            check (! view.getFinePlusRect().isEmpty() && ! view.getFineMinusRect().isEmpty() && ! view.getFineResetRect().isEmpty(),
+                   "Fat-Finger Fine-Tune Stepper Dock buttons (- / + / Reset) are present in Overview footer");
+            const double valBeforePlus = targetKnob->getValue();
+            check (view.handleOverviewMouseDown (view.getFinePlusRect().getCentre()),
+                   "Tapping [+] in Fat-Finger Fine-Tune Stepper Dock is handled");
+            check (std::abs (targetKnob->getValue() - (valBeforePlus + 0.5)) < 0.05,
+                   "Tapping [+] steps target dB knob up by +0.5 dB");
+            check (view.handleOverviewMouseDown (view.getFineMinusRect().getCentre()),
+                   "Tapping [-] in Fat-Finger Fine-Tune Stepper Dock is handled");
+            check (std::abs (targetKnob->getValue() - valBeforePlus) < 0.05,
+                   "Tapping [-] steps target dB knob down by -0.5 dB");
+            check (view.handleOverviewMouseDown (view.getFineResetRect().getCentre()),
+                   "Tapping [Reset] in Fat-Finger Fine-Tune Stepper Dock is handled");
+            check (std::abs (targetKnob->getValue() - targetKnob->getDoubleClickReturnValue()) < 0.05,
+                   "Tapping [Reset] in Fat-Finger Fine-Tune Stepper Dock resets target knob to its default value");
+            check (view.handleOverviewMouseDown (view.getFineTargetRect().getCentre()),
+                   "Tapping target pill in Fat-Finger Fine-Tune Stepper Dock cycles to next knob");
+
+            // Verify ClickToEditSlider left/right value-box edge tap steps by fine increment without opening text editor
+            if (auto* ctes = dynamic_cast<ClickToEditSlider*> (targetKnob))
+            {
+                ctes->setValue (2.0, juce::sendNotificationSync);
+                ctes->stepByFineIncrement (-1);
+                check (std::abs (ctes->getValue() - 1.5) < 0.05, "ClickToEditSlider::stepByFineIncrement(-1) steps dB knob by -0.5 dB");
+                ctes->stepByFineIncrement (+1);
+                check (std::abs (ctes->getValue() - 2.0) < 0.05, "ClickToEditSlider::stepByFineIncrement(+1) steps dB knob by +0.5 dB");
+                ctes->setValue (0.0, juce::sendNotificationSync);
+            }
+        }
+
+        // Verify Argon bar left-end (-5% step) and right-end (+5% step) fat-finger protection
+        {
+            view.setOverview (true);
+            view.setOverviewLayoutMode (0);
+            setParameter ("argon_velvet", 50.0f);
+            // In Argon Cockpit (theme 0), argonBarRects[0] is at { 456 + 24 + 14 + 344 = 838, 122 + 154 = 276, 234, 28 }
+            const juce::Point<int> barLeftTap  (838 + 20, 276 + 14);
+            const juce::Point<int> barRightTap (838 + 234 - 16, 276 + 14);
+            check (view.handleOverviewMouseDown (barLeftTap), "Tapping left label end of Argon Velvet bar is handled");
+            const float afterMinus = processor->apvts.getRawParameterValue ("argon_velvet")->load();
+            check (std::abs (afterMinus - 45.0f) < 1.0f, "Tapping left label end of Argon bar steps -5% instead of slamming to 0%");
+            check (view.handleOverviewMouseDown (barRightTap), "Tapping right % end of Argon Velvet bar is handled");
+            const float afterPlus = processor->apvts.getRawParameterValue ("argon_velvet")->load();
+            check (std::abs (afterPlus - 50.0f) < 1.0f, "Tapping right % end of Argon bar steps +5% instead of slamming to 100%");
+        }
+
+        // Verify EQGraph fat-finger 28px catch radius and double-click Q cycling
+        {
+            setParameter ("seq_on", 1.0f);
+            setParameter ("seq_mode", 1.0f); // Manual mode
+            setParameter ("seq_f1", 500.0f);
+            setParameter ("seq_d1", 6.0f);
+            setParameter ("seq_q1", 3.0f);
+            auto& eq = view.getEqGraph();
+            // Trigger paint so plot rect is initialized
+            {
+                juce::Image eqImg (juce::Image::ARGB, juce::jmax (64, eq.getWidth()), juce::jmax (32, eq.getHeight()), true);
+                juce::Graphics eg (eqImg);
+                eq.paint (eg);
+            }
+            const auto node0 = eq.getBandNodePosPublic (0);
+            // Test a fat-finger touch 22px to the left of node0 center (previously failed at >12px!)
+            const int hitIdx = eq.hitTestBandPublic (node0.translated (-22.0f, 0.0f));
+            check (hitIdx == 0, "EQGraph::hitTestBand catches fat-finger touch 22px away from band node center (28px radius)");
+            auto& desktop = juce::Desktop::getInstance();
+            juce::MouseEvent dblEv (desktop.getMainMouseSource(),
+                                    node0,
+                                    juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                    0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                    &eq, &eq,
+                                    juce::Time::getCurrentTime(),
+                                    node0,
+                                    juce::Time::getCurrentTime(),
+                                    2, false);
+            eq.mouseDoubleClick (dblEv);
+            const float qAfterDbl = processor->apvts.getRawParameterValue ("seq_q1")->load();
+            check (std::abs (qAfterDbl - 6.0f) < 0.2f, "Double-tapping EQ band node cycles Q width (3.0 -> 6.0)");
+            setParameter ("seq_mode", 0.0f);
+        }
+
+        // Verify On-Demand Lazy Heya IR Synthesis & Legacy Version Time Machine (v1.0.0 - v5.0.0)
+        {
+            heya::Convolver lazyConv;
+            lazyConv.prepare (48000.0, 256, true);
+            for (int r = 0; r < heya::kNumRooms; ++r)
+                check (! lazyConv.isRoomBuilt (r), "Heya lazyRooms=true does not eagerly synthesize room IRs at startup");
+            lazyConv.ensureRoomBuilt (2);
+            check (lazyConv.isRoomBuilt (2) && ! lazyConv.isRoomBuilt (0) && ! lazyConv.isRoomBuilt (5),
+                   "Heya::ensureRoomBuilt synthesizes only the requested room on demand");
+
+            // Test recalling all 13 generations (0 = v5.0.0 .. 12 = v1.0.0)
+            for (int vid = 0; vid < VocalGzzioContent::kLegacyVersionCount; ++vid)
+            {
+                const auto& spec = VocalGzzioContent::getLegacyVersionSpec (vid);
+                view.applyLegacyVersion (vid, true);
+                check (processor->getLegacyVersionId()  == spec.id,  "applyLegacyVersion sets processor legacyVersionId");
+                check (processor->getLegacyVersionEra() == spec.era, "applyLegacyVersion sets processor legacyVersionEra");
+                check (view.isOverview() == (spec.pageMode == 0),    "applyLegacyVersion switches pageMode (Overview vs Detail/Easy)");
+
+                juce::Image snap (juce::Image::ARGB, view.getWidth(), view.getHeight(), true);
+                juce::Graphics sg (snap);
+                view.paintEntireComponent (sg, true);
+
+                // Run a real audio block in this era to verify 0-CPU sleep gating works cleanly
+                juce::AudioBuffer<float> buf (2, 256);
+                buf.clear();
+                juce::MidiBuffer midi;
+                processor->processBlock (buf, midi);
+            }
+
+            // Verify XML state round-trip of <LEGACY_VER id="12" era="100" eco="1" />
+            view.applyLegacyVersion (12, true);
+            juce::MemoryBlock stateData;
+            processor->getStateInformation (stateData);
+            view.applyLegacyVersion (0, true);
+            check (processor->getLegacyVersionId() == 0 && processor->getLegacyVersionEra() == 500,
+                   "Reset to v5.0.0 clears legacy version id to 0");
+            processor->setStateInformation (stateData.getData(), (int) stateData.getSize());
+            check (processor->getLegacyVersionId() == 12 && processor->getLegacyVersionEra() == 100,
+                   "setStateInformation restores saved legacy version id=12 (v1.0.0) and era=100");
+
+            // Restore v5.0.0 and verify LegacyVersionPopup launches cleanly
+            view.applyLegacyVersion (0, true);
+            view.openLegacyVersionPopup ({ 724, 20, 64, 34 });
+            {
+                juce::Image popSnap (juce::Image::ARGB, view.getWidth(), view.getHeight(), true);
+                juce::Graphics pg (popSnap);
+                view.paintEntireComponent (pg, true);
+            }
+        }
     }
     view.setLookAndFeel (nullptr);
     processor->releaseResources();

@@ -156,6 +156,49 @@ void checkApplication()
     check (! gzzio::applyFinishPreset (-1, invalid)
         && ! gzzio::applyFinishPreset (gzzio::kNumFinishPresets, invalid) && calls == 0,
         "範囲外の選択は音を変えない");
+
+    // v5.0: 3軸直交プリセット (声質20 × マイク環境20 × 音楽ジャンル20 = 全60種) の定義・範囲・直交検証
+    check (gzzio::kNumVoicePresets == 20, "第1軸（声質・発声・悩み補正）20種", gzzio::kNumVoicePresets);
+    check (gzzio::kNumMicPresets   == 20, "第2軸（マイク・収録環境補正）20種", gzzio::kNumMicPresets);
+    check (gzzio::kNumEqPresets    == 20, "第3軸（音楽ジャンル・曲調レシピ）20種", gzzio::kNumEqPresets);
+    for (int i = 0; i < gzzio::kNumVoicePresets; ++i)
+    {
+        const auto& v = gzzio::kVoicePresets[i];
+        check (v.name != nullptr && v.name[0] != '\0' && v.nameEn != nullptr && v.nameEn[0] != '\0'
+            && v.desc != nullptr && v.desc[0] != '\0' && v.descEn != nullptr && v.descEn[0] != '\0',
+            v.nameEn, (double) (i + 1));
+        set (p, "comp1", v.c1); set (p, "comp2", v.c2);
+        set (p, "attack", v.atk); set (p, "release", v.rel);
+        set (p, "presence", v.pres); set (p, "drive", v.drv); set (p, "sustain", v.sus);
+        set (p, "ride_amt", v.ride); set (p, "res_amt", v.res);
+        set (p, "cons_amt", v.cons); set (p, "br_amt", v.br);
+        set (p, "ring", v.ring); set (p, "deess", v.ds);
+        set (p, "argon_velvet", v.velvet); set (p, "argon_focus", v.focus); set (p, "argon_silk", v.silk);
+    }
+    for (int i = 0; i < gzzio::kNumMicPresets; ++i)
+    {
+        const auto& m = gzzio::kMicPresets[i];
+        check (m.name != nullptr && m.name[0] != '\0' && m.nameJa != nullptr && m.nameJa[0] != '\0'
+            && m.desc != nullptr && m.desc[0] != '\0' && m.descEn != nullptr && m.descEn[0] != '\0',
+            m.name, (double) (i + 1));
+        set (p, "lowcut", m.lc); set (p, "mud", m.mud);
+        set (p, "harsh", m.harsh); set (p, "air", m.air); set (p, "deess", m.ds);
+        set (p, "prox_amt", m.prox); set (p, "pop_amt", m.pop);
+    }
+    for (int i = 0; i < gzzio::kNumEqPresets; ++i)
+    {
+        const auto& e = gzzio::kEqPresets[i];
+        check (e.name != nullptr && e.name[0] != '\0' && e.nameEn != nullptr && e.nameEn[0] != '\0'
+            && e.desc != nullptr && e.desc[0] != '\0' && e.descEn != nullptr && e.descEn[0] != '\0',
+            e.nameEn, (double) (i + 1));
+        set (p, "lowcut", e.lc); set (p, "mud", e.mud);
+        set (p, "harsh", e.harsh); set (p, "presence", e.pres);
+        set (p, "air", e.air); set (p, "drive", e.drv);
+        set (p, "argon_velvet", e.velvet); set (p, "argon_focus", e.focus);
+        set (p, "argon_silk", e.silk); set (p, "argon_halo", e.halo);
+        set (p, "cons_amt", e.cons); set (p, "br_amt", e.br);
+        set (p, "ring", e.ring); set (p, "sustain", e.sus);
+    }
 }
 }
 int main()

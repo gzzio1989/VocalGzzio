@@ -487,6 +487,24 @@ namespace Palette
             mirrorTop = juce::Colour (0xff1d4ed8);  // 蒼海サファイア＆シャンデリア鏡面
             mirrorBot = juce::Colour (0xff050e29);
         }
+        else if (mode == 19)    // 🕰️ 初代 v1.0.0 クリーム・フラット (v1.0.0_ui.png 完全再現パレット)
+        {
+            bgTop    = juce::Colour (0xfffaf8f2);
+            bgBot    = juce::Colour (0xfff5f1e6);
+            panel    = juce::Colour (0xfffffefa);
+            panel2   = juce::Colour (0xfff3efe4);
+            panelLn  = juce::Colour (0xffddd6c7);
+            ink      = juce::Colour (0xff263b54);
+            inkSoft  = juce::Colour (0xff5a6d82);
+            yellow   = juce::Colour (0xffdac438);
+            yellowDk = juce::Colour (0xffb8a224);
+            green    = juce::Colour (0xff62a888);
+            salmon   = juce::Colour (0xffee8b72);
+            blue     = juce::Colour (0xff4a709c);
+            ice      = juce::Colour (0xffdac438);
+            track    = juce::Colour (0xffe3dfd3);
+            badge    = juce::Colour (0xfffffefa);
+        }
         else
         {
             bgTop    = juce::Colour (0xff111719);
@@ -507,13 +525,13 @@ namespace Palette
         }
     }
 
-    // ★ ユニバーサル・アクセシビリティ配慮パレット上書き:
-    //   1 = 👓 老眼・くっきり大文字 (WCAG AAA 12:1 超高コントラスト・漆黒マット下地・純白＆黄金文字)
-    //   2 = 🧭 ADHD 集中・3ステップ (視覚ノイズを抑えたディープスレート下地・明確な3色ステップ配色)
-    //   3 = 🌿 ASD・感覚過敏 低刺激 (眩しさ・発光・高彩度を排したウォームスレート＆セージグリーン配色)
+    // ★ 表示スタイル別パレット上書き:
+    //   1 = ◉ くっきり大文字 (WCAG AAA 12:1 超高コントラスト・漆黒マット下地・純白＆黄金文字)
+    //   2 = ★ かんたん3ステップ (視覚ノイズを抑えたディープスレート下地・明確な3色ステップ配色)
+    //   3 = ● マット・具体表記 (眩しさ・発光・高彩度を排したウォームスレート＆セージグリーン配色)
     inline void applyAccessOverride (int accessMode) noexcept
     {
-        if (accessMode == 1)        // 👓 老眼・くっきり大文字モード (WCAG AAA High-Clarity)
+        if (accessMode == 1)        // ◉ くっきり大文字スタイル (WCAG AAA High-Clarity)
         {
             bgTop     = juce::Colour (0xff070b10);
             bgBot     = juce::Colour (0xff05080c);
@@ -536,29 +554,11 @@ namespace Palette
             mirrorTop = juce::Colour (0xff1a2b45);
             mirrorBot = juce::Colour (0xff080d16);
         }
-        else if (accessMode == 2)   // 🧭 ADHD 集中・迷わない3ステップモード
+        else if (accessMode == 2)   // ★ かんたん3ステップスタイル (選択中のテーマ配色・世界観デザインをそのまま活かす)
         {
-            bgTop     = juce::Colour (0xff0d1522);
-            bgBot     = juce::Colour (0xff090e18);
-            panel     = juce::Colour (0xff141f30);
-            panel2    = juce::Colour (0xff1d2c42);
-            panelLn   = juce::Colour (0xff4e688a);
-            ink       = juce::Colour (0xfff8fafc);
-            inkSoft   = juce::Colour (0xffcbd5e1);
-            green     = juce::Colour (0xff34d399);
-            blue      = juce::Colour (0xff60a5fa);
-            yellow    = juce::Colour (0xfffbbf24);
-            yellowDk  = juce::Colour (0xffd97706);
-            salmon    = juce::Colour (0xfff87171);
-            ice       = juce::Colour (0xff38bdf8);
-            track     = juce::Colour (0xff263750);
-            metalHi   = juce::Colour (0xffe2e8f0);
-            metalMid  = juce::Colour (0xff94a3b8);
-            metalDark = juce::Colour (0xff475569);
-            mirrorTop = juce::Colour (0xff1e3a5f);
-            mirrorBot = juce::Colour (0xff0d1624);
+            // テーマ本来のパレット(Palette::applyTheme)を100%維持し、上書きしない
         }
-        else if (accessMode == 3)   // 🌿 ASD・感覚過敏 やさしい低刺激モード (Zero-Glare Matte Sage & Slate)
+        else if (accessMode == 3)   // ● マット・具体表記スタイル (Zero-Glare Matte Sage & Slate)
         {
             bgTop     = juce::Colour (0xff1c2226);
             bgBot     = juce::Colour (0xff171c20);
@@ -836,7 +836,7 @@ public:
 
     juce::Typeface::Ptr getTypefaceForFont (const juce::Font& f) override
     {
-        if (s_useKawaii && s_kawaiiFace != nullptr && s_accessMode == 0)
+        if (s_useKawaii && s_kawaiiFace != nullptr && (s_accessMode == 0 || s_accessMode == 2))
             return s_kawaiiFace;
         return juce::LookAndFeel_V4::getTypefaceForFont (f);
     }
@@ -847,7 +847,7 @@ public:
     static juce::Font uiFont (float height, bool bold)
     {
         FontProbe::note (height);
-        if (s_useKawaii && s_kawaiiFace != nullptr && s_accessMode == 0)
+        if (s_useKawaii && s_kawaiiFace != nullptr && (s_accessMode == 0 || s_accessMode == 2))
             return juce::Font (s_kawaiiFace).withHeight (height);  // rounded font (single weight)
 
         juce::FontOptions o;
@@ -884,10 +884,30 @@ public:
     }
 
     static constexpr float kFitMinPx = 12.0f;
+    static int stringWidth (const juce::Font& f, const juce::String& t)
+    {
+        if (t.isEmpty()) return 0;
+        struct WidthCacheEntry
+        {
+            juce::int64 hash { 0 };
+            int hKey { 0 };
+            int width { 0 };
+        };
+        static WidthCacheEntry s_cache[1024];
+        const juce::int64 h64 = t.hashCode64();
+        const int hKey = juce::roundToInt (f.getHeight() * 20.0f) ^ (f.getStyleFlags() << 16) ^ (s_useKawaii ? 0x400000 : 0);
+        const size_t slot = (size_t) ((juce::uint64) (h64 ^ hKey) & 1023u);
+        if (s_cache[slot].hash == h64 && s_cache[slot].hKey == hKey && s_cache[slot].width > 0)
+            return s_cache[slot].width;
+        const int need = juce::GlyphArrangement::getStringWidthInt (f, t);
+        s_cache[slot] = { h64, hKey, need };
+        return need;
+    }
+
     static juce::Font fitFont (juce::Font f, const juce::String& t, int w)
     {
         if (t.isEmpty() || w <= 0) return f;
-        const int need = juce::GlyphArrangement::getStringWidthInt (f, t);
+        const int need = stringWidth (f, t);
         if (need <= w) return f;
         const float shrunk = juce::jmax (kFitMinPx, f.getHeight() * (float) w / (float) need);
         FontProbe::note (shrunk);
@@ -1057,7 +1077,7 @@ public:
             if (s_knobStyle != 5 && area.getWidth() >= 36 && area.getHeight() >= 14)
             {
                 const auto rf = l.getLocalBounds().toFloat().reduced (1.5f, 0.8f);
-                const float rad = (s_accessMode > 0) ? 6.0f : (s_useKawaii ? rf.getHeight() * 0.48f : 5.5f);
+                const float rad = (s_accessMode == 1 || s_accessMode == 3) ? 6.0f : (s_useKawaii ? rf.getHeight() * 0.48f : 5.5f);
                 const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
                 const int group = (int) parentSlider->getProperties().getWithDefault ("signalGroup", 2);
                 const juce::Colour acc = ! parentSlider->isEnabled() ? Palette::inkSoft
@@ -1133,8 +1153,8 @@ public:
                     return;
                 }
 
-                // 標準 または ★ かんたん3ステップモード (3ステップ時は待機カプセルを減光して作動中だけに視線を集中させる)
-                const float adhdDim = (s_accessMode == 2 && ! isWorking) ? 0.38f : 1.0f;
+                // 標準 または ★ かんたん3ステップスタイル (3ステップ時は待機カプセルを減光して作動中だけに視線を集中させる)
+                const float stepDim = (s_accessMode == 2 && ! isWorking) ? 0.38f : 1.0f;
 
                 // 0. 効いているツマミのOLEDカプセル背面オーラ
                 if (isWorking)
@@ -1146,25 +1166,25 @@ public:
                 // 1. ディスプレイ深層キャビティ背景
                 if (lightPanel)
                 {
-                    g.setGradientFill (juce::ColourGradient (Palette::panel2.darker (0.04f).withAlpha (0.90f * adhdDim), rf.getX(), rf.getY(),
-                                                             Palette::panel.brighter (0.04f).withAlpha (0.94f * adhdDim), rf.getX(), rf.getBottom(), false));
+                    g.setGradientFill (juce::ColourGradient (Palette::panel2.darker (0.04f).withAlpha (0.90f * stepDim), rf.getX(), rf.getY(),
+                                                             Palette::panel.brighter (0.04f).withAlpha (0.94f * stepDim), rf.getX(), rf.getBottom(), false));
                 }
                 else
                 {
-                    g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (isWorking ? 0.38f : 0.55f).withAlpha (0.90f * adhdDim), rf.getX(), rf.getY(),
-                                                             Palette::panel2.darker (isWorking ? 0.16f : 0.32f).withAlpha (0.92f * adhdDim), rf.getX(), rf.getBottom(), false));
+                    g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (isWorking ? 0.38f : 0.55f).withAlpha (0.90f * stepDim), rf.getX(), rf.getY(),
+                                                             Palette::panel2.darker (isWorking ? 0.16f : 0.32f).withAlpha (0.92f * stepDim), rf.getX(), rf.getBottom(), false));
                 }
                 g.fillRoundedRectangle (rf, rad);
 
                 // 2. 上部ガラス反射マイクロハイライト
-                g.setColour (juce::Colours::white.withAlpha ((lightPanel ? 0.55f : (isWorking ? 0.22f : 0.08f)) * adhdDim));
+                g.setColour (juce::Colours::white.withAlpha ((lightPanel ? 0.55f : (isWorking ? 0.22f : 0.08f)) * stepDim));
                 g.drawHorizontalLine (juce::roundToInt (rf.getY() + 1.0f), rf.getX() + rad, rf.getRight() - rad);
 
                 // 3. 下辺のライブ・オプティカル進捗ライトパイプバー (効いている時のみ鮮やかに発光)
                 const float barMaxW = juce::jmax (8.0f, rf.getWidth() - 10.0f);
                 const float barX    = rf.getX() + 5.0f;
                 const float barY    = rf.getBottom() - 2.6f;
-                g.setColour (Palette::track.withAlpha (0.45f * adhdDim));
+                g.setColour (Palette::track.withAlpha (0.45f * stepDim));
                 g.fillRoundedRectangle (barX, barY, barMaxW, 1.6f, 0.8f);
                 if (isWorking && prop > 0.01f)
                 {
@@ -1190,8 +1210,8 @@ public:
 
                 // 5. 精密ベゼルリム（効いているツマミは発光リム、待機中ツマミは静かなダークリム）
                 g.setColour (isWorking ? effCol.withAlpha (0.85f)
-                           : s_knobStyle == 6 ? Palette::metalMid.withAlpha (0.32f * adhdDim)
-                                              : Palette::panelLn.withAlpha (0.38f * adhdDim));
+                           : s_knobStyle == 6 ? Palette::metalMid.withAlpha (0.32f * stepDim)
+                                              : Palette::panelLn.withAlpha (0.38f * stepDim));
                 g.drawRoundedRectangle (rf.reduced (0.4f), rad, isWorking ? 1.35f : 0.85f);
             }
         }
@@ -1214,9 +1234,12 @@ public:
         }
         g.setColour (textCol.withMultipliedAlpha (textAlpha));
         g.setFont (f);
-        g.drawFittedText (l.getText(), textArea.withTrimmedBottom (1), l.getJustificationType(),
-                          juce::jmax (1, (int) ((float) textArea.getHeight() / f.getHeight())),
-                          l.getMinimumHorizontalScale());
+        const int maxLines = juce::jmax (1, (int) ((float) textArea.getHeight() / f.getHeight()));
+        if (maxLines <= 1)
+            g.drawText (l.getText(), textArea.withTrimmedBottom (1), l.getJustificationType(), false);
+        else
+            g.drawFittedText (l.getText(), textArea.withTrimmedBottom (1), l.getJustificationType(),
+                              maxLines, l.getMinimumHorizontalScale());
     }
 
     juce::Font getTextButtonFont (juce::TextButton& b, int h) override
@@ -1303,7 +1326,7 @@ public:
     void drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                            float pos, float startAngle, float endAngle, juce::Slider& sl) override
     {
-        if (s_knobStyle == 1 && s_accessMode == 0)   // yuru-kawa: draw a juice glass (fill = value)
+        if (s_knobStyle == 1 && (s_accessMode == 0 || s_accessMode == 2))   // yuru-kawa: draw a juice glass (fill = value)
         {
             drawJuiceKnob (g, juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height),
                            pos, (int) sl.getProperties().getWithDefault ("juice", 0),
@@ -1331,15 +1354,16 @@ public:
                                              : groupAccent.interpolatedWith (Palette::inkSoft, 0.52f).withAlpha (0.58f);
 
         // =========================================================================
-        // ★ ユニバーサル・アクセシビリティ専用ロータリーダイヤル描画 (s_accessMode == 1, 2, 3)
+        // ★ 表示スタイル専用ロータリーダイヤル描画 (s_accessMode == 1, 3)
+        //    (s_accessMode == 2「★かんたん3ステップ」は選択中テーマ本来のデザイン描画へ進む)
         // =========================================================================
-        if (s_accessMode == 1)  // 👓 老眼・くっきり大文字モード (WCAG AAA 12:1・極太8目盛り・巨大白金ポインター針)
+        if (s_accessMode == 1)  // ◉ くっきり大文字スタイル (WCAG AAA 12:1・極太8目盛り・巨大白金ポインター針)
         {
             const float thickRing = ring * 1.38f;
             const juce::Colour hiCol = isWorking ? (effDir < 0 ? Palette::green : (group == 1 ? Palette::blue : Palette::yellow))
                                                  : Palette::panelLn.withAlpha (0.55f);
 
-            // 1. 外周8分割の極太・高コントラスト目盛り（32本の細かい目盛りを廃止し、老眼でも一目で位置がわかる大目盛り）
+            // 1. 外周8分割の極太・高コントラスト目盛り（32本の細かい目盛りを廃止し、一目で位置がわかる大目盛り）
             for (int tick = 0; tick <= 8; ++tick)
             {
                 const float tNorm = (float) tick / 8.0f;
@@ -1398,59 +1422,7 @@ public:
             }
             return;
         }
-        else if (s_accessMode == 2) // 🧭 ADHD 集中・迷わない3ステップモード (非稼働ノブは静かに減光、稼働ノブと主役ノブだけくっきり表示)
-        {
-            const float focusAlpha = isWorking ? 1.0f : (isHero ? 0.55f : 0.25f);
-            if (isWorking)
-            {
-                const float coronaR = radius + (isHero ? 9.0f : 6.5f);
-                g.setGradientFill (juce::ColourGradient (groupAccent.withAlpha (0.24f), c.x, c.y,
-                                                         groupAccent.withAlpha (0.0f), c.x + coronaR, c.y, true));
-                g.fillEllipse (c.x - coronaR, c.y - coronaR, coronaR * 2.0f, coronaR * 2.0f);
-            }
-            for (int tick = 0; tick <= 12; ++tick)
-            {
-                const float tNorm = (float) tick / 12.0f;
-                const float a = startAngle + (endAngle - startAngle) * tNorm;
-                const bool major = (tick % 3 == 0);
-                const bool passed = isWorking && (tNorm <= pos + 0.01f);
-                const float rIn  = radius + 3.5f;
-                const float rOut = radius + (major ? 9.0f : 6.0f);
-                g.setColour ((passed ? groupAccent : Palette::inkSoft).withAlpha ((passed ? 0.95f : (major ? 0.45f : 0.20f)) * focusAlpha));
-                g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
-                            c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), major ? 2.2f : 1.3f);
-            }
-            juce::Path track;
-            track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
-            g.setColour (Palette::track.withAlpha (focusAlpha));
-            g.strokePath (track, juce::PathStrokeType (ring * 1.15f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-            if (isWorking)
-            {
-                juce::Path valArc;
-                valArc.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
-                g.setColour (groupAccent);
-                g.strokePath (valArc, juce::PathStrokeType (ring * 1.20f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-            }
-
-            const float kr = radius - ring - 3.2f;
-            if (kr >= 6.0f)
-            {
-                g.setColour (Palette::panel2.darker (isWorking ? 0.10f : 0.45f).withAlpha (focusAlpha));
-                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
-                g.setColour ((isWorking ? groupAccent : Palette::panelLn).withAlpha (focusAlpha));
-                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 2.2f : 1.4f);
-
-                const float sinA = std::sin (angle), cosA = std::cos (angle);
-                g.setColour ((isWorking ? juce::Colours::white : Palette::inkSoft).withAlpha (focusAlpha));
-                g.drawLine (c.x + kr * 0.20f * sinA, c.y - kr * 0.20f * cosA,
-                            c.x + kr * 0.85f * sinA, c.y - kr * 0.85f * cosA, isHero ? 3.8f : 3.0f);
-                g.setColour (groupAccent.withAlpha (focusAlpha));
-                g.fillEllipse (c.x - 3.5f, c.y - 3.5f, 7.0f, 7.0f);
-            }
-            return;
-        }
-        else if (s_accessMode == 3) // 🌿 ASD・感覚過敏 やさしい低刺激モード (発光ゼロ・反射ゼロ・グラデーションゼロの完全マット設計)
+        else if (s_accessMode == 3) // ● マット・具体表記スタイル (発光ゼロ・反射ゼロ・グラデーションゼロの完全マット設計)
         {
             for (int tick = 0; tick <= 8; ++tick)
             {
@@ -2647,8 +2619,7 @@ public:
     //  文字サイズを上げたときに「Ba…」「トー…」と省略されるのを、**寸法の側**で断つ。
     int buttonWidthFor (juce::TextButton& b, int h, int extraPad = 26)
     {
-        const int textW = juce::GlyphArrangement::getStringWidthInt (getTextButtonFont (b, h),
-                                                                    b.getButtonText());
+        const int textW = stringWidth (getTextButtonFont (b, h), b.getButtonText());
         return textW + extraPad + (b.getClickingTogglesState() ? (int) kLampBox + 4 : 0);
     }
 
@@ -2701,7 +2672,7 @@ private:
     static std::atomic<int>    s_instances;    // v2.3.0: 最後の1つが消えたらフォントを手放す
     static bool s_useKawaii;
     static int  s_knobStyle;                   // 0=standard, 1=juice, 2=liver, 3=studio, 4=neon
-    inline static int s_accessMode = 0;        // 0=標準, 1=👓老眼・大文字, 2=🧭ADHD集中, 3=🌿ASD低刺激
+    inline static int s_accessMode = 0;        // 0=標準デザイン, 1=◉くっきり大文字, 2=★かんたん3ステップ, 3=●マット・具体表記
     static float s_juicePhase;                 // juice bubble/wobble animation phase
 };
 
@@ -2864,13 +2835,17 @@ public:
     bool isLiteMode() const noexcept { return liteMode; }
 
     // ---- v1.4.0 F6-style editing: drag manual bands on the graph ----
-    // (freq = horizontal, depth = vertical, mouse wheel = Q width)
+    // (freq = horizontal, depth = vertical, mouse wheel / double-tap = Q width)
     void mouseDown  (const juce::MouseEvent&) override;
     void mouseDrag  (const juce::MouseEvent&) override;
     void mouseUp    (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseMove  (const juce::MouseEvent&) override;
     void mouseExit  (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    int  getDraggingBand() const noexcept { return dragBand; }
+    int  hitTestBandPublic (juce::Point<float> p) const { return hitTestBand (p); }
+    juce::Point<float> getBandNodePosPublic (int b) const { return bandNodePos (b); }
 
     // log freq <-> x, dB <-> y helpers (public so bands can reuse them later)
     float freqToX (float hz) const
@@ -2901,7 +2876,10 @@ private:
     bool manualEditActive() const;                    // seq_on && manual mode
     int  hitTestBand (juce::Point<float>) const;      // node under the mouse, or -1
     juce::Point<float> bandNodePos (int b) const;     // node = (freq, -depth)
+    void cycleBandQ (int b);                          // touch double-tap Q width cycle (1.4 -> 3.0 -> 6.0)
     int dragBand { -1 }, hoverBand { -1 };
+    juce::uint32 lastEqTapMs { 0 };
+    juce::Point<float> lastEqTapPos;
     bool liteMode { false };
 
     VocalGzzioProcessor& proc;
@@ -2919,25 +2897,150 @@ private:
 };
 
 //==============================================================================
-// Slider whose value box opens for typing on a single click (the knob face
-// still drags normally). Makes every parameter directly type-editable.
+// ★ 指が太い人・タブレットPCタッチ操作対応スライダー (ClickToEditSlider):
+//   1. 下から太い指でツマミを掴んだ際、指の腹が下部数値カプセル (textBoxArea) に重なっても
+//      文字入力ボックス＆スクリーンキーボードが誤爆ポップアップせず、そのまま滑らかにドラッグ回転できる！
+//   2. ドラッグせずに下部数値カプセルの「左端30%」をタップすると -1ステップ微調整、
+//      「右端30%」をタップすると +1ステップ微調整、「中央40%」の静止クリック時のみ数値手入力を開く。
+//   3. 指離し時のロール・ドリフト補正 (Touch Lift-Off Stabilization):
+//      画面から太い指を離す直前(22〜85ms)の非対称な指腹ロールによる微小な値ズレを自動補正。
+//   4. 太い指の2タップ許容 (Fat-Finger Double-Tap):
+//      1回目と2回目のタップ位置が最大28px離れていても（380ms以内）確実に初期値リセットが発動！
 class ClickToEditSlider : public juce::Slider
 {
 public:
     ClickToEditSlider() = default;
 
+    std::function<void()> onSelect;
+
+    void setTextBoxStyle (TextEntryBoxPosition newPosition, bool isReadOnly,
+                          int textEntryBoxWidth, int textEntryBoxHeight)
+    {
+        if (getTextBoxPosition() == newPosition
+            && (! isTextBoxEditable()) == isReadOnly
+            && getTextBoxWidth() == textEntryBoxWidth
+            && getTextBoxHeight() == textEntryBoxHeight)
+            return;
+        juce::Slider::setTextBoxStyle (newPosition, isReadOnly, textEntryBoxWidth, textEntryBoxHeight);
+    }
+
+    void stepByFineIncrement (int dir)
+    {
+        const double span = getMaximum() - getMinimum();
+        double step = 1.0;
+        if (span >= 1000.0)      step = 25.0;  // 周波数 (120..8000 Hz)
+        else if (span >= 180.0)  step = 5.0;   // LowCut (20..250 Hz), Delay ms, BPM
+        else if (span <= 36.0)   step = 0.5;   // dB ノブ (-12..+12 dB, -18..+18 dB, -6..+6 dB 等)
+        else                     step = 2.0;   // % ノブ (0..100%) / ゲート (-80..-20 dB)
+        const double nextVal = juce::jlimit (getMinimum(), getMaximum(), getValue() + (double) dir * step);
+        setValue (nextVal, juce::sendNotificationSync);
+        if (onSelect) onSelect();
+    }
+
     void mouseDown (const juce::MouseEvent& e) override
     {
-        // If the click lands in the text-box strip at the bottom, edit it.
-        if (getTextBoxPosition() != juce::Slider::NoTextBox && textBoxArea().contains (e.getPosition()))
+        if (onSelect) onSelect();
+
+        const juce::uint32 nowMs = juce::Time::getMillisecondCounter();
+        // 太い指のダブルタップ初期値リセット（最大28pxの座標ズレまで許容）
+        if (isDoubleClickReturnEnabled()
+            && lastTapMs > 0
+            && (nowMs - lastTapMs) <= 380
+            && e.getPosition().getDistanceFrom (lastTapPos) <= 28)
         {
-            showTextBox();
+            lastTapMs = 0;
+            setValue (getDoubleClickReturnValue(), juce::sendNotificationSync);
             return;
         }
+
+        downInTextBox = (getTextBoxPosition() != juce::Slider::NoTextBox
+                         && textBoxArea().contains (e.getPosition()));
+        downTimeMs    = nowMs;
+        draggedFar    = false;
+        histCount     = 0;
+        histHead      = 0;
+        pushHistory (nowMs, getValue());
+
+        // ★ mouseDown 時点では showTextBox() を呼ばず、常に Slider::mouseDown へ渡すことで
+        //    太い指が下部数値カプセルにかかった状態からのドラッグ回転を100%保証する！
         juce::Slider::mouseDown (e);
     }
 
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (e.getDistanceFromDragStart() >= 4)
+            draggedFar = true;
+        juce::Slider::mouseDrag (e);
+        pushHistory (juce::Time::getMillisecondCounter(), getValue());
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        const juce::uint32 nowMs = juce::Time::getMillisecondCounter();
+
+        // ★ 指離し時のロール・ドリフト補正 (Touch Lift-Off Stabilization)
+        if (draggedFar && (nowMs - downTimeMs) >= 160 && histCount >= 2)
+        {
+            const double curVal = getValue();
+            const double span   = juce::jmax (0.001, getMaximum() - getMinimum());
+            for (int i = 0; i < histCount; ++i)
+            {
+                const auto& h = hist[(size_t) ((histHead - 1 - i + kHistCap) % kHistCap)];
+                const juce::uint32 age = nowMs - h.ms;
+                if (age >= 22 && age <= 85)
+                {
+                    const double diff = std::abs (curVal - h.val);
+                    if (diff > 0.0 && diff <= span * 0.035)
+                        setValue (h.val, juce::sendNotificationSync);
+                    break;
+                }
+            }
+        }
+
+        juce::Slider::mouseUp (e);
+
+        // ドラッグせずに静止タップされた場合の処理
+        if (! draggedFar && e.getDistanceFromDragStart() < 4 && (nowMs - downTimeMs) <= 340)
+        {
+            lastTapMs  = nowMs;
+            lastTapPos = e.getPosition();
+
+            if (downInTextBox)
+            {
+                const auto tb    = textBoxArea();
+                const int  relX  = e.x - tb.getX();
+                const int  sideW = juce::jmax (14, tb.getWidth() * 30 / 100);
+                if (relX < sideW)
+                    stepByFineIncrement (-1);
+                else if (relX >= tb.getWidth() - sideW)
+                    stepByFineIncrement (+1);
+                else
+                    showTextBox();
+            }
+        }
+    }
+
+    juce::Rectangle<int> getTextBoxAreaPublic() const { return textBoxArea(); }
+
 private:
+    struct Sample { juce::uint32 ms { 0 }; double val { 0.0 }; };
+    static constexpr int kHistCap = 8;
+    Sample       hist[kHistCap];
+    int          histHead  { 0 };
+    int          histCount { 0 };
+    bool         downInTextBox { false };
+    bool         draggedFar    { false };
+    juce::uint32 downTimeMs    { 0 };
+    juce::uint32 lastTapMs     { 0 };
+    juce::Point<int> lastTapPos;
+
+    void pushHistory (juce::uint32 ms, double val) noexcept
+    {
+        hist[(size_t) histHead] = { ms, val };
+        histHead = (histHead + 1) % kHistCap;
+        if (histCount < kHistCap) ++histCount;
+    }
+
     juce::Rectangle<int> textBoxArea() const
     {
         // Mirror the layout for each text-box position.
@@ -4661,6 +4764,9 @@ public:
             const float fy = r.getY() + r.getHeight() * (0.12f + 0.76f * hash01 (f * 37 + 29)) + std::cos (phase * 0.8f) * 10.0f;
             const float pulse = (0.45f + 0.55f * std::sin (phase * 1.8f)) * voiceBoost;
             const float fr = (5.0f + 9.0f * hash01 (f * 19 + 3)) * (0.8f + 0.35f * pulse);
+            if (! g.clipRegionIntersects (juce::Rectangle<int> ((int) (fx - fr * 2.5f), (int) (fy - fr * 2.5f),
+                                                                (int) (fr * 5.0f) + 2,  (int) (fr * 5.0f) + 2)))
+                continue;
             if (mode == 15)
             {
                 drawWaterDroplet (g, fx, fy, fr * 0.65f, Palette::ice, juce::jmin (0.85f, 0.45f * pulse));
@@ -5004,8 +5110,8 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModuleCard)
 };
 
-// 押している「間だけ」効く小さなボタン。TextButton の onClick は離したときに
-// 一度呼ばれるだけなので、押し下げと離しを別々に受け取れるようにする。
+// 押している「間だけ」効くボタン ＋ タブレットPC向けの「短タップ（チョン押し）ロック切替」。
+// Windows タブレットの指長押し（右クリック判定リング）でも途切れず、手放しでも原音比較できるようにする。
 class HoldButton : public juce::TextButton
 {
 public:
@@ -5013,22 +5119,80 @@ public:
     void mouseDown (const juce::MouseEvent& e) override
     {
         juce::TextButton::mouseDown (e);
-        held = true; if (onDown) onDown(); repaint();
+        downMs = juce::Time::getMillisecondCounter();
+        wasLatchedBeforeDown = latched;
+        if (! held)
+        {
+            held = true;
+            if (onDown) onDown();
+            repaint();
+        }
     }
     void mouseUp (const juce::MouseEvent& e) override
     {
         juce::TextButton::mouseUp (e);
+        const juce::uint32 elapsed = juce::Time::getMillisecondCounter() - downMs;
+        if (! wasLatchedBeforeDown && elapsed < 240 && getLocalBounds().expanded (12).contains (e.getPosition()))
+        {
+            latched = true;
+            setToggleState (true, juce::dontSendNotification);
+            repaint();
+            return;
+        }
+        latched = false;
+        setToggleState (false, juce::dontSendNotification);
         if (held) { held = false; if (onUp) onUp(); repaint(); }
     }
     // 押したままウィンドウの外へ出て離された場合の取りこぼしを防ぐ
     void focusLost (FocusChangeType t) override
     {
         juce::TextButton::focusLost (t);
-        if (held) { held = false; if (onUp) onUp(); repaint(); }
+        if (! latched && held) { held = false; if (onUp) onUp(); repaint(); }
     }
     bool isHeld() const noexcept { return held; }
+    bool isLatched() const noexcept { return latched; }
 private:
     bool held { false };
+    bool latched { false };
+    bool wasLatchedBeforeDown { false };
+    juce::uint32 downMs { 0 };
+};
+
+// タブレットPCやタッチ画面で「ツマミを動かさずに説明だけ読みたい」「ダブルタップで確実に初期値へ戻したい」
+// という操作をツマミ名ラベルへのタップ／ダブルタップで受け止める Label。
+class TouchHintLabel : public juce::Label
+{
+public:
+    std::function<void()> onTap;
+    std::function<void()> onDoubleTap;
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        juce::Label::mouseDown (e);
+        if (onTap) onTap();
+    }
+    void mouseDoubleClick (const juce::MouseEvent& e) override
+    {
+        juce::Label::mouseDoubleClick (e);
+        if (onDoubleTap) onDoubleTap();
+    }
+};
+
+// クリック時に標準のテキストメニューではなく、カーソルを合わせるだけで
+// 選ぶ前に詳しい説明と音作りレシピが見られる「プリセット・パレット」を開く ComboBox。
+class PresetPaletteComboBox : public juce::ComboBox
+{
+public:
+    std::function<void()> onShowPalette;
+    void showPopup() override
+    {
+        if (onShowPalette)
+        {
+            hidePopup();
+            onShowPalette();
+            return;
+        }
+        juce::ComboBox::showPopup();
+    }
 };
 
 class PathRail : public juce::Component
@@ -5147,7 +5311,7 @@ public:
     //   4 ライブ / 6 ジャニーズ → 1 へ   (v2.4.0)
     //   5 軽量                  → 0 へ   (v2.12.0)
     void setThemeMode (int m);
-    void setAccessMode (int m);                             // 0=標準, 1=👓老眼・大文字, 2=🧭ADHD集中, 3=🌿ASD低刺激
+    void setAccessMode (int m);                             // 0=標準デザイン, 1=◉くっきり大文字, 2=★かんたん3ステップ, 3=●マット・具体表記
     int  getAccessMode() const noexcept { return accessMode; }
     void refreshLanguage();                                 // v1.8.0: JP <-> EN re-label
     void forceSeason (int s);                               // test hook (GZ_SEASON)
@@ -5158,7 +5322,7 @@ public:
     bool liverTheme()     const { return Palette::isCoutureTheme (themeMode); }
     bool oceanStarTheme() const { return Palette::isOceanStarTheme (themeMode); }
     bool pastelTheme()    const { return themeMode == 1 || themeMode == 8 || liverTheme(); }
-    bool juiceTheme()     const { return ! liteMode && accessMode == 0 && (themeMode == 1 || themeMode == 8); }
+    bool juiceTheme()     const { return ! liteMode && (accessMode == 0 || accessMode == 2) && (themeMode == 1 || themeMode == 8); }
     bool nightTheme()     const { return themeMode == 8 || themeMode == 11 || oceanStarTheme(); }   // ゆるふわ・よる / ノワール・ロリータ / 星空・海・黄昏
     void  setAdvanced (bool a) { advancedMode = a; applyModeVisibility(); if (onUiStateChange) onUiStateChange ("ui_advanced", a ? 1 : 0); }
     VocalTuner& getTuner() { return tuner; }
@@ -5176,11 +5340,12 @@ public:
     void fitText (juce::Graphics& g, const juce::String& t, juce::Rectangle<int> r,
                   juce::Justification j, float h, bool bold) const
     {
+        if (! g.clipRegionIntersects (r)) return;
         auto f = cfont (h, bold);
         if (r.getHeight() > 0 && f.getHeight() > (float) r.getHeight() * 0.86f)
             f = f.withHeight (juce::jmax (14.0f, (float) r.getHeight() * 0.86f));
         g.setFont (GzzioLnF::fitFont (f, t, r.getWidth() - 2));
-        g.drawText (t, r, j);
+        g.drawText (t, r, j, false);
     }
 
     bool handleOverviewMouseDown (juce::Point<int> pt);
@@ -5190,8 +5355,38 @@ public:
     void applyArgonVoiceTarget (int idx);
     void syncArgonOrbFromParams() noexcept;
     juce::String overviewHelpAt (juce::Point<int> pt) const;
+    void openPresetPalette (int initialTab, juce::Rectangle<int> localAnchorBounds, bool keepOpenDefault = false);
+    juce::Rectangle<int> getFineTargetRect() const noexcept { return fineTargetRect; }
+    juce::Rectangle<int> getFineMinusRect()  const noexcept { return fineMinusRect; }
+    juce::Rectangle<int> getFinePlusRect()   const noexcept { return finePlusRect; }
+    juce::Rectangle<int> getFineResetRect()  const noexcept { return fineResetRect; }
+    EQGraph&             getEqGraph()        noexcept       { return eqGraph; }
+
+    // 🕰️ 歴代バージョン呼び出し（世代タイムマシン）カタログ — constexpr テーブルのため起動時ヒープ確保 0 バイト
+    struct LegacyVersionSpec
+    {
+        int         id;             // 0 = v5.0.0 最新, 1..12 = 歴代世代
+        int         era;            // 100..500 (DSP省負荷ゲート＆世代別UIレイアウト判定)
+        const char* verTag;         // "v5.0.0", "v1.0.0" 等
+        const char* titleJa;
+        const char* titleEn;
+        const char* descJa;
+        const char* descEn;
+        const char* previewPng;     // docs/assets/archive-ui/ 内の実機スクリーンショット名（ポップアップ表示時のみ1枚だけオンデマンド読込）
+        int         pageMode;       // 0=総合画面, 1=詳細画面
+        bool        advMode;        // true=こだわり詳細, false=かんたん1列
+        int         themeId;        // Palette::applyTheme の番号 (19=初代クリーム, 0=ダーク/Argon, 5=クチュール, 9=スタジオ, 14=星雲 等)
+        int         ovLayout;       // overviewLayoutMode (0..3)
+        int         knobStyle;      // GzzioLnF::s_knobStyle
+    };
+    static constexpr int kLegacyVersionCount = 13;
+    static const LegacyVersionSpec& getLegacyVersionSpec (int id) noexcept;
+    void applyLegacyVersion (int versionId, bool keepEcoGate = true);
+    void openLegacyVersionPopup (juce::Rectangle<int> anchorScreenBounds);
 
 private:
+    friend class PresetPalettePopup;
+    friend class LegacyVersionPopup;
     void initialiseOverview();
     void updateOverviewVisibility();
     void restoreOverviewVisibility();
@@ -5205,13 +5400,15 @@ private:
     void openStandaloneAudioSettings();
     void openStageStudioPopup (juce::Rectangle<int> anchorScreenBounds);
     void openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds);
+    void openPresetMatrixMenu (juce::Rectangle<int> anchorScreenBounds);
+    juce::Rectangle<int> detailVerBadgeRect; // 詳細・かんたん画面ヘッダの歴代バージョン切替バッジ領域
     bool overviewEnabled { true };
     int  overviewLayoutMode { 0 };     // 0=Argon Cockpit, 1=V-Liver Stage, 2=Studio Rack, 3=Classic
     bool overviewLayoutManual { false };
     bool liteMode { false };           // ⚡ 軽量モード (FFT・背景パーティクル・透過重なり休止 / 音声DSPは100%最高品質)
-    int  accessMode { 0 };             // ★ ユニバーサル配慮モード: 0=標準, 1=👓老眼・大文字, 2=🧭ADHD集中3ステップ, 3=🌿ASD・感覚過敏低刺激
+    int  accessMode { 0 };             // ★ 表示スタイル切替: 0=標準デザイン, 1=◉くっきり大文字, 2=★かんたん3ステップ, 3=●マット・具体表記
     std::array<juce::Rectangle<int>, 4> archPillRects;
-    std::array<juce::Rectangle<int>, 4> accessPillRects;    // ★ ユニバーサル配慮モード切替ピル (標準 / 👓老眼 / 🧭ADHD / 🌿ASD)
+    std::array<juce::Rectangle<int>, 4> accessPillRects;    // ★ 表示スタイル切替ピル (標準 / ◉大文字 / ★3ステップ / ●マット)
     std::array<juce::Rectangle<int>, 5> coutureSwatchRects;   // 💄 クチュール・コスメ / 🌌 星空・海 5色ワンタッチ切替ピル
     int  lastCoutureTheme { 5 };                              // 最後に選んだクチュール・カラーバリエーション
     int  lastOceanStarTheme { 14 };                           // 最後に選んだ星空・海・黄昏カラーバリエーション
@@ -5224,16 +5421,27 @@ private:
     juce::Rectangle<int> loopPillRect;    // 🔄 5秒録って手放し聴き比べ「試聴ルーパー」ピル
     juce::Rectangle<int> coughPillRect;   // 😷 咳払い・くしゃみ瞬間ミュート（8ms無音フェード・残響鳴り残り防止）ピル
     juce::Rectangle<int> stagePillRect;   // 🎵 BGMプレイヤー・1クリックWAV録音・30秒さかのぼり保存・声質ターゲット診断ピル
+    juce::Rectangle<int> chorusPillRect;  // 🔥 v5.0: サビ1クリック華やか演出 (Chorus Boost) ピル
+    std::array<juce::Rectangle<int>, 4> liveSeRects; // 👏 v5.0: 歌枠・VC盛り上げ 4種ライブSEポン出しパッド (拍手/キラキラ/ドラム/チャイム)
+    juce::Rectangle<int> fineTargetRect;  // 🎯 指が太い人・タッチ対応：現在選択中のツマミ名＆数値表示ピル（タップで次のツマミへ順送り）
+    juce::Rectangle<int> fineMinusRect;   // ➖ 指が太い人・タッチ対応：選択中ツマミを1ステップ下げる大型ボタン
+    juce::Rectangle<int> finePlusRect;    // ➕ 指が太い人・タッチ対応：選択中ツマミを1ステップ上げる大型ボタン
+    juce::Rectangle<int> fineResetRect;   // ↺ 指が太い人・タッチ対応：選択中ツマミを1タップで初期値へ戻す大型ボタン
     juce::Rectangle<int> irOverviewRect;  // 🌊 IR残響 音響減衰カーブ表示＆外部IR(.wav/.aiff)ローダーカプセル
     juce::Rectangle<int> argonPadRect;
+    juce::Rectangle<int> argonResetRect;  // ↺ タブレット・タッチ向け 2Dオーブ＆4軸バー 1タップ0%リセットピル
     std::array<juce::Rectangle<int>, 4> argonBarRects;
     std::array<juce::Rectangle<int>, 4> argonTargetRects;
     juce::Rectangle<int> levelBadgeRect;
     float argonOrbX { 0.46f }, argonOrbY { 0.36f };
     int   argonDragging { -1 };
     int   argonActiveTarget { -1 };
+    juce::Point<int> argonDragStartPt;
+    int   argonBarStepZone { 0 };
     std::vector<std::pair<juce::Component::SafePointer<juce::Component>, bool>> overviewOldVisibility;
-    juce::ComboBox finishPresetBox;
+    PresetPaletteComboBox finishPresetBox;
+    juce::uint32 lastPaletteOpenMs { 0 };
+    int lastPaletteTab { -1 };
     juce::TextButton overviewDetails, overviewReturn, overviewPitch, overviewOutputTrim;
     HoldButton overviewCompare;
     juce::TextButton reverbPower;
@@ -5248,9 +5456,11 @@ private:
     struct Knob
     {
         ClickToEditSlider slider;
-        juce::Label       label;
+        TouchHintLabel    label;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attach;
     };
+    Knob* activeDragKnob  { nullptr };
+    Knob* lastTouchedKnob { nullptr };
 
     void timerCallback() override;   // learn-button state refresh
     void addKnob (Knob& k, const juce::String& paramID, const juce::String& text,
@@ -5305,6 +5515,7 @@ private:
     VocalGzzioProcessor& processor;
     juce::Image          mascot;
     int                  themeMode { 0 };
+    bool                 themeInitialised { false };
     // v2.11.0: ゆるふわチップを押したとき、ひる(1)とよる(8)のどちらへ戻すか。
     // 一度よるにした人が別テーマを経由して戻ってきても、よるのままで戻れる。
     bool                 yuruNight { false };
@@ -5330,8 +5541,8 @@ private:
          seqF1K, seqD1K, seqF2K, seqD2K, seqF3K, seqD3K; // Smart EQ manual (3 bands)
 
     // Preset system: voice type x mic model x scene, all combinable
-    juce::ComboBox voiceBox, micBox;
-    juce::ComboBox eqPresetBox;                            // famous vocal EQ recipes
+    PresetPaletteComboBox voiceBox, micBox;
+    PresetPaletteComboBox eqPresetBox;                     // famous vocal EQ recipes
     juce::String   infoText;                               // preset description shown under the graph
     juce::TextButton sceneSolo, sceneTalk, sceneBand { juce::String::fromUTF8 ("バンド") };
     juce::TextButton tuningPopBtn { juce::String::fromUTF8 ("チューナー") };
@@ -5464,7 +5675,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> atKeyAttach, atScaleAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>   atAmountAttach, atSpeedAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> ornAttach;   // v2.7.0
-    juce::ComboBox revTypeBox, dlySyncBox, megaTypeBox, charBox;
+    juce::ComboBox revTypeBox, dlySyncBox, megaTypeBox;
+    PresetPaletteComboBox charBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>
         revTypeAttach, dlySyncAttach, megaTypeAttach;
     juce::TextButton tapButton { "TAP" };
@@ -5570,7 +5782,7 @@ public:
     //  合わせて拡大縮小される（content.setBounds(0,0,baseW,baseH) + Transform）。
     //  v3.0-c: 左に「音のとおり道」の列(約212px)＋間隔10pxが増えたぶん横を広げ、
     //  カード8枚がスクロールなしで収まるぶん縦を足した。**既存の3列は1pxも
-    //  狭めていない**（狭めればツマミが小さくなる＝老眼への指摘に逆行する）。
+    //  狭めていない**（狭めればツマミが小さくなり視認性が下がるため）。
     static constexpr int baseW = 1582;  // v1.8.3: +80 → v3.0-c: +222(とおり道の列)
     static constexpr int baseH = 892;   // v1.8.3: +24 → v3.0-c: +34(カード8枚)
 

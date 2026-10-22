@@ -386,11 +386,17 @@ public:
     static constexpr int kCustomSlotA = kNumRooms;
     static constexpr int kCustomSlotB = kNumRooms + 1;
 
-    // 全部屋ぶんのスペクトルを prepare で作り置き。実行時の切替は瞬間・確保ゼロ。
-    void prepare (double sampleRate, int /*maxBlock*/)
+    // 全部屋ぶんのスペクトルを prepare で作り置き（または lazyRooms=true で遅延構築）。
+    // 事前確保は prepare で済ませるため、実行時の切替・オンデマンド生成はヒープ確保ゼロ。
+    void prepare (double sampleRate, int /*maxBlock*/, bool lazyRooms = false)
     {
         if (std::abs (sampleRate - sr) < 0.5 && ! roomData.empty())
-        {   reset(); return; }            // 同じレートなら作り直さない
+        {
+            if (! lazyRooms)
+                for (int r = 0; r < kNumRooms; ++r) ensureRoomBuilt (r);
+            reset();
+            return;
+        }
 
         sr = sampleRate;
         fadeCoef = (float) (1.0 - std::pow (1.0 - 0.0035, 48000.0 / sr));
@@ -399,14 +405,33 @@ public:
 
         roomData.clear();
         roomData.resize (kNumRooms + 2);
+        roomBuilt.fill (false);
         maxParts = std::max (1, ((int) std::lround (3.0 * sr) - B + B - 1) / B);
 
-        GeneratedIr ir;
+        int maxIrLen = 256;
         for (int room = 0; room < kNumRooms; ++room)
         {
-            generateRoomIr (room, sr, ir);
-            buildRoomSlot (roomData[(size_t) room], ir.L.data(), ir.R.data(), ir.lengthSamples);
-            maxParts = std::max (maxParts, roomData[(size_t) room].numParts);
+            const int nRoom = std::max (256, (int) std::lround (rooms()[(size_t) room].tailSec * sr));
+            maxIrLen = std::max (maxIrLen, nRoom);
+            const int npRoom = std::max (1, ( std::max (0, nRoom - B) + B - 1 ) / B);
+            maxParts = std::max (maxParts, npRoom);
+            RoomData& rd = roomData[(size_t) room];
+            rd.headRevL.assign ((size_t) B, 0.0f);
+            rd.headRevR.assign ((size_t) B, 0.0f);
+            rd.numParts = npRoom;
+            rd.spec.assign ((size_t) npRoom * NBINS * 4, 0.0f);
+        }
+
+        // オンデマンド構築用の作業バッファも prepare で一括確保（動的生成時のヒープ確保をゼロにする）
+        lazyIr.L.assign ((size_t) maxIrLen, 0.0f);
+        lazyIr.R.assign ((size_t) maxIrLen, 0.0f);
+        lazyPartRe.assign ((size_t) NFFT, 0.0f);
+        lazyPartIm.assign ((size_t) NFFT, 0.0f);
+
+        if (! lazyRooms)
+        {
+            for (int room = 0; room < kNumRooms; ++room)
+                ensureRoomBuilt (room);
         }
 
         // カスタムIR用ダブルバッファ・スロットも事前確保（実行時の再確保を防ぐ）
@@ -472,6 +497,23 @@ public:
         curRoom = pendingRoom;
         fadeGain = 1.0f; fadeTarget = 1.0f;
         if (! partGain.empty()) updatePartGains (true);
+    }
+
+    /** 指定された部屋(0..5)のIRが未構築なら、その場で1部屋だけ遅延構築する。 */
+    void ensureRoomBuilt (int room)
+    {
+        if (roomData.empty() || sr <= 0.0) return;
+        const int rClamped = std::min (kNumRooms - 1, std::max (0, room));
+        if (roomBuilt[(size_t) rClamped]) return;
+        generateRoomIr (rClamped, sr, lazyIr);
+        buildRoomSlot (roomData[(size_t) rClamped], lazyIr.L.data(), lazyIr.R.data(), lazyIr.lengthSamples);
+        roomBuilt[(size_t) rClamped] = true;
+    }
+
+    bool isRoomBuilt (int room) const noexcept
+    {
+        const int rClamped = std::min (kNumRooms - 1, std::max (0, room));
+        return roomBuilt[(size_t) rClamped];
     }
 
     /** 部屋を選ぶ(0..5)。鳴っている最中でも安全（10msフェードで入れ替え）。 */
@@ -548,7 +590,7 @@ public:
     {
         if (dest == nullptr || nPoints <= 0) return;
         const int rClamped = std::min (kNumRooms - 1, std::max (0, room));
-        if (roomData.empty())
+        if (roomData.empty() || (! hasCustom && ! roomBuilt[(size_t) rClamped]))
         {
             const RoomSpec& sp = rooms()[(size_t) rClamped];
             const float rt = std::max (0.12f, 0.5f * (sp.rt60[2] + sp.rt60[3]) * (0.25f + 0.75f * sizeAmt));
@@ -595,6 +637,10 @@ public:
     void process (float* Lc, float* Rc, int n) noexcept
     {
         if (roomData.empty()) return;
+        if (curRoom >= 0 && curRoom < kNumRooms && ! roomBuilt[(size_t) curRoom])
+            ensureRoomBuilt (curRoom);
+        if (pendingRoom >= 0 && pendingRoom < kNumRooms && ! roomBuilt[(size_t) pendingRoom])
+            ensureRoomBuilt (pendingRoom);
 
         const RoomData* rd = &roomData[(size_t) curRoom];
         for (int i = 0; i < n; ++i)
@@ -693,8 +739,10 @@ private:
 
     void buildRoomSlot (RoomData& rd, const float* srcL, const float* srcR, int lengthSamples)
     {
-        rd.headRevL.assign ((size_t) B, 0.0f);
-        rd.headRevR.assign ((size_t) B, 0.0f);
+        if (rd.headRevL.size() < (size_t) B) rd.headRevL.assign ((size_t) B, 0.0f);
+        else std::fill (rd.headRevL.begin(), rd.headRevL.begin() + B, 0.0f);
+        if (rd.headRevR.size() < (size_t) B) rd.headRevR.assign ((size_t) B, 0.0f);
+        else std::fill (rd.headRevR.begin(), rd.headRevR.begin() + B, 0.0f);
         for (int n = 0; n < B && n < lengthSamples; ++n)
         {
             rd.headRevL[(size_t) (B - 1 - n)] = srcL[n];
@@ -711,27 +759,26 @@ private:
         else
             std::fill (rd.spec.begin(), rd.spec.begin() + (ptrdiff_t) needed, 0.0f);
 
-        std::vector<float> re ((size_t) NFFT, 0.0f), im ((size_t) NFFT, 0.0f);
-        Fft localFft;
-        localFft.prepare (FFT_ORDER);
+        if (lazyPartRe.size() < (size_t) NFFT) lazyPartRe.assign ((size_t) NFFT, 0.0f);
+        if (lazyPartIm.size() < (size_t) NFFT) lazyPartIm.assign ((size_t) NFFT, 0.0f);
         for (int p = 0; p < rd.numParts; ++p)
         {
             for (int chn = 0; chn < 2; ++chn)
             {
                 const float* src = (chn == 0 ? srcL : srcR);
-                std::fill (re.begin(), re.end(), 0.0f);
-                std::fill (im.begin(), im.end(), 0.0f);
+                std::fill (lazyPartRe.begin(), lazyPartRe.begin() + NFFT, 0.0f);
+                std::fill (lazyPartIm.begin(), lazyPartIm.begin() + NFFT, 0.0f);
                 for (int n = 0; n < B; ++n)
                 {
                     const int k = B + p * B + n;
-                    if (k < lengthSamples) re[(size_t) n] = src[k];
+                    if (k < lengthSamples) lazyPartRe[(size_t) n] = src[k];
                 }
-                localFft.run (re.data(), im.data(), false);
+                fft.run (lazyPartRe.data(), lazyPartIm.data(), false);
                 float* dst = rd.spec.data() + ((size_t) p * NBINS * 4) + (size_t) chn * NBINS * 2;
                 for (int k2 = 0; k2 < NBINS; ++k2)
                 {
-                    dst[(size_t) (2 * k2)]     = re[(size_t) k2];
-                    dst[(size_t) (2 * k2) + 1] = im[(size_t) k2];
+                    dst[(size_t) (2 * k2)]     = lazyPartRe[(size_t) k2];
+                    dst[(size_t) (2 * k2) + 1] = lazyPartIm[(size_t) k2];
                 }
             }
         }
@@ -858,6 +905,9 @@ private:
     double sr = 0.0;
     Fft fft;
     std::vector<RoomData> roomData;
+    std::array<bool, kNumRooms> roomBuilt {};
+    GeneratedIr lazyIr;
+    std::vector<float> lazyPartRe, lazyPartIm;
     int maxParts = 0;
     std::vector<float> savedCustomL, savedCustomR;
 

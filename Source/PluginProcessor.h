@@ -515,6 +515,53 @@ public:
     bool  getBgmToStream() const noexcept      { return bgmToStream.load (std::memory_order_relaxed); }
     void  setBgmToStream (bool b) noexcept     { bgmToStream.store (b, std::memory_order_relaxed); }
 
+    //== v5.0.0 柱①：伴奏ボーカル除去（1クリック原曲カラオケ化 — Mid/Side Spectral Center Canceller） ==
+    bool  getBgmVocalCancel() const noexcept   { return bgmVocalCancel.load (std::memory_order_relaxed); }
+    void  setBgmVocalCancel (bool b) noexcept  { bgmVocalCancel.store (b, std::memory_order_relaxed); }
+    void  toggleBgmVocalCancel() noexcept      { bgmVocalCancel.store (! getBgmVocalCancel(), std::memory_order_relaxed); }
+
+    //== v5.0.0 柱②：-14 LUFS 自動音圧マスタリング ＆ 完パケFullMix同時保存 ==
+    bool  getRecAutoMaster() const noexcept    { return recAutoMaster.load (std::memory_order_relaxed); }
+    void  setRecAutoMaster (bool b) noexcept   { recAutoMaster.store (b, std::memory_order_relaxed); }
+    void  toggleRecAutoMaster() noexcept       { recAutoMaster.store (! getRecAutoMaster(), std::memory_order_relaxed); }
+    float getLastMasterGainDb() const noexcept { return lastMasterGainDb.load (std::memory_order_relaxed); }
+
+    //== v5.0.0 柱③：歌枠・VC盛り上げ「4種ライブSEポン出しパッド（0:拍手歓声 / 1:キラキラ / 2:ドラムロール / 3:チャイム）」 ==
+    void  ensureLiveSeBuilt (int index);
+    void  triggerLiveSe (int index) noexcept
+    {
+        if (index < 0 || index >= 4) { stopLiveSe(); return; }
+        ensureLiveSeBuilt (index);
+        liveSeReadPos.store (0, std::memory_order_relaxed);
+        activeLiveSe.store (index, std::memory_order_release);
+    }
+    void  stopLiveSe() noexcept
+    {
+        activeLiveSe.store (-1, std::memory_order_release);
+        liveSeReadPos.store (0, std::memory_order_relaxed);
+    }
+    int   getActiveLiveSe() const noexcept     { return activeLiveSe.load (std::memory_order_acquire); }
+
+    //== v5.0.0 柱④：サビ1クリック華やか演出「サビ盛り上げモード（Chorus Boost）」 ==
+    bool  getChorusBoostMode() const noexcept  { return chorusBoostMode.load (std::memory_order_relaxed); }
+    void  setChorusBoostMode (bool b) noexcept { chorusBoostMode.store (b, std::memory_order_relaxed); }
+    void  toggleChorusBoostMode() noexcept     { chorusBoostMode.store (! getChorusBoostMode(), std::memory_order_relaxed); }
+
+    //== 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ==
+    // id: 0 = v5.0.0 最新版, 1..12 = 歴代メジャー世代（v1.0.0〜v4.9.0）
+    // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
+    //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0), 500(v5.0.0)
+    int   getLegacyVersionId() const noexcept  { return legacyVersionId.load (std::memory_order_relaxed); }
+    int   getLegacyVersionEra() const noexcept { return legacyVersionEra.load (std::memory_order_relaxed); }
+    void  setLegacyVersionState (int id, int era) noexcept
+    {
+        legacyVersionId.store (juce::jlimit (0, 12, id), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 500, era), std::memory_order_relaxed);
+        markStateDirty();
+    }
+    bool  getLegacyEcoGate() const noexcept    { return legacyEcoGate.load (std::memory_order_relaxed); }
+    void  setLegacyEcoGate (bool on) noexcept  { legacyEcoGate.store (on, std::memory_order_relaxed); markStateDirty(); }
+
     //== v4.8.0 柱②：🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（Wet+Dry同時24bit保存） ==
     bool  isWavRecording() const noexcept      { return wavRecording.load (std::memory_order_relaxed); }
     float getWavRecordingSec() const noexcept
@@ -686,6 +733,7 @@ public:
     float getArgonSilkMeter()   const noexcept { return meterArgonSilk.load (std::memory_order_relaxed); }
     float getArgonHaloMeter()   const noexcept { return meterArgonHalo.load (std::memory_order_relaxed); }
     float getArgonVoicedRatio() const noexcept { return meterArgonVoiced.load (std::memory_order_relaxed); }
+    juce::String getAutoVoiceProfileSummary (bool english) const;
 
     // v4.6.0 へや IRリバーブ: 減衰カーブ取得 & 外部カスタムIR読込
     bool loadCustomIrFile (const juce::File& file);
@@ -1034,6 +1082,8 @@ private:
     std::atomic<int>    autoSetupCountdown { 0 };
     std::atomic<int>    autoSetupResult    { -1 };
     std::atomic<float>  asBrightDb { 0.0f }, asSibPct { 0.0f };   // v2.12.0 実測の根拠
+    std::atomic<int>    asVoiceRegIdx  { 1 };                     // v5.0 声質重心 (0:High, 1:Mid, 2:LowMid, 3:Deep)
+    std::atomic<int>    asVoicePhonIdx { 1 };                     // v5.0 発声特性 (0:Whisper, 1:Natural, 2:Mix, 3:Belt, 4:Fast/Grit)
     std::atomic<int>    asMode { 0 };                 // 0 talk, 1 sing
     std::atomic<int>    asTotalLen { 1 };             // capture length in samples
     std::atomic<double> asSumSq { 0.0 };              // total energy -> overall RMS
@@ -1159,26 +1209,47 @@ private:
     float              bgmDuckGain        { 1.0f };
     std::atomic<float> meterBgmDuckDb     { 0.0f };
     std::atomic<bool>  bgmToStream        { true };
+    std::atomic<bool>  bgmVocalCancel     { false };
+    float              bgmVcLp160L        { 0.0f }, bgmVcLp160R  { 0.0f };
+    float              bgmVcLp8500L       { 0.0f }, bgmVcLp8500R { 0.0f };
     std::vector<float> bgmPitchRingL, bgmPitchRingR;
     int                bgmPitchRingW      { 0 };
     float              bgmPitchPhase      { 0.0f };
     juce::AudioBuffer<float> bgmBlockScratch;
 
     // ---- v4.8.0 柱②：🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（Wet+Dry同時24bit保存） ----
-    juce::AudioBuffer<float> retroDryBuf, retroWetBuf;
+    juce::AudioBuffer<float> retroDryBuf, retroWetBuf, retroBgmBuf;
     int                retroMaxSamples    { 1440000 };
     std::atomic<int>   retroWritePos      { 0 };
     std::atomic<int>   retroFilled        { 0 };
     std::atomic<bool>  retroFreeze        { false };
-    juce::AudioBuffer<float> wavRecDryBuf, wavRecWetBuf;
+    juce::AudioBuffer<float> wavRecDryBuf, wavRecWetBuf, wavRecBgmBuf;
     int                wavRecMaxSamples   { 5760000 }; // 最大120秒分を事前確保
     std::atomic<int>   wavRecPos          { 0 };
     std::atomic<bool>  wavRecording       { false };
+    std::atomic<bool>  recAutoMaster      { true };
+    std::atomic<float> lastMasterGainDb   { 0.0f };
     juce::String       lastSavedWavStatus;
     bool               writeDryWetWavPair (const juce::AudioBuffer<float>& drySrc,
                                            const juce::AudioBuffer<float>& wetSrc,
                                            int numFrames,
-                                           const juce::String& prefixTag);
+                                           const juce::String& prefixTag,
+                                           const juce::AudioBuffer<float>* bgmSrc = nullptr);
+
+    // ---- v5.0.0 柱③：4種ライブSEポン出しパッド（0:拍手歓声 / 1:キラキラ / 2:ドラムロール / 3:チャイム） ----
+    juce::AudioBuffer<float> liveSeBufs[4];
+    std::array<bool, 4> liveSeBuilt       { false, false, false, false };
+    std::atomic<int>   activeLiveSe       { -1 };
+    std::atomic<int>   liveSeReadPos      { 0 };
+
+    // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
+    std::atomic<int>   legacyVersionId    { 0 };
+    std::atomic<int>   legacyVersionEra   { 500 };
+    std::atomic<bool>  legacyEcoGate      { true };
+
+    // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
+    std::atomic<bool>  chorusBoostMode    { false };
+    float              chorusBoostEnv     { 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

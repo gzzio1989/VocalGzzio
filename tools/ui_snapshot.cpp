@@ -70,7 +70,20 @@ int main (int argc, char** argv)
             if (m9 >= 1 && m9 <= 3) content.setAccessMode (m9);
             else if (m9 != 0)       content.setLiteMode (true);
         }
+        if (argc > 11 && std::atoi (argv[11]) != 0)
+        {
+            processor.setChorusBoostMode (true);
+            processor.triggerLiveSe (1);
+        }
+        if (argc > 12 && std::atoi (argv[12]) > 0)
+        {
+            content.applyLegacyVersion (std::atoi (argv[12]), true);
+        }
         content.resized();
+        if (argc > 13 && std::atoi (argv[13]) != 0)
+        {
+            content.openLegacyVersionPopup ({ 724, 20, 64, 34 });
+        }
         const float uiScale = (argc > 10 && std::atof (argv[10]) > 0.1) ? (float) std::atof (argv[10]) : 1.0f;
         auto picture = content.createComponentSnapshot (content.getLocalBounds(), true, uiScale);
         const auto target = juce::File::getCurrentWorkingDirectory().getChildFile (
@@ -82,6 +95,8 @@ int main (int argc, char** argv)
         output.truncate();
         juce::PNGImageFormat format;
         if (! format.writeImageToStream (picture, output)) return 4;
+        if (argc > 12 && std::atoi (argv[12]) > 0)
+            content.applyLegacyVersion (0, true);
         content.setLookAndFeel (nullptr);
     }
     processor.releaseResources();
