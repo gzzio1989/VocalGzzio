@@ -982,6 +982,26 @@ void VocalGzzioContent::updateOverviewVisibility()
                            (juce::Component*) &tempoFitButton, (juce::Component*) &sessionButton })
             sub->setVisible (false);
     }
+
+    // 🕰️ v4.0.0 / v4.3.3 初代・3ステップ総合画面再現 (v4.2.0_overview.png / v4.3.3_overview.png 完全一致)
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
+    if (eraNow <= 433 && ! showAllKnobs)
+    {
+        for (auto* c : { (juce::Component*) &autoSetupButton, (juce::Component*) &songSetupButton,
+                         (juce::Component*) &resetButton, (juce::Component*) &checkupButton,
+                         (juce::Component*) &overviewOutputTrim,
+                         (juce::Component*) &crushBtn, (juce::Component*) &seqOnButton,
+                         (juce::Component*) &atOnButton, (juce::Component*) &jnOnButton, (juce::Component*) &vcOnButton,
+                         (juce::Component*) &tempoFitButton })
+            c->setVisible (false);
+        sessionButton.setVisible (true);
+        if (eraNow <= 400)
+        {
+            overviewNoiseStatus.setVisible (false);
+            dnClearButton.setVisible (false);
+        }
+    }
+
     overviewReturn.setVisible (false);
     updateOverviewState();
 }
@@ -1244,6 +1264,8 @@ void VocalGzzioContent::resizedOverview()
     irOverviewRect = {};
     ioInMonoRect = {};
     ioOutMonoRect = {};
+    routePillRect = {};
+    streamPillRect = {};
     talkPillRect = {};
     loopPillRect = {};
     coughPillRect = {};
@@ -1258,41 +1280,80 @@ void VocalGzzioContent::resizedOverview()
     for (auto& r : argonTargetRects) r = {};
     for (auto& r : coutureSwatchRects) r = {};
     for (auto& r : accessPillRects) r = {};
+    for (auto& r : archPillRects) r = {};
+    litePillRect = {};
+
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
+    const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
 
     // ---- 1段目: ロゴ・4種ワークスペース配置ピル・軽量ピル・中央寄せ/MONOピル・外部出力(SYNCROOM)ピル・遅延バッジ・ナビツールバー ----
     const int buttonH = 38;
-    for (int i = 0; i < 4; ++i)
-        archPillRects[(size_t) i] = { 236 + i * 68, 20, 64, 34 };
-    litePillRect   = { 508, 20, 56, 34 };
-    routePillRect  = { 568, 20, 74, 34 };
-    streamPillRect = { 646, 20, 74, 34 };
-    latBadgeArea   = { 724, 20, 64, 34 };
+    if (isClassicV4)
+    {
+        // 🕰️ v4.0.0 / v4.3.3 クラシック総合画面ヘッダ (v4.2.0_overview.png / v4.3.3_overview.png 完全一致)
+        latBadgeArea = { 244, 18, 172, buttonH };
+        sessionButton.setBounds (426, 18, 140, buttonH);
+        sizePopBtn     .setBounds (w - edge - 140, 18, 140, buttonH);
+        overviewDetails.setBounds (sizePopBtn.getX() - 8 - 116, 18, 116, buttonH);
+        tuningPopBtn   .setBounds (overviewDetails.getX() - 8 - 116, 18, 116, buttonH);
+        overviewPitch  .setBounds (tuningPopBtn.getX() - 8 - 136, 18, 136, buttonH);
 
-    auto toolbar = juce::Rectangle<int> (790, 18, w - edge - 790, buttonH);
-    loadButton     .setBounds (toolbar.removeFromRight (78));  toolbar.removeFromRight (5);
-    saveButton     .setBounds (toolbar.removeFromRight (78));  toolbar.removeFromRight (6);
-    sizePopBtn     .setBounds (toolbar.removeFromRight (138)); toolbar.removeFromRight (5);
-    overviewDetails.setBounds (toolbar.removeFromRight (112)); toolbar.removeFromRight (5);
-    tuningPopBtn   .setBounds (toolbar.removeFromRight (104)); toolbar.removeFromRight (5);
-    overviewPitch  .setBounds (toolbar.removeFromRight (126)); toolbar.removeFromRight (5);
-    checkupButton  .setBounds (toolbar.removeFromRight (86));
+        const int barY = 72, barH = 40;
+        finishPresetBox.setBounds (108, barY, 244, barH);
+        srcModeLabelArea = {};
+        srcModeBox     .setBounds (362, barY, 152, barH);
+        overviewCompare.setBounds (524, barY, 168, barH);
+        abA            .setBounds (704, barY, 38,  barH);
+        abB            .setBounds (746, barY, 38,  barH);
+        abCopy         .setBounds (788, barY, 54,  barH);
+        saveButton     .setBounds (w - edge - 166, barY, 78, barH);
+        loadButton     .setBounds (w - edge - 80,  barY, 80, barH);
+    }
+    else
+    {
+        for (int i = 0; i < 4; ++i)
+            archPillRects[(size_t) i] = { 236 + i * 68, 20, 64, 34 };
+        litePillRect   = { 508, 20, 56, 34 };
+        if (eraNow >= 460 || showAllKnobs)
+        {
+            routePillRect  = { 568, 20, 74, 34 };
+            streamPillRect = { 646, 20, 74, 34 };
+            latBadgeArea   = { 724, 20, 64, 34 };
+        }
+        else
+        {
+            latBadgeArea   = { 572, 20, 88, 34 };
+        }
 
-    // ---- 2段目: 仕上がり・音の種類・ワンクリック自動設定・A/B比較・歌枠⇄雑談MC・5秒試聴・咳ミュート・BGM録音診断・原音比較・初期化 ----
-    const int barY = 72, barH = 40;
-    finishPresetBox.setBounds (110, barY, 212, barH);
-    srcModeLabelArea = { 324, barY, 74, barH };
-    srcModeBox     .setBounds (400, barY, 136, barH);
-    autoSetupButton.setBounds (542, barY, 114, barH);
-    songSetupButton.setBounds (660, barY, 114, barH);
-    abA            .setBounds (780, barY, 36,  barH);
-    abB            .setBounds (820, barY, 36,  barH);
-    abCopy         .setBounds (860, barY, 52,  barH);
-    talkPillRect   = { 918,  barY + 3, 94,  barH - 6 };
-    loopPillRect   = { 1016, barY + 3, 94,  barH - 6 };
-    coughPillRect  = { 1114, barY + 3, 98,  barH - 6 };
-    stagePillRect  = { 1216, barY + 3, 114, barH - 6 };
-    overviewCompare.setBounds (1336, barY, 144, barH);
-    resetButton    .setBounds (1484, barY, w - edge - 1484, barH);
+        auto toolbar = juce::Rectangle<int> (790, 18, w - edge - 790, buttonH);
+        loadButton     .setBounds (toolbar.removeFromRight (78));  toolbar.removeFromRight (5);
+        saveButton     .setBounds (toolbar.removeFromRight (78));  toolbar.removeFromRight (6);
+        sizePopBtn     .setBounds (toolbar.removeFromRight (138)); toolbar.removeFromRight (5);
+        overviewDetails.setBounds (toolbar.removeFromRight (112)); toolbar.removeFromRight (5);
+        tuningPopBtn   .setBounds (toolbar.removeFromRight (104)); toolbar.removeFromRight (5);
+        overviewPitch  .setBounds (toolbar.removeFromRight (126)); toolbar.removeFromRight (5);
+        checkupButton  .setBounds (toolbar.removeFromRight (86));
+
+        // ---- 2段目: 仕上がり・音の種類・ワンクリック自動設定・A/B比較・歌枠⇄雑談MC・5秒試聴・咳ミュート・BGM録音診断・原音比較・初期化 ----
+        const int barY = 72, barH = 40;
+        finishPresetBox.setBounds (110, barY, 212, barH);
+        srcModeLabelArea = { 324, barY, 74, barH };
+        srcModeBox     .setBounds (400, barY, 136, barH);
+        autoSetupButton.setBounds (542, barY, 114, barH);
+        songSetupButton.setBounds (660, barY, 114, barH);
+        abA            .setBounds (780, barY, 36,  barH);
+        abB            .setBounds (820, barY, 36,  barH);
+        abCopy         .setBounds (860, barY, 52,  barH);
+        if (eraNow >= 480 || showAllKnobs)
+        {
+            talkPillRect   = { 918,  barY + 3, 94,  barH - 6 };
+            loopPillRect   = { 1016, barY + 3, 94,  barH - 6 };
+            coughPillRect  = { 1114, barY + 3, 98,  barH - 6 };
+            stagePillRect  = { 1216, barY + 3, 114, barH - 6 };
+        }
+        overviewCompare.setBounds (1336, barY, 144, barH);
+        resetButton    .setBounds (1484, barY, w - edge - 1484, barH);
+    }
 
     auto grid = [this] (juce::Rectangle<int> r, std::initializer_list<Knob*> knobs, int columns)
     {
@@ -1396,7 +1457,7 @@ void VocalGzzioContent::resizedOverview()
         const int centerX = leftX + wingW + gap;
         const int rightX = centerX + centerW + gap;
 
-        if (oceanStarTheme() || accessMode > 0)
+        if ((oceanStarTheme() && (eraNow >= 490 || showAllKnobs)) || accessMode > 0)
         {
             const int upperWingH = 208; // y = 122..330 (中段 y=335..413 に水平線パノラマ窓／スタイル案内デッキを開放)
             const int domeH      = 286; // y = 122..408 (中央プラネタリウム・オペラドーム)
@@ -1489,8 +1550,19 @@ void VocalGzzioContent::resizedOverview()
         overviewMonitor = { edge, top, monW, stageTopH };
         argonPadRect    = { overviewMonitor.getX() + 16, top + 42, 296, 204 };
         eqGraph.setBounds (overviewMonitor.getX() + 324, top + 42, monW - 340, 84);
-        for (int b = 0; b < 4; ++b)
-            argonBarRects[(size_t) b] = { overviewMonitor.getX() + 324, top + 134 + b * 29, monW - 340, 26 };
+        if (eraNow <= 440 && ! showAllKnobs)
+        {
+            // 🕰️ v4.4.0 V-Liver Stage は 3本のフェーダー (VELVET / SILK / HALO) 構成 (v4.4.0_liver_stage.png 完全一致)
+            argonBarRects[0] = { overviewMonitor.getX() + 324, top + 136, monW - 340, 30 };
+            argonBarRects[1] = {};
+            argonBarRects[2] = { overviewMonitor.getX() + 324, top + 173, monW - 340, 30 };
+            argonBarRects[3] = { overviewMonitor.getX() + 324, top + 210, monW - 340, 30 };
+        }
+        else
+        {
+            for (int b = 0; b < 4; ++b)
+                argonBarRects[(size_t) b] = { overviewMonitor.getX() + 324, top + 134 + b * 29, monW - 340, 26 };
+        }
         const int targetW = (monW - 32 - 18) / 4;
         for (int t = 0; t < 4; ++t)
             argonTargetRects[(size_t) t] = { overviewMonitor.getX() + 16 + t * (targetW + 6), top + 254, targetW, 40 };
@@ -1589,9 +1661,18 @@ void VocalGzzioContent::resizedOverview()
             x += widths[i] + gap;
         }
         grid (overviewOutput.reduced (10).withTrimmedTop (94), { &inGainK, &makeupK }, 2);
-        grid (overviewCards[0].reduced (16).withTrimmedTop (126), { &denoiseK, &gate, &lowCut, &mudK }, 2);
-        grid (overviewCards[1].reduced (16).withTrimmedTop (126), { &comp2K, &deessK, &presenceK, &warmthK }, 2);
-        grid (overviewCards[2].reduced (16).withTrimmedTop (126), { &revMixK, &revSizeK, &delayK, &widthK }, 2);
+        if (isClassicV4)
+        {
+            grid (overviewCards[0].reduced (16).withTrimmedTop (eraNow <= 400 ? 94 : 124), { &denoiseK, &gate, &lowCut, &mudK }, 2);
+            grid (overviewCards[1].reduced (16).withTrimmedTop (86), { &comp2K, &deessK, &presenceK, &warmthK }, 2);
+            grid (overviewCards[2].reduced (16).withTrimmedTop (94), { &revMixK, &revSizeK, &delayK, &widthK }, 2);
+        }
+        else
+        {
+            grid (overviewCards[0].reduced (16).withTrimmedTop (126), { &denoiseK, &gate, &lowCut, &mudK }, 2);
+            grid (overviewCards[1].reduced (16).withTrimmedTop (126), { &comp2K, &deessK, &presenceK, &warmthK }, 2);
+            grid (overviewCards[2].reduced (16).withTrimmedTop (126), { &revMixK, &revSizeK, &delayK, &widthK }, 2);
+        }
     }
 
     if ((accessMode == 0 || accessMode == 2) && (liverTheme() || oceanStarTheme() || themeMode == 2 || themeMode == 4
@@ -1610,11 +1691,17 @@ void VocalGzzioContent::resizedOverview()
         argonResetRect = { argonPadRect.getRight() - 68, argonPadRect.getY() + 2, 66, 24 };
 
     const int levelButtonWidth = overviewOutput.getWidth() < 240 ? 74 : (overviewOutput.getWidth() < 340 ? 76 : 94);
-    levelBadgeRect = { overviewOutput.getRight() - levelButtonWidth - 10, overviewOutput.getY() + 10, levelButtonWidth, 24 };
+    levelBadgeRect = isClassicV4 ? juce::Rectangle<int>()
+                                 : juce::Rectangle<int> (overviewOutput.getRight() - levelButtonWidth - 10, overviewOutput.getY() + 10, levelButtonWidth, 24);
     overviewOutputTrim.setBounds (levelBadgeRect);
 
     // 計器＆入出力カード内の「🎤入力: モノラル/ステレオ」「🔊出力: モノラル/ステレオ」直結ピル配置
-    if (overviewLayoutMode == 2)
+    if (eraNow < 460 && ! showAllKnobs)
+    {
+        ioInMonoRect = {};
+        ioOutMonoRect = {};
+    }
+    else if (overviewLayoutMode == 2)
     {
         // STUDIO RACK (幅170px・縦長): 5連メーターと入出力ノブの間に横並びで配置
         const int pillW = (overviewOutput.getWidth() - 20) / 2;
@@ -1677,7 +1764,19 @@ void VocalGzzioContent::resizedOverview()
     revTypeBox.setBounds (spaceRow1);
 
     auto spaceRow2 = overviewCards[2].reduced (12).withTrimmedTop (88).withHeight (30);
-    if (accessMode == 2)
+    if (isClassicV4)
+    {
+        irOverviewRect = {};
+    }
+    else if (eraNow <= 440 && ! showAllKnobs)
+    {
+        const int spBtnW = (spaceRow2.getWidth() - 6) / 2;
+        tempoFitButton.setBounds (spaceRow2.removeFromLeft (spBtnW));
+        spaceRow2.removeFromLeft (6);
+        sessionButton .setBounds (spaceRow2);
+        irOverviewRect = {};
+    }
+    else if (accessMode == 2)
     {
         irOverviewRect = spaceRow2;
     }
@@ -1695,11 +1794,6 @@ void VocalGzzioContent::resizedOverview()
     auto placePower = [] (Lamp& lamp, Knob& k)
     {
         const auto b = k.slider.getBounds();
-        // ★ 指が太い人・タッチ操作対応：
-        //   TextBoxRight（サテライトノブ gate / delayK）では左側に回転ツマミがあり、
-        //   従来のように (b.getX() + 2, b.getY() + 2) に電源ボタンを置くと回転ツマミの真上に重なって
-        //   太い指でツマミを回した瞬間に電源が誤爆OFFになってしまう。
-        //   そのため右上の数値ボックス上（ラベル行右端）へ退避し、回転ツマミ領域との重なりをゼロにする！
         if (k.slider.getTextBoxPosition() == juce::Slider::TextBoxRight)
             lamp.btn.setBounds (b.getRight() - 30, k.label.getY() - 1, 28, 26);
         else
@@ -1712,7 +1806,6 @@ void VocalGzzioContent::resizedOverview()
 
     // v5.0: フッター右側に「🎯 太指ワンタップ微調整ドック (ターゲット / ➖ / ➕ / ↺初期)」＋「🔥サビ盛」＋「👏4種ライブSEポン出しパッド」を常設
     // ※ 歴代バージョン再現時（era < 500 かつ省負荷ゲートON）は v5.0 専用ドックを非表示にして当時のスッキリしたフッターを再現
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
     if (eraNow >= 500)
     {
         const int deckY = overviewHelp.getY() + 12;
@@ -2029,7 +2122,26 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         }
     }
 
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
+    const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
     const auto latencyMs = 1000.0 * processor.addedLatencySamples() / juce::jmax (1.0, processor.getTunerSampleRate());
+    if (isClassicV4)
+    {
+        const auto lb = latBadgeArea.toFloat();
+        g.setColour (Palette::panel2);
+        g.fillRoundedRectangle (lb, 7.0f);
+        g.setColour (Palette::panelLn);
+        g.drawRoundedRectangle (lb.reduced (0.5f), 7.0f, 1.0f);
+        g.setColour (Palette::inkSoft);
+        fitText (g, language->T ("追加遅延", "Latency"),
+                 { latBadgeArea.getX() + 12, latBadgeArea.getY(), 72, latBadgeArea.getHeight() },
+                 juce::Justification::centredLeft, 13.0f, false);
+        g.setColour (Palette::green);
+        fitText (g, "+" + juce::String (latencyMs, 1) + " ms",
+                 { latBadgeArea.getX() + 84, latBadgeArea.getY(), latBadgeArea.getWidth() - 96, latBadgeArea.getHeight() },
+                 juce::Justification::centredRight, 14.0f, true);
+    }
+    else
     {
         const int legId = processor.getLegacyVersionId();
         const bool isLeg = (legId > 0);
@@ -2075,6 +2187,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                                                  juce::Colours::transparentBlack, (float) getWidth() - 24.0f, 63.0f, false));
         g.fillRect ((float) getWidth() * 0.5f, 62.5f, (float) getWidth() * 0.5f - 24.0f, 1.5f);
     }
+
+    if (isClassicV4)
+    {
+        text (language->T ("仕上がり", "FINISH"), { 24, 72, 82, 40 }, 16.5f, Palette::inkSoft, true, juce::Justification::centredLeft);
+    }
+    else
     {
         const juce::Rectangle<int> pb (24, 72, 86, 40);
         const bool has3Axis = (voiceBox.getSelectedId() > 0 || micBox.getSelectedId() > 0 || eqPresetBox.getSelectedId() > 0);
@@ -3601,6 +3719,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         for (int b = 0; b < 4; ++b)
         {
             const auto r = argonBarRects[(size_t) b];
+            if (r.isEmpty()) continue;
             const auto rf = r.toFloat();
             const float norm = juce::jlimit (0.0f, 1.0f, vals[b] * 0.01f);
             const float barRad = kawaiiBars ? rf.getHeight() * 0.5f : 6.5f;
@@ -3815,10 +3934,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
     const bool compactOut = (overviewOutput.getWidth() < 340);
     const int titleW = (overviewOutput.getWidth() >= 400 && ! ioInMonoRect.isEmpty())
                      ? (ioInMonoRect.getX() - overviewOutput.getX() - 28)
-                     : (compactOut ? 60 : 124);
-    fitText (g, compactOut ? language->T ("計器", "I/O") : language->T ("計器・入出力", "TELEMETRY & I/O"),
+                     : (isClassicV4 ? 120 : (compactOut ? 60 : 124));
+    fitText (g, isClassicV4 ? language->T ("入出力", "I/O") : (compactOut ? language->T ("計器", "I/O") : language->T ("計器・入出力", "TELEMETRY & I/O")),
              juce::Rectangle<int> (overviewOutput.getX() + 24, overviewOutput.getY() + 8, juce::jmax (44, titleW), 28),
-             juce::Justification::centredLeft, 15.5f, true);
+             juce::Justification::centredLeft, isClassicV4 ? 18.0f : 15.5f, true);
 
     // ---- 計器＆入出力カード内の「🎤入力: モノラル/ステレオ」「🔊出力: モノラル/ステレオ」直結ピル描画 ----
     if (g.clipRegionIntersects (overviewOutput.expanded (8)))
@@ -3865,8 +3984,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
         const int meterW = (overviewLayoutMode == 0 || overviewLayoutMode == 1)
                          ? (overviewOutput.getWidth() - 236)
                          : (overviewOutput.getWidth() - 24);
-        const int numRows = (overviewLayoutMode == 3) ? 3 : 5;
-        const int rowStep = (overviewLayoutMode == 3) ? 18 : ((oceanStarTheme() && overviewLayoutMode == 0) ? 30 : 32);
+        const int numRows = isClassicV4 ? 2 : ((overviewLayoutMode == 3) ? 3 : 5);
+        const int rowStep = isClassicV4 ? 22 : ((overviewLayoutMode == 3) ? 18 : ((oceanStarTheme() && overviewLayoutMode == 0) ? 30 : 32));
         const int rowStartY = (oceanStarTheme() && overviewLayoutMode == 0) ? 39 : 42;
         const bool kawaiiMeters = (isLiverStyle || isYuruStyle);
 
@@ -4885,15 +5004,29 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
                                                                    : (i == 1 ? 138 : 112);
         auto titleR = juce::Rectangle<int> (r.getX() + 26, r.getY() + 8, titleMaxW, 34);
         g.setColour ((accessMode == 2) ? accents[i] : Palette::ink);
-        const char* curJa = (accessMode == 2) ? namesJaStep[i] : (accessMode == 3) ? namesJaConcrete[i] : namesJaStd[i];
-        fitText (g, juce::String::fromUTF8 (language->english ? namesEn[i] : curJa),
+        const char* namesJaClassic[] = { "整える", "声をつくる", "空間をつくる" };
+        const char* namesEnClassic[] = { "CLEAN",  "CHARACTER",  "SPACE" };
+        const char* curJa = isClassicV4       ? namesJaClassic[i]
+                          : (accessMode == 2) ? namesJaStep[i]
+                          : (accessMode == 3) ? namesJaConcrete[i]
+                                              : namesJaStd[i];
+        const char* curEn = isClassicV4 ? namesEnClassic[i] : namesEn[i];
+        fitText (g, juce::String::fromUTF8 (language->english ? curEn : curJa),
                  titleR, juce::Justification::centredLeft, (accessMode == 1) ? 19.0f : 18.0f, true);
 
+        if (isClassicV4 && i == 1)
+        {
+            g.setColour (Palette::inkSoft);
+            fitText (g, language->T ("音量の差と、声の質感を整える", "Balance volume differences and shape vocal tone"),
+                     juce::Rectangle<int> (r.getX() + 26, r.getY() + 48, r.getWidth() - 52, 26),
+                     juce::Justification::centredLeft, 15.0f, false);
+        }
+
         // ★ 各セクション見出し横の「リアルタイム音変化ステータス・ピル」:
-        //   そのセクションで今どんな変化が起きているか（雑音・こもり除去 / 声量均一＆倍音 / 残響＆やまびこ）を視覚表示！
+        //   そのセクションで今どんな変化が起きているか（雑音・こもり除去 / 声量均一＆美声ツヤ / 残響＆やまびこ）を視覚表示！
         const int badgeX = titleR.getRight() + 4;
         const int badgeW = pwrX - badgeX - 6;
-        if (badgeW >= 68 && ! liteMode)
+        if (! isClassicV4 && badgeW >= 68 && ! liteMode)
         {
             const juce::Rectangle<float> stPill ((float) badgeX, (float) (r.getY() + 13), (float) badgeW, 24.0f);
             const bool secActive = (activeKnobCount > 0);

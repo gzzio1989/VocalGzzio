@@ -505,6 +505,24 @@ namespace Palette
             track    = juce::Colour (0xffe3dfd3);
             badge    = juce::Colour (0xfffffefa);
         }
+        else if (mode == 20)    // 🕰️ v1.3.0 ダークネイビー 2列スタジオ (v1.3.0_ui.png 完全再現パレット)
+        {
+            bgTop    = juce::Colour (0xff121622);
+            bgBot    = juce::Colour (0xff0e121c);
+            panel    = juce::Colour (0xff1a2030);
+            panel2   = juce::Colour (0xff232a3d);
+            panelLn  = juce::Colour (0xff2e374f);
+            ink      = juce::Colour (0xfff0f4f8);
+            inkSoft  = juce::Colour (0xff94a0b8);
+            yellow   = juce::Colour (0xfff0c445);
+            yellowDk = juce::Colour (0xffd4a628);
+            green    = juce::Colour (0xff62c898);
+            salmon   = juce::Colour (0xffec6868);
+            blue     = juce::Colour (0xff6088d8);
+            ice      = juce::Colour (0xfff0c445);
+            track    = juce::Colour (0xff283044);
+            badge    = juce::Colour (0xfffaf8f2);
+        }
         else
         {
             bgTop    = juce::Colour (0xff111719);
@@ -714,6 +732,26 @@ public:
         auto r = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height).reduced (0.8f);
         const float rad = s_useKawaii ? r.getHeight() * 0.48f : 7.5f;
         const bool lightTheme = Palette::panel2.getPerceivedBrightness() > 0.55f;
+
+        if (s_knobStyle >= 7)
+        {
+            // 🕰 歴代タイムマシン (v1.0.0〜v4.3.3): ジュエル装飾なしのフラット／クリーンなクラシックセレクター
+            const float legacyRad = (s_knobStyle == 8 || s_knobStyle == 9) ? 5.0f : 6.0f;
+            g.setColour (isButtonDown ? Palette::panel2.darker (0.06f) : Palette::panel2);
+            g.fillRoundedRectangle (r, legacyRad);
+            g.setColour (Palette::panelLn);
+            g.drawRoundedRectangle (r, legacyRad, 1.2f);
+
+            const float bx = r.getRight() - 14.0f;
+            const float by = r.getCentreY();
+            juce::Path chev;
+            chev.startNewSubPath (bx - 4.0f, by - 1.8f);
+            chev.lineTo          (bx,        by + 2.2f);
+            chev.lineTo          (bx + 4.0f, by - 1.8f);
+            g.setColour (Palette::inkSoft);
+            g.strokePath (chev, juce::PathStrokeType (1.7f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            return;
+        }
 
         if (s_useKawaii || lightTheme)
         {
@@ -1072,9 +1110,10 @@ public:
         int leftLedPad = 0;
 
         // ★ ロータリーノブの数値ボックス描画（標準＝OLEDカプセル / ◉くっきり＝超高コントラスト＋形状記号 / ★3ステップ＝待機減光 / ●マット＝無発光箱）
+        //    ※ s_knobStyle >= 7 (v1.0.0〜v4.3.3 歴代モード) は当時のUI通りカプセル枠なしのプレーンテキスト数値表示にする
         if (auto* parentSlider = dynamic_cast<juce::Slider*> (l.getParentComponent()))
         {
-            if (s_knobStyle != 5 && area.getWidth() >= 36 && area.getHeight() >= 14)
+            if (s_knobStyle != 5 && s_knobStyle < 7 && area.getWidth() >= 36 && area.getHeight() >= 14)
             {
                 const auto rf = l.getLocalBounds().toFloat().reduced (1.5f, 0.8f);
                 const float rad = (s_accessMode == 1 || s_accessMode == 3) ? 6.0f : (s_useKawaii ? rf.getHeight() * 0.48f : 5.5f);
@@ -1492,6 +1531,138 @@ public:
                             juce::jmax (2.4f, kr * 0.06f));
             }
             return;
+        }
+
+        // 🕰 歴代タイムマシン専用ノブ描画 (s_knobStyle == 7..10)
+        if (s_knobStyle >= 7 && s_knobStyle <= 10)
+        {
+            if (s_knobStyle == 8) // v1.0.0: クリーム背景フラット・リングノブ (外周オリーブ黄アーク＋紺枠サークル＋紺ポインター)
+            {
+                const float r8 = juce::jmax (4.8f, radius * 0.16f);
+                juce::Path trk;
+                trk.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+                g.setColour (juce::Colour (0xffe0dbd0));
+                g.strokePath (trk, juce::PathStrokeType (r8, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                juce::Path val;
+                val.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                g.setColour (juce::Colour (0xffd4c83a));
+                g.strokePath (val, juce::PathStrokeType (r8, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                const float kr = radius - r8 * 0.88f;
+                if (kr >= 5.0f)
+                {
+                    g.setColour (juce::Colour (0xffece8dc));
+                    g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                    g.setColour (juce::Colour (0xff2a4158));
+                    g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 2.0f);
+                    g.drawLine (c.x + kr * 0.20f * std::sin (angle), c.y - kr * 0.20f * std::cos (angle),
+                                c.x + kr * 0.82f * std::sin (angle), c.y - kr * 0.82f * std::cos (angle), 2.4f);
+                }
+                return;
+            }
+            if (s_knobStyle == 9) // v1.3.0: ダークネイビー・フラットサークルノブ (外周アンバー黄アーク＋濃紺円盤＋白ポインター)
+            {
+                const float r9 = juce::jmax (4.4f, radius * 0.15f);
+                juce::Path trk;
+                trk.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+                g.setColour (juce::Colour (0xff262d3d));
+                g.strokePath (trk, juce::PathStrokeType (r9, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                juce::Path val;
+                val.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                g.setColour (juce::Colour (0xfff0c445));
+                g.strokePath (val, juce::PathStrokeType (r9, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                const float kr = radius - r9 * 0.88f;
+                if (kr >= 5.0f)
+                {
+                    g.setColour (juce::Colour (0xff1e2430));
+                    g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                    g.setColour (juce::Colour (0xff3a4356));
+                    g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 1.5f);
+                    g.setColour (juce::Colour (0xfff0f4f8));
+                    g.drawLine (c.x + kr * 0.20f * std::sin (angle), c.y - kr * 0.20f * std::cos (angle),
+                                c.x + kr * 0.82f * std::sin (angle), c.y - kr * 0.82f * std::cos (angle), 2.3f);
+                }
+                return;
+            }
+            if (s_knobStyle == 7) // v1.7.0〜v3.1.0: 機械式デュアルギア・ムーブメントノブ (金の大歯車＋ミントの小歯車＋ルビー軸受＋白針)
+            {
+                const float r7 = juce::jmax (4.2f, radius * 0.135f);
+                juce::Path trk;
+                trk.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+                g.setColour (Palette::track);
+                g.strokePath (trk, juce::PathStrokeType (r7, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                juce::Path val;
+                val.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                g.setColour (Palette::green);
+                g.strokePath (val, juce::PathStrokeType (r7, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                const float kr = radius - r7 - 2.2f;
+                if (kr >= 5.0f)
+                {
+                    const int dia = juce::jmax (10, juce::roundToInt (kr * 2.0f));
+                    g.setColour (juce::Colours::black.withAlpha (0.35f));
+                    g.fillEllipse (c.x - kr, c.y - kr + 2.2f, kr * 2.0f, kr * 2.0f);
+                    g.drawImage (getMovementFace (dia),
+                                 juce::Rectangle<float> (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f));
+
+                    // 金色の大歯車 (12歯) ＆ ミントの小歯車 (8歯)
+                    g.setColour (juce::Colour (0xffe5c868).withAlpha (0.88f));
+                    g.fillPath (uGearBig, juce::AffineTransform::rotation (angle * 0.8f)
+                                              .scaled (kr * 0.52f, kr * 0.52f)
+                                              .translated (c.x - kr * 0.12f, c.y + kr * 0.10f));
+                    g.setColour (juce::Colour (0xff7be0c0).withAlpha (0.85f));
+                    g.fillPath (uGearSmall, juce::AffineTransform::rotation (-angle * 1.4f)
+                                                .scaled (kr * 0.34f, kr * 0.34f)
+                                                .translated (c.x + kr * 0.28f, c.y - kr * 0.12f));
+                    // ルビー軸受
+                    g.setColour (juce::Colour (0xfff0788c));
+                    g.fillEllipse (c.x - kr * 0.12f - 2.4f, c.y + kr * 0.10f - 2.4f, 4.8f, 4.8f);
+                    // 白ポインター針
+                    g.setColour (juce::Colours::white);
+                    g.drawLine (c.x + kr * 0.18f * std::sin (angle), c.y - kr * 0.18f * std::cos (angle),
+                                c.x + kr * 0.86f * std::sin (angle), c.y - kr * 0.86f * std::cos (angle),
+                                juce::jmax (2.4f, kr * 0.08f));
+                }
+                return;
+            }
+            if (s_knobStyle == 10) // v4.0.0〜v4.3.3: 3ステップ・クラシックスタジオノブ (ミント/ラベンダー/ライムのアーク＋ダークスタジオキャップ)
+            {
+                const float r10 = juce::jmax (4.2f, radius * 0.13f);
+                juce::Path trk;
+                trk.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+                g.setColour (juce::Colour (0xff242e34));
+                g.strokePath (trk, juce::PathStrokeType (r10, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                juce::Path val;
+                val.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                g.setColour (groupAccent);
+                g.strokePath (val, juce::PathStrokeType (r10, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                const float kr = radius - r10 - 2.8f;
+                if (kr >= 5.0f)
+                {
+                    g.setColour (juce::Colours::black.withAlpha (0.42f));
+                    g.fillEllipse (c.x - kr, c.y - kr + 2.4f, kr * 2.0f, kr * 2.0f);
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff222c32), c.x - kr * 0.4f, c.y - kr * 0.5f,
+                                                             juce::Colour (0xff12181c), c.x + kr * 0.5f, c.y + kr * 0.6f, false));
+                    g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                    g.setColour (juce::Colour (0xff313f47));
+                    g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 1.4f);
+                    // センターリング
+                    g.setColour (juce::Colour (0xff29353c));
+                    g.drawEllipse (c.x - kr * 0.42f, c.y - kr * 0.42f, kr * 0.84f, kr * 0.84f, 1.0f);
+                    // ポインター針
+                    g.setColour (groupAccent.brighter (0.15f));
+                    g.drawLine (c.x + kr * 0.25f * std::sin (angle), c.y - kr * 0.25f * std::cos (angle),
+                                c.x + kr * 0.84f * std::sin (angle), c.y - kr * 0.84f * std::cos (angle),
+                                juce::jmax (2.5f, kr * 0.08f));
+                }
+                return;
+            }
         }
 
         // ★ アクティブ音響コロナ (Active Sonic Corona):

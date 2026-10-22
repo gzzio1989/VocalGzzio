@@ -572,6 +572,59 @@ void VocalTuner::paint (juce::Graphics& g)
     const bool show = hold > 0;
     const bool inTune = displayInTune();
     const auto stateColour = Palette::accentOn (inTune ? Palette::green : Palette::yellowDk, Palette::panel);
+    if (GzzioLnF::getKnobStyle() == 8)
+    {
+        // 🕰️ v1.0.0 TUNER & METER 1段横長バー再現 (v1.0.0_initial.png 完全一致)
+        g.setColour (Palette::yellow);
+        g.fillRoundedRectangle (12.0f, 10.0f, 3.5f, 15.0f, 1.5f);
+        g.setColour (Palette::ink);
+        g.setFont (font (13.0f, true));
+        g.drawText ("TUNER & METER", 22, 8, 130, 20, juce::Justification::centredLeft);
+
+        juce::Rectangle<float> noteBox (160.0f, 14.0f, 128.0f, full.getHeight() - 28.0f);
+        g.setColour (Palette::panel2);
+        g.fillRoundedRectangle (noteBox, 8.0f);
+        g.setColour (Palette::panelLn);
+        g.drawRoundedRectangle (noteBox, 8.0f, 1.0f);
+        g.setColour (show ? stateColour : secondary);
+        g.setFont (font (24.0f, true));
+        g.drawText (show ? noteName : juce::String ("--"), noteBox.withTrimmedBottom (18.0f).toNearestInt(), juce::Justification::centred);
+        g.setColour (secondary);
+        g.setFont (font (11.5f, false));
+        g.drawText (show ? (juce::String (dispFreq, 1) + " Hz") : "440 Hz",
+                    noteBox.withTrimmedTop (noteBox.getHeight() - 22.0f).toNearestInt(), juce::Justification::centred);
+
+        juce::Rectangle<float> cBar (312.0f, full.getHeight() * 0.52f - 4.0f, full.getWidth() - 640.0f, 8.0f);
+        g.setColour (Palette::track);
+        g.fillRoundedRectangle (cBar, 4.0f);
+        g.setColour (secondary);
+        g.setFont (font (11.0f, false));
+        g.drawText ("-50", (int) cBar.getX(), (int) cBar.getY() - 18, 36, 16, juce::Justification::centredLeft);
+        g.drawText ("0",   (int) cBar.getCentreX() - 18, (int) cBar.getY() - 18, 36, 16, juce::Justification::centred);
+        g.drawText ("+50", (int) cBar.getRight() - 36, (int) cBar.getY() - 18, 36, 16, juce::Justification::centredRight);
+        const float cx = cBar.getCentreX() + (show ? juce::jlimit (-1.0f, 1.0f, dispCents / 50.0f) * (cBar.getWidth() * 0.48f) : 0.0f);
+        g.setColour (show ? stateColour : Palette::green);
+        g.fillEllipse (cx - 6.0f, cBar.getCentreY() - 6.0f, 12.0f, 12.0f);
+
+        const float mx = full.getWidth() - 296.0f;
+        const float mw = 272.0f;
+        auto drawV10Meter = [&] (const char* lbl, float yM, float val)
+        {
+            g.setColour (secondary);
+            g.setFont (font (11.5f, true));
+            g.drawText (lbl, (int) mx, (int) yM - 2, 34, 16, juce::Justification::centredLeft);
+            juce::Rectangle<float> tr (mx + 38.0f, yM + 2.0f, mw - 38.0f, 8.0f);
+            g.setColour (Palette::track);
+            g.fillRoundedRectangle (tr, 4.0f);
+            const float db = juce::Decibels::gainToDecibels (val, -60.0f);
+            const float norm = juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f);
+            g.setColour (Palette::green);
+            g.fillRoundedRectangle (tr.withWidth (tr.getWidth() * norm), 4.0f);
+        };
+        drawV10Meter ("IN",  24.0f, dispIn);
+        drawV10Meter ("OUT", 50.0f, dispOut);
+        return;
+    }
     auto body = full.reduced (12.0f).withTrimmedTop ((float) controlHeight() - 4.0f);
     if (body.getHeight() < 45.0f) return;
 
@@ -870,6 +923,15 @@ void VocalTuner::paint (juce::Graphics& g)
 
 void VocalTuner::resized()
 {
+    if (GzzioLnF::getKnobStyle() == 8)
+    {
+        tunerModeBox.setBounds (0, 0, 0, 0);
+        refPitchBox.setBounds (0, 0, 0, 0);
+        guitarStringBox.setBounds (0, 0, 0, 0);
+        railToggle.setBounds (0, 0, 0, 0);
+        rangeButton.setBounds (0, 0, 0, 0);
+        return;
+    }
     auto bounds = getLocalBounds().reduced (12, 8);
     const int gap = 8, rowHeight = 36;
     auto row = bounds.removeFromTop (rowHeight);
@@ -5838,21 +5900,43 @@ void VocalGzzioContent::updateTabVisibility()
 
     // 🕰️ 歴代バージョン再現時（era < 500 かつ ぜんぶ表示OFF）：その世代に存在しなかった後発ツマミ・ボタンを隠す
     const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
-    if (eraNow < 500 && ! showAllKnobs && ! isOverview() && advancedMode)
+    if (eraNow < 500 && ! showAllKnobs && ! isOverview())
     {
         auto hideK = [] (Knob& k) { k.slider.setVisible (false); k.label.setVisible (false); };
+        if (eraNow <= 310) overviewReturn.setVisible (false);
         if (eraNow < 310) hideK (pickK);
-        if (eraNow < 300) { relearnBtn.setVisible (false); crushBtn.setVisible (false); }
-        if (eraNow < 290) { hideK (proxK); srcModeBox.setVisible (false); checkupButton.setVisible (false); sessionButton.setVisible (false); }
+        if (eraNow < 300) { relearnBtn.setVisible (false); crushBtn.setVisible (false); railView.setVisible (false); }
+        if (eraNow < 290) { hideK (proxK); srcModeBox.setVisible (false); checkupButton.setVisible (false); sessionButton.setVisible (false); dnClearButton.setVisible (false); }
         if (eraNow < 270) { ornSlider.setVisible (false); }
         if (eraNow < 260) { hideK (humK); hideK (consK); }
+        if (eraNow <= 240) { tuningPopBtn.setVisible (false); modPopBtn.setVisible (false); }
         if (eraNow < 240) { hideK (inGainK); hideK (resK); hideK (rideK); }
         if (eraNow < 230) { hideK (popK); hideK (lipK); }
         if (eraNow < 210) { midiButton.setVisible (false); routeButton.setVisible (false); stageButton.setVisible (false); streamButton.setVisible (false); }
         if (eraNow < 200) { hideK (ringK); hideK (brK); hideK (emoK); hideK (liftK); }
         if (eraNow < 190) { atOnButton.setVisible (false); atKeyBox.setVisible (false); atScaleBox.setVisible (false); atAmountSlider.setVisible (false); atSpeedSlider.setVisible (false); }
-        if (eraNow < 180) { vcOnButton.setVisible (false); jnOnButton.setVisible (false); jnHarmBox.setVisible (false); jnSoloButton.setVisible (false); hideK (vcPitchK); hideK (vcFormK); hideK (jnMixK); }
+        if (eraNow < 180)
+        {
+            vcOnButton.setVisible (false); jnOnButton.setVisible (false); jnHarmBox.setVisible (false); jnSoloButton.setVisible (false);
+            hideK (vcPitchK); hideK (vcFormK); hideK (jnMixK);
+            tabEqButton.setVisible (false); tabFxButton.setVisible (false); tempoFitButton.setVisible (false);
+        }
         if (eraNow < 160) { revTypeBox.setVisible (false); }
+        if (eraNow <= 130)
+        {
+            autoSetupButton.setVisible (false);
+            songSetupButton.setVisible (false);
+        }
+        if (eraNow <= 100)
+        {
+            eqPresetBox.setVisible (false);
+            reverbPower.setVisible (false);
+            seqOnButton.setVisible (false);
+            seqModeBox.setVisible (false);
+            eqGraph.setVisible (false);
+            for (auto* k : { &seqAmountK, &seqFocusK, &seqF1K, &seqD1K, &seqF2K, &seqD2K, &seqF3K, &seqD3K })
+                hideK (*k);
+        }
     }
     else if (! isOverview() && advancedMode && ! focusMode)
     {
@@ -5914,6 +5998,7 @@ void VocalGzzioContent::applyModeVisibility()
 void VocalGzzioContent::applyKnobVisibility()
 {
     restoreOverviewVisibility();
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
     // v2.4.0 かんたんモードは「よく使う7ツマミ」だけ。残りは丸ごと隠す。
     auto showKnob = [] (Knob& k, bool v) { k.slider.setVisible (v); k.label.setVisible (v); };
     for (auto* k : { &gate, &lowCut, &popK, &lipK, &resK, &rideK, &humK, &consK,
@@ -5926,10 +6011,37 @@ void VocalGzzioContent::applyKnobVisibility()
         showKnob (*k, advancedMode);
     for (auto* k : { &inGainK, &denoiseK, &comp2K, &presenceK, &revMixK, &makeupK })
         showKnob (*k, true);
-    inGainK.label.setText (language->T ("入力音量", "Input"), juce::dontSendNotification);
+
+    // まず現行世代の標準ラベルへ戻す（v1.0/v1.3 からの復帰用）
+    gate.label.setText (language->T ("ゲート", "GATE"), juce::dontSendNotification);
+    lowCut.label.setText (language->T ("ローカット", "LOW CUT"), juce::dontSendNotification);
+    mudK.label.setText (language->T ("こもり", "MUD"), juce::dontSendNotification);
+    harshK.label.setText (language->T ("キンキン", "HARSH"), juce::dontSendNotification);
+    denoiseK.label.setText (language->T ("ノイズ除去", "DENOISE"), juce::dontSendNotification);
+    comp1K.label.setText (language->T ("ピーク圧縮", "PEAK"), juce::dontSendNotification);
     comp2K.label.setText (language->T (advancedMode ? "ならし圧縮" : "音量をそろえる", "Leveling"), juce::dontSendNotification);
+    attackK.label.setText (language->T ("アタック", "ATTACK"), juce::dontSendNotification);
+    releaseK.label.setText (language->T ("リリース", "RELEASE"), juce::dontSendNotification);
+    deessK.label.setText (language->T ("サ行おさえ", "DE-ESS"), juce::dontSendNotification);
     presenceK.label.setText (language->T (advancedMode ? "ヌケ感" : "声の明るさ", "Presence"), juce::dontSendNotification);
-    makeupK.label.setText (language->T ("出力音量", "Output"), juce::dontSendNotification);
+    airK.label.setText (language->T ("キラキラ", "AIR"), juce::dontSendNotification);
+    warmthK.label.setText (language->T ("あたたかみ", "WARMTH"), juce::dontSendNotification);
+    sustainK.label.setText (language->T ("のび", "SUSTAIN"), juce::dontSendNotification);
+    inGainK.label.setText (language->T ("入力音量", "Input"), juce::dontSendNotification);
+    makeupK.label.setText (language->T (advancedMode ? "仕上げ音量" : "出力音量", "Output"), juce::dontSendNotification);
+    mixK.label.setText (language->T ("エフェクト量", "FX MIX"), juce::dontSendNotification);
+    widthK.label.setText (language->T ("ひろがり", "WIDTH"), juce::dontSendNotification);
+    doublerK.label.setText (language->T ("かさね", "DOUBLER"), juce::dontSendNotification);
+    delayK.label.setText (language->T ("やまびこ", "ECHO"), juce::dontSendNotification);
+    revSizeK.label.setText (language->T ("部屋の広さ", "ROOM SIZE"), juce::dontSendNotification);
+    revMixK.label.setText (language->T ("ひびき", "REVERB"), juce::dontSendNotification);
+    seqAmountK.label.setText (language->seq_amount_label(), juce::dontSendNotification);
+    seqFocusK.label.setText (language->seq_focus_label(), juce::dontSendNotification);
+    saveButton.setButtonText (language->T ("保存", "Save"));
+    loadButton.setButtonText (language->T ("読込", "Load"));
+    resetButton.setButtonText (language->T ("初期化", "Reset"));
+    learnButton.setButtonText (language->T ("ノイズを測る", "Learn noise"));
+
     // 隠したツマミのランプも一緒に消す(残ると宙に浮いて見える)
     lampGate.btn.setVisible (advancedMode);
     lampDbl .btn.setVisible (advancedMode);
@@ -5945,7 +6057,62 @@ void VocalGzzioContent::applyKnobVisibility()
                      (juce::Component*) &autoSetupButton, (juce::Component*) &songSetupButton,
                      (juce::Component*) &learnButton })
         c->setVisible (true);
-    overviewReturn.setVisible (! isOverview());
+
+    // 🕰️ v2.4.0 かんたんモード再現 (v2.4.0_simple.png 完全一致の7ツマミ構成)
+    if (! advancedMode && eraNow <= 240 && ! showAllKnobs)
+    {
+        showKnob (inGainK, false);
+        showKnob (presenceK, false);
+        showKnob (makeupK, false);
+        for (auto* k : { &denoiseK, &mudK, &harshK, &comp2K, &deessK, &revMixK, &mixK })
+            showKnob (*k, true);
+        comp2K.label.setText (language->T ("ならし圧縮", "LEVELER"), juce::dontSendNotification);
+        lampDn.btn.setVisible (true);
+        lampDs.btn.setVisible (true);
+        lampRev.btn.setVisible (true);
+        reverbPower.setVisible (false);
+        dnClearButton.setVisible (false);
+        learnButton.setButtonText ("LEARN");
+        resetButton.setButtonText ("RESET");
+    }
+    // 🕰️ v1.0.0 / v1.3.0 初期スタジオ世代の英語ツマミ表記 (v1.0.0_ui.png / v1.3.0_ui.png 完全一致)
+    else if (eraNow <= 130 && ! showAllKnobs)
+    {
+        gate.label.setText ("GATE", juce::dontSendNotification);
+        lowCut.label.setText ("LOW CUT", juce::dontSendNotification);
+        mudK.label.setText (language->T ("こもり", "MUD"), juce::dontSendNotification);
+        harshK.label.setText (language->T ("キンキン", "HARSH"), juce::dontSendNotification);
+        denoiseK.label.setText ("DE-NOISE", juce::dontSendNotification);
+        comp1K.label.setText ("PEAK COMP", juce::dontSendNotification);
+        comp2K.label.setText ("LEVEL COMP", juce::dontSendNotification);
+        attackK.label.setText ("ATTACK", juce::dontSendNotification);
+        releaseK.label.setText ("RELEASE", juce::dontSendNotification);
+        deessK.label.setText ("DE-ESSER", juce::dontSendNotification);
+        presenceK.label.setText ("PRESENCE", juce::dontSendNotification);
+        airK.label.setText ("AIR", juce::dontSendNotification);
+        warmthK.label.setText ("WARMTH", juce::dontSendNotification);
+        sustainK.label.setText (language->T ("のび", "SUSTAIN"), juce::dontSendNotification);
+        makeupK.label.setText ("MAKEUP", juce::dontSendNotification);
+        mixK.label.setText ("MIX", juce::dontSendNotification);
+        widthK.label.setText ("WIDTH", juce::dontSendNotification);
+        doublerK.label.setText ("DOUBLER", juce::dontSendNotification);
+        delayK.label.setText ("DELAY", juce::dontSendNotification);
+        revSizeK.label.setText ("REV SIZE", juce::dontSendNotification);
+        revMixK.label.setText ("REVERB", juce::dontSendNotification);
+        seqAmountK.label.setText (language->T ("量", "Amount"), juce::dontSendNotification);
+        seqFocusK.label.setText (language->T ("選択", "Focus"), juce::dontSendNotification);
+        saveButton.setButtonText ("SAVE");
+        loadButton.setButtonText ("LOAD");
+        resetButton.setButtonText ("RESET");
+        learnButton.setButtonText ("LEARN");
+    }
+    else if (eraNow <= 240 && ! showAllKnobs)
+    {
+        resetButton.setButtonText ("RESET");
+        learnButton.setButtonText ("LEARN");
+    }
+
+    overviewReturn.setVisible (! isOverview() && (eraNow > 310 || showAllKnobs));
     refreshOverviewText();
 
     if (! advancedMode) currentTab = 0;
@@ -6922,8 +7089,13 @@ void VocalGzzioContent::paint (juce::Graphics& g)
         }
     }
 
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
+    const bool isV10 = (eraNow == 100 && ! showAllKnobs);
+    const bool isV13 = (eraNow == 130 && ! showAllKnobs);
+
     // ---- header bar (72 px: taller row 1 for larger, legible combos) ----
-    auto hdr = getLocalBounds().withHeight (juce::jmax (72, heroArea.getY() - 8));
+    const int hdrH = isV10 ? 156 : (heroArea.isEmpty() ? juce::jmax (72, cleanArea.getY() - 8) : juce::jmax (72, heroArea.getY() - 8));
+    auto hdr = getLocalBounds().withHeight (hdrH);
     g.setColour (Palette::panel);
     g.fillRect (hdr);
     g.setColour (juce::Colours::white.withAlpha (0.04f));       // top elevation highlight
@@ -6931,81 +7103,102 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     g.setColour (Palette::panelLn);
     g.fillRect (hdr.withY (hdr.getBottom() - 1).withHeight (1));
 
-    // v2.12.0 ★ここにあった drawCrossSwitch(g) を消した。
-    //  ヘッダ宣言には「未使用」と書いてあったが**実際は毎フレーム呼ばれていた**。
-    //  v2.4.0 でチップ版(drawThemeCross)に置き換わってから、描いた絵はチップに
-    //  上書きされて見えなくなっていただけ——つまり4版ぶん、見えない絵を毎回
-    //  描き続けていた。コメントを信じずに呼び出し元を数えるべきだった。
-    //  しかも今回チップの席を空にしたので、空矩形を expanded(3) した 6x6 の
-    //  染みが左上に出るところだった。実装・呼び出しとも撤去。
-
-    // mascot: medium 80px illustration next to the logo (bright art on a light card)
-    // v2.10.0 ★どのテーマでも「ぷにぐじくん」にそろえた。
-    //   以前は ゆるかわ(themeMode==1) のときだけ ぷにぐじくん で、それ以外は
-    //   ラーメンの絵(character.png)が出ていた。アプリのアイコン・インストーラ・
-    //   サイトはどれも ぷにぐじくん なので、**テーマを変えた瞬間だけ顔が変わる**
-    //   状態になっていた。看板は1つにする。
-    if (themeMode == 0)
+    if (isV10)
     {
-        const juce::Rectangle<float> mark (12.0f, 12.0f, 54.0f, 54.0f);
-        g.setColour (Palette::yellow);
-        g.fillRoundedRectangle (mark, 13.0f);
-        g.setColour (Palette::bgBot);
-        const float heights[] = { 13.0f, 26.0f, 36.0f, 21.0f, 10.0f };
-        for (int i = 0; i < 5; ++i)
-            g.fillRoundedRectangle (mark.getX() + 11.5f + i * 6.8f,
-                mark.getCentreY() - heights[i] * 0.5f, 3.8f, heights[i], 1.8f);
-    }
-    else if (kawaiiMascot.isValid() || mascot.isValid())
-    {
-        juce::Rectangle<float> badge (10.0f, 8.0f, 60.0f, 60.0f);
-        g.setColour (Palette::badge);
-        g.fillRoundedRectangle (badge, 12.0f);
-        g.setColour (Palette::panelLn);
-        g.drawRoundedRectangle (badge.reduced (0.5f), 12.0f, 1.0f);
-        g.drawImage (kawaiiMascot.isValid() ? kawaiiMascot : mascot,
-                     badge.reduced (3.0f), juce::RectanglePlacement::centred, false);
-    }
-
-    // v1.5.0 brand: butter title on navy (site palette), single clean pass
-    // v5.0.0: 左上ブランド欄どこをクリックしても歴代バージョン切替が開き、バージョン文字も大きく(18.5px太字・高さ32px)表示
-    g.setFont (GzzioLnF::uiFont (20.0f, true));
-    {
-        const juce::Rectangle<int> tr (76, 4, 172, 24);
+        // 🕰️ 初代 v1.0.0 中央マスコット＆ブランドヘッダ (v1.0.0_ui.png 完全一致)
+        const int cx = getWidth() / 2;
+        if (mascot.isValid() || kawaiiMascot.isValid())
+        {
+            juce::Rectangle<float> badge ((float) cx - 22.0f, 3.0f, 44.0f, 44.0f);
+            g.drawImage (mascot.isValid() ? mascot : kawaiiMascot,
+                         badge, juce::RectanglePlacement::centred, false);
+        }
         g.setColour (Palette::ink);
-        g.drawText (language->title(), tr, juce::Justification::centredLeft);
-    }
+        g.setFont (GzzioLnF::uiFont (17.5f, true));
+        g.drawText (language->title(), juce::Rectangle<int> (cx - 140, 44, 280, 18), juce::Justification::centred);
+        g.setColour (Palette::inkSoft);
+        g.setFont (GzzioLnF::uiFont (10.5f, false));
+        g.drawText ("G'zzio / VOCAL CHANNEL STRIP", juce::Rectangle<int> (cx - 140, 59, 280, 13), juce::Justification::centred);
 
-    g.setColour (Palette::accentOn (Palette::inkSoft, Palette::bgTop));
-    g.setFont (GzzioLnF::uiFont (14.0f, false));
-    g.drawText (language->T ("あなたの声を、主役に。", "Put your voice first."), juce::Rectangle<int> (78, 27, 170, 17),
-                juce::Justification::centredLeft);
-    {
         const int legId = processor.getLegacyVersionId();
-        const bool isLeg = (legId > 0);
         const auto& vSpec = getLegacyVersionSpec (legId);
-        detailVerBadgeRect = { 76, 45, 170, 32 };
+        detailVerBadgeRect = { 12, 12, 178, 32 };
         const auto vf = detailVerBadgeRect.toFloat();
-        const auto vCol = isLeg ? Palette::yellow : Palette::ice;
-        g.setColour (isLeg ? vCol.withAlpha (0.28f) : vCol.withAlpha (0.16f));
+        g.setColour (Palette::yellow.withAlpha (0.28f));
         g.fillRoundedRectangle (vf, 7.5f);
-        g.setColour (isLeg ? vCol.withAlpha (0.92f) : vCol.withAlpha (0.78f));
+        g.setColour (Palette::yellowDk);
         g.drawRoundedRectangle (vf.reduced (0.6f), 7.5f, 1.4f);
-        g.setColour (Palette::accentOn (isLeg ? vCol : Palette::ink, Palette::panel));
-        const juce::String vLabel = isLeg
-            ? (juce::String::fromUTF8 ("🕰 ") + vSpec.verTag + juce::String::fromUTF8 (" ▼ ") + language->T ("世代再現", "Legacy"))
-            : (juce::String ("v") + JucePlugin_VersionString + juce::String::fromUTF8 (" ▼ ") + language->T ("歴代切替", "Versions")
-              #if VOCALGZZIO_TRIAL
-               + language->T ("(体験)", "(TRIAL)")
-              #endif
-              );
-        fitText (g, vLabel, detailVerBadgeRect.reduced (6, 2), juce::Justification::centred, 18.5f, true);
+        g.setColour (Palette::ink);
+        const juce::String vLabel = juce::String::fromUTF8 ("🕰 ") + vSpec.verTag + juce::String::fromUTF8 (" ▼ ") + language->T ("世代再現", "Legacy");
+        fitText (g, vLabel, detailVerBadgeRect.reduced (6, 2), juce::Justification::centred, 18.0f, true);
+    }
+    else
+    {
+        if (themeMode == 0 && eraNow >= 300)
+        {
+            const juce::Rectangle<float> mark (12.0f, 12.0f, 54.0f, 54.0f);
+            g.setColour (Palette::yellow);
+            g.fillRoundedRectangle (mark, 13.0f);
+            g.setColour (Palette::bgBot);
+            const float heights[] = { 13.0f, 26.0f, 36.0f, 21.0f, 10.0f };
+            for (int i = 0; i < 5; ++i)
+                g.fillRoundedRectangle (mark.getX() + 11.5f + i * 6.8f,
+                    mark.getCentreY() - heights[i] * 0.5f, 3.8f, heights[i], 1.8f);
+        }
+        else if (kawaiiMascot.isValid() || mascot.isValid())
+        {
+            juce::Rectangle<float> badge (10.0f, 8.0f, 60.0f, 60.0f);
+            g.setColour (Palette::badge);
+            g.fillRoundedRectangle (badge, 12.0f);
+            g.setColour (Palette::panelLn);
+            g.drawRoundedRectangle (badge.reduced (0.5f), 12.0f, 1.0f);
+            const auto& mImg = (eraNow < 240 && themeMode != 1 && mascot.isValid()) ? mascot
+                             : (kawaiiMascot.isValid() ? kawaiiMascot : mascot);
+            g.drawImage (mImg, badge.reduced (3.0f), juce::RectanglePlacement::centred, false);
+        }
+
+        // v1.5.0 brand: butter title on navy (site palette), single clean pass
+        // v5.0.0: 左上ブランド欄どこをクリックしても歴代バージョン切替が開き、バージョン文字も大きく(18.5px太字・高さ32px)表示
+        g.setFont (GzzioLnF::uiFont (20.0f, true));
+        {
+            const juce::Rectangle<int> tr (76, 4, 172, 24);
+            g.setColour (isV13 ? Palette::yellow : Palette::ink);
+            g.drawText (language->title(), tr, juce::Justification::centredLeft);
+        }
+
+        g.setColour (Palette::accentOn (Palette::inkSoft, Palette::bgTop));
+        g.setFont (GzzioLnF::uiFont (14.0f, false));
+        g.drawText (isV13 ? juce::String ("G'zzio / VOCAL CHANNEL STRIP")
+                          : language->T ("あなたの声を、主役に。", "Put your voice first."),
+                    juce::Rectangle<int> (78, 27, 170, 17),
+                    juce::Justification::centredLeft);
+        {
+            const int legId = processor.getLegacyVersionId();
+            const bool isLeg = (legId > 0);
+            const auto& vSpec = getLegacyVersionSpec (legId);
+            detailVerBadgeRect = { 76, 45, 170, 32 };
+            const auto vf = detailVerBadgeRect.toFloat();
+            const auto vCol = isLeg ? Palette::yellow : Palette::ice;
+            g.setColour (isLeg ? vCol.withAlpha (0.28f) : vCol.withAlpha (0.16f));
+            g.fillRoundedRectangle (vf, 7.5f);
+            g.setColour (isLeg ? vCol.withAlpha (0.92f) : vCol.withAlpha (0.78f));
+            g.drawRoundedRectangle (vf.reduced (0.6f), 7.5f, 1.4f);
+            g.setColour (Palette::accentOn (isLeg ? vCol : Palette::ink, Palette::panel));
+            const juce::String vLabel = isLeg
+                ? (juce::String::fromUTF8 ("🕰 ") + vSpec.verTag + juce::String::fromUTF8 (" ▼ ") + language->T ("世代再現", "Legacy"))
+                : (juce::String ("v") + JucePlugin_VersionString + juce::String::fromUTF8 (" ▼ ") + language->T ("歴代切替", "Versions")
+                  #if VOCALGZZIO_TRIAL
+                   + language->T ("(体験)", "(TRIAL)")
+                  #endif
+                  );
+            fitText (g, vLabel, detailVerBadgeRect.reduced (6, 2), juce::Justification::centred, 18.5f, true);
+        }
     }
 
     // ---- v1.4.0 stream-loudness meter (header): low / good / hot zones ----
     // Practice for stream mic level: sitting in green = too quiet; aim for the
     // yellow "good" zone; brief red is fine, constant red clips. Maps RMS dB.
-    if (! updateNotice.isVisible())
+    if (! lvMeterArea.isEmpty() && ! updateNotice.isVisible())
     {
         auto lm = lvMeterArea;
         const int topH = juce::jmax (12, lm.getHeight() * 38 / 100);
@@ -7044,6 +7237,7 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     }
 
     // ---- v1.5.0 hero band: title + hint / latest auto-setup result ----
+    if (! heroArea.isEmpty())
     {
         auto r = heroArea.toFloat();
         const float heroA = (accessMode == 1 || accessMode == 3) ? 1.0f
@@ -7398,29 +7592,33 @@ void VocalGzzioContent::paint (juce::Graphics& g)
                     cleanArea.withHeight (hh).translated (0, 5).withTrimmedRight (446),
                     juce::Justification::centredRight);
 
-        // 調整の流れは、対応するつまみの真下にまとめて置く。
-        auto guide = cleanArea.withTrimmedTop (cleanArea.getHeight() - 57).reduced (20, 9);
-        const char* groupNames[] = { "整える  /  入力とノイズ", "磨く  /  声の輪郭と音量", "届ける  /  ひびきと仕上げ" };
-        const char* groupNamesEn[] = { "Clean / Input & noise", "Shape / Tone & level", "Deliver / Space & output" };
-        const juce::Colour groupColours[] = { Palette::green, Palette::blue, Palette::yellow };
-        const int shownKnobs = revMixK.slider.isVisible() ? 6 : 5;
-        const int pairWidth = guide.getWidth() * 2 / shownKnobs;
-        const int groupWidths[] = { pairWidth, pairWidth, guide.getWidth() - pairWidth * 2 };
-        for (int i = 0; i < 3; ++i)
+        // 調整の流れは、対応するつまみの真下にまとめて置く（v2.4.0再現時は不要）。
+        if (eraNow > 240 || showAllKnobs)
         {
-            auto group = guide.removeFromLeft (groupWidths[i]).reduced (8, 0);
-            g.setColour (groupColours[i].withAlpha (0.35f));
-            g.fillRect (group.getX(), group.getY(), group.getWidth(), 1);
-            g.setColour (Palette::accentOn (groupColours[i], Palette::panel));
-            g.setFont (GzzioLnF::uiFont (14.0f, true));
-            g.drawText (language->T (groupNames[i], groupNamesEn[i]), group.withTrimmedTop (8),
-                        juce::Justification::centred);
+            auto guide = cleanArea.withTrimmedTop (cleanArea.getHeight() - 57).reduced (20, 9);
+            const char* groupNames[] = { "整える  /  入力とノイズ", "磨く  /  声の輪郭と音量", "届ける  /  ひびきと仕上げ" };
+            const char* groupNamesEn[] = { "Clean / Input & noise", "Shape / Tone & level", "Deliver / Space & output" };
+            const juce::Colour groupColours[] = { Palette::green, Palette::blue, Palette::yellow };
+            const int shownKnobs = revMixK.slider.isVisible() ? 6 : 5;
+            const int pairWidth = guide.getWidth() * 2 / shownKnobs;
+            const int groupWidths[] = { pairWidth, pairWidth, guide.getWidth() - pairWidth * 2 };
+            for (int i = 0; i < 3; ++i)
+            {
+                auto group = guide.removeFromLeft (groupWidths[i]).reduced (8, 0);
+                g.setColour (groupColours[i].withAlpha (0.35f));
+                g.fillRect (group.getX(), group.getY(), group.getWidth(), 1);
+                g.setColour (Palette::accentOn (groupColours[i], Palette::panel));
+                g.setFont (GzzioLnF::uiFont (14.0f, true));
+                g.drawText (language->T (groupNames[i], groupNamesEn[i]), group.withTrimmedTop (8),
+                            juce::Justification::centred);
+            }
         }
     }
     else
     {
-    drawPanel (cleanArea, language->T ("\x31\x20\xe3\x81\x8d\xe3\x82\x8c\xe3\x81\x84\xe3\x81\xab\xe3\x81\x99\xe3\x82\x8b", "1 CLEAN UP"));
-    drawPanel (dynArea,   language->T ("\x32\x20\xe9\x9f\xb3\xe9\x87\x8f\xe3\x82\x92\xe3\x81\x9d\xe3\x82\x8d\xe3\x81\x88\xe3\x82\x8b", "2 LEVEL"));
+    const bool legacyEnSec = (isV10 || isV13);
+    drawPanel (cleanArea, legacyEnSec ? juce::String ("1. CLEAN UP") : language->T ("\x31\x20\xe3\x81\x8d\xe3\x82\x8c\xe3\x81\x84\xe3\x81\xab\xe3\x81\x99\xe3\x82\x8b", "1 CLEAN UP"));
+    drawPanel (dynArea,   legacyEnSec ? juce::String ("2. DYNAMICS") : language->T ("\x32\x20\xe9\x9f\xb3\xe9\x87\x8f\xe3\x82\x92\xe3\x81\x9d\xe3\x82\x8d\xe3\x81\x88\xe3\x82\x8b", "2 LEVEL"));
     // v3.0「つぶさない」がいま何dBゆるめているか。**数字を出す**のは、
     //  「判断が曖昧で雑」と言われたときの答えが「賢くします」ではなく
     //  「何をどう測ってそう決めたかを見せます」だと思っているから（点検と同じ思想）。
@@ -7432,8 +7630,8 @@ void VocalGzzioContent::paint (juce::Graphics& g)
         fitText (g, juce::String (db, 1) + " dB", crushReadArea,
                  juce::Justification::centredRight, 13.0f, true);
     }
-    drawPanel (toneArea,  language->T ("\x33\x20\xe9\x9f\xb3\xe8\x89\xb2\xe3\x82\x92\xe3\x81\xa4\xe3\x81\x8f\xe3\x82\x8b", "3 TONE"));
-    drawPanel (spaceArea, {}); // 見出しの席を明示的なリバーブ入／切に使う。
+    drawPanel (toneArea,  legacyEnSec ? juce::String ("3. TONE") : language->T ("\x33\x20\xe9\x9f\xb3\xe8\x89\xb2\xe3\x82\x92\xe3\x81\xa4\xe3\x81\x8f\xe3\x82\x8b", "3 TONE"));
+    drawPanel (spaceArea, isV10 ? juce::String ("4. OUTPUT / SPACE") : juce::String()); // 見出しの席を明示的なリバーブ入／切に使う。
     // v1.6.0: caption for the reverb-type pulldown in the section-4 header
     // v3.0-c: 席は resized() が実測で決める（空なら「テンポフィット」に譲った合図）
     if (! revTypeLabArea.isEmpty())
@@ -7442,9 +7640,9 @@ void VocalGzzioContent::paint (juce::Graphics& g)
         fitText (g, language->T ("\xe3\x81\xb2\xe3\x81\xb3\xe3\x81\x8d\xe3\x81\xae\xe7\xa8\xae\xe9\xa1\x9e", "Reverb type"),
                  revTypeLabArea, juce::Justification::centredRight, 11.5f, true);
     }
-    drawPanel (seqArea,   juce::String());   // header hosts the EQ | effects tabs
+    drawPanel (seqArea, (eraNow <= 170 && ! showAllKnobs) ? language->T ("ダイナミックEQ", "DYNAMIC EQ") : juce::String());   // header hosts the EQ | effects tabs
 
-    if (currentTab == 0)
+    if (! seqArea.isEmpty() && currentTab == 0)
     {
         // The EQ graph itself is drawn by the EQGraph child component (eqGraphArea).
         // Info line in the gap between the graph and the knob strip shows the
@@ -7462,7 +7660,7 @@ void VocalGzzioContent::paint (juce::Graphics& g)
                                                 seqArea.getWidth() - 8, lines * 18),
                           juce::Justification::centredTop, lines, 1.0f);
     }
-    else
+    else if (! seqArea.isEmpty())
     {
         // effects tab: section mini-headers, hairline separators, description strip
         g.setColour (Palette::accentOn (Palette::inkSoft, Palette::panel));   // v2.0.0
@@ -7638,7 +7836,66 @@ void VocalGzzioContent::resized()
     const int H   = getHeight();
     const int pad = 12;
     const int bh  = 22;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
+    const bool isV10 = (eraNow == 100 && ! showAllKnobs);
+    const bool isV13 = (eraNow == 130 && ! showAllKnobs);
     voiceStageArea = {};
+
+    // ======================= 🕰️ 初代 v1.0.0 1列縦積み専用レイアウト (v1.0.0_ui.png 完全一致) =======================
+    if (isV10)
+    {
+        heroArea = heroTitleArea = latBadgeArea = srcModeLabelArea = lvMeterArea = {};
+        crossArea = seqArea = eqGraphArea = analysisArea = atColArea = keyColArea = {};
+        revTypeLabArea = crushReadArea = fxWarnArea = {};
+        focusHeadArea = focusTipArea = focusFinishArea = focusSideArea = focusMeterArea = {};
+        focusEmpty.setVisible (false);
+        focusCompare.setVisible (false);
+        railView.setVisible (false);
+        fontSliderLabel.setVisible (false); fontSlider.setVisible (false);
+        zoomSliderLabel.setVisible (false); zoomSlider.setVisible (false);
+        themePainter.setBounds (getLocalBounds());
+
+        sizePopBtn.setBounds (W - pad - 140, 12, 140, 32);
+
+        const int fullW = W - pad * 2;
+        const int barY = 74, barH = 26;
+        voiceBox   .setBounds (pad,       barY, 220, barH);
+        micBox     .setBounds (pad + 226, barY, 200, barH);
+        sceneSolo  .setBounds (pad + 436, barY, 106, barH);
+        sceneTalk  .setBounds (pad + 546, barY, 106, barH);
+        sceneBand  .setBounds (pad + 656, barY, 106, barH);
+        abA        .setBounds (pad + 774, barY, 34,  barH);
+        abB        .setBounds (pad + 812, barY, 34,  barH);
+        abCopy     .setBounds (pad + 850, barY, 50,  barH);
+        saveButton .setBounds (pad + 906, barY, 68,  barH);
+        loadButton .setBounds (pad + 978, barY, 68,  barH);
+        resetButton.setBounds (W - pad - 80, barY, 80, barH);
+
+        int y0 = 108;
+        const int avail  = H - 8 - y0;
+        const int tunerH = 84;
+        const int cardH  = juce::jmax (116, (avail - tunerH - 8 * 4) / 4);
+        tuner.setVisible (true);
+        tuner.setBounds (pad, y0, fullW, tunerH); y0 += tunerH + 8;
+        cleanArea = { pad, y0, fullW, cardH };    y0 += cardH + 8;
+        dynArea   = { pad, y0, fullW, cardH };    y0 += cardH + 8;
+        toneArea  = { pad, y0, fullW, cardH };    y0 += cardH + 8;
+        spaceArea = { pad, y0, fullW, juce::jmax (116, H - 8 - y0) };
+
+        placeRow (cleanArea, { &gate, &lowCut, &mudK, &harshK, &denoiseK });
+        placeRow (dynArea,   { &comp1K, &comp2K, &attackK, &releaseK, &deessK });
+        placeRow (toneArea,  { &presenceK, &airK, &warmthK, &sustainK, nullptr });
+        placeRow (spaceArea, { &makeupK, &mixK, &widthK, &doublerK, &delayK, &revSizeK, &revMixK });
+
+        learnButton.setBounds (cleanArea.getRight() - 84, cleanArea.getY() + 3, 78, 19);
+        placeLamp (lampGate, gate);
+        placeLamp (lampDn,   denoiseK);
+        placeLamp (lampDs,   deessK);
+        placeLamp (lampDbl,  doublerK);
+        placeLamp (lampDly,  delayK);
+        placeLamp (lampRev,  revMixK);
+        return;
+    }
 
     // cell placer without a panel header (shared by several sections)
     auto placeCells = [fs2 = fontScale] (juce::Rectangle<int> area, std::initializer_list<Knob*> ks)
@@ -7829,97 +8086,90 @@ void VocalGzzioContent::resized()
     // v2.12.0: ヘッダが2段/3段で伸び縮みするので、開始位置はその下端に追従させる。
     heroBig  = ! advancedMode;
     heroTitleArea = {};                       // かんたんモードのときだけ resized が埋める
-    heroArea = { pad, juce::jmax (78, yRow), W - pad * 2, heroBig ? 76 : 50 };
-    overviewReturn.setBounds (heroArea.getX() + 8, heroArea.getY() + (heroArea.getHeight() - 36) / 2, 120, 36);
-
-    // v2.9.0 セッションモード: ヒーロー帯の右端に「セッション」スイッチと
-    // 「追加遅延 +0.0ms」バッジを置く。**かんたん/こだわりのどちらでも同じ位置**に
-    // 出すので、セッション中にモードを行き来しても迷子にならない。
-    // 先に席を取ってから、残りの幅で中央のボタンとヒント文を割り振る。
-    const int kSrcBoxW   = 112;    // v2.10.0 音源モード(うた/アコギ/しゃべり)
-    const int kSrcLabW   = 62;     //          その見出し「音の種類」
-    const int kSessBtnW  = 116;
-    const int kSessBadgeW = 108;
-    const int kChkBtnW    = 66;    // v2.10.0 点検
-    // v2.10.0 音源モードもこの席に入れる。ヘッダ2段目に置いたら、テーマ帯
-    //  (crossArea は x=W-380 から、y も2段目まで届く)の下敷きになって見えなかった。
-    //  ここは「その回ぜんぶに効く大きな選択」が並ぶ場所なので、意味の上でも合っている。
-    const int kSessBlockW = kSrcLabW + 4 + kSrcBoxW + 12
-                          + kChkBtnW + 8 + kSessBadgeW + 8 + kSessBtnW + 12;
+    if (isV13)
     {
-        const int sbH = 36;
-        const int yTop = heroArea.getY() + (heroArea.getHeight() - sbH) / 2;
-        sessionButton.setBounds (heroArea.getRight() - 12 - kSessBtnW, yTop, kSessBtnW, sbH);
-        const int badgeRight = sessionButton.isVisible() ? (sessionButton.getX() - 8) : (heroArea.getRight() - 12);
-        latBadgeArea = { badgeRight - kSessBadgeW, heroArea.getY() + 3,
-                         kSessBadgeW, heroArea.getHeight() - 6 };
-        // 点検はバッジのすぐ左。バッジの数字の「出どころ」を確かめる場所なので、隣が自然。
-        checkupButton.setBounds (latBadgeArea.getX() - 8 - kChkBtnW, yTop, kChkBtnW, sbH);
-        // 音源モードは点検のさらに左。見出し「音の種類」はその左に描く。
-        srcModeBox.setBounds (checkupButton.getX() - 12 - kSrcBoxW, yTop, kSrcBoxW, sbH);
-        srcModeLabelArea = { srcModeBox.getX() - 4 - kSrcLabW, heroArea.getY() + 3,
-                             kSrcLabW, heroArea.getHeight() - 6 };
-    }
-
-    if (heroBig)
-    {
-        // v2.4.0: うた自動(10秒おまかせ)が主役。画面中央にどんと置き、
-        // トーク自動はその左に控えめに。ヒントは右側の余白に描く。
-        // v2.9.0: セッション席(右端244px)を除いた中央へ寄せる。真ん中のままだと
-        // ヒント文の幅が170pxまで潰れて読めなくなる。
-        const int bw = 340, bh = 56;
-        const int cx = (W - kSessBlockW) / 2;
-        // v3.0-c ★「トーク自動」が見出し「おまかせ設定」に食い込んでいた。
-        //  さらに左端には「総合画面 (overviewReturn)」ボタンが居るので、見出しの開始位置は
-        //  overviewReturn の右隣から取り、2つのボタンをまとめて右へずらす。
-        const int autoW = 168;
-        int songX = cx - bw / 2;
-        int autoX = songX - 12 - autoW;
-        const int titleNeed = juce::GlyphArrangement::getStringWidthInt (
-            cfont (20.0f, true), language->hero_title());
-        heroTitleArea = { overviewReturn.getRight() + 10, heroArea.getY(),
-                          juce::jmax (132, titleNeed + 8), heroArea.getHeight() };
-        if (autoX < heroTitleArea.getRight() + 12)
-        {
-            const int shift = heroTitleArea.getRight() + 12 - autoX;
-            autoX += shift; songX += shift;
-        }
-        // 右のセッション席へめり込まないところで止める
-        const int rightStop = srcModeLabelArea.getX() - 12;
-        if (songX + bw > rightStop) songX = juce::jmax (autoX + autoW + 12, rightStop - bw);
-        songSetupButton.setBounds (songX, heroArea.getY() + (heroArea.getHeight() - bh) / 2, bw, bh);
-        autoSetupButton.setBounds (autoX, heroArea.getY() + (heroArea.getHeight() - 44) / 2,
-                                   autoW, 44);
-        songSetupButton.getProperties().set ("fontH", 20.0);   // 大ボタンに合う文字へ
-        autoSetupButton.getProperties().set ("fontH", 15.0);
+        // 🕰️ v1.3.0 はおまかせ設定ヒーロー帯も「かんたんモード」スイッチも存在しない (v1.3.0_ui.png 完全一致)
+        heroArea = {};
+        latBadgeArea = {};
+        srcModeLabelArea = {};
+        crossArea = {};
+        lvMeterArea = {};
     }
     else
     {
-        const int bw = 128, bh = 36;
-        auto hb = heroArea.reduced (10, (heroArea.getHeight() - bh) / 2);
-        hb.removeFromLeft (128);                       // overviewReturn button slot
-        autoSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (bh));
-        hb.removeFromLeft (8);
-        songSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (bh));
-        songSetupButton.getProperties().remove ("fontH");
-        autoSetupButton.getProperties().remove ("fontH");
-        // the rest of the band paints the hint / result message
+        heroArea = { pad, juce::jmax (78, yRow), W - pad * 2, heroBig ? 76 : 50 };
+        overviewReturn.setBounds (heroArea.getX() + 8, heroArea.getY() + (heroArea.getHeight() - 36) / 2, 120, 36);
+
+        // v2.9.0 セッションモード: ヒーロー帯の右端に「セッション」スイッチと
+        // 「追加遅延 +0.0ms」バッジを置く。**かんたん/こだわりのどちらでも同じ位置**に
+        // 出すので、セッション中にモードを行き来しても迷子にならない。
+        // 先に席を取ってから、残りの幅で中央のボタンとヒント文を割り振る。
+        const int kSrcBoxW   = 112;    // v2.10.0 音源モード(うた/アコギ/しゃべり)
+        const int kSrcLabW   = 62;     //          その見出し「音の種類」
+        const int kSessBtnW  = 116;
+        const int kSessBadgeW = 108;
+        const int kChkBtnW    = 66;    // v2.10.0 点検
+        const int kSessBlockW = kSrcLabW + 4 + kSrcBoxW + 12
+                              + kChkBtnW + 8 + kSessBadgeW + 8 + kSessBtnW + 12;
+        {
+            const int sbH = 36;
+            const int yTop = heroArea.getY() + (heroArea.getHeight() - sbH) / 2;
+            sessionButton.setBounds (heroArea.getRight() - 12 - kSessBtnW, yTop, kSessBtnW, sbH);
+            const int badgeRight = sessionButton.isVisible() ? (sessionButton.getX() - 8) : (heroArea.getRight() - 12);
+            latBadgeArea = { badgeRight - kSessBadgeW, heroArea.getY() + 3,
+                             kSessBadgeW, heroArea.getHeight() - 6 };
+            // 点検はバッジのすぐ左。バッジの数字の「出どころ」を確かめる場所なので、隣が自然。
+            checkupButton.setBounds (latBadgeArea.getX() - 8 - kChkBtnW, yTop, kChkBtnW, sbH);
+            // 音源モードは点検のさらに左。見出し「音の種類」はその左に描く。
+            srcModeBox.setBounds (checkupButton.getX() - 12 - kSrcBoxW, yTop, kSrcBoxW, sbH);
+            srcModeLabelArea = { srcModeBox.getX() - 4 - kSrcLabW, heroArea.getY() + 3,
+                                 kSrcLabW, heroArea.getHeight() - 6 };
+        }
+
+        if (heroBig)
+        {
+            const int bw = 340, bh = 56;
+            const int cx = (W - kSessBlockW) / 2;
+            const int autoW = 168;
+            int songX = cx - bw / 2;
+            int autoX = songX - 12 - autoW;
+            const int titleNeed = juce::GlyphArrangement::getStringWidthInt (
+                cfont (20.0f, true), language->hero_title());
+            const int leftAnchor = overviewReturn.isVisible() ? (overviewReturn.getRight() + 10) : (heroArea.getX() + 14);
+            heroTitleArea = { leftAnchor, heroArea.getY(),
+                              juce::jmax (132, titleNeed + 8), heroArea.getHeight() };
+            if (autoX < heroTitleArea.getRight() + 12)
+            {
+                const int shift = heroTitleArea.getRight() + 12 - autoX;
+                autoX += shift; songX += shift;
+            }
+            const int rightStop = (srcModeBox.isVisible() ? srcModeLabelArea.getX() : latBadgeArea.getX()) - 12;
+            if (songX + bw > rightStop) songX = juce::jmax (autoX + autoW + 12, rightStop - bw);
+            songSetupButton.setBounds (songX, heroArea.getY() + (heroArea.getHeight() - bh) / 2, bw, bh);
+            autoSetupButton.setBounds (autoX, heroArea.getY() + (heroArea.getHeight() - 44) / 2,
+                                       autoW, 44);
+            songSetupButton.getProperties().set ("fontH", 20.0);
+            autoSetupButton.getProperties().set ("fontH", 15.0);
+        }
+        else
+        {
+            const int bw = 128, bh = 36;
+            auto hb = heroArea.reduced (10, (heroArea.getHeight() - bh) / 2);
+            if (overviewReturn.isVisible())
+                hb.removeFromLeft (128);                   // overviewReturn button slot
+            autoSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (bh));
+            hb.removeFromLeft (8);
+            songSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (bh));
+            songSetupButton.getProperties().remove ("fontH");
+            autoSetupButton.getProperties().remove ("fontH");
+        }
     }
 
     // ---- left column: tuner + CLEAN UP / DYNAMICS / TONE (big knobs) ----
-    const int top   = heroArea.getBottom() + 8;   // header (72) + hero band + gap
+    const int top   = heroArea.isEmpty() ? juce::jmax (76, yRow + 4) : (heroArea.getBottom() + 8);
     const int gap   = 6;
 
     // ================= v3.0-c 「音のとおり道」の常設列 ========================
-    //  設計書 §4「左1/4 = 音のとおり道」。前回は吹き出しの中だったカードを、
-    //  ここで画面の左端へ**常時**出す。
-    //
-    //  幅は固定しない。カードの中の名前とひとことを実測して、いちばん長い物が
-    //  切れない幅を出す（文字を150%にすれば列も広がる）。ただし画面の 1/3 を
-    //  超えたら打ち止めにして、あふれるぶんはカード側で折り返す。
-    //  縦に入り切らないぶんは Viewport が縦スクロールを出す。
-    // =========================================================================
-    const int  eraNow   = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
     const bool showRail = advancedMode && (eraNow >= 300);
     const int  railGap  = 10;
     const int  leftW    = (advancedMode && ! showRail) ? 580 : 520;   // v2.3.0: 1段目が7ノブになったぶん左列を拡張（v1.0〜v2.4再現時は2列構成のため580px）
@@ -7988,6 +8238,29 @@ void VocalGzzioContent::resized()
         const int avail   = H - bgStrip - availTop - 8;
         const int tunerH  = 240;
         const int panelH  = juce::jmin (390, avail - tunerH - 14);
+        if (eraNow <= 240 && ! showAllKnobs)
+        {
+            // 🕰️ v2.4.0 かんたんモード (v2.4.0_simple.png 完全一致: 横幅いっぱいの大型チューナー＋よく使う7ツマミ)
+            tuner.setBounds (pad, availTop, fullW, tunerH);
+            voiceStageArea = {};
+            cleanArea = { pad, availTop + tunerH + 14, fullW, panelH };
+            dynArea = toneArea = spaceArea = seqArea = {};
+            eqGraphArea = analysisArea = atColArea = keyColArea = {};
+
+            rowScale = 1.45f;
+            placeRow (cleanArea, { &denoiseK, &mudK, &harshK, &comp2K, &deessK, &revMixK, &mixK });
+            rowScale = 1.0f;
+            learnButton.setBounds (cleanArea.getRight() - 120, cleanArea.getY() + 6, 108, 28);
+            relearnBtn.setVisible (false);
+            dnClearButton.setVisible (false);
+            reverbPower.setVisible (false);
+            placeLamp (lampDn,  denoiseK);
+            placeLamp (lampDs,  deessK);
+            placeLamp (lampRev, revMixK);
+            crushBtn.setVisible (false);
+            crushReadArea = {};
+            return;
+        }
         const int stageW = juce::roundToInt ((float) fullW * 0.44f);
         tuner.setBounds (pad, availTop, fullW - stageW - 14, tunerH);
         voiceStageArea = { pad + fullW - stageW, availTop, stageW, tunerH };
@@ -8009,10 +8282,6 @@ void VocalGzzioContent::resized()
         placeLamp (lampDn,  denoiseK);
         placeLamp (lampRev, revMixK);
         reverbPower.setBounds (dnClearButton.getX() - 8 - 142, cleanArea.getY() + 6, 142, 32);
-        // v3.0-c ★ここは setBounds(0,0,0,0) にしていた。見た目には出ないが
-        //  「見えていることになっている幅0のボタン」なので、検査が
-        //  「使える幅 -28px」＝**必ず「…」になる物**として拾い続けていた。
-        //  隠すつもりなら、ちゃんと隠す。
         crushBtn.setVisible (false);
         crushReadArea = {};
         return;
@@ -8947,7 +9216,7 @@ void VocalGzzioContent::refreshLanguage()
 
 void VocalGzzioContent::setThemeMode (int m)
 {
-    const int clamped = juce::jlimit (0, 19, m);
+    const int clamped = juce::jlimit (0, 20, m);
     if (themeInitialised && themeMode == clamped && language->english == (clamped == 3))
         return;
     themeInitialised = true;
@@ -9637,58 +9906,58 @@ const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionS
         { 5,  433, "v4.3.3",
           "3ステップ総合画面（オートミキサー＆実測部屋残響）",
           "3-Step Classic Overview (Auto-Mixer & Room IR Convolution)",
-          "「1 整える・2 声を決める・3 空間と仕上げ」の3カード総合画面と6種の部屋IR畳み込みリバーブ世代。Argon 4軸DSPは完全スリープします。",
+          "「1 整える・2 声をつくる・3 空間をつくる」の3カード総合画面と6種の部屋IR畳み込みリバーブ世代。Argon 4軸DSPは完全スリープします。",
           "Classic 3-card overview (Clean / Shape / Space) and 6 room IR spaces. Argon 4-axis DSP sleeps at 0 CPU.",
-          "assets/archive-ui/v4.3.3_overview.png", 0, true, 0, 3, 0 },
+          "assets/archive-ui/v4.3.3_overview.png", 0, true, 0, 3, 10 },
 
         { 6,  400, "v4.0.0",
           "初代オーバービュー総合画面＆1クリックととのえる",
           "First-Gen Overview Screen & 1-Click Auto-Setup",
           "総合画面が初めて登場した記念すべき v4.0 世代。上部に大型チューナー、下部に3カードを並べたクラシック構成で軽快に動作します。",
           "The original v4.0 Overview generation with large top tuner, 3-card layout, and lightweight DSP.",
-          "assets/archive-ui/v4.2.0_overview.png", 0, true, 0, 3, 0 },
+          "assets/archive-ui/v4.2.0_overview.png", 0, true, 0, 3, 10 },
 
         { 7,  310, "v3.1.0",
           "「音のとおり道」左列常設＆詳細3列スタジオ画面",
           "Signal Path Rail & 3-Column Studio Detail View",
           "左端に「音のとおり道」8モジュール列を常設した詳細3列レイアウト世代。「つぶさない」保護・自動ノイズ再学習・アコギピック抑制を搭載。",
           "3-column detail layout with the 8-module Signal Path Rail, Anti-Crush guard, and auto noise re-learn.",
-          "assets/archive-ui/v4.3.3_detail.png", 1, true, 0, 0, 0 },
+          "assets/archive-ui/v4.3.3_detail.png", 1, true, 0, 0, 7 },
 
         { 8,  240, "v2.4.0",
-          "かんたん1列モード（10秒おまかせ設定＋特大6ツマミ）",
-          "Easy 1-Row Mode (10s Auto-Setup + 6 Giant Knobs)",
-          "初めてでも迷わず触れる「かんたんモード」世代。10秒おまかせ設定・大型チューナー・主要6ツマミだけに絞った超低負荷レイアウトです。",
-          "Easy 1-row mode with 10s Auto-Setup, large pitch tuner, and 6 essential giant knobs.",
-          "assets/archive-ui/v2.4.0_simple.png", 1, false, 0, 0, 0 },
+          "かんたん1列モード（10秒おまかせ設定＋よく使う7ツマミ）",
+          "Easy 1-Row Mode (10s Auto-Setup + 7 Essential Knobs)",
+          "初めてでも迷わず触れる「かんたんモード」世代。10秒おまかせ設定・大型チューナー・よく使う7ツマミだけに絞った超低負荷レイアウトです。",
+          "Easy 1-row mode with 10s Auto-Setup, large pitch tuner, and 7 essential giant knobs.",
+          "assets/archive-ui/v2.4.0_simple.png", 1, false, 0, 0, 7 },
 
         { 9,  200, "v2.0.0",
           "エモート表現（息・エモ・サビリフト）＆伝統2列詳細画面",
           "Emote Expression (Breath/Emo/Chorus Lift) & 2-Column UI",
           "左列「音のとおり道」以前の伝統的な2列詳細画面。息・エモ・サビリフト・ピッチ補正・5人ユニゾンまでの構成で軽快に動作します。",
           "Classic 2-column detail UI with Breath/Emo/Chorus Lift, Auto-Tune, and 5-Voice Unison.",
-          "assets/archive-ui/v1.9.0_standard.png", 1, true, 0, 0, 0 },
+          "assets/archive-ui/v1.9.0_standard.png", 1, true, 0, 0, 7 },
 
         { 10, 170, "v1.7.0",
-          "ゆるふわパステル＆ジュースグラス2列画面",
-          "Yuru-Kawa Pastel & Juice Glass 2-Column UI",
-          "大人気の「ゆるふわ」パステル配色とジュースグラス型ツマミ・右下のジュースサーバーが登場した2列世代。ピッチ補正・ユニゾン休止で超低負荷。",
-          "Beloved Yuru-Kawa pastel theme with juice-glass knobs and corner dispenser in a 2-column layout. Very low CPU.",
-          "assets/archive-ui/v1.7.0_yurufuwa.png", 1, true, 1, 1, 1 },
+          "ゆるふわパステル＆機械式ギア2列画面",
+          "Yuru-Kawa Pastel & Mechanical Gear 2-Column UI",
+          "大人気の「ゆるふわ」パステル配色と機械式デュアルギアツマミ・右下のジュースサーバーが登場した2列世代。ピッチ補正・ユニゾン休止で超低負荷。",
+          "Beloved Yuru-Kawa pastel theme with dual-gear knobs and corner dispenser in a 2-column layout. Very low CPU.",
+          "assets/archive-ui/v1.7.0_yurufuwa.png", 1, true, 1, 1, 7 },
 
         { 11, 130, "v1.3.0",
-          "ダーク・ティール2列スタジオ＆スマート動的EQ",
-          "Dark Teal 2-Column Studio & Smart Dynamic EQ",
-          "ダーク・ティール配色と3バンド手動/自動スマート動的EQが確立された初期2列スタジオ世代。基本ストリップのみで極小CPU負荷で動作します。",
-          "Early 2-column dark teal studio UI with 3-band Smart Dynamic EQ and core vocal strip at minimal CPU load.",
-          "assets/archive-ui/v1.3.0_ui.png", 1, true, 0, 2, 0 },
+          "ダーク・ネイビー2列スタジオ＆スマート動的EQ",
+          "Dark Navy 2-Column Studio & Smart Dynamic EQ",
+          "ダーク・ネイビー配色と3バンド手動/自動スマート動的EQが確立された初期2列スタジオ世代。基本ストリップのみで極小CPU負荷で動作します。",
+          "Early 2-column dark navy studio UI with 3-band Smart Dynamic EQ and core vocal strip at minimal CPU load.",
+          "assets/archive-ui/v1.3.0_ui.png", 1, true, 20, 2, 9 },
 
         { 12, 100, "v1.0.0",
-          "初代 クリーム・フラット2列（原点・最軽量モード）",
-          "Original Cream Flat 2-Column (Origin & Ultra-Light)",
-          "記念すべき初代 VocalGzzio v1.0.0！明るいクリーム背景・フラットベクターダイヤル・基本18ツマミ2列構成。後発DSPを全休止し最軽量で動作します。",
-          "The original VocalGzzio v1.0.0! Warm cream flat UI, 2-column 18-knob strip, and all post-v1.0 DSP asleep for minimum CPU.",
-          "assets/archive-ui/v1.0.0_ui.png", 1, true, 19, 3, 5 }
+          "初代 クリーム・フラット1列縦積み（原点・最軽量モード）",
+          "Original Cream Flat 1-Column Stack (Origin & Ultra-Light)",
+          "記念すべき初代 VocalGzzio v1.0.0！明るいクリーム背景・フラットリングダイヤル・基本18ツマミ縦積み構成。後発DSPを全休止し最軽量で動作します。",
+          "The original VocalGzzio v1.0.0! Warm cream flat UI, 1-column stacked 18-knob strip, and all post-v1.0 DSP asleep for minimum CPU.",
+          "assets/archive-ui/v1.0.0_ui.png", 1, true, 19, 3, 8 }
     };
     return kSpecs[juce::jlimit (0, kLegacyVersionCount - 1, id)];
 }
@@ -9725,6 +9994,7 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     {
         resized();
     }
+    tuner.resized();
 
     const juce::String msg = (spec.id == 0)
         ? language->T ("✨ 最新 v5.0.0（フル機能フラッグシップ）に戻しました。",
