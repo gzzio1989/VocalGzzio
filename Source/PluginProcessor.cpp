@@ -38,13 +38,47 @@ VocalGzzioProcessor::VocalGzzioProcessor()
     // hands us a saved project state (fresh insert, unsaved project, standalone).
     // A host-provided setStateInformation later simply overwrites this.
    #if ! VOCALGZZIO_TRIAL   // 体験版は前回の設定を覚えない（保存しないので読む物も作らない）
-    if (auto f = autosaveFile(); f.existsAsFile())
-        if (auto xml = juce::XmlDocument::parse (f))
-            applyStateXml (*xml);
-    // 新規起動時は常に最新版(v5.0.0)モードで立ち上げる（DAWプロジェクト保存の setStateInformation では過去版状態も復元される）
-    legacyVersionId.store  (0,    std::memory_order_relaxed);
-    legacyVersionEra.store (500,  std::memory_order_relaxed);
-    legacyEcoGate.store    (true, std::memory_order_relaxed);
+    {
+        auto f = autosaveFile();
+        bool loadedFromStandaloneSettings = false;
+        if (! gz::isTestDataIsolated())
+        {
+            const auto sf = gz::dataDirectory().getChildFile ("VocalGzzio.settings");
+            if (sf.existsAsFile() && (! f.existsAsFile() || sf.getLastModificationTime() > f.getLastModificationTime()))
+            {
+                if (auto sxml = juce::XmlDocument::parse (sf))
+                {
+                    for (auto* v = sxml->getFirstChildElement(); v != nullptr; v = v->getNextElement())
+                    {
+                        if (v->hasTagName ("VALUE") && v->getStringAttribute ("name") == "filterState")
+                        {
+                            juce::MemoryBlock mb;
+                            if (mb.fromBase64Encoding (v->getStringAttribute ("val")) && mb.getSize() > 0)
+                            {
+                                if (auto stateXml = getXmlFromBinary (mb.getData(), (int) mb.getSize()))
+                                {
+                                    applyStateXml (*stateXml);
+                                    flushAutosaveNow();
+                                    loadedFromStandaloneSettings = true;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (! loadedFromStandaloneSettings && f.existsAsFile())
+            if (auto xml = juce::XmlDocument::parse (f))
+                applyStateXml (*xml);
+
+        if (gz::isTestDataIsolated())
+        {
+            legacyVersionId.store  (0,    std::memory_order_relaxed);
+            legacyVersionEra.store (500,  std::memory_order_relaxed);
+            legacyEcoGate.store    (true, std::memory_order_relaxed);
+        }
+    }
    #endif
 
     apvts.state.addListener (this);
@@ -5010,6 +5044,7 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
     auto root = std::make_unique<juce::XmlElement> ("VOCALGZZIO");
     root->setAttribute ("ver", 4);   // v3.0-c: 3 以降は「直ったサビリフト」
                                      // v4.0.0: 4 以降は「学びなおし既定ON」
+    root->setAttribute ("savedAtMs", juce::String (juce::Time::currentTimeMillis()));
     if (auto params = apvts.copyState().createXml())
         root->addChildElement (params.release());
     auto* d = root->createNewChildElement ("DENOISE");
@@ -5062,7 +5097,6 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
     }
 
     // 🕰️ 歴代バージョン呼び出し状態（世代タイムマシン＆省負荷ゲート）
-    if (legacyVersionId.load (std::memory_order_relaxed) != 0 || ! legacyEcoGate.load (std::memory_order_relaxed))
     {
         auto* lv = root->createNewChildElement ("LEGACY_VER");
         lv->setAttribute ("id",  legacyVersionId.load (std::memory_order_relaxed));
@@ -5226,7 +5260,7 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
                 legacyVersionEra.store (juce::jlimit (100, 500, lv->getIntAttribute ("era", 500)), std::memory_order_relaxed);
                 legacyEcoGate.store    (lv->getIntAttribute ("eco", 1) != 0,                       std::memory_order_relaxed);
             }
-            else
+            else if (gz::isTestDataIsolated())
             {
                 legacyVersionId.store  (0,   std::memory_order_relaxed);
                 legacyVersionEra.store (500, std::memory_order_relaxed);
@@ -5445,7 +5479,7 @@ void VocalGzzioProcessor::timerCallback()
     stateDirty.store (false);      // 体験版は autosave を書かない
    #else
     if (stateDirty.load()
-        && juce::Time::getMillisecondCounter() - lastDirtyMs.load() > 1200)
+        && juce::Time::getMillisecondCounter() - lastDirtyMs.load() > 400)
         flushAutosaveNow();
    #endif
 }
@@ -5536,6 +5570,27 @@ void VocalGzzioProcessor::setStateInformation (const void* data, int sizeInBytes
    #endif
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
     {
+        if (! gz::isTestDataIsolated())
+        {
+            // スタンドアローン版とVST3版の間で直近に更新された設定・歴代バージョンを引き継ぐ：
+            // ホスト(DAW/OBS/StandaloneFilterWindow)が渡してきた保存チャンクよりも
+            // autosave.xml の方が新しい場合は、最新の autosave.xml 側を優先して適用する。
+            const auto chunkMs = xml->getStringAttribute ("savedAtMs").getLargeIntValue();
+            if (auto f = autosaveFile(); f.existsAsFile())
+            {
+                if (auto autoXml = juce::XmlDocument::parse (f))
+                {
+                    const auto autoMs = juce::jmax<juce::int64> (
+                        autoXml->getStringAttribute ("savedAtMs").getLargeIntValue(),
+                        f.getLastModificationTime().toMilliseconds());
+                    if (autoMs > chunkMs + 1500)
+                    {
+                        applyStateXml (*autoXml);
+                        return;
+                    }
+                }
+            }
+        }
         applyStateXml (*xml);
         markStateDirty();   // keep the autosave in sync with the restored project
     }

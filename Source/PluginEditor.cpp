@@ -6454,6 +6454,12 @@ void VocalGzzioContent::timerCallback()
     }
    #endif
 
+    if (processor.getLegacyVersionId() != lastAppliedLegacyVer
+        || processor.getLegacyEcoGate() != lastAppliedLegacyEco)
+    {
+        applyLegacyVersion (processor.getLegacyVersionId(), true);
+    }
+
     if (isOverview())
     {
         updateOverviewState();
@@ -9969,6 +9975,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
         processor.setLegacyEcoGate (true);
     const bool eco = processor.getLegacyEcoGate();
     processor.setLegacyVersionState (spec.id, spec.era);
+    lastAppliedLegacyVer = spec.id;
+    lastAppliedLegacyEco = eco;
 
     // 1. まず世代の画面モード（総合画面 vs 詳細/かんたん画面）と詳細フラグを切り替え
     focusMode = false;
@@ -10008,7 +10016,11 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     overviewHint = msg;
     infoText     = msg;
     autoSetupMsg = msg;
-    if (onUiStateChange) onUiStateChange ("ui_legacy_ver", spec.id);
+    if (onUiStateChange)
+    {
+        onUiStateChange ("ui_legacy_ver", spec.id);
+        onUiStateChange ("ui_legacy_eco", eco ? 1 : 0);
+    }
     repaint();
 }
 
@@ -10343,9 +10355,11 @@ private:
             return;
 
         const juce::String relPath = juce::String ("docs/") + spec.previewPng;
-        juce::File bases[2] = {
+        juce::File bases[4] = {
             juce::File::getCurrentWorkingDirectory(),
-            juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory()
+            juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory(),
+            juce::File::getSpecialLocation (juce::File::currentApplicationFile).getParentDirectory(),
+            juce::File::getSpecialLocation (juce::File::globalApplicationsDirectory).getChildFile ("VocalGzzio")
         };
         for (auto dir : bases)
         {
@@ -10417,10 +10431,11 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         o.applicationName = "VocalGzzio";
         o.filenameSuffix  = ".settings";
         o.folderName      = "VocalGzzio";
-       #if VOCALGZZIO_TESTING
-        o.folderName = gz::dataDirectory().getFullPathName();
-        o.osxLibrarySubFolder = "Application Support";
-       #endif
+        if (gz::isTestDataIsolated())
+        {
+            o.folderName = gz::dataDirectory().getFullPathName();
+            o.osxLibrarySubFolder = "Application Support";
+        }
         o.storageFormat   = juce::PropertiesFile::storeAsXML;
         o.millisecondsBeforeSaving = 2500;
         appProps.setStorageParameters (o);
@@ -10481,9 +10496,12 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
     // (the editor object is destroyed/recreated; these live in the shared file)
     content.onUiStateChange = [prefs] (const juce::String& key, int val)
     {
-        // PropertiesFile coalesces writes after 400 ms. A navigation click must
-        // not wait for a synchronous file replacement (antivirus/network profile).
-        if (prefs != nullptr) prefs->setValue (key, val);
+        if (prefs != nullptr)
+        {
+            prefs->setValue (key, val);
+            if (key.startsWith ("ui_legacy") || key == "ui_theme" || key == "ui_overview" || key == "ui_advanced" || key == "ui_arch")
+                prefs->saveIfNeeded();
+        }
     };
     content.getTuner().onRailChange = [prefs] (bool r)
     {
@@ -10523,8 +10541,17 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         }
         if (const char* ss = std::getenv ("GZ_SEASON"))  // test hook: force a season (0-3)
             content.forceSeason (juce::String (ss).getIntValue());
+        const int prefLegacyVer = (prefs != nullptr && prefs->containsKey ("ui_legacy_ver"))
+                                ? prefs->getIntValue ("ui_legacy_ver", -1) : -1;
+        if (prefs != nullptr && prefs->containsKey ("ui_legacy_eco"))
+            p.setLegacyEcoGate (prefs->getIntValue ("ui_legacy_eco", 1) != 0);
+
         if (const char* lv = std::getenv ("GZ_LEGACY_VER"))
             content.applyLegacyVersion (juce::String (lv).getIntValue(), true);
+        else if (prefLegacyVer > 0)
+            content.applyLegacyVersion (prefLegacyVer, true);
+        else if (prefLegacyVer == 0 && p.getLegacyVersionId() > 0)
+            content.applyLegacyVersion (0, true);
         else if (p.getLegacyVersionId() > 0)
             content.applyLegacyVersion (p.getLegacyVersionId(), true);
     }

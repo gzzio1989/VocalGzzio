@@ -5573,6 +5573,8 @@ private:
     void openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds);
     void openPresetMatrixMenu (juce::Rectangle<int> anchorScreenBounds);
     juce::Rectangle<int> detailVerBadgeRect; // 詳細・かんたん画面ヘッダの歴代バージョン切替バッジ領域
+    int  lastAppliedLegacyVer { 0 };
+    bool lastAppliedLegacyEco { true };
     bool overviewEnabled { true };
     int  overviewLayoutMode { 0 };     // 0=Argon Cockpit, 1=V-Liver Stage, 2=Studio Rack, 3=Classic
     bool overviewLayoutManual { false };

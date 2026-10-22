@@ -553,14 +553,26 @@ public:
     //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0), 500(v5.0.0)
     int   getLegacyVersionId() const noexcept  { return legacyVersionId.load (std::memory_order_relaxed); }
     int   getLegacyVersionEra() const noexcept { return legacyVersionEra.load (std::memory_order_relaxed); }
-    void  setLegacyVersionState (int id, int era) noexcept
+    void  setLegacyVersionState (int id, int era)
     {
         legacyVersionId.store (juce::jlimit (0, 12, id), std::memory_order_relaxed);
         legacyVersionEra.store (juce::jlimit (100, 500, era), std::memory_order_relaxed);
         markStateDirty();
+       #if ! VOCALGZZIO_TRIAL
+        if (! restoringState)
+            flushAutosaveNow();
+       #endif
     }
     bool  getLegacyEcoGate() const noexcept    { return legacyEcoGate.load (std::memory_order_relaxed); }
-    void  setLegacyEcoGate (bool on) noexcept  { legacyEcoGate.store (on, std::memory_order_relaxed); markStateDirty(); }
+    void  setLegacyEcoGate (bool on)
+    {
+        legacyEcoGate.store (on, std::memory_order_relaxed);
+        markStateDirty();
+       #if ! VOCALGZZIO_TRIAL
+        if (! restoringState)
+            flushAutosaveNow();
+       #endif
+    }
 
     //== v4.8.0 柱②：🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（Wet+Dry同時24bit保存） ==
     bool  isWavRecording() const noexcept      { return wavRecording.load (std::memory_order_relaxed); }
