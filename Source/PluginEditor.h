@@ -5537,8 +5537,8 @@ public:
     struct LegacyVersionSpec
     {
         int         id;             // 0 = v5.0.0 最新, 1..12 = 歴代世代
-        int         era;            // 100..500 (DSP省負荷ゲート＆世代別UIレイアウト判定)
-        const char* verTag;         // "v5.0.0", "v1.0.0" 等
+        int         era;            // 100..510 (DSP省負荷ゲート＆世代別UIレイアウト判定)
+        const char* verTag;         // "v5.1.0", "v5.0.0", "v1.0.0" 等
         const char* titleJa;
         const char* titleEn;
         const char* descJa;
@@ -5550,7 +5550,7 @@ public:
         int         ovLayout;       // overviewLayoutMode (0..3)
         int         knobStyle;      // GzzioLnF::s_knobStyle
     };
-    static constexpr int kLegacyVersionCount = 13;
+    static constexpr int kLegacyVersionCount = 14;
     static const LegacyVersionSpec& getLegacyVersionSpec (int id) noexcept;
     void applyLegacyVersion (int versionId, bool keepEcoGate = true);
     void openLegacyVersionPopup (juce::Rectangle<int> anchorScreenBounds);

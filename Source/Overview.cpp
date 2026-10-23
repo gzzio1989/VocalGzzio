@@ -305,8 +305,8 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
     if (topBrandVerRect.contains (pt))
     {
         openLegacyVersionPopup (localAreaToGlobal (juce::Rectangle<int> (68, 32, 160, 24)));
-        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.0.0までの13世代を選択して画面配置・配色・DSP構成を瞬時に再現します（必要な時だけ遅延読み込み＆世代別DSP自動スリープの省負荷設計）。",
-                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 13 generations from v1.0.0 to v5.0.0 with on-demand lazy loading and era-specific zero-CPU sleep gating.");
+        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.1.0までの14世代を選択して画面配置・配色・DSP構成を瞬時に再現します（必要な時だけ遅延読み込み＆世代別DSP自動スリープの省負荷設計）。",
+                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 14 generations from v1.0.0 to v5.1.0 with on-demand lazy loading and era-specific zero-CPU sleep gating.");
         return true;
     }
 
@@ -440,12 +440,12 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
-    // 1d-1b. ヘッダの「🕰 歴代バージョン呼び出し・世代タイムマシン (v5.0.0▼ / 遅延)」ピル
+    // 1d-1b. ヘッダの「🕰 歴代バージョン呼び出し・世代タイムマシン (v5.1.0▼ / 遅延)」ピル
     if (! latBadgeArea.isEmpty() && latBadgeArea.expanded (2, 4).contains (pt))
     {
         openLegacyVersionPopup (localAreaToGlobal (latBadgeArea));
-        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.0.0までの13世代を選択して画面配置・配色・DSP構成を瞬時に再現します（必要な時だけ遅延読み込み＆世代別DSP自動スリープの省負荷設計）。",
-                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 13 generations from v1.0.0 to v5.0.0 with on-demand lazy loading and era-specific zero-CPU sleep gating.");
+        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.1.0までの14世代を選択して画面配置・配色・DSP構成を瞬時に再現します（必要な時だけ遅延読み込み＆世代別DSP自動スリープの省負荷設計）。",
+                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 14 generations from v1.0.0 to v5.1.0 with on-demand lazy loading and era-specific zero-CPU sleep gating.");
         return true;
     }
 
@@ -579,16 +579,32 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         }
     }
 
-    // 1d-6. v5.0: フッター右デッキの「🔥サビ盛」ワンクリック華やか演出ピル
+    // 1d-6. v5.0/v5.1: フッター右デッキの「🔥サビ盛 ➔ 🤖サビ自動 ➔ OFF」3段階サイクル演出ピル
     if (! chorusPillRect.isEmpty() && chorusPillRect.expanded (2, 4).contains (pt))
     {
-        processor.toggleChorusBoostMode();
-        const bool on = processor.getChorusBoostMode();
-        overviewHint = on
-            ? language->T ("【🔥 サビ盛り演出 ON！】既存のツマミ位置を壊さずに、声の芯(+12%)・高域シルク艶(+18%)・立体ハロー(+22%)・ダブラー厚み・左右ステレオ幅を自動ブーストしました。サビ終わりに再クリックでAメロへ滑らかに戻ります。",
-                           "[CHORUS BOOST ON!] Non-destructively boosts Focus (+12%), Silk Air (+18%), 3D Halo (+22%), Doubler, and Stereo Width for an exciting chorus. Click again to return to verse.")
-            : language->T ("【🔥 サビ盛り演出 OFF】通常のAメロ・平歌バランスへ滑らかに戻しました。",
-                           "[CHORUS BOOST OFF] Smoothly returned to normal verse vocal balance.");
+        const bool curManual = processor.getChorusBoostMode();
+        const bool curAuto   = processor.getAutoChorusMode();
+        if (! curManual && ! curAuto)
+        {
+            processor.setChorusBoostMode (true);
+            processor.setAutoChorusMode (false);
+            overviewHint = language->T ("【🔥 サビ盛り演出 ON！（常時）】既存のツマミ位置を壊さずに、声の芯(+12%)・高域シルク艶(+18%)・立体ハロー(+22%)・ダブラー厚み・左右ステレオ幅を自動ブーストしました。もう一度押すと「🤖サビ自動検知モード」へ切り替わります。",
+                                        "[CHORUS BOOST ON!] Non-destructively boosts Focus (+12%), Silk Air (+18%), 3D Halo (+22%), Doubler, and Stereo Width. Click again for Auto-Chorus Director.");
+        }
+        else if (curManual)
+        {
+            processor.setChorusBoostMode (false);
+            processor.setAutoChorusMode (true);
+            overviewHint = language->T ("【🤖 サビ自動検知（Auto-Chorus Director）ON！】伴奏と歌声の盛り上がりをリアルタイム解析し、サビ突入で自動的にサビ盛りブーストを発動、Aメロに戻ると滑らかに解除します（息継ぎ2.4秒ホールド付き）。再クリックでOFFに戻ります。",
+                                        "[AUTO-CHORUS DIRECTOR ON!] Automatically triggers Chorus Boost when BGM & vocal energy reach the chorus, and smoothly returns to verse (2.4s breath hold). Click again to turn OFF.");
+        }
+        else
+        {
+            processor.setChorusBoostMode (false);
+            processor.setAutoChorusMode (false);
+            overviewHint = language->T ("【🔥 サビ盛り / 🤖 サビ自動検知 OFF】通常のAメロ・平歌バランスへ滑らかに戻しました。",
+                                        "[CHORUS BOOST / AUTO-CHORUS OFF] Smoothly returned to normal verse vocal balance.");
+        }
         repaint();
         return true;
     }
@@ -984,7 +1000,7 @@ void VocalGzzioContent::updateOverviewVisibility()
     }
 
     // 🕰️ v4.0.0 / v4.3.3 初代・3ステップ総合画面再現 (v4.2.0_overview.png / v4.3.3_overview.png 完全一致)
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 500;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 510;
     if (eraNow <= 433 && ! showAllKnobs)
     {
         for (auto* c : { (juce::Component*) &autoSetupButton, (juce::Component*) &songSetupButton,
@@ -1077,8 +1093,8 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
                             "Simultaneously streams processed audio to 'ライン (VocalGzzio Driver (WDM))' (or SYNCROOM Driver / VB-CABLE) while keeping your main interface on ASIO.");
     if ((! latBadgeArea.isEmpty() && latBadgeArea.contains (pt))
         || juce::Rectangle<int> (20, 10, 212, 50).contains (pt))
-        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.0.0までの13世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
-                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any of the 13 generations from v1.0.0 to v5.0.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
+        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.1.0までの14世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
+                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any of the 14 generations from v1.0.0 to v5.1.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
     if (irOverviewRect.contains (pt))
         return language->T ("実空間IR（インパルス応答）残響の音響減衰カーブと声優先ダッキングを表示します。クリックすると内蔵6部屋のIR切替・外部IRファイル(.wav/.aiff)の読込・歌っている最中の残響自動回避（声優先ダッキング）が選べます。",
                             "Displays the IR convolution decay curve and vocal-priority space ducking. Click to switch between 6 built-in rooms, load a custom IR (.wav/.aiff), or set vocal-priority ducking.");
@@ -1107,8 +1123,8 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
         return language->T ("【↺ 1タップ初期値リセット】選択中のツマミを1タップで初期値へ戻します。太い指でダブルタップが効きにくい場合でも確実にリセットできます。",
                             "[1-Tap Reset] Resets the selected knob to its default value with a single tap.");
     if (chorusPillRect.contains (pt))
-        return language->T ("【🔥 サビ1クリック華やか演出 (Chorus Boost)】クリックすると既存のツマミ設定を壊さずに、声の芯・高域の艶・立体ハロー・ダブラー厚み・左右の広がりをサビ向けに華やかにブーストします。もう一度押すとAメロへ滑らかに戻ります。",
-                            "[1-Click Chorus Boost] Non-destructively boosts vocal focus, silk air, 3D halo, doubler richness, and stereo width for an impactful chorus. Click again to return to verse.");
+        return language->T ("【🔥 サビ1クリック演出 ⇄ 🤖 サビ自動検知 (Chorus Boost / Auto-Chorus Director)】クリックするたびに「🔥サビ盛ON（常時） ➔ 🤖サビ自動検知（伴奏と声の盛り上がりで自動発動） ➔ OFF」を切り替えます。",
+                            "[1-Click Chorus Boost / Auto-Chorus Director] Click to cycle: Manual Chorus Boost ON -> Auto-Chorus Director (auto-triggers on chorus energy) -> OFF.");
     for (size_t s = 0; s < liveSeRects.size(); ++s)
         if (! liveSeRects[s].isEmpty() && liveSeRects[s].contains (pt))
             return language->T ("【👏 歌枠・VC盛り上げ ライブSEポン出しパッド】クリックすると拍手歓声・キラキラ・ドラムロール・チャイムの効果音を即座に再生し、自分の耳と配信出力（VocalGzzio Driver）の両方へ届けます。",
@@ -5250,20 +5266,31 @@ void VocalGzzioContent::paintOverview (juce::Graphics& g)
             }
         }
 
-        // ---- v5.0: フッター右デッキ「🔥サビ盛」＋「👏4種ライブSEポン出しパッド」描画 ----
+        // ---- v5.0/v5.1: フッター右デッキ「🔥サビ盛 / 🤖サビ自動」＋「👏4種ライブSEポン出しパッド」描画 ----
         if (! chorusPillRect.isEmpty())
         {
             const auto cf = chorusPillRect.toFloat();
-            const bool cOn = processor.getChorusBoostMode();
+            const bool cManual = processor.getChorusBoostMode();
+            const bool cAuto   = processor.getAutoChorusMode();
+            const bool cTrig   = cAuto && processor.isAutoChorusTriggered();
+            const bool cOn     = cManual || cAuto;
             const float rad = (accessMode == 3) ? 6.0f : 10.0f;
-            g.setColour (cOn ? Palette::salmon.withAlpha (0.34f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f));
+            const auto pillCol = cManual ? Palette::salmon
+                               : cTrig   ? Palette::green
+                               : cAuto   ? Palette::ice
+                                         : Palette::panelLn;
+            g.setColour (cOn ? pillCol.withAlpha (0.34f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f));
             g.fillRoundedRectangle (cf, rad);
-            g.setColour (cOn ? Palette::salmon : Palette::panelLn.withAlpha (0.75f));
+            g.setColour (cOn ? pillCol : Palette::panelLn.withAlpha (0.75f));
             g.drawRoundedRectangle (cf.reduced (0.5f), rad, cOn ? 1.8f : 1.1f);
             g.setColour (cOn ? Palette::ink : Palette::inkSoft);
-            fitText (g, cOn ? language->T ("★サビON!", "★CHORUS!")
-                            : language->T ("★サビ盛", "★CHORUS"),
-                     chorusPillRect.reduced (5, 0), juce::Justification::centred, 14.5f, true);
+            const juce::String cTxt = cManual
+                ? language->T ("★サビON!", "★CHORUS!")
+                : cAuto
+                    ? (cTrig ? language->T ("🤖サビ中!", "🤖AUTO!") : language->T ("🤖サビ自動", "🤖AUTO"))
+                    : language->T ("★サビ盛", "★CHORUS");
+            fitText (g, cTxt,
+                     chorusPillRect.reduced (4, 0), juce::Justification::centred, 14.0f, true);
         }
         static const char* const kSeShortJa[4] = { "♪拍手", "✦キラ", "◉ドラム", "♦ベル" };
         static const char* const kSeShortEn[4] = { "♪CLAP", "✦GLOW", "◉ROLL",  "♦BELL" };

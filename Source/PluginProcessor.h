@@ -547,16 +547,44 @@ public:
     void  setChorusBoostMode (bool b) noexcept { chorusBoostMode.store (b, std::memory_order_relaxed); }
     void  toggleChorusBoostMode() noexcept     { chorusBoostMode.store (! getChorusBoostMode(), std::memory_order_relaxed); }
 
+    //== v5.1.0 柱①：🎼 伴奏キー（調・長調/短調）＆ BPM 1秒自動解析エンジン（Auto-Key & Auto-Tempo Lock） ==
+    void  analyzeBgmKeyAndBpm();
+    void  applyBgmAutoKeyBpm();
+    int   getBgmDetectedKey() const noexcept   { return bgmDetectedKey.load (std::memory_order_relaxed); }
+    bool  getBgmDetectedMinor() const noexcept { return bgmDetectedMinor.load (std::memory_order_relaxed); }
+    int   getBgmDetectedBpm() const noexcept   { return bgmDetectedBpm.load (std::memory_order_relaxed); }
+    juce::String getBgmKeyBpmSummary (bool english = false) const;
+
+    //== v5.1.0 柱②：🤖 サビ自動検知・オートブースト（Auto-Chorus Director） ==
+    bool  getAutoChorusMode() const noexcept   { return autoChorusMode.load (std::memory_order_relaxed); }
+    void  setAutoChorusMode (bool b) noexcept
+    {
+        autoChorusMode.store (b, std::memory_order_relaxed);
+        if (! b) autoChorusTriggered.store (false, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleAutoChorusMode() noexcept      { setAutoChorusMode (! getAutoChorusMode()); }
+    bool  isAutoChorusTriggered() const noexcept { return autoChorusTriggered.load (std::memory_order_relaxed); }
+
+    //== v5.1.0 柱③：🎙️ ゼロ遅延・名機マイク・モデリング（0=OFF, 1=✨800G真空管, 2=👑U87王道, 3=📻SM7B配信, 4=💎ASMR極艶） ==
+    int   getMicModelMode() const noexcept     { return micModelMode.load (std::memory_order_relaxed); }
+    void  setMicModelMode (int m) noexcept
+    {
+        micModelMode.store (juce::jlimit (0, 4, m), std::memory_order_relaxed);
+        markStateDirty();
+    }
+    static const char* getMicModelName (int m, bool english = false) noexcept;
+
     //== 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ==
-    // id: 0 = v5.0.0 最新版, 1..12 = 歴代メジャー世代（v1.0.0〜v4.9.0）
+    // id: 0 = v5.1.0 最新版, 1..13 = 歴代メジャー世代（v1.0.0〜v5.0.0）
     // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
-    //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0), 500(v5.0.0)
+    //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0), 500(v5.0.0), 510(v5.1.0)
     int   getLegacyVersionId() const noexcept  { return legacyVersionId.load (std::memory_order_relaxed); }
     int   getLegacyVersionEra() const noexcept { return legacyVersionEra.load (std::memory_order_relaxed); }
     void  setLegacyVersionState (int id, int era)
     {
-        legacyVersionId.store (juce::jlimit (0, 12, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 500, era), std::memory_order_relaxed);
+        legacyVersionId.store (juce::jlimit (0, 13, id), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 510, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState)
@@ -1256,12 +1284,25 @@ private:
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 500 };
+    std::atomic<int>   legacyVersionEra   { 510 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
     std::atomic<bool>  chorusBoostMode    { false };
     float              chorusBoostEnv     { 0.0f };
+
+    // ---- v5.1.0 柱①〜③：伴奏キー＆BPM自動解析・サビ自動検知・名機マイクモデリング ----
+    std::atomic<int>   bgmDetectedKey     { 0 };
+    std::atomic<bool>  bgmDetectedMinor   { false };
+    std::atomic<int>   bgmDetectedBpm     { 120 };
+    std::atomic<bool>  autoChorusMode     { false };
+    std::atomic<bool>  autoChorusTriggered { false };
+    float              autoChorusHoldSec  { 0.0f };
+    std::atomic<int>   micModelMode       { 0 };
+    int                micModLastMode     { -1 };
+    double             micModLastSr       { 0.0 };
+    juce::dsp::IIR::Filter<float> micModSub[2], micModBody[2], micModPres[2], micModAir[2];
+    float              micModDc[2]        { 0.0f, 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

@@ -2810,6 +2810,20 @@ public:
         syncKeyBtn.onClick = [this] { processor.setBgmSyncKey (syncKeyBtn.getToggleState()); };
         addAndMakeVisible (syncKeyBtn);
 
+        autoKeyBpmBtn.setButtonText (language->T ("🎼 キー＆BPM自動反映", "🎼 Apply Key & BPM"));
+        autoKeyBpmBtn.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.28f));
+        autoKeyBpmBtn.onClick = [this]
+        {
+            if (! processor.hasBgmLoaded())
+                processor.loadBuiltinDemoBgm();
+            else
+                processor.analyzeBgmKeyAndBpm();
+            processor.applyBgmAutoKeyBpm();
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (autoKeyBpmBtn);
+
         bgmVolSlider.setSliderStyle (juce::Slider::LinearHorizontal);
         bgmVolSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 62, 22);
         bgmVolSlider.setRange (-36.0, 6.0, 0.5);
@@ -2903,6 +2917,21 @@ public:
             addAndMakeVisible (b);
         }
 
+        // ---- v5.1.0 柱③：🎙️ ゼロ遅延・名機マイク・モデリング（0=OFF, 1=800G, 2=U87, 3=SM7B, 4=ASMR） ----
+        for (int i = 0; i < 5; ++i)
+        {
+            auto& mb = micModBtns[(size_t) i];
+            mb.setButtonText (juce::String::fromUTF8 (VocalGzzioProcessor::getMicModelName (i, language->english)));
+            mb.setColour (juce::TextButton::buttonOnColourId, i == 0 ? Palette::blue : Palette::ice);
+            mb.onClick = [this, i]
+            {
+                processor.setMicModelMode (i);
+                refresh();
+                owner.repaint();
+            };
+            addAndMakeVisible (mb);
+        }
+
         // ---- 柱④：絶叫セーフティガード ＆ 咳払い瞬間ミュート ----
         coughBtn.setClickingTogglesState (true);
         coughBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
@@ -2923,7 +2952,7 @@ public:
         };
         addAndMakeVisible (screamGuardBtn);
 
-        // ---- v5.0.0 柱④：🔥 サビ1クリック華やか演出 ＆ 👏 4種ライブSEポン出しパッド ----
+        // ---- v5.0.0 柱④ ＆ v5.1.0 柱②：🔥 サビ1クリック華やか演出・🤖 サビ自動検知 ＆ 👏 4種ライブSEポン出しパッド ----
         chorusBoostBtn.setClickingTogglesState (true);
         chorusBoostBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
         chorusBoostBtn.setToggleState (processor.getChorusBoostMode(), juce::dontSendNotification);
@@ -2934,6 +2963,17 @@ public:
             owner.repaint();
         };
         addAndMakeVisible (chorusBoostBtn);
+
+        autoChorusBtn.setClickingTogglesState (true);
+        autoChorusBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        autoChorusBtn.setToggleState (processor.getAutoChorusMode(), juce::dontSendNotification);
+        autoChorusBtn.onClick = [this]
+        {
+            processor.setAutoChorusMode (autoChorusBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (autoChorusBtn);
 
         static const char* const kSeJa[4] = { "👏 拍手歓声", "✨ キラキラ", "🥁 ドラム!", "🔔 チャイム" };
         static const char* const kSeEn[4] = { "👏 Applause", "✨ Sparkle",  "🥁 Drumroll", "🔔 Chime"   };
@@ -2954,7 +2994,7 @@ public:
             addAndMakeVisible (sb);
         }
 
-        setSize (760, 604);
+        setSize (780, 642);
         refresh();
         startTimerHz (10);
     }
@@ -2984,17 +3024,17 @@ public:
         };
 
         drawSectionCard (secBgmRect,   Palette::green,
-                         language->T ("① 🎵 カラオケ・BGMプレイヤー ＆ ✨ 1クリック原曲ボーカル除去（キー±6・声優先ダッキング）",
-                                      "1. Karaoke / BGM Player & 1-Click Vocal Remover (Key Shift, Sync & Auto Ducking)"));
+                         language->T ("① 🎵 カラオケ・BGM ＆ 🎼 キー/BPM自動解析・✨ 1クリック原曲ボーカル除去",
+                                      "1. Karaoke / BGM, Auto-Key/BPM Lock & 1-Click Vocal Remover"));
         drawSectionCard (secRecRect,   Palette::salmon,
                          language->T ("② 🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（💿 -14LUFS完パケMIX＋Wet＋Dry同時保存）",
                                       "2. 1-Click WAV Recorder & 30s Retro Save (-14 LUFS FullMix + Wet + Dry 24-bit WAV)"));
         drawSectionCard (secDiagRect,  Palette::yellow,
-                         language->T ("③ 🎯 5秒声質ターゲット診断（あなたの声質×理想ターゲットの差分から2DオーブをAI自動調律）",
-                                      "3. 5s Voice Target AI Diagnosis (Auto-tunes 2D Argon Orb & EQ to target vocal curve)"));
+                         language->T ("③ 🎯 5秒声質ターゲットAI診断 ＆ 🎙️ ゼロ遅延・4大名機マイク・モデリング",
+                                      "3. 5s Voice Target AI Diagnosis & Zero-Latency Studio Mic Modeler (800G / U87 / SM7B / ASMR)"));
         drawSectionCard (secGuardRect, Palette::ice,
-                         language->T ("④ 🔥 サビ1クリック華やか演出・👏 ライブSEポン出し ＆ 🛡 絶叫ガード・咳払いミュート",
-                                      "4. Chorus Boost, 4 Live SE Pads, Scream Safety Limiter & Cough Instant Mute"));
+                         language->T ("④ 🔥 サビ盛り・🤖 サビ自動検知・👏 ライブSEポン出し ＆ 🛡 絶叫ガード・咳払いミュート",
+                                      "4. Chorus Boost, Auto-Chorus AI, 4 Live SE Pads, Scream Safety & Cough Mute"));
 
         // BGM状態＆プログレスバー描画
         {
@@ -3008,15 +3048,14 @@ public:
                 return juce::String (tot / 60) + ":" + juce::String (tot % 60).paddedLeft ('0', 2);
             };
             const juce::String bgmInfo = processor.getBgmTitle()
-                + (dur > 0.1f ? ("   [" + fmtTime (cur) + " / " + fmtTime (dur) + "]") : "");
-            g.drawText (bgmInfo, bgmStatusRect.withTrimmedRight (170), juce::Justification::centredLeft);
+                + (dur > 0.1f ? ("  [" + fmtTime (cur) + "/" + fmtTime (dur) + "]") : "");
+            g.drawText (bgmInfo, bgmStatusRect.withTrimmedRight (230), juce::Justification::centredLeft);
 
             const int semi = processor.getBgmPitchSemi();
-            const juce::String semiTxt = language->T ("現在キー: ", "Key: ")
-                                       + (semi > 0 ? "+" : "") + juce::String (semi)
-                                       + language->T (" 半音", " st");
-            g.setColour (semi != 0 ? Palette::yellow : Palette::inkSoft);
-            g.drawText (semiTxt, bgmStatusRect.withLeft (bgmStatusRect.getRight() - 166), juce::Justification::centredRight);
+            const juce::String semiTxt = processor.getBgmKeyBpmSummary (language->english)
+                                       + " (" + (semi > 0 ? "+" : "") + juce::String (semi) + ")";
+            g.setColour (semi != 0 ? Palette::yellow : Palette::ice);
+            g.drawText (semiTxt, bgmStatusRect.withLeft (bgmStatusRect.getRight() - 226), juce::Justification::centredRight);
 
             // プログレスバー（クリックでシーク可能）
             const auto pb = bgmProgRect.toFloat();
@@ -3120,17 +3159,18 @@ public:
 
             inner.removeFromTop (5);
             auto rProg = inner.removeFromTop (22);
-            bgmStatusRect = rProg.removeFromLeft (420);
+            bgmStatusRect = rProg.removeFromLeft (460);
             rProg.removeFromLeft (8);
             bgmProgRect   = rProg.reduced (0, 5);
 
             inner.removeFromTop (5);
             auto rKey = inner.removeFromTop (28);
-            keyDownBtn    .setBounds (rKey.removeFromLeft (76));  rKey.removeFromLeft (4);
-            keyZeroBtn    .setBounds (rKey.removeFromLeft (82));  rKey.removeFromLeft (4);
-            keyUpBtn      .setBounds (rKey.removeFromLeft (76));  rKey.removeFromLeft (6);
-            vocalCancelBtn.setBounds (rKey.removeFromLeft (180)); rKey.removeFromLeft (6);
-            syncKeyBtn    .setBounds (rKey.removeFromLeft (152)); rKey.removeFromLeft (6);
+            keyDownBtn    .setBounds (rKey.removeFromLeft (68));  rKey.removeFromLeft (4);
+            keyZeroBtn    .setBounds (rKey.removeFromLeft (72));  rKey.removeFromLeft (4);
+            keyUpBtn      .setBounds (rKey.removeFromLeft (68));  rKey.removeFromLeft (5);
+            vocalCancelBtn.setBounds (rKey.removeFromLeft (158)); rKey.removeFromLeft (5);
+            autoKeyBpmBtn .setBounds (rKey.removeFromLeft (144)); rKey.removeFromLeft (5);
+            syncKeyBtn    .setBounds (rKey.removeFromLeft (112)); rKey.removeFromLeft (5);
             bgmRouteBtn   .setBounds (rKey);
 
             inner.removeFromTop (5);
@@ -3144,32 +3184,40 @@ public:
         }
         b.removeFromTop (8);
 
-        // ② 1クリックWAV録音 ＆ 直前30秒さかのぼり保存 (106px)
-        secRecRect = b.removeFromTop (106);
+        // ② 1クリックWAV録音 ＆ 直前30秒さかのぼり保存 (104px)
+        secRecRect = b.removeFromTop (104);
         {
             auto inner = secRecRect.reduced (10, 6);
             inner.removeFromTop (26);
             auto r1 = inner.removeFromTop (32);
-            wavRecBtn    .setBounds (r1.removeFromLeft (202)); r1.removeFromLeft (6);
-            retroSaveBtn .setBounds (r1.removeFromLeft (236)); r1.removeFromLeft (6);
-            autoMasterBtn.setBounds (r1.removeFromLeft (168)); r1.removeFromLeft (6);
+            wavRecBtn    .setBounds (r1.removeFromLeft (206)); r1.removeFromLeft (6);
+            retroSaveBtn .setBounds (r1.removeFromLeft (240)); r1.removeFromLeft (6);
+            autoMasterBtn.setBounds (r1.removeFromLeft (174)); r1.removeFromLeft (6);
             openRecDirBtn.setBounds (r1);
             inner.removeFromTop (4);
             wavStatusRect = inner;
         }
         b.removeFromTop (8);
 
-        // ③ 5秒声質ターゲット診断（AIオートオーブ調律） (142px)
-        secDiagRect = b.removeFromTop (142);
+        // ③ 5秒声質ターゲット診断 ＆ ゼロ遅延・名機マイクモデリング (178px)
+        secDiagRect = b.removeFromTop (178);
         {
             auto inner = secDiagRect.reduced (10, 6);
             inner.removeFromTop (26);
-            auto r1 = inner.removeFromTop (32);
+            auto r1 = inner.removeFromTop (30);
             const int bw = (r1.getWidth() - 24) / 5;
             for (int i = 0; i < 5; ++i)
             {
                 diagBtns[(size_t) i].setBounds (r1.removeFromLeft (i == 4 ? r1.getWidth() : bw));
                 if (i < 4) r1.removeFromLeft (6);
+            }
+            inner.removeFromTop (5);
+            auto rMic = inner.removeFromTop (30);
+            const int mw = (rMic.getWidth() - 24) / 5;
+            for (int i = 0; i < 5; ++i)
+            {
+                micModBtns[(size_t) i].setBounds (rMic.removeFromLeft (i == 4 ? rMic.getWidth() : mw));
+                if (i < 4) rMic.removeFromLeft (6);
             }
             inner.removeFromTop (4);
             diagBarsRect = inner.removeFromTop (22);
@@ -3178,13 +3226,14 @@ public:
         }
         b.removeFromTop (8);
 
-        // ④ サビ盛り・ライブSEポン出し ＆ 絶叫セーフティガード・咳払いミュート (残り ~124px)
+        // ④ サビ盛り・サビ自動検知・ライブSEポン出し ＆ 絶叫セーフティガード・咳払いミュート (残り ~128px)
         secGuardRect = b;
         {
             auto inner = secGuardRect.reduced (10, 6);
             inner.removeFromTop (26);
             auto rLive = inner.removeFromTop (32);
-            chorusBoostBtn.setBounds (rLive.removeFromLeft (206)); rLive.removeFromLeft (6);
+            chorusBoostBtn.setBounds (rLive.removeFromLeft (162)); rLive.removeFromLeft (5);
+            autoChorusBtn .setBounds (rLive.removeFromLeft (148)); rLive.removeFromLeft (6);
             const int seW = (rLive.getWidth() - 18) / 4;
             for (int i = 0; i < 4; ++i)
             {
@@ -3193,8 +3242,8 @@ public:
             }
             inner.removeFromTop (6);
             auto r1 = inner.removeFromTop (32);
-            coughBtn      .setBounds (r1.removeFromLeft (258)); r1.removeFromLeft (8);
-            screamGuardBtn.setBounds (r1.removeFromLeft (288)); r1.removeFromLeft (8);
+            coughBtn      .setBounds (r1.removeFromLeft (262)); r1.removeFromLeft (8);
+            screamGuardBtn.setBounds (r1.removeFromLeft (292)); r1.removeFromLeft (8);
             guardMeterRect = r1;
         }
     }
@@ -3236,14 +3285,14 @@ private:
         const bool vocCancel = processor.getBgmVocalCancel();
         vocalCancelBtn.setToggleState (vocCancel, juce::dontSendNotification);
         vocalCancelBtn.setButtonText (vocCancel
-            ? language->T ("✨ ボーカル除去 ON (カラオケ中)", "✨ Vocal Cancel ON (Karaoke)")
-            : language->T ("✨ ボーカル除去 (原曲カラオケ化)", "✨ Vocal Cancel (Make Karaoke)"));
+            ? language->T ("✨ ボーカル除去 ON", "✨ Vocal Cancel ON")
+            : language->T ("✨ 原曲ボーカル除去", "✨ Vocal Cancel"));
 
         const bool toStream = processor.getBgmToStream();
         bgmRouteBtn.setToggleState (toStream, juce::dontSendNotification);
         bgmRouteBtn.setButtonText (toStream
-            ? language->T ("📡 配信にも混ぜる", "📡 Mix to Stream")
-            : language->T ("🎧 自分の耳だけ", "🎧 Monitor Only"));
+            ? language->T ("📡 配信混音", "📡 Stream")
+            : language->T ("🎧 自分のみ", "🎧 Monitor"));
 
         const bool rec = processor.isWavRecording();
         wavRecBtn.setToggleState (rec, juce::dontSendNotification);
@@ -3272,11 +3321,23 @@ private:
         for (int i = 0; i < 5; ++i)
             diagBtns[(size_t) i].setToggleState (activeDiag == i, juce::dontSendNotification);
 
+        const int activeMicMod = processor.getMicModelMode();
+        for (int i = 0; i < 5; ++i)
+            micModBtns[(size_t) i].setToggleState (activeMicMod == i, juce::dontSendNotification);
+
         const bool cBoost = processor.getChorusBoostMode();
         chorusBoostBtn.setToggleState (cBoost, juce::dontSendNotification);
         chorusBoostBtn.setButtonText (cBoost
-            ? language->T ("🔥 サビ華やか演出 ON! (艶・広がりUP)", "🔥 Chorus Boost ON! (Air+Width)")
-            : language->T ("🔥 サビ1クリック華やか演出", "🔥 1-Click Chorus Boost"));
+            ? language->T ("🔥 サビ演出 ON!", "🔥 Chorus ON!")
+            : language->T ("🔥 サビ1クリック演出", "🔥 Chorus Boost"));
+
+        const bool autoCh = processor.getAutoChorusMode();
+        const bool autoTrig = processor.isAutoChorusTriggered();
+        autoChorusBtn.setToggleState (autoCh, juce::dontSendNotification);
+        autoChorusBtn.setButtonText (autoCh
+            ? (autoTrig ? language->T ("🤖 サビ自動発動中!", "🤖 Auto-Chorus ON!")
+                        : language->T ("🤖 サビ自動検知: 待機", "🤖 Auto-Chorus: Armed"))
+            : language->T ("🤖 サビ自動検知 OFF", "🤖 Auto-Chorus OFF"));
 
         const int activeSe = processor.getActiveLiveSe();
         for (int i = 0; i < 4; ++i)
@@ -3304,11 +3365,12 @@ private:
     juce::Rectangle<int> bgmStatusRect, bgmProgRect, bgmVolLabelRect, bgmDuckLabelRect, bgmDuckMeterRect;
     juce::Rectangle<int> wavStatusRect, diagBarsRect, diagStatusRect, guardMeterRect;
     juce::TextButton loadBgmBtn, demoBgmBtn, playBgmBtn, rewBgmBtn, loopBgmBtn;
-    juce::TextButton keyDownBtn, keyZeroBtn, keyUpBtn, vocalCancelBtn, syncKeyBtn, bgmRouteBtn;
+    juce::TextButton keyDownBtn, keyZeroBtn, keyUpBtn, vocalCancelBtn, autoKeyBpmBtn, syncKeyBtn, bgmRouteBtn;
     juce::Slider bgmVolSlider, bgmDuckSlider;
     juce::TextButton wavRecBtn, retroSaveBtn, autoMasterBtn, openRecDirBtn;
     std::array<juce::TextButton, 5> diagBtns;
-    juce::TextButton chorusBoostBtn;
+    std::array<juce::TextButton, 5> micModBtns;
+    juce::TextButton chorusBoostBtn, autoChorusBtn;
     std::array<juce::TextButton, 4> seBtns;
     juce::TextButton coughBtn, screamGuardBtn;
     std::unique_ptr<juce::FileChooser> chooser;
@@ -5103,8 +5165,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (sb);
                 }
 
-                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.0.0までの全13世代をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
-                                                      "Select and recall any of the 13 generations from v1.0.0 to v5.0.0 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
+                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.1.0までの全14世代をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
+                                                      "Select and recall any of the 14 generations from v1.0.0 to v5.1.0 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
                 legacyVerBtn.onClick = [this]
                 {
                     const auto anchor = ow.localAreaToGlobal (ow.sizePopBtn.getBounds());
@@ -5209,7 +5271,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     const auto& vSpec = VocalGzzioContent::getLegacyVersionSpec (legId);
                     legacyVerBtn.setButtonText (legId > 0
                         ? language->T ("🕰 歴代バージョン切替 (現在: ", "🕰 Legacy Version (Active: ") + vSpec.verTag + ")"
-                        : language->T ("🕰 歴代バージョン呼び出し (v1.0〜v5.0)", "🕰 Recall Legacy Versions (v1.0–v5.0)"));
+                        : language->T ("🕰 歴代バージョン呼び出し (v1.0〜v5.1)", "🕰 Recall Legacy Versions (v1.0–v5.1)"));
                     legacyVerBtn.setColour (juce::TextButton::buttonColourId, legId > 0 ? Palette::yellow.withAlpha (0.28f) : Palette::panel2);
                     legacyVerBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 }
@@ -9865,7 +9927,7 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 
 //==============================================================================
 // 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ オンデマンド遅延読み込み・世代別省負荷エンジン
-//   - 全13世代の定義は static constexpr テーブルに保持（起動時のヒープ確保 0 バイト）
+//   - 全14世代の定義は static constexpr テーブルに保持（起動時のヒープ確保 0 バイト）
 //   - プレビュー画像はポップアップが開いている間だけ「現在選択中の1枚」のみをオンデマンド読込し、
 //     別世代への切替時やポップアップ閉鎖時に即座に解放（常駐メモリ 0 バイト）
 //   - 旧世代を呼び出した際は、その世代に存在しなかった後発DSPを processBlock / updateParameters で
@@ -9874,91 +9936,98 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionSpec (int id) noexcept
 {
     static constexpr LegacyVersionSpec kSpecs[kLegacyVersionCount] = {
-        { 0,  500, "v5.0.0",
-          "最新フラッグシップ（星空・海5景・3軸パレット・タッチ対応）",
-          "Current Flagship (Sky/Sea 5 Vistas, 3-Axis Palette & Touch)",
-          "最新の全機能（星空・海5景テーマ、3軸直交プリセット60種、指上特大ルーペ、サビブースト、ライブSE、実測IR残響）をフル稼働します。",
-          "Full flagship suite: 5 Sky/Sea themes, 60 orthogonal 3-axis presets, touch loupe, Chorus Boost, Live SE pads, and IR reverb.",
+        { 0,  510, "v5.1.0",
+          "最新フラッグシップ（伴奏キー＆BPM自動解析・サビ自動検知・4大名機マイク）",
+          "Current Flagship (Auto-Key/BPM, Auto-Chorus & 4 Studio Mic Models)",
+          "最新の全機能（伴奏キー＆BPM 1秒自動解析、サビ自動検知オートブースト、4大名機マイクモデリング、星空・海5景テーマ、3軸60種プリセット）をフル稼働します。",
+          "Full v5.1 flagship suite: Auto-Key/BPM analyzer, Auto-Chorus Director, 4 zero-latency Studio Mic models, 5 Sky/Sea themes, and 60 3-axis presets.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 1,  490, "v4.9.0",
+        { 1,  500, "v5.0.0",
+          "星空・海5景・3軸60種パレット・タッチ対応・サビ盛＆ライブSE",
+          "Sky/Sea 5 Vistas, 3-Axis 60-Preset Palette, Touch & Live SE",
+          "星空・海5景テーマ、3軸直交プリセット60種、指上特大ルーペ、1クリックサビ盛り、4種ライブSE、実測IR残響世代。v5.1のマイクモデリング＆サビ自動検知を休止します。",
+          "5 Sky/Sea themes, 60 orthogonal 3-axis presets, touch loupe, manual Chorus Boost, Live SE pads, and IR reverb. Pauses v5.1 Mic Modeler & Auto-Chorus.",
+          "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
+
+        { 2,  490, "v4.9.0",
           "星空・海・黄昏 5景コレクション＆天球ガラスオーブ",
           "Sky, Ocean & Dusk 5 Vistas & Celestial Glass Orb",
-          "天球ガラスオーブ＆アストロラーベ金環ダイヤルと星空・深海5景テーマ世代。v5.0のサビブースト・ライブSEパッド・フッタードックを休止します。",
-          "Celestial glass orb & astrolabe gold dials with 5 sky/ocean themes. Pauses v5.0 Chorus Boost & Live SE dock.",
+          "天球ガラスオーブ＆アストロラーベ金環ダイヤルと星空・深海5景テーマ世代。v5.0以降のサビブースト・ライブSEパッド・フッタードックを休止します。",
+          "Celestial glass orb & astrolabe gold dials with 5 sky/ocean themes. Pauses v5.0+ Chorus Boost & Live SE dock.",
           "assets/styles-4.9.0.png", 0, true, 14, 0, 6 },
 
-        { 2,  480, "v4.8.0",
+        { 3,  480, "v4.8.0",
           "歌枠ステージスタジオ（BGM・完パケ録音・声質診断）",
           "Stage Studio (BGM Player, FullMix WAV Rec & AI Voice Target)",
           "ダーク・ティール Argon Cockpit 総合画面にBGMプレイヤー・30秒さかのぼり録音・5秒声質ターゲット診断を搭載した配信特化世代です。",
           "Dark teal Argon Cockpit overview with BGM player, 30s retroactive WAV recording, and 5s AI voice target diagnosis.",
           "interface-compatibility-4.8.0.png", 0, true, 0, 0, 0 },
 
-        { 3,  460, "v4.6.0",
+        { 4,  460, "v4.6.0",
           "Argon 2D声質重力オーブ＆4種類の総合画面構成",
           "Argon 2D Voice Gravity Orb & 4 Overview Architectures",
           "2D声質重力オーブ（倍音・声芯・空気・立体）と4種類の画面構成（コックピット/ライバー/ラック/クラシック）が確立された世代です。",
           "2D Voice Gravity Orb (Velvet/Focus/Silk/Halo) and 4 switchable overview architectures.",
           "overview-ja-4.6.0.png", 0, true, 0, 0, 0 },
 
-        { 4,  440, "v4.4.0",
+        { 5,  440, "v4.4.0",
           "クチュール・コスメ 5色＆Vライバーステージ",
           "Couture Cosmetics 5 Palettes & V-Liver Stage",
           "女性Vライバー・歌い手向けのクチュール5色パレットと宝石ダイヤル・12連マカロンリボンを搭載した華やかな総合画面世代です。",
           "Couture Cosmetics 5 color palettes, jewel dials, and 12-dial ribbon tailored for V-Livers and singers.",
           "assets/archive-ui/v4.4.0_liver_stage.png", 0, true, 5, 1, 2 },
 
-        { 5,  433, "v4.3.3",
+        { 6,  433, "v4.3.3",
           "3ステップ総合画面（オートミキサー＆実測部屋残響）",
           "3-Step Classic Overview (Auto-Mixer & Room IR Convolution)",
           "「1 整える・2 声をつくる・3 空間をつくる」の3カード総合画面と6種の部屋IR畳み込みリバーブ世代。Argon 4軸DSPは完全スリープします。",
           "Classic 3-card overview (Clean / Shape / Space) and 6 room IR spaces. Argon 4-axis DSP sleeps at 0 CPU.",
           "assets/archive-ui/v4.3.3_overview.png", 0, true, 0, 3, 10 },
 
-        { 6,  400, "v4.0.0",
+        { 7,  400, "v4.0.0",
           "初代オーバービュー総合画面＆1クリックととのえる",
           "First-Gen Overview Screen & 1-Click Auto-Setup",
           "総合画面が初めて登場した記念すべき v4.0 世代。上部に大型チューナー、下部に3カードを並べたクラシック構成で軽快に動作します。",
           "The original v4.0 Overview generation with large top tuner, 3-card layout, and lightweight DSP.",
           "assets/archive-ui/v4.2.0_overview.png", 0, true, 0, 3, 10 },
 
-        { 7,  310, "v3.1.0",
+        { 8,  310, "v3.1.0",
           "「音のとおり道」左列常設＆詳細3列スタジオ画面",
           "Signal Path Rail & 3-Column Studio Detail View",
           "左端に「音のとおり道」8モジュール列を常設した詳細3列レイアウト世代。「つぶさない」保護・自動ノイズ再学習・アコギピック抑制を搭載。",
           "3-column detail layout with the 8-module Signal Path Rail, Anti-Crush guard, and auto noise re-learn.",
           "assets/archive-ui/v4.3.3_detail.png", 1, true, 0, 0, 7 },
 
-        { 8,  240, "v2.4.0",
+        { 9,  240, "v2.4.0",
           "かんたん1列モード（10秒おまかせ設定＋よく使う7ツマミ）",
           "Easy 1-Row Mode (10s Auto-Setup + 7 Essential Knobs)",
           "初めてでも迷わず触れる「かんたんモード」世代。10秒おまかせ設定・大型チューナー・よく使う7ツマミだけに絞った超低負荷レイアウトです。",
           "Easy 1-row mode with 10s Auto-Setup, large pitch tuner, and 7 essential giant knobs.",
           "assets/archive-ui/v2.4.0_simple.png", 1, false, 0, 0, 7 },
 
-        { 9,  200, "v2.0.0",
+        { 10, 200, "v2.0.0",
           "エモート表現（息・エモ・サビリフト）＆伝統2列詳細画面",
           "Emote Expression (Breath/Emo/Chorus Lift) & 2-Column UI",
           "左列「音のとおり道」以前の伝統的な2列詳細画面。息・エモ・サビリフト・ピッチ補正・5人ユニゾンまでの構成で軽快に動作します。",
           "Classic 2-column detail UI with Breath/Emo/Chorus Lift, Auto-Tune, and 5-Voice Unison.",
           "assets/archive-ui/v1.9.0_standard.png", 1, true, 0, 0, 7 },
 
-        { 10, 170, "v1.7.0",
+        { 11, 170, "v1.7.0",
           "ゆるふわパステル＆機械式ギア2列画面",
           "Yuru-Kawa Pastel & Mechanical Gear 2-Column UI",
           "大人気の「ゆるふわ」パステル配色と機械式デュアルギアツマミ・右下のジュースサーバーが登場した2列世代。ピッチ補正・ユニゾン休止で超低負荷。",
           "Beloved Yuru-Kawa pastel theme with dual-gear knobs and corner dispenser in a 2-column layout. Very low CPU.",
           "assets/archive-ui/v1.7.0_yurufuwa.png", 1, true, 1, 1, 7 },
 
-        { 11, 130, "v1.3.0",
+        { 12, 130, "v1.3.0",
           "ダーク・ネイビー2列スタジオ＆スマート動的EQ",
           "Dark Navy 2-Column Studio & Smart Dynamic EQ",
           "ダーク・ネイビー配色と3バンド手動/自動スマート動的EQが確立された初期2列スタジオ世代。基本ストリップのみで極小CPU負荷で動作します。",
           "Early 2-column dark navy studio UI with 3-band Smart Dynamic EQ and core vocal strip at minimal CPU load.",
           "assets/archive-ui/v1.3.0_ui.png", 1, true, 20, 2, 9 },
 
-        { 12, 100, "v1.0.0",
+        { 13, 100, "v1.0.0",
           "初代 クリーム・フラット1列縦積み（原点・最軽量モード）",
           "Original Cream Flat 1-Column Stack (Origin & Ultra-Light)",
           "記念すべき初代 VocalGzzio v1.0.0！明るいクリーム背景・フラットリングダイヤル・基本18ツマミ縦積み構成。後発DSPを全休止し最軽量で動作します。",
@@ -10005,8 +10074,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     tuner.resized();
 
     const juce::String msg = (spec.id == 0)
-        ? language->T ("✨ 最新 v5.0.0（フル機能フラッグシップ）に戻しました。",
-                       "✨ Restored latest v5.0.0 (Full Flagship).")
+        ? language->T ("✨ 最新 v5.1.0（フル機能フラッグシップ）に戻しました。",
+                       "✨ Restored latest v5.1.0 (Full Flagship).")
         : (language->T ("🕰️ 歴代バージョン再現: ", "🕰️ Recalled Legacy Version: ")
            + juce::String (spec.verTag) + " — "
            + juce::String::fromUTF8 (language->english ? spec.titleEn : spec.titleJa)
@@ -10086,8 +10155,8 @@ public:
 
         g.setColour (kGold);
         g.setFont (GzzioLnF::uiFont (20.0f, true));
-        g.drawFittedText (language->T ("🕰️ 歴代バージョン呼び出し・世代タイムマシン (v1.0.0 〜 v5.0.0)",
-                                       "🕰️ Legacy Version Time Machine (v1.0.0 - v5.0.0)"),
+        g.drawFittedText (language->T ("🕰️ 歴代バージョン呼び出し・世代タイムマシン (v1.0.0 〜 v5.1.0)",
+                                       "🕰️ Legacy Version Time Machine (v1.0.0 - v5.1.0)"),
                           { hdr.getX() + 14, hdr.getY() + 2, 540, 24 },
                           juce::Justification::centredLeft, 1, 0.88f);
 
@@ -10119,11 +10188,11 @@ public:
                  ecoOn ? language->T ("🔋 世代別省負荷ゲート: ON", "🔋 Era Eco-Gate: ON")
                        : language->T ("🔋 世代別省負荷ゲート: OFF", "🔋 Era Eco-Gate: OFF"));
         drawBtn (latestBtnRect, kCyan, owner.processor.getLegacyVersionId() == 0,
-                 language->T ("✨ 最新 v5.0.0 へ", "✨ Latest v5.0.0"));
+                 language->T ("✨ 最新 v5.1.0 へ", "✨ Latest v5.1.0"));
         drawBtn (closeBtnRect, kSalmon, false,
                  language->T ("✕ 閉じる", "✕ Close"));
 
-        // ---- 2. 左カラム：全13世代カード一覧（2列×7段、オンデマンド選択） ----
+        // ---- 2. 左カラム：全14世代カード一覧（2列×7段、オンデマンド選択） ----
         const int leftX = 16, leftY = 68, leftW = 484;
         const int colW  = (leftW - 8) / 2;
         const int rowH  = 74;
@@ -10133,11 +10202,9 @@ public:
         for (int i = 0; i < VocalGzzioContent::kLegacyVersionCount; ++i)
         {
             const auto& sp = VocalGzzioContent::getLegacyVersionSpec (i);
-            const int col = (i == 0) ? 0 : ((i - 1) % 2);
-            const int row = (i == 0) ? 0 : (1 + (i - 1) / 2);
-            const juce::Rectangle<int> cardR = (i == 0)
-                ? juce::Rectangle<int> (leftX, leftY, leftW, rowH)
-                : juce::Rectangle<int> (leftX + col * (colW + 8), leftY + row * (rowH + gapY), colW, rowH);
+            const int col = i % 2;
+            const int row = i / 2;
+            const juce::Rectangle<int> cardR (leftX + col * (colW + 8), leftY + row * (rowH + gapY), colW, rowH);
             cardRects[(size_t) i] = cardR;
 
             const bool isAct  = (i == activeId);
@@ -10166,8 +10233,8 @@ public:
                 ? language->T ("総合画面", "Overview")
                 : (sp.advMode ? (sp.era >= 300 ? language->T ("詳細3列", "3-Col UI") : language->T ("伝統2列", "2-Col UI"))
                               : language->T ("かんたん1列", "Easy 1-Row"));
-            const int sleepPct = juce::jlimit (0, 82, (500 - sp.era) * 20 / 100);
-            const juce::String ecoTag = (sp.era >= 500)
+            const int sleepPct = juce::jlimit (0, 82, (510 - sp.era) * 20 / 100);
+            const juce::String ecoTag = (sp.era >= 510)
                 ? language->T ("FULL機能", "FULL DSP")
                 : (language->T ("省負荷 -", "ECO -") + juce::String (sleepPct) + "%");
             g.setColour (isAct ? kGold : kSoft);
@@ -10178,7 +10245,7 @@ public:
 
             // 世代タイトル
             g.setColour (kInk);
-            g.setFont (GzzioLnF::uiFont (i == 0 ? 16.0f : 14.0f, true));
+            g.setFont (GzzioLnF::uiFont (14.0f, true));
             g.drawFittedText (juce::String::fromUTF8 (language->english ? sp.titleEn : sp.titleJa),
                               { cardR.getX() + 10, cardR.getY() + 34, cardR.getWidth() - 20, 34 },
                               juce::Justification::centredLeft, 2, 0.88f);
@@ -10245,12 +10312,15 @@ public:
                           juce::Justification::topLeft, 2, 0.90f);
 
         // 省負荷ゲートで休止される後発DSPモジュールの明示
-        const juce::String sleepSummary = (insp.era >= 500)
-            ? language->T ("⚡ 稼働DSP: 全モジュール稼働（実測IR残響も選択された1部屋のみオンデマンド生成）",
-                           "⚡ Active DSP: All flagship modules active (IR rooms synthesized on demand when selected)")
-            : (insp.era >= 440)
-                ? language->T ("⚡ 省負荷スリープ対象: v5.0 サビブースト・ライブSE合成を完全休止 (0 CPU)",
-                               "⚡ Sleeping DSP: v5.0 Chorus Boost & Live SE synthesis asleep at 0 CPU")
+        const juce::String sleepSummary = (insp.era >= 510)
+            ? language->T ("⚡ 稼働DSP: 全モジュール稼働（4大名機マイク・サビ自動検知・実測IR残響もオンデマンド生成）",
+                           "⚡ Active DSP: All flagship v5.1 modules active (4 Studio Mic models, Auto-Chorus & IR rooms)")
+            : (insp.era >= 500)
+                ? language->T ("⚡ 省負荷スリープ対象: v5.1 4大名機マイクモデリング・サビ自動検知を完全休止 (0 CPU)",
+                               "⚡ Sleeping DSP: v5.1 4 Studio Mic Modeler & Auto-Chorus Director asleep at 0 CPU")
+                : (insp.era >= 440)
+                    ? language->T ("⚡ 省負荷スリープ対象: v5.0/v5.1 マイクモデリング・サビブースト・ライブSE合成を完全休止 (0 CPU)",
+                                   "⚡ Sleeping DSP: v5.0/v5.1 Mic Modeler, Chorus Boost & Live SE synthesis asleep at 0 CPU")
                 : (insp.era >= 400)
                     ? language->T ("⚡ 省負荷スリープ対象: Argon 4軸(倍音/声芯/空気/立体)・サビ演出・SEを完全休止 (0 CPU)",
                                    "⚡ Sleeping DSP: Argon 4-axis engine, Chorus Boost & Live SE asleep at 0 CPU")

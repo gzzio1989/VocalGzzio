@@ -75,7 +75,7 @@ VocalGzzioProcessor::VocalGzzioProcessor()
         if (gz::isTestDataIsolated())
         {
             legacyVersionId.store  (0,    std::memory_order_relaxed);
-            legacyVersionEra.store (500,  std::memory_order_relaxed);
+            legacyVersionEra.store (510,  std::memory_order_relaxed);
             legacyEcoGate.store    (true, std::memory_order_relaxed);
         }
     }
@@ -1559,7 +1559,7 @@ void VocalGzzioProcessor::updateParameters()
     // ではなく ArrayCoefficients (確保なし) を使う。→ PluginProcessor.h の ACoefs 参照
     // v2.10.0 #77/#78 音源モードで中心を持ち替える（うたは今までと同じ数値）
     const int  eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                             ? legacyVersionEra.load (std::memory_order_relaxed) : 500;
+                             ? legacyVersionEra.load (std::memory_order_relaxed) : 510;
     const int  srcMode = (eraNow >= 210) ? (int) apvts.getRawParameterValue ("src_mode")->load() : 0;
     const auto prof    = sourceProfile (srcMode);
 
@@ -1697,6 +1697,53 @@ void VocalGzzioProcessor::updateParameters()
         chorus.setDepth (0.15f + amt * 0.25f);
         chorus.setMix (on ? amt * 0.5f : 0.0f);
     }
+
+    // ---- v5.1.0 柱③：🎙️ ゼロ遅延・名機マイク・モデリング（0=OFF, 1=800G真空管, 2=U87王道, 3=SM7B配信, 4=ASMR極艶） ----
+    {
+        const int mm = (eraNow >= 510) ? micModelMode.load (std::memory_order_relaxed) : 0;
+        if (mm > 0 && (mm != micModLastMode || std::abs (sr - micModLastSr) > 1.0))
+        {
+            micModLastMode = mm;
+            micModLastSr   = sr;
+            const double safeSr = juce::jmax (16000.0, sr);
+            const float maxF    = (float) (safeSr * 0.44);
+            struct MicProfile { float hpHz, bodyHz, bodyQ, bodyDb, presHz, presQ, presDb, airHz, airDb; };
+            static const MicProfile kProfiles[4] = {
+                // 1: ✨ 800G 真空管 (Sony C-800G 風 — 10.5kHz シルクエアー＋すっきり中低域＋真空管2次倍音)
+                { 65.0f, 255.0f, 1.15f, -1.6f, 3800.0f, 0.90f, +1.8f, 10500.0f, +4.2f },
+                // 2: 👑 U87 王道 (Neumann U87 Ai 風 — 185Hz 胸声の厚み＋2.6kHz 王道ボーカルの芯)
+                { 75.0f, 185.0f, 0.90f, +1.6f, 2600.0f, 0.85f, +2.4f,  9500.0f, +1.5f },
+                // 3: 📻 SM7B 配信 (Shure SM7B 風 — タイトな低域＋放送局の温かみ＋4kHz耳痛緩和)
+                { 85.0f, 155.0f, 1.00f, +2.2f, 2850.0f, 1.05f, +2.1f,  7500.0f, -1.2f },
+                // 4: 💎 ASMR 極艶 (耳元リボン＆超高域ブレス — 140Hz 近接感＋3.2kHz 刺さり緩和＋11.5kHz 極艶エアー)
+                { 55.0f, 140.0f, 0.90f, +2.0f, 3200.0f, 1.30f, -2.0f, 11500.0f, +4.8f }
+            };
+            const auto& mp = kProfiles[juce::jlimit (0, 3, mm - 1)];
+            const auto cSub  = ACoefs::makeHighPass   (safeSr, juce::jmin (mp.hpHz,   maxF), 0.707f);
+            const auto cBody = ACoefs::makePeakFilter (safeSr, juce::jmin (mp.bodyHz, maxF), mp.bodyQ, toGain (mp.bodyDb));
+            const auto cPres = ACoefs::makePeakFilter (safeSr, juce::jmin (mp.presHz, maxF), mp.presQ, toGain (mp.presDb));
+            const auto cAir  = ACoefs::makeHighShelf  (safeSr, juce::jmin (mp.airHz,  maxF), 0.707f,   toGain (mp.airDb));
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                *micModSub[ch].coefficients  = cSub;
+                *micModBody[ch].coefficients = cBody;
+                *micModPres[ch].coefficients = cPres;
+                *micModAir[ch].coefficients  = cAir;
+            }
+        }
+        else if (mm == 0 && micModLastMode != 0)
+        {
+            micModLastMode = 0;
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                micModSub[ch].reset();
+                micModBody[ch].reset();
+                micModPres[ch].reset();
+                micModAir[ch].reset();
+                micModDc[ch] = 0.0f;
+            }
+        }
+    }
 }
 
 //==============================================================================
@@ -1751,7 +1798,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // 🕰️ 世代タイムマシン・省負荷ゲート: 旧バージョンが選ばれているときは、
     // その世代以降に追加されたDSPステージを丸ごと休止させて当時の軽快なCPU負荷を再現する。
     const int   eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                              ? legacyVersionEra.load (std::memory_order_relaxed) : 500;
+                              ? legacyVersionEra.load (std::memory_order_relaxed) : 510;
     const bool  crushOn = (eraNow >= 300) && (apvts.getRawParameterValue ("crush_on")->load() > 0.5f);
     const float crushCg = crushOn ? crushGuard : 0.0f;
 
@@ -2195,6 +2242,42 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     }
 
     dryBuffer.makeCopyOf (buffer, true);
+
+    // ---- v5.1.0 柱③：🎙️ ゼロ遅延・名機マイク・モデリング（0=OFF, 1=800G真空管, 2=U87王道, 3=SM7B配信, 4=ASMR極艶） ----
+    // 原音コピー(dryBuffer)の直後で適用するため、「押して原音と比較」や Mix=0% では素のマイク音と正確に聴き比べられる。
+    {
+        const int mm = (eraNow >= 510 && ! cmp && ! selfTestRunning.load (std::memory_order_relaxed))
+                           ? micModelMode.load (std::memory_order_relaxed) : 0;
+        if (mm > 0 && micModLastMode == mm)
+        {
+            const int chCount = juce::jmin (numCh, 2);
+            for (int ch = 0; ch < chCount; ++ch)
+            {
+                float* p = buffer.getWritePointer (ch);
+                auto& fSub  = micModSub[ch];
+                auto& fBody = micModBody[ch];
+                auto& fPres = micModPres[ch];
+                auto& fAir  = micModAir[ch];
+                float dc    = micModDc[ch];
+                for (int n = 0; n < numSamples; ++n)
+                {
+                    float x = fAir.processSample (fPres.processSample (fBody.processSample (fSub.processSample (p[n]))));
+                    if (mm == 1) // ✨ 800G 真空管: 偶数次2次倍音の艶やかな三極管サチュレーション
+                    {
+                        const float sq = x * x;
+                        dc += 0.002f * (sq - dc);
+                        x = x + 0.075f * (sq - dc);
+                    }
+                    else if (mm == 2) // 👑 U87 王道: トランスフォーマーの温かみある奇数次ソフト飽和
+                    {
+                        x = std::tanh (1.18f * x) * 0.8474576f;
+                    }
+                    p[n] = x;
+                }
+                micModDc[ch] = dc;
+            }
+        }
+    }
 
     // ---- v1.4.0 AUTO SETUP: accumulate band energy of the raw voice for 5 s ----
     if (autoSetupCountdown.load() > 0 && asPrepared)
@@ -3487,9 +3570,36 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             susPrevU[0] = susPrevU[1] = 0.0f;
         }
     }
-    // v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost）25ms スムージング
+    // v5.0.0 柱④ ＆ v5.1.0 柱②：サビ1クリック華やか演出（Chorus Boost）＋ 🤖 サビ自動検知オートブースト（Auto-Chorus Director）
+    if (eraNow >= 510 && autoChorusMode.load (std::memory_order_relaxed)
+        && ! liveTalkMode.load (std::memory_order_relaxed)
+        && ! selfTestRunning.load (std::memory_order_relaxed))
+    {
+        const float blockSec = (float) numSamples / (float) juce::jmax (8000.0, currentSampleRate);
+        const bool highVocalEnergy = (beltFastDb > -28.0f && (beltFastDb - beltSlowDb > 2.4f || beltNow > 0.15f))
+                                  || (beltFastDb > -16.5f);
+        if (highVocalEnergy)
+        {
+            autoChorusHoldSec = 2.4f; // サビ中の短いブレス（息継ぎ）でもブーストが途切れないよう2.4秒ホールド
+            autoChorusTriggered.store (true, std::memory_order_relaxed);
+        }
+        else
+        {
+            autoChorusHoldSec = juce::jmax (0.0f, autoChorusHoldSec - blockSec);
+            if (autoChorusHoldSec <= 0.0f || beltFastDb < -44.0f)
+                autoChorusTriggered.store (false, std::memory_order_relaxed);
+        }
+    }
+    else if (autoChorusTriggered.load (std::memory_order_relaxed))
+    {
+        autoChorusHoldSec = 0.0f;
+        autoChorusTriggered.store (false, std::memory_order_relaxed);
+    }
+
     const bool wantChorusBoost = (eraNow >= 500)
-                              && chorusBoostMode.load (std::memory_order_relaxed)
+                              && (chorusBoostMode.load (std::memory_order_relaxed)
+                                  || (eraNow >= 510 && autoChorusMode.load (std::memory_order_relaxed)
+                                      && autoChorusTriggered.load (std::memory_order_relaxed)))
                               && ! liveTalkMode.load (std::memory_order_relaxed)
                               && ! selfTestRunning.load (std::memory_order_relaxed);
     const float cbAlpha = 1.0f - std::exp (-(float) numSamples / juce::jmax (1.0f, 0.025f * (float) currentSampleRate));
@@ -5103,6 +5213,13 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         lv->setAttribute ("era", legacyVersionEra.load (std::memory_order_relaxed));
         lv->setAttribute ("eco", legacyEcoGate.load (std::memory_order_relaxed) ? 1 : 0);
     }
+
+    // v5.1.0 サビ自動検知 ＆ 名機マイクモデリング状態
+    {
+        auto* s51 = root->createNewChildElement ("STAGE_V51");
+        s51->setAttribute ("autoChorus", autoChorusMode.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("micModel",   micModelMode.load (std::memory_order_relaxed));
+    }
     return root;
 }
 
@@ -5256,15 +5373,25 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
 
             if (auto* lv = xml.getChildByName ("LEGACY_VER"))
             {
-                legacyVersionId.store  (juce::jlimit (0, 12,    lv->getIntAttribute ("id",  0)),   std::memory_order_relaxed);
-                legacyVersionEra.store (juce::jlimit (100, 500, lv->getIntAttribute ("era", 500)), std::memory_order_relaxed);
-                legacyEcoGate.store    (lv->getIntAttribute ("eco", 1) != 0,                       std::memory_order_relaxed);
+                const int loadedId  = juce::jlimit (0, 13,    lv->getIntAttribute ("id",  0));
+                int       loadedEra = juce::jlimit (100, 510, lv->getIntAttribute ("era", 510));
+                if (loadedId == 0 && loadedEra == 500)
+                    loadedEra = 510; // 最新版(id=0)が選ばれていた場合は v5.1.0 (era=510) へ自然昇格
+                legacyVersionId.store  (loadedId,  std::memory_order_relaxed);
+                legacyVersionEra.store (loadedEra, std::memory_order_relaxed);
+                legacyEcoGate.store    (lv->getIntAttribute ("eco", 1) != 0, std::memory_order_relaxed);
             }
             else if (gz::isTestDataIsolated())
             {
-                legacyVersionId.store  (0,   std::memory_order_relaxed);
-                legacyVersionEra.store (500, std::memory_order_relaxed);
+                legacyVersionId.store  (0,    std::memory_order_relaxed);
+                legacyVersionEra.store (510,  std::memory_order_relaxed);
                 legacyEcoGate.store    (true, std::memory_order_relaxed);
+            }
+
+            if (auto* s51 = xml.getChildByName ("STAGE_V51"))
+            {
+                autoChorusMode.store (s51->getIntAttribute ("autoChorus", 0) != 0, std::memory_order_relaxed);
+                micModelMode.store   (juce::jlimit (0, 4, s51->getIntAttribute ("micModel", 0)), std::memory_order_relaxed);
             }
         }
     }
@@ -5643,7 +5770,8 @@ bool VocalGzzioProcessor::loadBgmFile (const juce::File& file)
         const juce::ScopedLock sl (bgmMetaLock);
         bgmTitle = file.getFileNameWithoutExtension();
     }
-    bgmBaseKey = (int) apvts.getRawParameterValue ("at_key")->load();
+    bgmPitchSemi.store (0, std::memory_order_relaxed);
+    analyzeBgmKeyAndBpm();
     bgmPlaying.store (true, std::memory_order_release);
     return true;
 }
@@ -5712,7 +5840,204 @@ void VocalGzzioProcessor::loadBuiltinDemoBgm()
         const juce::ScopedLock sl (bgmMetaLock);
         bgmTitle = juce::String::fromUTF8 ("🎹 内蔵デモ伴奏（J-POPカノン進行 / Key: C / 120BPM）");
     }
+    bgmPitchSemi.store (0, std::memory_order_relaxed);
+    bgmDetectedKey.store (0, std::memory_order_relaxed);     // C
+    bgmDetectedMinor.store (false, std::memory_order_relaxed); // Major
+    bgmDetectedBpm.store (120, std::memory_order_relaxed);
     bgmBaseKey = 0; // C
+    if (bgmSyncKey.load (std::memory_order_relaxed))
+        applyBgmAutoKeyBpm();
+}
+
+void VocalGzzioProcessor::analyzeBgmKeyAndBpm()
+{
+    std::shared_ptr<const juce::AudioBuffer<float>> buf;
+    {
+        const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
+        buf = bgmAudioBuf;
+    }
+    if (buf == nullptr || buf->getNumSamples() < 4096)
+        return;
+
+    const double sr = currentSampleRate > 1000.0 ? currentSampleRate : 48000.0;
+    const int totalSamples = buf->getNumSamples();
+    // 曲のイントロ無音を避け、盛り上がりやすい前半〜中盤の最大18秒間を高速解析
+    const int startSample = (totalSamples > (int) (24.0 * sr)) ? (int) (4.0 * sr) : 0;
+    const int analyzeLen  = juce::jmin (totalSamples - startSample, (int) (18.0 * sr));
+    if (analyzeLen < 2048)
+        return;
+
+    const float* L = buf->getReadPointer (0) + startSample;
+    const float* R = buf->getReadPointer (buf->getNumChannels() > 1 ? 1 : 0) + startSample;
+
+    // 1. 12音クロマ（C..B）解析：約6kHzへデシメーションし、MIDI 48(C3)〜83(B5) の36音で直交相関を取る
+    const int decim = juce::jmax (1, (int) std::round (sr / 6000.0));
+    const double decSr = sr / (double) decim;
+    const int decLen = analyzeLen / decim;
+    std::vector<float> mono ((size_t) decLen, 0.0f);
+    for (int i = 0; i < decLen; ++i)
+    {
+        const int idx = i * decim;
+        mono[(size_t) i] = 0.5f * (L[idx] + R[idx]);
+    }
+
+    float chroma[12] = {};
+    for (int note = 48; note < 84; ++note)
+    {
+        const double freq = 440.0 * std::pow (2.0, (note - 69) / 12.0);
+        if (freq >= decSr * 0.45) continue;
+        const double w = juce::MathConstants<double>::twoPi * freq / decSr;
+        const float coeff = (float) (2.0 * std::cos (w));
+        // 0.25秒窓ごとにGoertzelエネルギーを積算
+        const int winLen = juce::jmax (256, (int) (0.25 * decSr));
+        double noteEnergy = 0.0;
+        int winCount = 0;
+        for (int w0 = 0; w0 + winLen <= decLen; w0 += winLen)
+        {
+            float s1 = 0.0f, s2 = 0.0f;
+            for (int n = 0; n < winLen; ++n)
+            {
+                const float s0 = mono[(size_t) (w0 + n)] + coeff * s1 - s2;
+                s2 = s1;
+                s1 = s0;
+            }
+            const float power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
+            noteEnergy += (double) juce::jmax (0.0f, power);
+            ++winCount;
+        }
+        if (winCount > 0)
+            chroma[note % 12] += (float) std::sqrt (noteEnergy / (double) winCount);
+    }
+
+    // Krumhansl-Kessler 24調（12長調・12短調）プロファイル相関で主音と長調/短調を判定
+    static const float kMajProf[12] = { 6.35f, 2.23f, 3.48f, 2.33f, 4.38f, 4.09f, 2.52f, 5.19f, 2.39f, 3.66f, 2.29f, 2.88f };
+    static const float kMinProf[12] = { 6.33f, 2.68f, 3.52f, 5.38f, 2.60f, 3.53f, 2.54f, 4.75f, 3.98f, 2.69f, 3.34f, 3.17f };
+    int bestKey = 0;
+    bool bestMinor = false;
+    float bestScore = -1.0e9f;
+    for (int root = 0; root < 12; ++root)
+    {
+        float majScore = 0.0f, minScore = 0.0f;
+        for (int pc = 0; pc < 12; ++pc)
+        {
+            const float c = chroma[(root + pc) % 12];
+            majScore += c * kMajProf[pc];
+            minScore += c * kMinProf[pc];
+        }
+        if (majScore > bestScore) { bestScore = majScore; bestKey = root; bestMinor = false; }
+        if (minScore > bestScore) { bestScore = minScore; bestKey = root; bestMinor = true;  }
+    }
+
+    // 2. テンポ（BPM 75..175）自動解析：100Hzオンセット包絡の自己相関
+    const int hop = juce::jmax (1, (int) std::round (decSr / 100.0));
+    const double envRate = decSr / (double) hop;
+    const int numFrames = decLen / hop;
+    int bestBpm = 120;
+    if (numFrames >= 240)
+    {
+        std::vector<float> onset ((size_t) numFrames, 0.0f);
+        float prevE = 0.0f;
+        for (int f = 0; f < numFrames; ++f)
+        {
+            float e = 0.0f;
+            const int base = f * hop;
+            for (int n = 0; n < hop; ++n)
+            {
+                const float v = mono[(size_t) (base + n)];
+                e += v * v;
+            }
+            e = std::sqrt (e / (float) hop);
+            onset[(size_t) f] = juce::jmax (0.0f, e - prevE);
+            prevE = e;
+        }
+        float maxBpmScore = -1.0f;
+        for (int bpm = 78; bpm <= 172; ++bpm)
+        {
+            const int lag1 = juce::jmax (1, (int) std::round (envRate * 60.0 / (double) bpm));
+            const int lag2 = lag1 * 2;
+            if (lag2 >= numFrames) continue;
+            float ac1 = 0.0f, ac2 = 0.0f;
+            for (int f = 0; f + lag2 < numFrames; ++f)
+            {
+                ac1 += onset[(size_t) f] * onset[(size_t) (f + lag1)];
+                ac2 += onset[(size_t) f] * onset[(size_t) (f + lag2)];
+            }
+            // 115〜135 BPM 付近のJ-POP標準テンポ帯に緩やかな事前重みを与えて倍テンポ誤判定を防ぐ
+            const float prior = 1.0f - 0.0012f * std::abs ((float) bpm - 124.0f);
+            const float score = (ac1 + 0.55f * ac2) * prior;
+            if (score > maxBpmScore)
+            {
+                maxBpmScore = score;
+                bestBpm = bpm;
+            }
+        }
+    }
+
+    bgmDetectedKey.store (bestKey, std::memory_order_relaxed);
+    bgmDetectedMinor.store (bestMinor, std::memory_order_relaxed);
+    bgmDetectedBpm.store (bestBpm, std::memory_order_relaxed);
+    bgmBaseKey = bestKey;
+
+    if (bgmSyncKey.load (std::memory_order_relaxed))
+        applyBgmAutoKeyBpm();
+}
+
+void VocalGzzioProcessor::applyBgmAutoKeyBpm()
+{
+    const int detKey = juce::jlimit (0, 11, bgmDetectedKey.load (std::memory_order_relaxed));
+    const bool detMin = bgmDetectedMinor.load (std::memory_order_relaxed);
+    const int detBpm = juce::jlimit (60, 240, bgmDetectedBpm.load (std::memory_order_relaxed));
+    const int semi   = juce::jlimit (-6, 6, bgmPitchSemi.load (std::memory_order_relaxed));
+    const int effKey = (detKey + semi + 120) % 12;
+
+    if (auto* pKey = apvts.getParameter ("at_key"))
+        pKey->setValueNotifyingHost (pKey->convertTo0to1 ((float) effKey));
+    if (auto* pScale = apvts.getParameter ("at_scale"))
+        pScale->setValueNotifyingHost (pScale->convertTo0to1 (detMin ? 2.0f : 1.0f)); // 1=Major, 2=Minor
+    if (auto* pBpm = apvts.getParameter ("bpm"))
+        pBpm->setValueNotifyingHost (pBpm->convertTo0to1 ((float) detBpm));
+    if (auto* pDlyMs = apvts.getParameter ("dly_ms"))
+    {
+        const float eighthMs = juce::jlimit (60.0f, 900.0f, 30000.0f / (float) detBpm);
+        pDlyMs->setValueNotifyingHost (pDlyMs->convertTo0to1 (eighthMs));
+    }
+    markStateDirty();
+}
+
+juce::String VocalGzzioProcessor::getBgmKeyBpmSummary (bool english) const
+{
+    static const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    const int detKey = juce::jlimit (0, 11, bgmDetectedKey.load (std::memory_order_relaxed));
+    const bool detMin = bgmDetectedMinor.load (std::memory_order_relaxed);
+    const int detBpm = juce::jlimit (60, 240, bgmDetectedBpm.load (std::memory_order_relaxed));
+    const int semi   = juce::jlimit (-6, 6, bgmPitchSemi.load (std::memory_order_relaxed));
+    const int effKey = (detKey + semi + 120) % 12;
+
+    juce::String s;
+    s << (english ? "🎼 Auto-Detected: " : "🎼 自動解析: ")
+      << kKeyNames[effKey] << (detMin ? "m" : " Maj")
+      << " / " << detBpm << " BPM";
+    return s;
+}
+
+const char* VocalGzzioProcessor::getMicModelName (int m, bool english) noexcept
+{
+    static const char* const kJa[5] = {
+        "🎙 素のマイク (OFF)",
+        "✨ 800G 真空管",
+        "👑 U87 王道",
+        "📻 SM7B 配信",
+        "💎 ASMR 極艶"
+    };
+    static const char* const kEn[5] = {
+        "🎙 Raw Mic (OFF)",
+        "✨ 800G Tube",
+        "👑 U87 Studio",
+        "📻 SM7B Broadcast",
+        "💎 ASMR Ribbon"
+    };
+    const int idx = juce::jlimit (0, 4, m);
+    return english ? kEn[idx] : kJa[idx];
 }
 
 void VocalGzzioProcessor::clearBgm()
