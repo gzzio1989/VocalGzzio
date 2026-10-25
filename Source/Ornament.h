@@ -46,7 +46,7 @@ public:
     {
         pPrev = pExtremum = -1.0f;
         velSm = 0.0f; sinceOnset = 9.9f; sinceRev = 9.9f;
-        protect = 0.0f; hold = 0.0f; vibRun = 0; kind = 0; voiced = false;
+        protect = 0.0f; hold = 0.0f; vibConf = 0.0f; vibRun = 0; kind = 0; voiced = false;
     }
 
     // amount 0..1（0 = 保護しない＝従来と完全に同じ）
@@ -63,21 +63,25 @@ public:
     // ずれる）状態だった。時間の数え方を実時間に合わせる。
     float process (float pitchSemi, float dt) noexcept
     {
-        if (amount <= 0.0005f) { return 1.0f; }
         dt = std::max (1.0e-4f, dt);
+        float out = 1.0f;
         if (dt > kMaxStep)
         {
             const int   steps = std::min (64, (int) std::ceil (dt / kMaxStep));
             const float sub   = dt / (float) steps;
-            float last = 1.0f;
-            for (int i = 0; i < steps; ++i) last = step (pitchSemi, sub);
-            return last;
+            for (int i = 0; i < steps; ++i) out = step (pitchSemi, sub);
         }
-        return step (pitchSemi, dt);
+        else
+        {
+            out = step (pitchSemi, dt);
+        }
+        return (amount <= 0.0005f) ? 1.0f : out;
     }
 
-    float lastProtect() const noexcept { return protect; }   // 0..1（UI表示用）
-    int   lastKind()    const noexcept { return kind; }       // 0=なし 1=しゃくり 2=こぶし
+    float lastProtect()       const noexcept { return protect; }          // 0..1（UI表示用）
+    int   lastKind()          const noexcept { return kind; }             // 0=なし 1=しゃくり 2=こぶし
+    float vibratoConfidence() const noexcept { return vibConf; }          // 0..1（規則的なビブラート中か）
+    bool  isVibrato()         const noexcept { return vibRun >= kVibRunToLock; } // 規則的ビブラートロック判定
 
 private:
     static constexpr float kMaxStep = 0.010f;   // 分割の刻み(秒)
@@ -102,8 +106,8 @@ private:
             sinceOnset = 0.0f; sinceRev = 0.0f;
             pExtremum = pitchSemi; velSm = 0.0f; vibRun = 0;
         }
-        else sinceOnset += dt;
-        sinceRev += dt;
+        else sinceOnset = std::fmin (sinceOnset + dt, 60.0f);   // v5.1.3 24時間配信でも float が飽和しないよう上限
+        sinceRev = std::fmin (sinceRev + dt, 60.0f);
         voiced = true;
 
         // --- 速さ（半音／秒）。生の微分は暴れるので 30ms でならす ---
@@ -169,6 +173,11 @@ private:
         const float aDn = 1.0f - std::exp (-dt / 0.150f);
         protect += ((want > protect) ? aUp : aDn) * (want - protect);
 
+        // --- 規則的ビブラート確信度 (0..1): 3回以上の規則的折り返し(4.2〜9Hz)で立ち上がり、不規則な揺れと区別 ---
+        const float wantVib = (vibRun >= kVibRunToLock && sinceRev <= 0.14f) ? 1.0f : 0.0f;
+        const float aVib = 1.0f - std::exp (-dt / (wantVib > vibConf ? 0.025f : 0.090f));
+        vibConf += aVib * (wantVib - vibConf);
+
         velLast = velSm;
         pPrev = pitchSemi;
         kind = (protect > 0.15f) ? (k != 0 ? k : kind) : 0;
@@ -179,6 +188,7 @@ private:
     {
         const float aDn = 1.0f - std::exp (-dt / 0.150f);
         protect += aDn * (0.0f - protect);
+        vibConf *= std::exp (-dt / 0.060f);
         hold = std::max (0.0f, hold - dt);
     }
 
@@ -203,7 +213,7 @@ private:
     float pPrev = -1.0f, pExtremum = -1.0f;
     float velSm = 0.0f, velLast = 0.0f;
     float sinceOnset = 9.9f, sinceRev = 9.9f;
-    float protect = 0.0f, hold = 0.0f;
+    float protect = 0.0f, hold = 0.0f, vibConf = 0.0f;
     int   vibRun = 0, kind = 0;
     bool  voiced = false;
 };

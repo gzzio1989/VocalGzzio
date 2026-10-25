@@ -2,6 +2,7 @@
 // JUCEに依存せず、Windows/macOSの標準C++17で実行できる。
 #include "../Source/PitchDetector.h"
 #include "../Source/PitchCorrection.h"
+#include "../Source/Ornament.h"
 #include "../Source/VoiceShifter.h"
 #include <cstdio>
 #include <limits>
@@ -114,7 +115,7 @@ void shifterTests()
     double worstIdentity = 0.0;
     bool latencyOk = true;
     for (double sr : {44100.0, 48000.0, 96000.0})
-        for (int order : {0, 9, 10})
+        for (int order : {0, 8, 9, 10})
             for (float mix : {0.0f, 0.5f, 1.0f})
             {
                 gz::VoiceShifter sh; sh.prepare (sr); if (order != 0) sh.setWindow (order); sh.setParams (0, 0, mix);
@@ -204,6 +205,61 @@ void correctionTests()
            "無声区間の後は新しい歌い出しとして補正");
     check (correction.target (72.25f, 0.005f, 0, gz::scale::Chromatic, 80, 0) == 0.0f,
            "補正量ゼロで補正値もゼロ");
+
+    // ---- v5.1.4 歌を上手く聴かせる知能ピッチ制御 (processSkilled) ----
+    {
+        gz::PitchCorrection pc;
+        gz::orn::Guard og; og.prepare (48000.0); og.setAmount (0.6f);
+        const float dt = 0.002f; // 2ms 刻み
+        // (a) 35セント低く入った歌い出しが、自然な速さ(speed=40)でも20ms以内にピタッと吸い付く(160ms遅れない)
+        float errAt20ms = 999.0f;
+        for (int i = 0; i < 12; ++i)
+        {
+            const float m = 59.65f;
+            const float keep = og.process (m, dt);
+            const float c = pc.processSkilled (m, dt, 0, gz::scale::Chromatic, 40.0f, 1.0f, keep, og.vibratoConfidence());
+            errAt20ms = std::abs ((m + c) - 60.0f) * 100.0f;
+        }
+        std::printf ("  歌い出し20ms後の残差 %.2f セント（入力 -35セント, speed=40）\n", errAt20ms);
+        check (errAt20ms < 2.0f, "歌い出しのピッチ遅れ(ラグ)が無く20ms以内に中心へ吸い付く");
+
+        // (b) 素人の不規則なピッチふらつき(±20セント, 2.1Hz + 3.3Hz)を位相遅れなく制振する
+        pc.reset(); og.reset();
+        double rawRms = 0.0, corrRms = 0.0; int cnt = 0;
+        for (int i = 0; i < 400; ++i)
+        {
+            const double t = i * dt;
+            const float wobble = (float) (0.13 * std::sin (2.0 * pi * 2.1 * t) + 0.09 * std::sin (2.0 * pi * 3.3 * t + 0.7));
+            const float m = 60.0f - 0.15f + wobble;
+            const float keep = og.process (m, dt);
+            const float c = pc.processSkilled (m, dt, 0, gz::scale::Chromatic, 40.0f, 1.0f, keep, og.vibratoConfidence());
+            if (i >= 50)
+            {
+                rawRms  += (double) (m - 60.0f) * (m - 60.0f);
+                corrRms += (double) (m + c - 60.0f) * (m + c - 60.0f);
+                ++cnt;
+            }
+        }
+        rawRms  = std::sqrt (rawRms / cnt) * 100.0;
+        corrRms = std::sqrt (corrRms / cnt) * 100.0;
+        std::printf ("  不規則な声のふらつき: 入力RMS %.2f セント → 補正後RMS %.2f セント\n", rawRms, corrRms);
+        check (corrRms < 2.5, "ノート内の不規則なふらつきを位相遅れなくピタッと制振する");
+
+        // (c) ロングトーン語尾の息切れフラット垂れ(-30セント)を自然な速さ(speed=65)でも支え切る
+        pc.reset(); og.reset();
+        float tailErr = 999.0f;
+        for (int i = 0; i < 350; ++i)
+        {
+            const double t = i * dt; // 0..0.70秒
+            const float sag = (t > 0.35) ? (float) (-0.30 * (t - 0.35) / 0.35) : 0.0f;
+            const float m = 60.0f + sag;
+            const float keep = og.process (m, dt);
+            const float c = pc.processSkilled (m, dt, 0, gz::scale::Chromatic, 65.0f, 1.0f, keep, og.vibratoConfidence());
+            tailErr = std::abs ((m + c) - 60.0f) * 100.0f;
+        }
+        std::printf ("  語尾のフラット垂れ(-30セント)時の最終残差 %.2f セント (speed=65)\n", tailErr);
+        check (tailErr < 2.5f, "ロングトーン語尾のフラット垂れを自動で支えて音程を落とさない");
+    }
 }
 }
 

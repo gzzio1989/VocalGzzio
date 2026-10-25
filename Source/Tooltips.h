@@ -351,19 +351,37 @@ struct Language
     inline juce::String jn_harm_i6() const { return T ("\x33\xe5\xba\xa6\x2b\x35\xe5\xba\xa6", "3rd+5th"); }
     inline juce::String jn_harm_i7() const { return T ("\xe3\x81\x8a\xe3\x81\xbe\xe3\x81\x8b\xe3\x81\x9b", "Auto"); }
     inline juce::String jn_harm_i8() const { return T ("\xe5\x8f\x8d\xe8\xa1\x8c", "Contrary"); }
-    // v2.0.0: 9モードを添字で引く(コンボ構築用)
+    inline juce::String jn_harm_i9()  const { return T ("\xe3\x82\xaa\xe3\x82\xaf\xe4\xb8\x8b(-12)", "Octave down"); }
+    inline juce::String jn_harm_i10() const { return T ("\xe3\x82\xaa\xe3\x82\xaf\xe4\xb8\x8a(+12)", "Octave up"); }
+    inline juce::String jn_harm_i11() const { return T ("\xe3\x82\xaa\xe3\x82\xafW(\xe4\xb8\x8a\xe4\xb8\x8b)", "Octave W"); }
+    inline juce::String jn_harm_i12() const { return T ("\x33\xe5\xba\xa6W(\xe4\xb8\x8a\x2b\xe4\xb8\x8b)", "3rd W (up+down)"); }
+    inline juce::String jn_harm_i13() const { return T ("\xe4\xb8\x8a\x34\xe5\xba\xa6", "4th up"); }
+    inline juce::String jn_harm_i14() const { return T ("\xe4\xb8\x8b\x35\xe5\xba\xa6", "5th down"); }
+    inline juce::String jn_harm_i15() const { return T ("\x33\xe5\xa3\xb0\xe3\x82\xb3\xe3\x83\xbc\xe3\x83\xa9\xe3\x82\xb9", "3-voice Choir"); }
+    inline juce::String jn_harm_i16() const { return T ("\x34\xe5\xa3\xb0\xe3\x82\xb4\xe3\x82\xb9\xe3\x83\x9a\xe3\x83\xab", "4-voice Gospel"); }
+    inline juce::String jn_harm_i17() const { return T ("\xe3\x83\x9a\xe3\x83\x80\xe3\x83\xab(\xe4\xb8\xbb\xe9\x9f\xb3\xe4\xbf\x9d\xe6\x8c\x81)", "Pedal Drone"); }
+    // v5.1.1: 18モードを添字で引く(コンボ構築用)
     inline juce::String jn_harm_item (int i) const {
         switch (i)
         {
-            case 0: return jn_harm_i0();
-            case 1: return jn_harm_i1();
-            case 2: return jn_harm_i2();
-            case 3: return jn_harm_i3();
-            case 4: return jn_harm_i4();
-            case 5: return jn_harm_i5();
-            case 6: return jn_harm_i6();
-            case 7: return jn_harm_i7();
-            case 8: return jn_harm_i8();
+            case 0:  return jn_harm_i0();
+            case 1:  return jn_harm_i1();
+            case 2:  return jn_harm_i2();
+            case 3:  return jn_harm_i3();
+            case 4:  return jn_harm_i4();
+            case 5:  return jn_harm_i5();
+            case 6:  return jn_harm_i6();
+            case 7:  return jn_harm_i7();
+            case 8:  return jn_harm_i8();
+            case 9:  return jn_harm_i9();
+            case 10: return jn_harm_i10();
+            case 11: return jn_harm_i11();
+            case 12: return jn_harm_i12();
+            case 13: return jn_harm_i13();
+            case 14: return jn_harm_i14();
+            case 15: return jn_harm_i15();
+            case 16: return jn_harm_i16();
+            case 17: return jn_harm_i17();
             default: return jn_harm_i0();
         }
     }

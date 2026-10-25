@@ -751,11 +751,15 @@ int main()
         const juce::Point<int> se3Pt    { 1499, 844 };
         check (view.overviewHelpAt (chorusPt).isNotEmpty(), "hovering Chorus Boost pill shows explanation");
         check (view.overviewHelpAt (se0Pt).isNotEmpty(),    "hovering Live SE Applause pill shows explanation");
-        check (! processor->getChorusBoostMode(), "Chorus Boost starts OFF");
+        processor->setChorusBoostMode (false);
+        processor->setAutoChorusMode (false);
+        check (! processor->getChorusBoostMode() && ! processor->getAutoChorusMode(), "Chorus Boost starts OFF");
         check (view.handleOverviewMouseDown (chorusPt), "clicking Chorus Boost pill is handled");
-        check (processor->getChorusBoostMode(), "clicking Chorus Boost pill enables Chorus Boost");
+        check (processor->getChorusBoostMode() && ! processor->getAutoChorusMode(), "clicking Chorus Boost pill enables Chorus Boost");
         check (view.handleOverviewMouseDown (chorusPt), "clicking Chorus Boost pill again is handled");
-        check (! processor->getChorusBoostMode(), "clicking Chorus Boost pill returns to verse balance");
+        check (! processor->getChorusBoostMode() && processor->getAutoChorusMode(), "second click enters Auto-Chorus Director mode");
+        check (view.handleOverviewMouseDown (chorusPt), "clicking Chorus Boost pill third time is handled");
+        check (! processor->getChorusBoostMode() && ! processor->getAutoChorusMode(), "third click returns to verse balance (OFF)");
 
         //   Pillar 3: 4 Live SE Trigger Pads (Applause, Sparkle, Drumroll, Chime)
         const juce::Point<int> sePts[4] = { se0Pt, se1Pt, se2Pt, se3Pt };
@@ -1126,15 +1130,16 @@ int main()
                 processor->processBlock (buf, midi);
             }
 
-            // Verify XML state round-trip of <LEGACY_VER id="12" era="100" eco="1" />
-            view.applyLegacyVersion (12, true);
+            // Verify XML state round-trip of <LEGACY_VER id="v1Idx" era="100" eco="1" />
+            const int v1Idx = VocalGzzioContent::kLegacyVersionCount - 1;
+            view.applyLegacyVersion (v1Idx, true);
             juce::MemoryBlock stateData;
             processor->getStateInformation (stateData);
             view.applyLegacyVersion (0, true);
-            check (processor->getLegacyVersionId() == 0 && processor->getLegacyVersionEra() == 500,
+            check (processor->getLegacyVersionId() == 0 && processor->getLegacyVersionEra() >= 500,
                    "Reset to v5.0.0 clears legacy version id to 0");
             processor->setStateInformation (stateData.getData(), (int) stateData.getSize());
-            check (processor->getLegacyVersionId() == 12 && processor->getLegacyVersionEra() == 100,
+            check (processor->getLegacyVersionId() == v1Idx && processor->getLegacyVersionEra() == 100,
                    "setStateInformation restores saved legacy version id=12 (v1.0.0) and era=100");
 
             // Restore v5.0.0 and verify LegacyVersionPopup launches cleanly

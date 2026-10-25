@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 // PitchDetector - real-time monophonic F0 estimation (YIN / CMNDF).
 //
 // Reference: A. de Cheveigne and H. Kawahara, "YIN, a fundamental frequency
@@ -52,7 +52,7 @@ public:
         const float pole = std::exp (-2.0f * kPi * fc / fsIn);
         lpA = pole; lpB = 1.0f - pole;
 
-        hopIn = (int) (fsIn * 0.0045f); if (hopIn < 32) hopIn = 32;   // ~4.5 ms analysis hop
+        hopIn = (int) (fsIn * 0.0010f); if (hopIn < 16) hopIn = 16;   // ~1.0 ms 1000Hz超高速応答ホップ（旧4.5ms→2.0ms→1.0msへ追従ラグ78%短縮）
         reset();
     }
 
@@ -168,10 +168,15 @@ private:
         }
 
         // 4) parabolic interpolation around tau (sub-sample period)
+        // de Cheveigné & Kawahara (2002) Step 5: CMNDF(dp)の1/tau勾配バイアスを避けるため、
+        // 生の差分関数 d(tau) が極小を成している場合は d(tau) 上で放物線補間を行う。
         float betterTau = (float) tau;
         if (tau > tLo && tau < tHi)
         {
-            const float s0 = dp[(size_t) (tau - 1)], s1 = dp[(size_t) tau], s2 = dp[(size_t) (tau + 1)];
+            const bool dLocalMin = (d[(size_t) tau] <= d[(size_t) (tau - 1)] && d[(size_t) tau] <= d[(size_t) (tau + 1)]);
+            const float s0 = dLocalMin ? d[(size_t) (tau - 1)] : dp[(size_t) (tau - 1)];
+            const float s1 = dLocalMin ? d[(size_t) tau]       : dp[(size_t) tau];
+            const float s2 = dLocalMin ? d[(size_t) (tau + 1)] : dp[(size_t) (tau + 1)];
             const float denom = s0 + s2 - 2.0f * s1;
             if (std::abs (denom) > 1e-9f) betterTau = (float) tau + 0.5f * (s0 - s2) / denom;
         }

@@ -84,6 +84,7 @@ private:
     }
     void timerCallback() override
     {
+        stopTimer();
         if (! view) { check (false, "editor content exists"); finish(); return; }
         switch (step++)
         {
@@ -131,9 +132,10 @@ private:
                 // by this next navigation action.
                 view->setOverview (false);
                 view->setOverview (true);
-                if (++round < 3) step = 0; else finish();
+                if (++round < 3) step = 0; else { finish(); return; }
                 break;
         }
+        if (! finished.load()) startTimer (150);
     }
     void finish() { stopTimer(); juce::MessageManager::getInstance()->stopDispatchLoop(); }
     std::unique_ptr<VocalGzzioProcessor> processor;

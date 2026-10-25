@@ -22,6 +22,26 @@ public:
         return sampleRate > 96000.0 ? 13 : sampleRate > 48000.0 ? 12 : 11;
     }
 
+    // v5.1.2 遅延・音質モード別のFFT窓次数（prepareで確保したmaxNの範囲内でゼロ確保切替）
+    //   mode 0 = 🚀極限ゼロ感 (~5.3ms  @48kHz, N=256,  8x重なり) : 骨伝導とのズレが消える超高速モニター
+    //   mode 1 = ⚡超低遅延   (~10.6ms @48kHz, N=512,  8x重なり) : 雑談・コラボ・高速モニター重視
+    //   mode 2 = ⭐標準低遅延 (~21.3ms @48kHz, N=1024, 4x重なり) : 歌枠・ボイチェン・ピッチ補正の最適バランス（既定）
+    //   mode 3 = 💎最高音質   (~42.6ms @48kHz, N=2048, 4x重なり) : 歌ってみた録音・超低音ボイス用の最高分解能
+    static int windowOrderForLatencyMode (double sampleRate, int latMode) noexcept
+    {
+        const int maxOrd = recommendedWindowOrder (sampleRate);
+        if (latMode <= 0) return std::max (8, maxOrd - 3); // 256  @48kHz (~5.3ms)
+        if (latMode == 1) return std::max (8, maxOrd - 2); // 512  @48kHz (~10.6ms)
+        if (latMode == 2) return std::max (9, maxOrd - 1); // 1024 @48kHz (~21.3ms)
+        return maxOrd;                                     // 2048 @48kHz (~42.6ms)
+    }
+
+    static int overlapForWindow (int windowSamples) noexcept
+    {
+        // 小窓(N<=512)では8倍オーバーラップ(87.5%重なり)に高密度化し、追加遅延を一切増やさずにフレーム変調歪みを半減する
+        return (windowSamples <= 512) ? 8 : 4;
+    }
+
     void prepare (double sampleRate, int fftOrder = 0, int overlap = 4)
     {
         if (fftOrder == 0) fftOrder = recommendedWindowOrder (sampleRate);
@@ -73,6 +93,7 @@ public:
         for (int k = 0; k < bins; ++k) peakOwner[(size_t) k] = k;
         histPos = olaHead = dryPos = samplesSinceFrame = 0;
         uvGain = 1.0f; uvTarget = 1.0f;                     // v2.12.0 無声ガード
+        prevFrameE = 0.0;
     }
 
     // ------------------------------------------------------------------
@@ -99,14 +120,15 @@ public:
         mix = std::clamp (std::isfinite (mixAmt) ? mixAmt : 0.0f, 0.0f, 1.0f);
     }
 
-    // v1.9.6 低遅延モード: 窓を 1024 -> 512 に縮めると遅延が半分になる。
-    // 周波数分解能は落ちるので、低い声ではわずかにざらつきが増える代わりに、
-    // 歌いながらモニターしたときの違和感が消える。割り当ては発生しない。
+    // v1.9.6/v5.1.2 低遅延モード: 窓を 2048 -> 1024 -> 512 -> 256 に縮めると遅延が段階的に半減する。
+    // 小窓(<=512)では自動で8倍オーバーラップに切り替わり、ざらつき・ケロつきを抑える。割り当ては発生しない。
     void setWindow (int fftOrder)
     {
         const int newN = 1 << fftOrder;
-        if (newN == N || newN > maxN || newN < 128) return;
-        N = newN; hop = N / ovl; bins = N / 2 + 1; dryDelay = N - 1;
+        const int newOvl = overlapForWindow (newN);
+        if (newN == N && newOvl == ovl) return;
+        if (newN > maxN || newN < 128) return;
+        N = newN; ovl = newOvl; hop = N / ovl; bins = N / 2 + 1; dryDelay = N - 1;
         double wsum2 = 0.0;
         for (int n = 0; n < N; ++n)
         {
@@ -195,10 +217,15 @@ private:
             if (uvMode != 0)
             {
                 if (n > 0 && ((s > 0.0f) != (prevS > 0.0f))) ++zc;
-                prevS = s; frameE += (double) s * s;
+                prevS = s;
             }
+            frameE += (double) s * s;
             frame[(size_t) n] = cf (s * win[(size_t) n], 0.0f);
         }
+        // v5.1.2 トランジェント（歌い出し・破裂音アタック）位相リセット:
+        //  エネルギーが前フレーム比で急増した瞬間、古い累積位相オフセットをリセットして子音・発声アタックのボヤけを防ぐ
+        const bool isTransientOnset = (prevFrameE > 1.0e-9 && frameE > prevFrameE * 4.5 && (frameE / (double) N) > 1.0e-5);
+        prevFrameE = frameE;
         fft (frame, false);
         for (int k = 0; k < bins; ++k)
         {
@@ -241,9 +268,23 @@ private:
             }
         }
 
-        // spectral envelope: zero-phase one-pole smoothing (fwd+bwd, two passes)
-        for (int k = 0; k < bins; ++k) env[(size_t) k] = mag[(size_t) k];
-        smooth (env, bins, 0.78f); smooth (env, bins, 0.42f);
+        // v5.1.2 True-Envelope (倍音ピーク包絡ブリッジ) + 窓サイズ適応型ゼロ位相スムージング:
+        //  倍音と倍音のあいだの谷(valley)にスペクトル包絡が引きずり込まれると、移調先の倍音が
+        //  谷に落ち込んで声量が痩せる(コムフィルタ状の抜け)。局所ピークを橋渡ししてから平滑化する。
+        const int bridgeRad = std::clamp ((int) std::lround (95.0 * (double) N / srHz), 1, 6);
+        for (int k = 0; k < bins; ++k)
+        {
+            float localMax = mag[(size_t) k];
+            const int k0 = std::max (0, k - bridgeRad);
+            const int k1 = std::min (bins - 1, k + bridgeRad);
+            for (int j = k0; j <= k1; ++j)
+                if (mag[(size_t) j] > localMax) localMax = mag[(size_t) j];
+            env[(size_t) k] = 0.65f * localMax + 0.35f * mag[(size_t) k];
+        }
+        const float winScale = std::clamp ((float) N / 1024.0f, 0.25f, 4.0f);
+        const float a1 = std::pow (0.78f, 1.0f / winScale);
+        const float a2 = std::pow (0.42f, 1.0f / winScale);
+        smooth (env, bins, a1); smooth (env, bins, a2);
         // v1.9.0: an absolute floor of 1e-7 let the excitation blow up to 1e7x inside
         //         spectral valleys, which could explode on formant moves. Peak-relative now.
         float envPeak = 0.0f;
@@ -269,10 +310,11 @@ private:
             leftPeak = k;
         }
         const float phaseStep = 2.0f * PI * (float) hop / (float) N;
+        const float transientDamp = isTransientOnset ? 0.35f : 1.0f;
         for (int k = 0; k < bins; ++k)
         {
             const int oldPeak = peakOwner[(size_t) k];
-            nextOffset[(size_t) k] = std::remainder (phaseOffset[(size_t) oldPeak]
+            nextOffset[(size_t) k] = std::remainder (phaseOffset[(size_t) oldPeak] * transientDamp
                  + phaseStep * trueFreq[(size_t) k] * (pitchFactor - 1.0f), 2.0f * PI);
             if (! std::isfinite (nextOffset[(size_t) k])) nextOffset[(size_t) k] = 0.0f;
         }
@@ -300,7 +342,7 @@ private:
             const int dest = (int) std::lround (position);
             if (dest < 0 || dest >= bins) continue;
             const float formantGain = std::clamp (envelopeAt (position / formantFactor)
-                                         / env[(size_t) k], 0.25f, 4.0f);
+                                         / env[(size_t) k], 0.18f, 5.5f);
             const float magnitude = mag[(size_t) k] * formantGain;
             const float phase = lastPhase[(size_t) k] + phaseOffset[(size_t) owner];
             frame[(size_t) dest] += cf (magnitude * std::cos (phase), magnitude * std::sin (phase));
@@ -310,7 +352,7 @@ private:
         for (int k = 0; k < bins; ++k) outPower += std::norm (frame[(size_t) k]);
         // フォルマントを保つ処理で声量まで大きく変えない。無音の床は持ち上げない。
         const float gain = (outPower > 1.0e-18 && inPower > 1.0e-18)
-                         ? (float) std::clamp (std::sqrt (inPower / outPower), 0.25, 4.0) : 1.0f;
+                         ? (float) std::clamp (std::sqrt (inPower / outPower), 0.18, 6.0) : 1.0f;
         for (int k = 0; k < bins; ++k) frame[(size_t) k] *= gain;
         frame[0] = cf (frame[0].real(), 0.0f);
         frame[(size_t)(bins - 1)] = cf (frame[(size_t)(bins - 1)].real(), 0.0f);
@@ -347,6 +389,7 @@ private:
     int    uvMode = 0;
     float  uvGain = 1.0f, uvTarget = 1.0f, uvAtk = 0.01f, uvRel = 0.005f;
     double srHz = 48000.0;
+    double prevFrameE = 0.0;
 };
 
 } // namespace gz

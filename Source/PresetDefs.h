@@ -417,15 +417,57 @@ inline constexpr int kNumVoicePresets = (int) (sizeof (kVoicePresets) / sizeof (
 inline constexpr int kNumMicPresets   = (int) (sizeof (kMicPresets)   / sizeof (kMicPresets[0]));
 inline constexpr int kNumEqPresets    = (int) (sizeof (kEqPresets)    / sizeof (kEqPresets[0]));
 
-// ---- v1.4.0 character-voice presets (robot + megaphone combos) ----
-struct CharPresetDef { const char* name; const char* nameEn; const char* desc; float roboFreq, roboMix; int megaType; float megaAmt; };
+// ---- v1.4.0 / v5.1.0 Voice Changer & Character-Voice presets (pitch/formant + robot + megaphone) ----
+struct CharPresetDef
+{
+    const char* name;
+    const char* nameEn;
+    const char* desc;
+    float roboFreq, roboMix;
+    int   megaType;
+    float megaAmt;
+    bool  vcOn    = false;
+    float vcPitch = 0.0f;
+    float vcForm  = 0.0f;
+    float vcMix   = 100.0f;
+};
 static const CharPresetDef kCharPresets[] = {
-    { "\xe3\x82\x82\xe3\x81\xa9\xe3\x81\x99\x20\x28\xe8\xa7\xa3\xe9\x99\xa4\x29", "Off (reset)", "\xe3\x82\xad\xe3\x83\xa3\xe3\x83\xa9\xe5\xa3\xb0\xe3\x82\xa8\xe3\x83\x95\xe3\x82\xa7\xe3\x82\xaf\xe3\x83\x88\xe3\x82\x92\xe5\x85\xa8\xe3\x81\xa6\xe3\x82\xaa\xe3\x83\x95\xe3\x81\xab\xe6\x88\xbb\xe3\x81\x97\xe3\x81\xbe\xe3\x81\x99\xe3\x80\x82", 80.0f, 0.0f, 0, 0.0f },
-    { "\xe3\x83\xad\xe3\x83\x9c\xe3\x83\x83\xe3\x83\x88", "Robot", "\xe5\xae\x9a\xe7\x95\xaa\xe3\x81\xae\xe3\x83\xad\xe3\x83\x9c\xe3\x83\x9c\xe3\x82\xa4\xe3\x82\xb9\xe3\x80\x82\xe3\x82\xb3\xe3\x83\xa1\xe3\x83\xb3\xe3\x83\x88\xe8\xaa\xad\xe3\x81\xbf\xe3\x82\x84\xe8\x87\xaa\xe5\xb7\xb1\xe7\xb4\xb9\xe4\xbb\x8b\xe3\x81\xae\xe3\x83\x8d\xe3\x82\xbf\xe3\x81\xab\xe3\x80\x82", 60.0f, 85.0f, 1, 25.0f },
-    { "\xe5\xae\x87\xe5\xae\x99\xe4\xba\xba", "Alien", "\xe9\x87\x91\xe5\xb1\x9e\xe7\x9a\x84\xe3\x81\xaa\xe9\xab\x98\xe3\x81\x84\xe5\xa4\x89\xe8\xaa\xbf\xe3\x81\xae\xe5\xae\x87\xe5\xae\x99\xe4\xba\xba\xe3\x83\x9c\xe3\x82\xa4\xe3\x82\xb9\xe3\x80\x82\x53\x46\xe6\xbc\x94\xe5\x87\xba\xe3\x82\x84\xe3\x83\x9c\xe3\x82\xb1\xe6\x8b\x85\xe3\x81\xab\xe3\x80\x82", 320.0f, 70.0f, 0, 0.0f },
-    { "\xe9\x9b\xbb\xe8\xa9\xb1\xe3\x81\xae\xe3\x82\x80\xe3\x81\x93\xe3\x81\x86", "Far-away Phone", "\xe9\x9b\xbb\xe8\xa9\xb1\xe8\xb6\x8a\xe3\x81\x97\xe3\x83\xbb\xe7\x84\xa1\xe7\xb7\x9a\xe9\xa2\xa8\xe3\x81\xae\xe5\xa3\xb0\xe3\x80\x82\xe5\x9b\x9e\xe6\x83\xb3\xe3\x82\xb7\xe3\x83\xbc\xe3\x83\xb3\xe3\x82\x84\xe5\xae\x9f\xe6\xb3\x81\xe3\x81\x94\xe3\x81\xa3\xe3\x81\x93\xe3\x81\xab\xe3\x80\x82", 80.0f, 0.0f, 1, 70.0f },
-    { "\xe6\x82\xaa\xe5\xbd\xb9\xe3\x83\x9c\xe3\x82\xa4\xe3\x82\xb9", "Villain Voice", "\xe4\xbd\x8e\xe3\x81\x84\xe5\xa4\x89\xe8\xaa\xbf\x2b\xe6\x8b\xa1\xe5\xa3\xb0\xe5\x99\xa8\xe3\x81\xae\xe5\xa8\x81\xe5\x9c\xa7\xe3\x83\x9c\xe3\x82\xa4\xe3\x82\xb9\xe3\x80\x82\xe3\x83\xa9\xe3\x82\xb9\xe3\x83\x9c\xe3\x82\xb9\xe7\x99\xbb\xe5\xa0\xb4\xe3\x82\xb7\xe3\x83\xbc\xe3\x83\xb3\xe3\x81\xab\xe3\x80\x82", 35.0f, 60.0f, 0, 30.0f },
-    { "\xe3\x81\x93\xe3\x82\x8f\xe3\x82\x8c\xe3\x81\x9f\xe3\x82\xb9\xe3\x83\x94\xe3\x83\xbc\xe3\x82\xab\xe3\x83\xbc", "Broken Speaker", "\xe3\x83\xad\xe3\x83\xbc\xe3\x83\x95\xe3\x82\xa1\xe3\x82\xa4\xe3\x81\xa7\xe5\x89\xb2\xe3\x82\x8c\xe3\x81\x9f\xe9\x9f\xb3\xe3\x80\x82\xe3\x83\x9c\xe3\x82\xab\xe3\x83\xad\xe6\x9b\xb2\xe3\x81\xae\xe6\xbc\x94\xe5\x87\xba\xe3\x83\x95\xe3\x83\xac\xe3\x83\xbc\xe3\x82\xba\xe5\x86\x8d\xe7\x8f\xbe\xe3\x81\xab\xe3\x80\x82", 80.0f, 0.0f, 2, 85.0f },
+    { "もどす (ボイチェン・演出 解除)", "Off (Reset All)",
+      "ボイスチェンジャー（ピッチ・声質変換）とロボ声・メガホン演出をすべてオフ（原音）に戻します。",
+      80.0f, 0.0f, 0, 0.0f, false, 0.0f, 0.0f, 100.0f },
+    { "🎀 カワボ・美少女 (男→女・高め愛され声)", "Kawaii Girl (M-to-F)",
+      "男性地声や低めの声を、自然で可愛らしい高めの美少女ボイスへ変換します（ピッチ+5.0半音・声質フォルマント+3.2半音）。バ美肉・VTuber配信・VRChatに最適。",
+      80.0f, 0.0f, 0, 0.0f, true, +5.0f, +3.2f, 100.0f },
+    { "🌸 ナチュラル女性・お姉さん (自然で艶やかな高め声)", "Natural Female (Soft Sister)",
+      "やりすぎ感のない自然な女性声・綺麗なお姉さん声へ変換します（ピッチ+3.0半音・声質フォルマント+2.0半音）。歌枠でも雑談でも違和感がありません。",
+      80.0f, 0.0f, 0, 0.0f, true, +3.0f, +2.0f, 100.0f },
+    { "👑 イケボ・低音男子 (女→男・深みのある低音)", "Deep Male (F-to-M)",
+      "女性声や高めの声を、胸の響きが太く落ち着いたイケボ・低音男性ボイスへ変換します（ピッチ-5.0半音・声質フォルマント-2.8半音）。",
+      80.0f, 0.0f, 0, 0.0f, true, -5.0f, -2.8f, 100.0f },
+    { "🎧 少年・中性ボイス (爽やかボーイッシュ)", "Boyish / Neutral Voice",
+      "爽やかで中性的な少年・ボーイッシュ声へ変換します（ピッチ-2.5半音・声質フォルマント-1.5半音）。少年役やカッコいい歌ってみたに最適。",
+      80.0f, 0.0f, 0, 0.0f, true, -2.5f, -1.5f, 100.0f },
+    { "🧚 小動物・マスコット妖精 (ハイトーン・デフォルメ)", "Mascot / Fairy Voice",
+      "アニメのマスコットや妖精のような愛くるしいハイトーン声へ変換します（ピッチ+8.0半音・声質フォルマント+4.8半音）。",
+      80.0f, 0.0f, 0, 0.0f, true, +8.0f, +4.8f, 100.0f },
+    { "😈 魔王・ダークボス (重低音ボイス変換＋威圧感)", "Dark Boss (Giant Low Voice)",
+      "地の底から響くような超重低音モンスター・魔王ボイスへ変換します（ピッチ-7.5半音・声質フォルマント-4.2半音）。",
+      80.0f, 0.0f, 0, 0.0f, true, -7.5f, -4.2f, 100.0f },
+    { "🤖 ロボット (定番ロボボイス)", "Robot",
+      "定番のロボット変調ボイス。コメント読みや自己紹介・SF演出のネタに。",
+      60.0f, 85.0f, 1, 25.0f, false, 0.0f, 0.0f, 100.0f },
+    { "👽 宇宙人 (金属変調エイリアン)", "Alien",
+      "金属的な高い変調の宇宙人ボイス。SF演出やボケ担当に。",
+      320.0f, 70.0f, 0, 0.0f, true, +2.0f, +3.5f, 100.0f },
+    { "📞 電話のむこう (電話越し・無線風)", "Far-away Phone",
+      "電話越し・トランシーバー無線風の声。回想シーンや実況ごっこ・歌のイントロ演出に。",
+      80.0f, 0.0f, 1, 70.0f, false, 0.0f, 0.0f, 100.0f },
+    { "📢 悪役メガホン (低音変調＋拡声器)", "Villain Voice",
+      "低い変調＋拡声器の威圧ボイス。ラスボス登場シーンやアジ演説風に。",
+      35.0f, 60.0f, 0, 30.0f, true, -3.5f, -2.0f, 100.0f },
+    { "📻 こわれたスピーカー (Lo-Fiレトロ割れ)", "Broken Speaker",
+      "ローファイで割れたレトロスピーカー音。ボカロ曲の間奏演出フレーズ再現に。",
+      80.0f, 0.0f, 2, 85.0f, false, 0.0f, 0.0f, 100.0f },
 };
 static constexpr int kNumCharPresets = (int) (sizeof (kCharPresets) / sizeof (kCharPresets[0]));
 } // namespace gzzio

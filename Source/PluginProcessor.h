@@ -5,6 +5,7 @@
 #include <atomic>
 #include <vector>
 #include "VoiceShifter.h"
+#include "TdPitchShifter.h"   // v5.1.2 ピッチ補正専用・時間領域ピッチ同期シフタ(約2.9ms)
 #include "PitchDetector.h"
 #include "PitchCorrection.h"
 #include "StreamOut.h"
@@ -575,6 +576,71 @@ public:
     }
     static const char* getMicModelName (int m, bool english = false) noexcept;
 
+    //== v5.1.0 柱④：📋 歌枠セットリスト（プレイリスト・曲ごとの伴奏・キー・ボーカル除去・声質設定一括記憶） ==
+    struct SetlistItem
+    {
+        juce::String filePath;       // 空文字なら内蔵デモ伴奏
+        juce::String title;          // 表示曲名
+        int          pitchSemi   = 0;
+        bool         vocalCancel = false;
+        float        bgmGainDb   = -6.0f;
+        int          detKey      = 0;
+        bool         detMinor    = false;
+        int          detBpm      = 120;
+        float        velvet      = 55.0f;
+        float        focus       = 62.0f;
+        float        silk        = 58.0f;
+        float        halo        = 45.0f;
+        int          micModel    = 0;
+        int          revType     = 7;
+        float        revMix      = 22.0f;
+    };
+    int         getSetlistCount() const noexcept;
+    int         getCurrentSetlistIndex() const noexcept { return currentSetlistIdx.load (std::memory_order_relaxed); }
+    SetlistItem getSetlistItem (int index) const;
+    int         addCurrentSongToSetlist();
+    bool        loadSetlistSong (int index, bool autoPlay = true);
+    bool        nextSetlistSong();
+    bool        prevSetlistSong();
+    void        removeSetlistSong (int index);
+    void        clearSetlist();
+
+    //== v5.1.0 柱⑤：💧 リップノイズ（口のペチャ音・舌打ち）瞬間除去（2階差分トランジェント補間＋粘着音抑制） ==
+    bool  getLipDeclickOn() const noexcept     { return lipDeclickOn.load (std::memory_order_relaxed); }
+    void  setLipDeclickOn (bool b) noexcept;
+    void  toggleLipDeclickOn() noexcept        { setLipDeclickOn (! getLipDeclickOn()); }
+    float getLipDeclickMeterDb() const noexcept { return meterLip.load (std::memory_order_relaxed) * 12.0f; }
+
+    //== v5.1.4 ボイチェン＆ピッチ補正 4段階遅延モード ＆ フォルマント自動追従 ==
+    //   0:🚀極限ゼロ感 (補正 ~0.1ms / ボイチェン ~5.3ms)
+    //   1:⚡超低遅延   (補正 ~0.1ms / ボイチェン ~10.6ms)
+    //   2:⭐標準       (補正 ~0.1ms / ボイチェン ~21.3ms) ← 既定
+    //   3:💎最高音質   (補正・ボイチェンとも ~42.6ms の高分解能位相ボコーダ)
+    //   ※ピッチ補正だけのとき(ボイス変換OFF)は、💎以外は時間領域ピッチ同期エンジン(TdPitchShifter, 4サンプル=0.08ms)で処理する。
+    static constexpr int kPitchLatModes = 4;
+    int   getPitchLatencyMode() const noexcept  { return pitchLatMode.load (std::memory_order_relaxed); }
+    void  setPitchLatencyMode (int mode) noexcept
+    {
+        pitchLatMode.store (juce::jlimit (0, kPitchLatModes - 1, mode), std::memory_order_relaxed);
+        markStateDirty();
+    }
+    // そのモードで実際に足される遅延(ms)。画面の表示用。
+    double pitchLatencyMsFor (int mode, bool voiceChanger) const noexcept
+    {
+        const double sr = currentSampleRate > 1000.0 ? currentSampleRate : 48000.0;
+        if (! voiceChanger && mode < 3)
+            return (double) juce::jmax (4, tdSh[0].latencySamples()) * 1000.0 / sr;
+        const int ord = gz::VoiceShifter::windowOrderForLatencyMode (sr, mode);
+        return (double) ((1 << ord) - 1) * 1000.0 / sr;
+    }
+    bool  getVcFormantAutoLink() const noexcept { return vcFormAutoLink.load (std::memory_order_relaxed); }
+    void  setVcFormantAutoLink (bool on) noexcept
+    {
+        vcFormAutoLink.store (on, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleVcFormantAutoLink() noexcept    { setVcFormantAutoLink (! getVcFormantAutoLink()); }
+
     //== 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ==
     // id: 0 = v5.1.0 最新版, 1..13 = 歴代メジャー世代（v1.0.0〜v5.0.0）
     // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
@@ -862,7 +928,8 @@ private:
     std::atomic<bool> sessionActive   { false };
     float jnLastPitch = 60.0f; int jnLastDir = 1;   // v1.9.8: ハモリの自動反転用
     gz::scale::ContraryLine jnContra;         // v2.0.0: 反行ハモリの対旋律
-    float jnHeldSemi[2] = { 0.0f, 0.0f };     // v2.0.0: 無声区間はハモリ音程を保持
+    float jnHeldSemi[4] = { 0.0f, 0.0f, 0.0f, 0.0f }; // v5.1.1: 無声区間は4声すべてのハモリ音程を保持
+    float jnPedalMidi   = 60.0f;              // v5.1.1: ペダル・ドローン用の基準MIDIノート
     int   jnLastHarm = -1;                    //         (モードが変わったら保持を破棄)
     std::atomic<float> atDetectedHz { 0.0f };        // last detected F0 (UI; 0 = unvoiced)
     std::atomic<float> atCurrentCorrection { 0.0f }; // applied correction in semitones (UI)
@@ -1236,6 +1303,7 @@ private:
     juce::SpinLock     bgmAudioLock;
     std::shared_ptr<const juce::AudioBuffer<float>> bgmAudioBuf;
     juce::String       bgmTitle;
+    juce::String       bgmFilePath;
     std::atomic<int>   bgmLoadedSamples   { 0 };
     std::atomic<bool>  bgmPlaying         { false };
     std::atomic<bool>  bgmLooping         { true };
@@ -1291,7 +1359,7 @@ private:
     std::atomic<bool>  chorusBoostMode    { false };
     float              chorusBoostEnv     { 0.0f };
 
-    // ---- v5.1.0 柱①〜③：伴奏キー＆BPM自動解析・サビ自動検知・名機マイクモデリング ----
+    // ---- v5.1.0 柱①〜⑤：伴奏キー＆BPM自動解析・サビ自動検知・名機マイクモデリング・歌枠セットリスト・リップノイズ瞬間除去 ----
     std::atomic<int>   bgmDetectedKey     { 0 };
     std::atomic<bool>  bgmDetectedMinor   { false };
     std::atomic<int>   bgmDetectedBpm     { 120 };
@@ -1303,6 +1371,28 @@ private:
     double             micModLastSr       { 0.0 };
     juce::dsp::IIR::Filter<float> micModSub[2], micModBody[2], micModPres[2], micModAir[2];
     float              micModDc[2]        { 0.0f, 0.0f };
+    std::vector<SetlistItem> setlistItems;
+    std::atomic<int>   currentSetlistIdx  { -1 };
+    std::atomic<bool>  lipDeclickOn       { false };
+    float              lipPrev1[2]        { 0.0f, 0.0f };
+    float              lipPrev2[2]        { 0.0f, 0.0f };
+    float              lipSlewEnv         { 0.001f };
+
+    // ---- v5.1.1 ボイチェン＆ピッチ補正 遅延モード ＆ Post-VC 声道ナチュラライザー ----
+    std::atomic<int>   pitchLatMode       { 2 }; // v5.1.2: 0:🚀極限 1:⚡超低遅延 2:⭐標準(既定) 3:💎最高音質
+    gz::TdPitchShifter tdSh[2];                  // v5.1.4: ピッチ補正専用の時間領域ピッチ同期シフタ(4サンプル=約0.08ms)
+    bool               tdWasActive        { false };
+    float              tdBodyLp[2]        { 0.0f, 0.0f }; // ピッチ補正連動・声芯フォルマント傾き補正状態
+    int  mainPitchLatency (bool vcOn) const noexcept
+    {
+        return (! vcOn && pitchLatMode.load (std::memory_order_relaxed) < 3)
+             ? tdSh[0].latencySamples() : vcSh[0].latencySamples();
+    }
+    std::atomic<bool>  vcFormAutoLink     { false };
+    juce::dsp::IIR::Filter<float> vcNatHp[2], vcNatBody[2], vcNatDeHarsh[2];
+    float              vcNatLastPitch     { -999.0f };
+    float              vcNatLastForm      { -999.0f };
+    double             vcNatLastSr        { 0.0 };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

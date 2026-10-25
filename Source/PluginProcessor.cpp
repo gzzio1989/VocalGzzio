@@ -181,11 +181,13 @@ VocalGzzioProcessor::createParameterLayout()
     layout.add (std::make_unique<P>(pid ("jn_mix"),   "Unison Mix",    R (0.0f, 100.0f, 1.0f),  55.0f, unit ("%")));
     layout.add (std::make_unique<juce::AudioParameterBool>(pid ("jn_on"), "Unison x5 On", false));
     // v2.0.0: 9項目め「反行(Contrary)」を末尾に追加(既存プロジェクトの保存値は不変)。
-    // 7番の旧名 "Auto (contrary)" は実装上「上/下の持ち替え」なので名前を実態に合わせた。
+    // v5.1.1: 18項目へ倍増（9..17を末尾に追加し、既存の0..8のインデックス互換を完全維持）。
     layout.add (std::make_unique<juce::AudioParameterChoice>(pid ("jn_harm"), "Unison Harmony",
                     juce::StringArray { "Unison", "3rd up", "3rd down", "6th up",
                                         "6th down", "5th up", "3rd + 5th", "Auto flip",
-                                        "Contrary" }, 0));
+                                        "Contrary", "Octave down", "Octave up", "Octave W",
+                                        "3rd W (up+down)", "4th up", "5th down",
+                                        "3-voice Choir", "4-voice Gospel", "Pedal Drone" }, 0));
     // v1.9.9: ハモだけ出力（原音を消してハモリ声部だけを出す。別トラック録りや
     //         「自分の声を聴きながらハモリを重ねる」使い方のため）
     layout.add (std::make_unique<juce::AudioParameterBool>(pid ("jn_solo"), "Harmony Only", false));
@@ -499,7 +501,7 @@ void VocalGzzioProcessor::applyChara (juce::AudioBuffer<float>& buffer, bool doF
         {
             // 歌が -35dB より強いまま続いた時間を数える。0.35秒を超えたあたりから
             // 「ロングトーン」とみなして開き始め、1.2秒で全開。途切れたら素早く閉じる。
-            if (rmsDb > -35.0f) emoHoldSec += blockSec;
+            if (rmsDb > -35.0f) emoHoldSec = juce::jmin (emoHoldSec + blockSec, 60.0f);   // v5.1.3 長時間でも飽和しない上限
             else                emoHoldSec  = 0.0f;
             const float t = juce::jlimit (0.0f, 1.0f, (emoHoldSec - 0.35f) / 0.85f);
             const float target = t * t * (3.0f - 2.0f * t) * emoAmt;        // smoothstep
@@ -806,12 +808,28 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     heyaReady.store (true);
 
     // ---- v1.8.0 voice changer + unison ----
-    for (auto& s : vcSh) s.prepare (sampleRate);
-    for (auto& s : unSh) s.prepare (sampleRate);
+    const int initWinOrd = gz::VoiceShifter::windowOrderForLatencyMode (sampleRate, pitchLatMode.load (std::memory_order_relaxed));
+    const int initUnOrd  = std::max (initWinOrd, gz::VoiceShifter::windowOrderForLatencyMode (sampleRate, 1));
+    for (auto& s : vcSh) { s.prepare (sampleRate); s.setWindow (initWinOrd); }
+    for (auto& s : unSh) { s.prepare (sampleRate); s.setWindow (initUnOrd); }
+    for (auto& s : tdSh) s.prepare (sampleRate);   // v5.1.4 ピッチ補正専用の超低遅延エンジン(4サンプル=0.08ms)
+    tdWasActive = false;
+    tdBodyLp[0] = tdBodyLp[1] = 0.0f;
     // v2.12.0 無声ガード(§6-3): 本人の声(ボイス変換・ピッチ補正)は子音を素通し、
     // ユニゾン/ハモリの分身は子音を黙らせる(4人分の「サッ」が重ならないように)。
     for (auto& s : vcSh) s.setUnvoicedGuard (1);
     for (auto& s : unSh) s.setUnvoicedGuard (2);
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        vcNatHp[ch].reset();
+        vcNatBody[ch].reset();
+        vcNatDeHarsh[ch].reset();
+    }
+    vcNatLastPitch = -999.0f;
+    vcNatLastForm  = -999.0f;
+    vcNatLastSr    = sampleRate;
+    for (float& hs : jnHeldSemi) hs = 0.0f;
+    jnPedalMidi = 60.0f;
     pitchDet.prepare (sampleRate);            // v1.9.0 auto-tune F0 detector
     pitchCorrection.reset();
     pitchWasTracking = false;
@@ -1132,8 +1150,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // v2.8.0: Mixで混ぜ戻す原音を、加工側と同じだけ遅らせるためのリング。
     // 最大でシフターの申告遅延ぶん＋1ブロック＋余白があれば足りる。
     {
-        // ピッチ窓はサンプルレートに追従する。実際の遅延を原音側にも確保する。
-        const int maxLat = vcSh[0].latencySamples();
+        // v5.1.1: 実行中に 💎最高音質モード(N=2048) へ切り替えても再確保不要なよう、最大窓サイズで確保する。
+        const int maxLat = (1 << gz::VoiceShifter::recommendedWindowOrder (sampleRate));
         dryRing.setSize (2, maxLat + juce::jmax (samplesPerBlock * 2, 8192) + 8,
                          false, false, true);
         dryRing.clear();
@@ -1291,7 +1309,7 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
        #else
         const bool mainShifted = vcOn || atOn;
        #endif
-        voiceLatency = mainShifted ? vcSh[0].latencySamples() : 0;
+        voiceLatency = mainShifted ? mainPitchLatency (vcOn) : 0;
         setLatencySamples (voiceLatency);
         reportedLatency.store (voiceLatency);
     }
@@ -2759,11 +2777,12 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         //  どれも「声のピッチ」を前提にした処理で、和音が鳴るギターに掛けると
         //  検出が別の弦に飛び移って音程がふらつく。切れば遅延も 0 のままになる。
         // v3.0 モジュール「へんしん」。OFF のあいだは3つとも切れる＝遅延も0のまま。
-        // v4.7.0 雑談MC切替(talkMc)中も、歌枠のパラメータ値を保ったままピッチ系を素通しにする。
+        // v4.7.0 雑談MC切替(talkMc)中は、歌枠のパラメータ値を保ったままピッチ補正(atOn)とハモリ(jnOn)のみを素通しにする。
+        // ★ 重要：ボイス変換(vcOn)は雑談MC中も絶対に維持する（雑談MC中にボイチェンが切れて地声が露出するのを防ぐ）。
         const bool henshinOn = (eraNow >= 180) && (mods.displayGain (gz::ModuleChain::Henshin) > 0.5f);
 
         const bool vcOn = (apvts.getRawParameterValue ("vc_on")->load() > 0.5f)
-                            && henshinOn && ! sessionOn && ! talkMc && srcPitchOk
+                            && henshinOn && ! sessionOn && srcPitchOk
                           #if VOCALGZZIO_LITE
                             && false   // Lite版は非搭載
                           #endif
@@ -2782,16 +2801,23 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                             ;
 
         const bool pitchActive = vcOn || atOn;   // vcSh runs for the voice-changer AND/OR auto-tune
+        // v5.1.2 ピッチ補正だけのとき(ボイス変換OFF・💎以外)は時間領域ピッチ同期エンジン(約2.9ms)を使う
+        const bool useTd = pitchActive && ! vcOn && pitchLatMode.load (std::memory_order_relaxed) < 3;
 
         // v1.9.0 修正: 停止中のシフターには前回の音・位相・OLA が残っている。
         // そのまま再開すると 1 窓ぶん(約17ms)、入力の10倍を超える音が飛び出す
         // ("押した瞬間に爆音" の原因)。有効化の瞬間に必ず初期化する。
-        if (pitchActive && ! vcWasActive) for (auto& s : vcSh) s.reset();
+        if (pitchActive && (! vcWasActive || useTd != tdWasActive))
+        {
+            if (useTd) { for (auto& s : tdSh) s.reset(); tdBodyLp[0] = tdBodyLp[1] = 0.0f; }
+            else       { for (auto& s : vcSh) s.reset(); }
+        }
+        tdWasActive = useTd;
         if (jnOn && ! jnWasActive)
         {
             for (auto& s : unSh) s.reset();
             jnContra.reset();                            // v2.0.0 反行の状態も初期化
-            jnHeldSemi[0] = jnHeldSemi[1] = 0.0f;
+            for (float& hs : jnHeldSemi) hs = 0.0f;
         }
         vcWasActive = pitchActive;
         jnWasActive = jnOn;
@@ -2814,7 +2840,17 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         // v2.9.0 ★jnOn を外した。ハモリは主メロの横に足す並列処理なので、
         //   主メロ自体は遅れない(実測0サンプル)。ここに jnOn を入れていたため、
         //   ハモリだけONのときに原音を17.4ms遅らせて混ぜていた＝Mixのコム再発。
-        voiceLatency = pitchActive ? vcSh[0].latencySamples() : 0;
+        // v5.1.1: 3段階遅延モード（0:⚡超低遅延 ~10.6ms / 1:⭐標準低遅延 ~21.3ms / 2:💎最高音質 ~42.6ms）の動的反映（確保ゼロ）
+        {
+            const int wantOrd = gz::VoiceShifter::windowOrderForLatencyMode (currentSampleRate, pitchLatMode.load (std::memory_order_relaxed));
+            const int wantUn  = std::max (wantOrd, gz::VoiceShifter::windowOrderForLatencyMode (currentSampleRate, 1));
+            if (vcSh[0].currentWindow() != (1 << wantOrd))
+                for (auto& s : vcSh) s.setWindow (wantOrd);
+            // ハモリ声部は主旋律の横に足す並列処理なので、極限モードでも512点以上を保って音質を守る
+            if (unSh[0].currentWindow() != (1 << wantUn))
+                for (auto& s : unSh) s.setWindow (wantUn);
+        }
+        voiceLatency = pitchActive ? (useTd ? tdSh[0].latencySamples() : vcSh[0].latencySamples()) : 0;
         // v2.9.0: 画面の「追加遅延」バッジはここの値を出す。prepareToPlay の
         // 申告値だけを見ていると、再生中にピッチ補正をONにしたとき
         // **バッジが +0.0ms のまま嘘をつく**。歌う人が知りたいのは
@@ -2851,22 +2887,21 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             // 音符ごとに中心を持ち、新しい音へ古い補正を持ち越さない。
             // 境界には小さな余裕を設け、検出の揺れで隣の音を行き来するのを抑える。
             const float midi = hz > 0.0f ? 69.0f + 12.0f * std::log2 (hz / refA) : 0.0f;
-            float target = atOn ? pitchCorrection.target (midi, blockSec, key, scId, speed, amount) : 0.0f;
-            if (! atOn) pitchCorrection.reset();
             atDetectedHz.store (hz);
 
-            // ---- v2.7.0 こぶし(しゃくり・こぶし保護) ----
+            // ---- v2.7.0 こぶし(しゃくり・こぶし保護) & v5.1.4 規則的ビブラート確信度 ----
             // 音程の「動き方」だけを見て、しゃくり／こぶし／音の渡りの最中だけ
-            // 補正を引っ込める。音そのものには一切触らないのでゼロ遅延のまま。
-            // 詳細は Source/Ornament.h。
+            // 補正を引っ込め、規則的なビブラートと不規則なふらつきを分離する。
+            // 音そのものには一切触らないのでゼロ遅延のまま。詳細は Source/Ornament.h。
+            float keep    = 1.0f;
+            float vibConf = 0.0f;
             {
                 const float ornAmt = (eraNow >= 270)
                                    ? apvts.getRawParameterValue ("orn_amt")->load() * 0.01f : 0.0f;
                 ornGuard.setAmount (ornAmt);
                 // 半音単位の音高(無声は0以下)を渡す。基準ピッチは補正側と同じもの。
-                const float pSemi = (hz > 0.0f) ? (69.0f + 12.0f * std::log2 (hz / refA)) : 0.0f;
-                const float keep  = ornGuard.process (pSemi, blockSec);
-                target *= keep;
+                keep    = ornGuard.process (midi, blockSec);
+                vibConf = ornGuard.vibratoConfidence();
                 if (ornAmt > 0.001f)
                 {
                     meterOrn.store (ornGuard.lastProtect());
@@ -2878,27 +2913,28 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             // ケロケロ判定: 速さがほぼ0で、補正量も強い設定のとき
             const bool hard = atOn && (speed <= 8.0f) && (amount >= 0.90f);
 
-            // retune-speed glide: tau grows with 'speed' (0 => instant snap,
-            // 100 => ~180 ms smooth). Time constant is block-size independent.
+            // v5.1.4: 歌を上手く聴かせるゼロ遅延軌道エンジン (processSkilled)
+            //  - ノート間レガート軌跡(smoothedNote)とノート内即時制振(directCorr)を分離し、
+            //    従来の160ms中心フィルタ遅れ＋補正ローパス遅れによる「遅れて動くラグ感・うねり」を根絶。
+            //  - 規則的ビブラート中はビブラートをそのまま残し、ロングトーンや語尾のフラット垂れは先回りして支える。
             if (! atOn)
-                atCorrection = 0.0f;  // ハモリ用の検出だけで補正を有効にしない
-            else if (hard)
             {
-                atCorrection = target;          // 平滑化なし = 音程が階段状に飛ぶ
+                pitchCorrection.reset();
+                atCorrection = 0.0f;  // ハモリ用の検出だけで補正を有効にしない
             }
             else
             {
-                const float tauMs = 1.5f + (speed * speed / 10000.0f) * 178.5f;
-                const float alpha = 1.0f - std::exp (-blockSec / (tauMs * 0.001f));
-                atCorrection += (target - atCorrection) * alpha;
+                atCorrection = pitchCorrection.processSkilled (midi, blockSec, key, scId, speed, amount, keep, vibConf);
             }
             atCorr = atCorrection;
             atCurrentCorrection.store (atCorr);
 
             // v1.9.0: 音程が合っているときはボコーダを通さず素の声のまま出す。
-            // (ヒステリシス付き: 0.05半音を超えたら通し、0.02半音を下回ったら戻す)
-            // v1.9.3: ただしケロケロ設定では常時通す。素の声に戻ると独特の
-            //         質感が途切れて「効いていない」ように聞こえるため。
+            // v5.1.1: 旧版(0.05半音〜0.02半音のヒステリシス＋15ms遷移)では、微修正中に
+            //         atWetMix が中間値になって「補正前の原音」と「数セントずれた補正音」が混ざり、
+            //         フランジャー/コーラス状の『うなり・二重声』が発生していた。
+            //         0.002半音(0.2セント)以上の実補正がある間は 1.5ms で即座に 100% Wet へ振り切り、
+            //         二重声のうなりを完全に根絶する（完全ゼロ時のインパルス自己診断は 0.0f のまま通過）。
             if (hard)
             {
                 atWetMix = 1.0f;
@@ -2906,8 +2942,9 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             else
             {
                 const float mag = std::abs (atCorr);
-                const float want = (mag > 0.05f) ? 1.0f : (mag < 0.02f ? 0.0f : atWetMix);
-                const float aMix = 1.0f - std::exp (-blockSec / 0.015f);   // 15 ms
+                const float want = (mag > 0.002f) ? 1.0f : (mag < 0.0008f ? 0.0f : atWetMix);
+                const float tauMix = (want > atWetMix) ? 0.0015f : 0.012f;
+                const float aMix = 1.0f - std::exp (-blockSec / tauMix);
                 atWetMix += (want - atWetMix) * aMix;
             }
         }
@@ -2916,12 +2953,48 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
 
         if (pitchActive || jnOn)
         {
-            const float pit  = (vcOn ? apvts.getRawParameterValue ("vc_pitch")->load() : 0.0f) + atCorr;
+            const float vcPitRaw = vcOn ? apvts.getRawParameterValue ("vc_pitch")->load() : 0.0f;
+            const float pit  = vcPitRaw + atCorr;
             const float frm  = vcOn ? apvts.getRawParameterValue ("vc_form")->load() : 0.0f;
             // 声変え時はユーザーのミックス。ピッチ補正だけのときは「補正が要る間だけ」通す。
             const float vmix = vcOn ? apvts.getRawParameterValue ("vc_mix")->load() * 0.01f : atWetMix;
 
             if (pitchActive)
+            {
+                const bool applyVcNat = vcOn
+                                     && (std::abs (vcPitRaw) > 0.15f || std::abs (frm) > 0.15f)
+                                     && vmix > 0.01f
+                                     && ! selfTestRunning.load (std::memory_order_relaxed);
+                if (applyVcNat)
+                {
+                    if (std::abs (vcPitRaw - vcNatLastPitch) > 0.05f
+                        || std::abs (frm - vcNatLastForm) > 0.05f
+                        || std::abs (currentSampleRate - vcNatLastSr) > 1.0)
+                    {
+                        vcNatLastPitch = vcPitRaw;
+                        vcNatLastForm  = frm;
+                        vcNatLastSr    = currentSampleRate;
+                        const float hpHz = juce::jlimit (65.0f, 115.0f,
+                            72.0f + juce::jmax (0.0f, -vcPitRaw * 3.0f - frm * 1.8f));
+                        const float bodyDb = juce::jlimit (-2.4f, 2.6f,
+                            vcPitRaw * 0.20f + frm * 0.16f);
+                        const float deHarshDb = juce::jlimit (-3.2f, 1.6f,
+                            -juce::jmax (0.0f, vcPitRaw * 0.25f + frm * 0.20f)
+                            + juce::jmax (0.0f, -vcPitRaw * 0.12f));
+                        const auto cHp   = ACoefs::makeHighPass (currentSampleRate, hpHz, 0.707f);
+                        const auto cBody = ACoefs::makePeakFilter (currentSampleRate, 215.0f, 0.85f,
+                                               juce::Decibels::decibelsToGain (bodyDb * vmix));
+                        const auto cDeH  = ACoefs::makePeakFilter (currentSampleRate, 6200.0f, 1.35f,
+                                               juce::Decibels::decibelsToGain (deHarshDb * vmix));
+                        for (int ch = 0; ch < 2; ++ch)
+                        {
+                            *vcNatHp[ch].coefficients      = cHp;
+                            *vcNatBody[ch].coefficients    = cBody;
+                            *vcNatDeHarsh[ch].coefficients = cDeH;
+                        }
+                    }
+                }
+
                 for (int ch = 0; ch < juce::jmin (numCh, 2); ++ch)
                 {
                     float* p = buffer.getWritePointer (ch);
@@ -2931,14 +3004,61 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     // 次のブロックからは何事もなく続く(欠けは最大1ブロック=数ms)。
                     const int nn = juce::jmin (numSamples, (int) vcDry[ch].size());
                     juce::FloatVectorOperations::copy (vcDry[ch].data(), p, nn);
-                    vcSh[ch].setParams (pit, frm, vmix);
-                    vcSh[ch].processBlock (p, numSamples);
+                    if (useTd)
+                    {
+                        // v5.1.4 ピッチ補正専用: 検出した周期でつなぐ時間領域エンジン(4サンプル=0.08ms、FFT窓の待ち時間なし)
+                        tdSh[ch].setPitchHz (atDetectedHz.load (std::memory_order_relaxed));
+                        tdSh[ch].setParams (atCorr, vmix);
+                        tdSh[ch].processBlock (p, numSamples);
+
+                        // v5.1.4 ピッチ補正連動・声芯フォルマント傾き補正(ゼロ遅延):
+                        // フラットした高音を上へ引き上げた際(atCorr > 0)に時間領域シフトで声道共鳴が細く薄くなるのを防ぐため、
+                        // シフト量に比例して 240Hz 帯の声芯(チェスト感)をわずかに補い、常に太く余裕のある歌声に保つ。
+                        // atCorr == 0 のときは tiltGain == 0 で完全に恒等(ビット単位で素通し)。
+                        const float tiltGain = (! selfTestRunning.load (std::memory_order_relaxed))
+                                             ? juce::jlimit (-0.08f, 0.14f, atCorr * 0.09f * vmix) : 0.0f;
+                        const float lpAlpha  = (float) (1.0 - std::exp (-2.0 * 3.14159265358979323846 * 240.0 / currentSampleRate));
+                        float lpState = tdBodyLp[ch];
+                        for (int i = 0; i < numSamples; ++i)
+                        {
+                            const float s = p[i];
+                            if (std::isfinite (s))
+                            {
+                                lpState += lpAlpha * (s - lpState);
+                                p[i] = s + tiltGain * lpState;
+                            }
+                        }
+                        tdBodyLp[ch] = lpState;
+                    }
+                    else
+                    {
+                        vcSh[ch].setParams (pit, frm, vmix);
+                        vcSh[ch].processBlock (p, numSamples);
+                    }
+                    if (applyVcNat)
+                    {
+                        const float warmDrive = 0.032f * vmix;
+                        for (int i = 0; i < numSamples; ++i)
+                        {
+                            float x = vcNatHp[ch].processSample (p[i]);
+                            x = vcNatBody[ch].processSample (x);
+                            x = vcNatDeHarsh[ch].processSample (x);
+                            // 声帯の非対称振動に近い微細な偶数次倍音でボイチェン特有の人工的な薄さを補う
+                            x += warmDrive * (x * std::abs (x) - 0.30f * x * x * x);
+                            p[i] = x;
+                        }
+                    }
                     if (! gzBlockFinite (p, numSamples))
                     {
                         juce::FloatVectorOperations::copy (p, vcDry[ch].data(), nn);
                         vcSh[ch].reset();
+                        tdSh[ch].reset();
+                        vcNatHp[ch].reset();
+                        vcNatBody[ch].reset();
+                        vcNatDeHarsh[ch].reset();
                     }
                 }
+            }
 
             if (jnOn)
             {
@@ -2949,24 +3069,35 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 for (int i = 0; i < n; ++i) vcMono[(size_t) i] = 0.5f * (L[i] + R[i]);
 
                 const float jmix = apvts.getRawParameterValue ("jn_mix")->load() * 0.01f;
-                const int   harm = (int) apvts.getRawParameterValue ("jn_harm")->load();
+                const int   harm = juce::jlimit (0, 17, (int) apvts.getRawParameterValue ("jn_harm")->load());
                 // per-member character: detune (cents), formant (st), pan
                 static const float dCents[4] = { +9.0f, -11.0f, +16.0f, -15.0f };
                 static const float dForm [4] = { +1.5f,  -1.5f,  +3.2f,  -2.8f };
                 static const float pan   [4] = { -0.6f,  +0.6f,  -0.3f,  +0.3f };
-                // v1.9.8: ハモリを「半音固定」から「音階の度数」へ。長3度(4半音)と
-                // 短3度(3半音)は音階上の位置で決まるので、度数で動かさないと必ずぶつかる。
-                // v2.0.0: 8=反行(ContraryLine)を追加。UIも9項目すべて出すようにした。
-                static const int hDeg[9][4] = {
-                    {  0,  0,  0,  0 },   // 0 ユニゾン
-                    {  0,  0, +2, +2 },   // 1 3度上
-                    {  0,  0, -2, -2 },   // 2 3度下
-                    {  0,  0, +5, +5 },   // 3 6度上(3度のオクターブ違い・柔らかい)
-                    {  0,  0, -5, -5 },   // 4 6度下
-                    {  0,  0, +4, +4 },   // 5 5度上(硬く澄んだ響き)
-                    {  0,  0, +2, +4 },   // 6 3度＋5度
-                    {  0,  0, +2, +2 },   // 7 おまかせ(上昇フレーズは下・下降は上)
-                    {  0,  0,  0,  0 },   // 8 反行(メロディと逆に動く対旋律)
+                // v1.9.8: ハモリを「半音固定」から「音階の度数」へ。
+                // v5.1.1: 9種→18種へ倍増（0..8のインデックス互換は完全維持）。
+                //   9=オク下, 10=オク上, 11=オクW(上下同時), 12=3度W(上3+下3),
+                //   13=4度上(モダン), 14=5度下(重厚), 15=3声コーラス(下3+上3+上5),
+                //   16=4声ゴスペル(下6+下3+上3+上5), 17=ペダル・ドローン(主音+5度保持)
+                static const int hDeg[18][4] = {
+                    {  0,  0,  0,  0 },   // 0  ユニゾン
+                    {  0,  0, +2, +2 },   // 1  3度上
+                    {  0,  0, -2, -2 },   // 2  3度下
+                    {  0,  0, +5, +5 },   // 3  6度上(3度のオクターブ違い・柔らかい)
+                    {  0,  0, -5, -5 },   // 4  6度下
+                    {  0,  0, +4, +4 },   // 5  5度上(硬く澄んだ響き)
+                    {  0,  0, +2, +4 },   // 6  3度＋5度
+                    {  0,  0, +2, +2 },   // 7  おまかせ(上昇フレーズは下・下降は上)
+                    {  0,  0,  0,  0 },   // 8  反行(メロディと逆に動く対旋律)
+                    {  0,  0, -7, -7 },   // 9  オクターブ下(-12st)
+                    {  0,  0, +7, +7 },   // 10 オクターブ上(+12st)
+                    { -7, -7, +7, +7 },   // 11 オクターブW(上下オクターブ同時重ね)
+                    {  0,  0, +2, -2 },   // 12 3度W(3度上＋3度下の同時重ね)
+                    {  0,  0, +3, +3 },   // 13 4度上(都会的・モダンな4度ハモ)
+                    {  0,  0, -4, -4 },   // 14 5度下(重厚な下5度パワーハモ)
+                    {  0, -2, +2, +4 },   // 15 3声コーラス(上3度＋上5度＋下3度)
+                    { -5, -2, +2, +4 },   // 16 4声ゴスペル(下6度＋下3度＋上3度＋上5度)
+                    {  0,  0,  0,  0 },   // 17 ペダル・ドローン(主音＋5度を持続保持)
                 };
                 const int   hKey  = (int) apvts.getRawParameterValue ("at_key")->load();
                 const int   hScId = (int) apvts.getRawParameterValue ("at_scale")->load();
@@ -2976,7 +3107,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 if (harm != jnLastHarm)
                 {
                     jnLastHarm = harm;
-                    jnHeldSemi[0] = jnHeldSemi[1] = 0.0f;
+                    for (float& hs : jnHeldSemi) hs = 0.0f;
                     jnContra.reset();
                 }
 
@@ -3008,35 +3139,44 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                         const float cn = jnContra.update (pH, hKey, hScId);
                         hSemi[2] = hSemi[3] = cn - pH;
                     }
+                    else if (harm == 17) // ペダル・ドローン: 歌い手の音域に近い主音(Root)と完全5度(+7st)を持続保持
+                    {
+                        const int oct = (int) std::round ((pH - (float) hKey) / 12.0f);
+                        const float rootMidi = (float) (hKey + oct * 12);
+                        jnPedalMidi = rootMidi;
+                        hSemi[0] = hSemi[2] = juce::jlimit (-12.0f, 12.0f, rootMidi - pH);
+                        hSemi[1] = hSemi[3] = juce::jlimit (-12.0f, 12.0f, (rootMidi + 7.0f) - pH);
+                    }
                     else
-                        for (int v = 2; v < 4; ++v)
+                    {
+                        for (int v = 0; v < 4; ++v)
                         {
                             const int deg = hDeg[harm][v] * flip;
                             if (deg == 0) continue;
+                            if (deg == 7)       { hSemi[v] = +12.0f; continue; }
+                            else if (deg == -7) { hSemi[v] = -12.0f; continue; }
                             float note = gz::scale::step (pH, hKey, hScId, deg);
                             // トライトーン(6半音)は強い濁り。1度ずらして避ける
                             if (std::abs ((int) std::lround (note - pH)) == 6)
                                 note = gz::scale::step (pH, hKey, hScId, deg + (deg > 0 ? 1 : -1));
                             hSemi[v] = note - pH;      // 歌い手の抑揚に寄り添う
                         }
+                    }
 
-                    jnHeldSemi[0] = hSemi[2]; jnHeldSemi[1] = hSemi[3];
+                    for (int v = 0; v < 4; ++v)
+                        jnHeldSemi[v] = hSemi[v];
                 }
                 else if (harm > 0)
                 {
-                    // v2.0.0: 無声区間(子音・ブレス)はピッチ検出が0になる。ここで
-                    // ハモリを0半音へ落とすと一瞬だけ「本人の声」が混ざってしまい、
-                    // 特にハモだけ出力で原音漏れに聞こえる。直前の音程で歌い続ける。
-                    hSemi[2] = jnHeldSemi[0]; hSemi[3] = jnHeldSemi[1];
+                    // v2.0.0/v5.1.1: 無声区間(子音・ブレス)は直前の4声すべてのハモリ音程を保持
+                    for (int v = 0; v < 4; ++v)
+                        hSemi[v] = jnHeldSemi[v];
                 }
 
                 float* outL = buffer.getWritePointer (0);
                 float* outR = numCh > 1 ? buffer.getWritePointer (1) : outL;
 
                 // v1.9.9「ハモだけ」: 原音を消してハモリ声部だけを残す。
-                // v2.0.0修正: 以前はユニゾン隊(v0/v1=本人とほぼ同じ音程)も鳴らして
-                // いたため「原音が消えていない」ように聞こえた。ハモリ音程が選ばれて
-                // いるときは、実際にハモっている2声(v2/v3)だけを出す。
                 const bool soloOn = apvts.getRawParameterValue ("jn_solo")->load() > 0.5f;
                 if (soloOn)
                 {
@@ -3058,16 +3198,18 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                         unSh[v].reset();
                     }
 
-                    // ユニゾン隊はミュート(シフター・ディレイは回し続けて、解除した
-                    // 瞬間に古い音が飛び出さないようにする)。2声になった分は+3dB。
-                    const float g  = (skipUnisonPair && v < 2) ? 0.0f
+                    // ハモだけ出力時、ユニゾンパート(度数0)の声部はミュートし、実際に和音を歌っている声部のみ鳴らす
+                    const bool isUnisonVoice = (harm > 0 && harm != 17 && hDeg[harm][v] == 0);
+                    const float g  = (skipUnisonPair && isUnisonVoice) ? 0.0f
                                    : (skipUnisonPair ? 0.64f : 0.45f) * jmix;
                     const bool monoOpt = outputMonoMode.load (std::memory_order_relaxed)
                                       && ! selfTestRunning.load (std::memory_order_relaxed);
                     const float panV = monoOpt ? 0.0f : pan[v];
                     const float gL = g * 0.5f * (1.0f - panV);
                     const float gR = g * 0.5f * (1.0f + panV);
-                    float* dl = unDelay[v]; int w = unDelayW[v]; const int d = unDelaySmp[v];
+                    // v5.1.1: ハモリ選択時(harm > 0)はアンサンブル遅延を約半分(5〜14ms)に引き締め、主メロへの追従感を高める
+                    float* dl = unDelay[v]; int w = unDelayW[v];
+                    const int d = (harm > 0) ? juce::jmax (1, (unDelaySmp[v] * 45) / 100) : unDelaySmp[v];
                     for (int i = 0; i < n; ++i)
                     {
                         dl[w] = vcTmp[(size_t) i];
@@ -3097,10 +3239,12 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     {
         const float popAmt = (eraNow >= 230)
                            ? apvts.getRawParameterValue ("pop_amt")->load() * 0.01f : 0.0f;
+        const bool  declickSw = (eraNow >= 510) && lipDeclickOn.load (std::memory_order_relaxed);
         const float lipAmt = (eraNow >= 230)
-                           ? apvts.getRawParameterValue ("lip_amt")->load() * 0.01f : 0.0f;
+                           ? juce::jmax (declickSw ? 0.65f : 0.0f,
+                                         apvts.getRawParameterValue ("lip_amt")->load() * 0.01f) : 0.0f;
 
-        if (popAmt > 0.001f || lipAmt > 0.001f)
+        if (popAmt > 0.001f || lipAmt > 0.001f || declickSw)
         {
             auto* L = buffer.getWritePointer (0);
             auto* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
@@ -3108,6 +3252,30 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
 
             for (int n = 0; n < numSamples; ++n)
             {
+                // v5.1.0 💧 2階差分トランジェント・ディクリッカー（口のペチャ音・舌打ちの瞬間パルス補間）
+                if (declickSw)
+                {
+                    for (int ch = 0; ch < juce::jmin (numCh, 2); ++ch)
+                    {
+                        float* p = (ch == 0) ? L : R;
+                        if (p == nullptr) break;
+                        const float x0 = p[n];
+                        const float d1 = std::abs (x0 - lipPrev1[ch]);
+                        const float d2 = std::abs (x0 - 2.0f * lipPrev1[ch] + lipPrev2[ch]);
+                        lipSlewEnv += 0.004f * (d1 - lipSlewEnv);
+                        const float thr = juce::jmax (0.0025f, lipSlewEnv * 6.5f);
+                        if (d2 > thr)
+                        {
+                            const float pred = 1.5f * lipPrev1[ch] - 0.5f * lipPrev2[ch];
+                            const float atten = juce::jlimit (0.0f, 0.85f, (d2 - thr) / (thr * 3.0f + 1.0e-5f));
+                            p[n] = x0 + atten * (pred - x0);
+                            lipPk = juce::jmax (lipPk, atten);
+                        }
+                        lipPrev2[ch] = lipPrev1[ch];
+                        lipPrev1[ch] = p[n];
+                    }
+                }
+
                 const float x = (R != nullptr) ? 0.5f * (L[n] + R[n]) : L[n];
 
                 // ===== ポップ(破裂音) =====
@@ -5094,7 +5262,7 @@ void VocalGzzioProcessor::handleAsyncUpdate()
             case maRevType: cycleChoice ("rev_type", kRevTypeCount, +1); break;
             case maJnOn:    toggleBool ("jn_on");                     break;
             case maJnSolo:  toggleBool ("jn_solo");                   break;
-            case maJnHarm:  cycleChoice ("jn_harm", 9, +1);           break;
+            case maJnHarm:  cycleChoice ("jn_harm", 18, +1);          break;
             case maAtOn:    toggleBool ("at_on");                     break;
             case maVcOn:    toggleBool ("vc_on");                     break;
             case maDlyOn:   toggleBool ("dly_on");                    break;
@@ -5214,11 +5382,35 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         lv->setAttribute ("eco", legacyEcoGate.load (std::memory_order_relaxed) ? 1 : 0);
     }
 
-    // v5.1.0 サビ自動検知 ＆ 名機マイクモデリング状態
+    // v5.1.0 サビ自動検知・名機マイクモデリング・リップノイズ除去・歌枠セットリスト状態
     {
         auto* s51 = root->createNewChildElement ("STAGE_V51");
         s51->setAttribute ("autoChorus", autoChorusMode.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("micModel",   micModelMode.load (std::memory_order_relaxed));
+        s51->setAttribute ("lipDeclick", lipDeclickOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("pitchLatMode4", pitchLatMode.load (std::memory_order_relaxed));
+        s51->setAttribute ("vcFormLink", vcFormAutoLink.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("setlistCur", currentSetlistIdx.load (std::memory_order_relaxed));
+        const juce::ScopedLock sl (bgmMetaLock);
+        for (const auto& item : setlistItems)
+        {
+            auto* el = s51->createNewChildElement ("SONG");
+            el->setAttribute ("path",   item.filePath);
+            el->setAttribute ("title",  item.title);
+            el->setAttribute ("semi",   item.pitchSemi);
+            el->setAttribute ("vc",     item.vocalCancel ? 1 : 0);
+            el->setAttribute ("gain",   (double) item.bgmGainDb);
+            el->setAttribute ("key",    item.detKey);
+            el->setAttribute ("minor",  item.detMinor ? 1 : 0);
+            el->setAttribute ("bpm",    item.detBpm);
+            el->setAttribute ("velvet", (double) item.velvet);
+            el->setAttribute ("focus",  (double) item.focus);
+            el->setAttribute ("silk",   (double) item.silk);
+            el->setAttribute ("halo",   (double) item.halo);
+            el->setAttribute ("mic",    item.micModel);
+            el->setAttribute ("revType", item.revType);
+            el->setAttribute ("revMix", (double) item.revMix);
+        }
     }
     return root;
 }
@@ -5392,6 +5584,39 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
             {
                 autoChorusMode.store (s51->getIntAttribute ("autoChorus", 0) != 0, std::memory_order_relaxed);
                 micModelMode.store   (juce::jlimit (0, 4, s51->getIntAttribute ("micModel", 0)), std::memory_order_relaxed);
+                lipDeclickOn.store   (s51->getIntAttribute ("lipDeclick", 0) != 0, std::memory_order_relaxed);
+                // v5.1.2: 4段階化。旧3段階の保存値(0:10.6ms/1:21.3ms/2:42.6ms)は1つずらして同じ遅延へ移す
+                if (s51->hasAttribute ("pitchLatMode4"))
+                    pitchLatMode.store (juce::jlimit (0, kPitchLatModes - 1, s51->getIntAttribute ("pitchLatMode4", 2)), std::memory_order_relaxed);
+                else if (s51->hasAttribute ("pitchLatMode"))
+                    pitchLatMode.store (juce::jlimit (1, kPitchLatModes - 1, s51->getIntAttribute ("pitchLatMode", 1) + 1), std::memory_order_relaxed);
+                else
+                    pitchLatMode.store (2, std::memory_order_relaxed);
+                vcFormAutoLink.store (s51->getIntAttribute ("vcFormLink", 0) != 0, std::memory_order_relaxed);
+                currentSetlistIdx.store (s51->getIntAttribute ("setlistCur", -1), std::memory_order_relaxed);
+                const juce::ScopedLock sl (bgmMetaLock);
+                setlistItems.clear();
+                for (auto* el : s51->getChildWithTagNameIterator ("SONG"))
+                {
+                    if ((int) setlistItems.size() >= 20) break;
+                    SetlistItem item;
+                    item.filePath    = el->getStringAttribute ("path");
+                    item.title       = el->getStringAttribute ("title", "Song");
+                    item.pitchSemi   = juce::jlimit (-6, 6, el->getIntAttribute ("semi", 0));
+                    item.vocalCancel = el->getIntAttribute ("vc", 0) != 0;
+                    item.bgmGainDb   = (float) el->getDoubleAttribute ("gain", -6.0);
+                    item.detKey      = juce::jlimit (0, 11, el->getIntAttribute ("key", 0));
+                    item.detMinor    = el->getIntAttribute ("minor", 0) != 0;
+                    item.detBpm      = juce::jlimit (60, 240, el->getIntAttribute ("bpm", 120));
+                    item.velvet      = (float) el->getDoubleAttribute ("velvet", 55.0);
+                    item.focus       = (float) el->getDoubleAttribute ("focus",  62.0);
+                    item.silk        = (float) el->getDoubleAttribute ("silk",   58.0);
+                    item.halo        = (float) el->getDoubleAttribute ("halo",   45.0);
+                    item.micModel    = juce::jlimit (0, 4, el->getIntAttribute ("mic", 0));
+                    item.revType     = el->getIntAttribute ("revType", 7);
+                    item.revMix      = (float) el->getDoubleAttribute ("revMix", 22.0);
+                    setlistItems.push_back (std::move (item));
+                }
             }
         }
     }
@@ -5768,7 +5993,8 @@ bool VocalGzzioProcessor::loadBgmFile (const juce::File& file)
     }
     {
         const juce::ScopedLock sl (bgmMetaLock);
-        bgmTitle = file.getFileNameWithoutExtension();
+        bgmTitle    = file.getFileNameWithoutExtension();
+        bgmFilePath = file.getFullPathName();
     }
     bgmPitchSemi.store (0, std::memory_order_relaxed);
     analyzeBgmKeyAndBpm();
@@ -5839,6 +6065,7 @@ void VocalGzzioProcessor::loadBuiltinDemoBgm()
     {
         const juce::ScopedLock sl (bgmMetaLock);
         bgmTitle = juce::String::fromUTF8 ("🎹 内蔵デモ伴奏（J-POPカノン進行 / Key: C / 120BPM）");
+        bgmFilePath.clear();
     }
     bgmPitchSemi.store (0, std::memory_order_relaxed);
     bgmDetectedKey.store (0, std::memory_order_relaxed);     // C
@@ -6052,7 +6279,179 @@ void VocalGzzioProcessor::clearBgm()
     {
         const juce::ScopedLock sl (bgmMetaLock);
         bgmTitle.clear();
+        bgmFilePath.clear();
     }
+}
+
+void VocalGzzioProcessor::setLipDeclickOn (bool b) noexcept
+{
+    lipDeclickOn.store (b, std::memory_order_relaxed);
+    if (auto* p = apvts.getParameter ("lip_amt"))
+    {
+        const float cur = apvts.getRawParameterValue ("lip_amt")->load();
+        if (b && cur < 55.0f)
+            p->setValueNotifyingHost (p->convertTo0to1 (65.0f));
+        else if (! b && std::abs (cur - 65.0f) < 1.0f)
+            p->setValueNotifyingHost (p->convertTo0to1 (0.0f));
+    }
+    markStateDirty();
+}
+
+int VocalGzzioProcessor::getSetlistCount() const noexcept
+{
+    const juce::ScopedLock sl (bgmMetaLock);
+    return (int) setlistItems.size();
+}
+
+VocalGzzioProcessor::SetlistItem VocalGzzioProcessor::getSetlistItem (int index) const
+{
+    const juce::ScopedLock sl (bgmMetaLock);
+    if (index >= 0 && index < (int) setlistItems.size())
+        return setlistItems[(size_t) index];
+    return {};
+}
+
+int VocalGzzioProcessor::addCurrentSongToSetlist()
+{
+    if (! hasBgmLoaded())
+        loadBuiltinDemoBgm();
+
+    SetlistItem item;
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        item.filePath = bgmFilePath;
+        item.title    = bgmTitle.isNotEmpty() ? bgmTitle : juce::String::fromUTF8 ("曲 ") + juce::String ((int) setlistItems.size() + 1);
+    }
+    item.pitchSemi   = bgmPitchSemi.load (std::memory_order_relaxed);
+    item.vocalCancel = bgmVocalCancel.load (std::memory_order_relaxed);
+    item.bgmGainDb   = bgmGainDb.load (std::memory_order_relaxed);
+    item.detKey      = bgmDetectedKey.load (std::memory_order_relaxed);
+    item.detMinor    = bgmDetectedMinor.load (std::memory_order_relaxed);
+    item.detBpm      = bgmDetectedBpm.load (std::memory_order_relaxed);
+    item.velvet      = apvts.getRawParameterValue ("argon_velvet")->load();
+    item.focus       = apvts.getRawParameterValue ("argon_focus")->load();
+    item.silk        = apvts.getRawParameterValue ("argon_silk")->load();
+    item.halo        = apvts.getRawParameterValue ("argon_halo")->load();
+    item.micModel    = micModelMode.load (std::memory_order_relaxed);
+    item.revType     = (int) apvts.getRawParameterValue ("rev_type")->load();
+    item.revMix      = apvts.getRawParameterValue ("revmix")->load();
+
+    int newIdx = 0;
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        // 同じ曲名/パスがあれば上書き更新、無ければ追加（最大20曲）
+        int found = -1;
+        for (int i = 0; i < (int) setlistItems.size(); ++i)
+        {
+            if (setlistItems[(size_t) i].title == item.title && setlistItems[(size_t) i].filePath == item.filePath)
+            {
+                found = i;
+                break;
+            }
+        }
+        if (found >= 0)
+        {
+            setlistItems[(size_t) found] = item;
+            newIdx = found;
+        }
+        else
+        {
+            if ((int) setlistItems.size() >= 20)
+                setlistItems.erase (setlistItems.begin());
+            setlistItems.push_back (item);
+            newIdx = (int) setlistItems.size() - 1;
+        }
+    }
+    currentSetlistIdx.store (newIdx, std::memory_order_relaxed);
+    markStateDirty();
+    return newIdx;
+}
+
+bool VocalGzzioProcessor::loadSetlistSong (int index, bool autoPlay)
+{
+    SetlistItem item;
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        if (index < 0 || index >= (int) setlistItems.size())
+            return false;
+        item = setlistItems[(size_t) index];
+    }
+    currentSetlistIdx.store (index, std::memory_order_relaxed);
+
+    if (item.filePath.isNotEmpty() && juce::File (item.filePath).existsAsFile())
+        loadBgmFile (juce::File (item.filePath));
+    else
+        loadBuiltinDemoBgm();
+
+    bgmVocalCancel.store (item.vocalCancel, std::memory_order_relaxed);
+    bgmGainDb.store (item.bgmGainDb, std::memory_order_relaxed);
+    bgmDetectedKey.store (item.detKey, std::memory_order_relaxed);
+    bgmDetectedMinor.store (item.detMinor, std::memory_order_relaxed);
+    bgmDetectedBpm.store (item.detBpm, std::memory_order_relaxed);
+    bgmBaseKey = item.detKey;
+    setBgmPitchSemi (item.pitchSemi);
+    if (bgmSyncKey.load (std::memory_order_relaxed))
+        applyBgmAutoKeyBpm();
+
+    auto setP = [this] (const char* id, float val)
+    {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (p->convertTo0to1 (val));
+    };
+    setP ("argon_velvet", item.velvet);
+    setP ("argon_focus",  item.focus);
+    setP ("argon_silk",   item.silk);
+    setP ("argon_halo",   item.halo);
+    setP ("rev_type",     (float) item.revType);
+    setP ("revmix",       item.revMix);
+    micModelMode.store (juce::jlimit (0, 4, item.micModel), std::memory_order_relaxed);
+    bgmPlaying.store (autoPlay, std::memory_order_release);
+    markStateDirty();
+    return true;
+}
+
+bool VocalGzzioProcessor::nextSetlistSong()
+{
+    const int count = getSetlistCount();
+    if (count <= 0) return false;
+    const int cur = currentSetlistIdx.load (std::memory_order_relaxed);
+    const int next = (cur + 1) % count;
+    return loadSetlistSong (next, true);
+}
+
+bool VocalGzzioProcessor::prevSetlistSong()
+{
+    const int count = getSetlistCount();
+    if (count <= 0) return false;
+    const int cur = currentSetlistIdx.load (std::memory_order_relaxed);
+    const int prev = (cur <= 0) ? (count - 1) : (cur - 1);
+    return loadSetlistSong (prev, true);
+}
+
+void VocalGzzioProcessor::removeSetlistSong (int index)
+{
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        if (index < 0 || index >= (int) setlistItems.size())
+            return;
+        setlistItems.erase (setlistItems.begin() + index);
+        const int cur = currentSetlistIdx.load (std::memory_order_relaxed);
+        if (setlistItems.empty())
+            currentSetlistIdx.store (-1, std::memory_order_relaxed);
+        else if (cur >= (int) setlistItems.size())
+            currentSetlistIdx.store ((int) setlistItems.size() - 1, std::memory_order_relaxed);
+    }
+    markStateDirty();
+}
+
+void VocalGzzioProcessor::clearSetlist()
+{
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        setlistItems.clear();
+        currentSetlistIdx.store (-1, std::memory_order_relaxed);
+    }
+    markStateDirty();
 }
 
 void VocalGzzioProcessor::setBgmPitchSemi (int semi)

@@ -2892,6 +2892,8 @@ private:
     int   lastMidi { -1 };                 // last detected MIDI note (for note-rail + range)
     float dispCents { 0 }, dispFreq { 0 };
     int   hold { 0 };
+    int   activeHistFrames { 0 };
+    bool  idlePainted { false };
     float dispIn { 0 }, dispOut { 0 }, dispGR { 0 }, dispDS { 0 }, dispDN { 0 };
 
     // ---- v1.6.0 gear meter (from the mixer-app motif): a brass + mint gear
@@ -3041,7 +3043,15 @@ public:
     }
 
 private:
-    void timerCallback() override { if (! liteMode) { updateSpectrum(); repaint(); } }
+    void timerCallback() override
+    {
+        if (liteMode || ! isShowing())
+            return;
+        if (specQuiet && proc.getInputLevel() < 0.0002f && proc.getOutputLevel() < 0.0002f)
+            return;
+        updateSpectrum();
+        repaint();
+    }
     void updateSpectrum();
 
     bool manualEditActive() const;                    // seq_on && manual mode
@@ -3052,6 +3062,7 @@ private:
     juce::uint32 lastEqTapMs { 0 };
     juce::Point<float> lastEqTapPos;
     bool liteMode { false };
+    bool specQuiet { false };
 
     VocalGzzioProcessor& proc;
     juce::Rectangle<float> plot;         // inner plotting area (set in paint)
@@ -3285,35 +3296,45 @@ public:
 private:
     void paintYuruKawa (juce::Graphics& g)
     {
-        auto r = area.toFloat();
-
-        // milky cream base
-        g.fillAll (juce::Colour (0xfffbf7f1));
-
-        // subtle WATERCOLOUR blooms: radial gradients fading to transparent, so the
-        // colour bleeds softly with no hard edge. Low alpha keeps it light/washy.
-        struct Bloom { float x, y, rad; juce::uint32 col; };
-        static const Bloom blooms[] = {
-            { 0.12f, 0.15f, 0.34f, 0x26afddcb },   // mint
-            { 0.82f, 0.10f, 0.30f, 0x24f4b4c2 },   // sakura
-            { 0.92f, 0.60f, 0.40f, 0x20aec9e4 },   // sky blue
-            { 0.28f, 0.84f, 0.34f, 0x1cf0d27a },   // butter
-            { 0.55f, 0.42f, 0.40f, 0x16f4b4c2 },   // soft pink centre
-            { 0.04f, 0.58f, 0.30f, 0x1cafddcb }    // mint 2
-        };
-        const float rad = juce::jmax (r.getWidth(), r.getHeight());
-        for (auto& b : blooms)
+        if (! yuruCache.isValid()
+            || yuruCacheMode != 1
+            || yuruCache.getWidth()  != area.getWidth()
+            || yuruCache.getHeight() != area.getHeight())
         {
-            const float cx = r.getX() + r.getWidth()  * b.x;
-            const float cy = r.getY() + r.getHeight() * b.y;
-            const float rr = rad * b.rad;
-            juce::Colour c (b.col);
-            juce::ColourGradient grad (c, cx, cy, c.withAlpha (0.0f), cx + rr, cy, true);
-            g.setGradientFill (grad);
-            g.fillEllipse (cx - rr, cy - rr, rr * 2.0f, rr * 2.0f);
+            yuruCache = juce::Image (juce::Image::RGB,
+                                     juce::jmax (1, area.getWidth()),
+                                     juce::jmax (1, area.getHeight()), false);
+            yuruCacheMode = 1;
+            juce::Graphics cg (yuruCache);
+            auto r = area.toFloat().withZeroOrigin();
+
+            // milky cream base
+            cg.fillAll (juce::Colour (0xfffbf7f1));
+
+            // subtle WATERCOLOUR blooms: radial gradients fading to transparent, so the
+            // colour bleeds softly with no hard edge. Low alpha keeps it light/washy.
+            struct Bloom { float x, y, rad; juce::uint32 col; };
+            static const Bloom blooms[] = {
+                { 0.12f, 0.15f, 0.34f, 0x26afddcb },   // mint
+                { 0.82f, 0.10f, 0.30f, 0x24f4b4c2 },   // sakura
+                { 0.92f, 0.60f, 0.40f, 0x20aec9e4 },   // sky blue
+                { 0.28f, 0.84f, 0.34f, 0x1cf0d27a },   // butter
+                { 0.55f, 0.42f, 0.40f, 0x16f4b4c2 },   // soft pink centre
+                { 0.04f, 0.58f, 0.30f, 0x1cafddcb }    // mint 2
+            };
+            const float rad = juce::jmax (r.getWidth(), r.getHeight());
+            for (auto& b : blooms)
+            {
+                const float cx = r.getX() + r.getWidth()  * b.x;
+                const float cy = r.getY() + r.getHeight() * b.y;
+                const float rr = rad * b.rad;
+                juce::Colour c (b.col);
+                juce::ColourGradient grad (c, cx, cy, c.withAlpha (0.0f), cx + rr, cy, true);
+                cg.setGradientFill (grad);
+                cg.fillEllipse (cx - rr, cy - rr, rr * 2.0f, rr * 2.0f);
+            }
         }
-        // NB: the mascot is drawn big & translucent in the FOREGROUND (end of
-        // Content::paint) so it reads as a "see-through" hero over the UI.
+        g.drawImageAt (yuruCache, area.getX(), area.getY());
     }
 
     // v2.11.0 ゆるふわ・よる。昼版と同じく**完全に静止画**（アニメなし）。
@@ -3322,71 +3343,83 @@ private:
     // （＝再描画のたびに星がチラつかない。確保も一切しない）。
     void paintYuruNight (juce::Graphics& g)
     {
-        auto r = area.toFloat();
-
-        // 夜空。上ほど深く、下は街あかりでほんの少し暖かい
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff1b1729), r.getX(), r.getY(),
-                                                 juce::Colour (0xff241d31), r.getX(), r.getBottom(),
-                                                 false));
-        g.fillRect (r);
-
-        // 星。奥(小さく暗い)から手前(大きく明るい)へ3層
+        if (! yuruCache.isValid()
+            || yuruCacheMode != 8
+            || yuruCache.getWidth()  != area.getWidth()
+            || yuruCache.getHeight() != area.getHeight())
         {
-            juce::uint32 s = 0x9e3779b9u;                     // 固定の種
-            auto rnd = [&s] { s = s * 1664525u + 1013904223u; return (float) (s >> 8) / 16777216.0f; };
-            for (int layer = 0; layer < 3; ++layer)
+            yuruCache = juce::Image (juce::Image::RGB,
+                                     juce::jmax (1, area.getWidth()),
+                                     juce::jmax (1, area.getHeight()), false);
+            yuruCacheMode = 8;
+            juce::Graphics cg (yuruCache);
+            auto r = area.toFloat().withZeroOrigin();
+
+            // 夜空。上ほど深く、下は街あかりでほんの少し暖かい
+            cg.setGradientFill (juce::ColourGradient (juce::Colour (0xff1b1729), r.getX(), r.getY(),
+                                                      juce::Colour (0xff241d31), r.getX(), r.getBottom(),
+                                                      false));
+            cg.fillRect (r);
+
+            // 星。奥(小さく暗い)から手前(大きく明るい)へ3層
             {
-                const int   n   = 34 - layer * 8;
-                const float dia = 1.1f + (float) layer * 0.7f;
-                g.setColour (juce::Colours::white.withAlpha (0.10f + 0.09f * (float) layer));
-                for (int i = 0; i < n; ++i)
+                juce::uint32 s = 0x9e3779b9u;                     // 固定の種
+                auto rnd = [&s] { s = s * 1664525u + 1013904223u; return (float) (s >> 8) / 16777216.0f; };
+                for (int layer = 0; layer < 3; ++layer)
                 {
-                    const float x = r.getX() + r.getWidth()  * rnd();
-                    const float y = r.getY() + r.getHeight() * rnd() * 0.82f;   // 下は空けておく
-                    g.fillEllipse (x, y, dia, dia);
+                    const int   n   = 34 - layer * 8;
+                    const float dia = 1.1f + (float) layer * 0.7f;
+                    cg.setColour (juce::Colours::white.withAlpha (0.10f + 0.09f * (float) layer));
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const float x = r.getX() + r.getWidth()  * rnd();
+                        const float y = r.getY() + r.getHeight() * rnd() * 0.82f;   // 下は空けておく
+                        cg.fillEllipse (x, y, dia, dia);
+                    }
                 }
             }
-        }
 
-        // お月さま（右上）。かさ(halo)を先に敷いて、その上に丸を置く
-        {
-            const float mr = juce::jmax (r.getWidth(), r.getHeight()) * 0.052f;
-            const float cx = r.getX() + r.getWidth() * 0.895f;
-            const float cy = r.getY() + r.getHeight() * 0.155f;
-            const float hr = mr * 4.2f;
-            juce::ColourGradient halo (juce::Colour (0x3af3e6b8), cx, cy,
-                                       juce::Colour (0x00f3e6b8), cx + hr, cy, true);
-            g.setGradientFill (halo);
-            g.fillEllipse (cx - hr, cy - hr, hr * 2.0f, hr * 2.0f);
-            g.setColour (juce::Colour (0xfff5ead0));
-            g.fillEllipse (cx - mr, cy - mr, mr * 2.0f, mr * 2.0f);
-            // うっすらクレーター（べた塗りの円に見えないように）
-            g.setColour (juce::Colour (0x18a08a5a));
-            g.fillEllipse (cx - mr * 0.42f, cy - mr * 0.30f, mr * 0.44f, mr * 0.44f);
-            g.fillEllipse (cx + mr * 0.10f, cy + mr * 0.22f, mr * 0.30f, mr * 0.30f);
-        }
+            // お月さま（右上）。かさ(halo)を先に敷いて、その上に丸を置く
+            {
+                const float mr = juce::jmax (r.getWidth(), r.getHeight()) * 0.052f;
+                const float cx = r.getX() + r.getWidth() * 0.895f;
+                const float cy = r.getY() + r.getHeight() * 0.155f;
+                const float hr = mr * 4.2f;
+                juce::ColourGradient halo (juce::Colour (0x3af3e6b8), cx, cy,
+                                           juce::Colour (0x00f3e6b8), cx + hr, cy, true);
+                cg.setGradientFill (halo);
+                cg.fillEllipse (cx - hr, cy - hr, hr * 2.0f, hr * 2.0f);
+                cg.setColour (juce::Colour (0xfff5ead0));
+                cg.fillEllipse (cx - mr, cy - mr, mr * 2.0f, mr * 2.0f);
+                // うっすらクレーター（べた塗りの円に見えないように）
+                cg.setColour (juce::Colour (0x18a08a5a));
+                cg.fillEllipse (cx - mr * 0.42f, cy - mr * 0.30f, mr * 0.44f, mr * 0.44f);
+                cg.fillEllipse (cx + mr * 0.10f, cy + mr * 0.22f, mr * 0.30f, mr * 0.30f);
+            }
 
-        // 昼版と同じ水彩のにじみ。夜なので色を寄せて、alpha もぐっと落とす
-        struct Bloom { float x, y, rad; juce::uint32 col; };
-        static const Bloom blooms[] = {
-            { 0.12f, 0.15f, 0.34f, 0x1c6fb9a2 },   // 夜のミント
-            { 0.82f, 0.10f, 0.30f, 0x18c07a92 },   // 夜のさくら
-            { 0.92f, 0.60f, 0.40f, 0x186f8ec0 },   // 夜の空色
-            { 0.28f, 0.84f, 0.34f, 0x14c0a45a },   // 夜のバター
-            { 0.55f, 0.42f, 0.40f, 0x12c07a92 },
-            { 0.04f, 0.58f, 0.30f, 0x146fb9a2 }
-        };
-        const float rad = juce::jmax (r.getWidth(), r.getHeight());
-        for (auto& b : blooms)
-        {
-            const float cx = r.getX() + r.getWidth()  * b.x;
-            const float cy = r.getY() + r.getHeight() * b.y;
-            const float rr = rad * b.rad;
-            juce::Colour c (b.col);
-            juce::ColourGradient grad (c, cx, cy, c.withAlpha (0.0f), cx + rr, cy, true);
-            g.setGradientFill (grad);
-            g.fillEllipse (cx - rr, cy - rr, rr * 2.0f, rr * 2.0f);
+            // 昼版と同じ水彩のにじみ。夜なので色を寄せて、alpha もぐっと落とす
+            struct Bloom { float x, y, rad; juce::uint32 col; };
+            static const Bloom blooms[] = {
+                { 0.12f, 0.15f, 0.34f, 0x1c6fb9a2 },   // 夜のミント
+                { 0.82f, 0.10f, 0.30f, 0x18c07a92 },   // 夜のさくら
+                { 0.92f, 0.60f, 0.40f, 0x186f8ec0 },   // 夜の空色
+                { 0.28f, 0.84f, 0.34f, 0x14c0a45a },   // 夜のバター
+                { 0.55f, 0.42f, 0.40f, 0x12c07a92 },
+                { 0.04f, 0.58f, 0.30f, 0x146fb9a2 }
+            };
+            const float rad = juce::jmax (r.getWidth(), r.getHeight());
+            for (auto& b : blooms)
+            {
+                const float cx = r.getX() + r.getWidth()  * b.x;
+                const float cy = r.getY() + r.getHeight() * b.y;
+                const float rr = rad * b.rad;
+                juce::Colour c (b.col);
+                juce::ColourGradient grad (c, cx, cy, c.withAlpha (0.0f), cx + rr, cy, true);
+                cg.setGradientFill (grad);
+                cg.fillEllipse (cx - rr, cy - rr, rr * 2.0f, rr * 2.0f);
+            }
         }
+        g.drawImageAt (yuruCache, area.getX(), area.getY());
     }
 
     // ==================================================================
@@ -4080,16 +4113,15 @@ public:
                 else
                     drawStar4 (cg, hx, hy, hs * 1.1f, hc);
             }
+
+            // クチュール・ドレッサーアーチもキャッシュに焼き込んで毎フレームのパス描画を省く
+            juce::Path arch;
+            arch.addCentredArc (rz.getCentreX(), rz.getBottom() + rz.getHeight() * 0.25f,
+                                rz.getWidth() * 0.62f, rz.getHeight() * 0.85f, 0.0f, -1.1f, 1.1f, true);
+            cg.setColour (Palette::salmon.withAlpha (0.20f));
+            cg.strokePath (arch, juce::PathStrokeType (6.0f, juce::PathStrokeType::curved));
         }
         g.drawImageAt (liverCache, area.getX(), area.getY());
-
-        // 声に連動して輝くクチュール・ドレッサーアーチ
-        const float glowA = 0.16f + 0.26f * level;
-        juce::Path arch;
-        arch.addCentredArc (r.getCentreX(), r.getBottom() + r.getHeight() * 0.25f,
-                            r.getWidth() * 0.62f, r.getHeight() * 0.85f, 0.0f, -1.1f, 1.1f, true);
-        g.setColour (Palette::salmon.withAlpha (glowA));
-        g.strokePath (arch, juce::PathStrokeType (6.0f, juce::PathStrokeType::curved));
     }
 
     // ---- ネオン (Cyber Neon: シンセウェイブ＆サイバーグリッド演出) ----
@@ -4134,13 +4166,10 @@ public:
                 cg.setColour (juce::Colour (0xfffe2a85).withAlpha (0.08f + 0.16f * t));
                 cg.drawHorizontalLine (juce::roundToInt (y), 0.0f, rz.getRight());
             }
+            cg.setColour (juce::Colour (0xff00f0ff).withAlpha (0.30f));
+            cg.drawHorizontalLine (68, 14.0f, rz.getRight() - 14.0f);
         }
         g.drawImageAt (neonCache, area.getX(), area.getY());
-
-        // 声と時間に連動するサイバーレーザーライン
-        const float pulse = 0.22f + 0.45f * level + 0.08f * std::sin (animT * 3.0f);
-        g.setColour (juce::Colour (0xff00f0ff).withAlpha (juce::jmin (0.75f, pulse)));
-        g.drawHorizontalLine (juce::roundToInt (r.getY() + 68.0f), r.getX() + 14.0f, r.getRight() - 14.0f);
     }
 
     // ---- スタジオ (Studio Pro: プロミュージシャン向けヴィンテージ・アナログコンソール筐体) ----
@@ -4923,45 +4952,41 @@ public:
                     drawLensBokeh (cg, bx, by, br, bc, 0.28f + 0.32f * hash01 (b * 13 + 7));
                 }
             }
+
+            // 世界観別パーティクル演出も背景キャッシュへ一括描画（毎フレームの再計算・グラデーション生成ゼロ）
+            for (int f = 0; f < 10; ++f)
+            {
+                const float phase = (float) f * 1.7f;
+                const float fx = rz.getX() + rz.getWidth()  * (0.08f + 0.84f * hash01 (f * 37 + 13)) + std::sin (phase) * 14.0f;
+                const float fy = rz.getY() + rz.getHeight() * (0.12f + 0.76f * hash01 (f * 37 + 29)) + std::cos (phase * 0.8f) * 10.0f;
+                const float pulse = 0.65f;
+                const float fr = (5.0f + 9.0f * hash01 (f * 19 + 3));
+                if (mode == 15)
+                {
+                    drawWaterDroplet (cg, fx, fy, fr * 0.65f, Palette::ice, 0.40f);
+                }
+                else if (mode == 17)
+                {
+                    if (f % 2 == 0)
+                        drawMapleLeaf (cg, fx, fy, fr * 0.90f, phase * 0.5f, Palette::salmon, 0.45f);
+                    else
+                        drawSnowCrystal (cg, fx, fy, fr * 0.75f, phase * 0.3f, Palette::ice, 0.45f);
+                }
+                else
+                {
+                    const juce::Colour fc = (f % 2 == 0) ? Palette::yellow : Palette::ice;
+                    cg.setGradientFill (juce::ColourGradient (fc.withAlpha (0.20f * pulse), fx, fy,
+                                                              fc.withAlpha (0.0f), fx + fr * 2.2f, fy, true));
+                    cg.fillEllipse (fx - fr * 2.2f, fy - fr * 2.2f, fr * 4.4f, fr * 4.4f);
+                    drawStar8 (cg, fx, fy, fr * 0.85f, fc.brighter (0.3f).withAlpha (0.38f));
+                }
+            }
         }
         g.drawImageAt (oceanStarCache, area.getX(), area.getY());
-
-        // 声と時間(animT)に連動してリアルタイムにきらめく世界観別パーティクル演出
-        const float voiceBoost = 0.65f + 0.85f * level;
-        for (int f = 0; f < 10; ++f)
-        {
-            const float phase = animT * (0.6f + 0.08f * (float) f) + (float) f * 1.7f;
-            const float fx = r.getX() + r.getWidth()  * (0.08f + 0.84f * hash01 (f * 37 + 13)) + std::sin (phase) * 14.0f;
-            const float fy = r.getY() + r.getHeight() * (0.12f + 0.76f * hash01 (f * 37 + 29)) + std::cos (phase * 0.8f) * 10.0f;
-            const float pulse = (0.45f + 0.55f * std::sin (phase * 1.8f)) * voiceBoost;
-            const float fr = (5.0f + 9.0f * hash01 (f * 19 + 3)) * (0.8f + 0.35f * pulse);
-            if (! g.clipRegionIntersects (juce::Rectangle<int> ((int) (fx - fr * 2.5f), (int) (fy - fr * 2.5f),
-                                                                (int) (fr * 5.0f) + 2,  (int) (fr * 5.0f) + 2)))
-                continue;
-            if (mode == 15)
-            {
-                drawWaterDroplet (g, fx, fy, fr * 0.65f, Palette::ice, juce::jmin (0.85f, 0.45f * pulse));
-            }
-            else if (mode == 17)
-            {
-                if (f % 2 == 0)
-                    drawMapleLeaf (g, fx, fy, fr * 0.90f, phase * 0.5f, Palette::salmon, juce::jmin (0.85f, 0.50f * pulse));
-                else
-                    drawSnowCrystal (g, fx, fy, fr * 0.75f, phase * 0.3f, Palette::ice, juce::jmin (0.85f, 0.50f * pulse));
-            }
-            else
-            {
-                const juce::Colour fc = (f % 2 == 0) ? Palette::yellow : Palette::ice;
-                g.setGradientFill (juce::ColourGradient (fc.withAlpha (juce::jmin (0.55f, 0.24f * pulse)), fx, fy,
-                                                         fc.withAlpha (0.0f), fx + fr * 2.2f, fy, true));
-                g.fillEllipse (fx - fr * 2.2f, fy - fr * 2.2f, fr * 4.4f, fr * 4.4f);
-                drawStar8 (g, fx, fy, fr * 0.85f, fc.brighter (0.3f).withAlpha (juce::jmin (0.88f, 0.48f * pulse)));
-            }
-        }
     }
 
-    juce::Image brandCache, brandFgCache, auroraCache, liverCache, neonCache, studioCache, oceanStarCache;
-    int         liverCacheMode { -1 }, oceanStarCacheMode { -1 };
+    juce::Image yuruCache, brandCache, brandFgCache, auroraCache, liverCache, neonCache, studioCache, oceanStarCache, fgCache;
+    int         yuruCacheMode { -1 }, liverCacheMode { -1 }, oceanStarCacheMode { -1 }, fgCacheMode { -1 };
 
     // ---- ライブ (大型機材) ----
     // ---- ペンライトの海 (5人ユニゾンON演出) ----
@@ -4995,51 +5020,6 @@ public:
         {
             drawParts (g, 0.6f);                 // 小粒パーティクルのみ(カーソルで押せる)
         }
-        else if (mode == 3)
-        {
-            // 静的オーバーレイ (~200描画) は1回だけ描いて画像キャッシュ
-            if (! brandFgCache.isValid()
-                || brandFgCache.getWidth()  != area.getWidth()
-                || brandFgCache.getHeight() != area.getHeight())
-            {
-                brandFgCache = juce::Image (juce::Image::ARGB,
-                                            juce::jmax (1, area.getWidth()),
-                                            juce::jmax (1, area.getHeight()), true);
-                juce::Graphics cg (brandFgCache);
-                auto rz = area.toFloat().withZeroOrigin();
-                drawMonoCanvas (cg, rz, 0.08f);
-                drawWeaveBand (cg, { rz.getX(), rz.getY(),              rz.getWidth(), 14.0f }, 0.55f);
-                drawWeaveBand (cg, { rz.getX(), rz.getBottom() - 14.0f, rz.getWidth(), 14.0f }, 0.55f);
-                // v2.12.0 ★上2つの飾りメダルを、ヘッダ(72px)の**下**へ移した。
-                //  以前は右上のメダルがテーマチップ帯の下敷きになって見えなかった
-                //  だけで、チップを外した今は「文字・見た目」ボタンの文字の上に
-                //  重なって出てしまう。飾りが操作の上に乗るのは順序が逆。
-                const float m = 24.0f, sm = 19.0f, hdr = 72.0f;
-                drawMedallion (cg, rz.getX() + m,      rz.getY() + hdr + m, sm, 0.55f);
-                drawMedallion (cg, rz.getRight() - m,  rz.getY() + hdr + m, sm, 0.55f);
-                drawMedallion (cg, rz.getX() + m,      rz.getBottom() - m, sm, 0.55f);
-                drawMedallion (cg, rz.getRight() - m,  rz.getBottom() - m, sm, 0.55f);
-            }
-            g.drawImageAt (brandFgCache, area.getX(), area.getY());
-        }
-        else if (mode == 8)
-        {
-            // v2.11.0 ゆるふわ・よる。カードが画面のほとんどを覆うので、背景に
-            // 星を置いても見えない。ごく薄い星だけをパネルの**上に**散らす。
-            // ・完全に静止（またたかせない）… 目の休まらない画面にしないため
-            // ・alpha 0.05〜0.09 … 文字の読みやすさを1ミリも削らない濃さ
-            // ・確保なし・毎回同じ位置（固定の漸化式）
-            juce::uint32 s = 0x2545f491u;
-            auto rnd = [&s] { s = s * 1664525u + 1013904223u; return (float) (s >> 8) / 16777216.0f; };
-            for (int i = 0; i < 46; ++i)
-            {
-                const float x  = r.getX() + r.getWidth()  * rnd();
-                const float y  = r.getY() + r.getHeight() * rnd();
-                const float sz = 1.2f + rnd() * 1.5f;
-                g.setColour (juce::Colours::white.withAlpha (0.05f + rnd() * 0.04f));
-                g.fillEllipse (x, y, sz, sz);
-            }
-        }
         else if (mode == 4)
         {
             // 上端だけ薄いオーロラのベール + 星の瞬き (操作域は素通し)
@@ -5059,96 +5039,134 @@ public:
                 g.strokePath (top, juce::PathStrokeType (7.0f, juce::PathStrokeType::curved));
             }
         }
-        else if (Palette::isCoutureTheme (mode))
+        else if (mode == 3 || mode == 6 || mode == 8 || Palette::isCoutureTheme (mode) || Palette::isOceanStarTheme (mode))
         {
-            // V-Liver (Couture Cosmetics): 画面の周縁にきらめく4芒星スパークル（操作の邪魔にならない淡い輝き）
-            for (int i = 0; i < 16; ++i)
+            // ★ すべての静的前景オーバーレイ（ブランド・よる・クチュール・星空＆海＆季節・ネオン）を1枚の透過画像にキャッシュ！
+            //   これで子コンポーネント（ノブ・オーブ・EQ・チューナー）が部分再描画されるたびに
+            //   12個の巨大レンズボケや水滴・紅葉・星屑をソフトウェア再計算していた重さを完全にゼロにする。
+            if (! fgCache.isValid()
+                || fgCacheMode        != mode
+                || fgCache.getWidth()  != area.getWidth()
+                || fgCache.getHeight() != area.getHeight())
             {
-                const float sx = r.getX() + r.getWidth()  * hash01 (i * 19 + 5);
-                const float sy = r.getY() + r.getHeight() * hash01 (i * 19 + 11);
-                const float pulse = 0.5f + 0.5f * std::sin (animT * 2.4f + (float) i * 1.3f);
-                const float sr = (4.5f + 4.5f * hash01 (i * 7)) * (0.7f + 0.5f * pulse);
-                const juce::Colour sc = (i % 2 == 0) ? Palette::salmon : Palette::blue;
-                drawStar4 (g, sx, sy, sr, sc.withAlpha (0.14f + 0.14f * pulse));
-            }
-        }
-        else if (Palette::isOceanStarTheme (mode))
-        {
-            // 🌌🌊🌅🍁👑 風景・季節コレクション: ガラスカードの上にも世界観の空気感（水滴・紅葉・初雪・朝焼け光芒・銀河星屑）を繊細に重ねる
-            const int oIdx = Palette::oceanStarIndex (mode);
-            if (oIdx == 1)
-            {
-                // 🌊 02 瑞々しい碧海: ガラスカードや画面の端に付着するぷるんとした水滴と細かな気泡
-                for (int d = 0; d < 18; ++d)
+                fgCache = juce::Image (juce::Image::ARGB,
+                                       juce::jmax (1, area.getWidth()),
+                                       juce::jmax (1, area.getHeight()), true);
+                fgCacheMode = mode;
+                juce::Graphics cg (fgCache);
+                auto rz = area.toFloat().withZeroOrigin();
+
+                if (mode == 3)
                 {
-                    const float dx = r.getX() + r.getWidth()  * (0.02f + 0.96f * hash01 (d * 37 + 7));
-                    const float dy = r.getY() + r.getHeight() * (0.08f + 0.88f * hash01 (d * 37 + 19));
-                    const float dr = 3.5f + 7.5f * hash01 (d * 37 + 29);
-                    drawWaterDroplet (g, dx, dy, dr, Palette::ice, 0.36f);
+                    drawMonoCanvas (cg, rz, 0.08f);
+                    drawWeaveBand (cg, { rz.getX(), rz.getY(),              rz.getWidth(), 14.0f }, 0.55f);
+                    drawWeaveBand (cg, { rz.getX(), rz.getBottom() - 14.0f, rz.getWidth(), 14.0f }, 0.55f);
+                    const float m = 24.0f, sm = 19.0f, hdr = 72.0f;
+                    drawMedallion (cg, rz.getX() + m,      rz.getY() + hdr + m, sm, 0.55f);
+                    drawMedallion (cg, rz.getRight() - m,  rz.getY() + hdr + m, sm, 0.55f);
+                    drawMedallion (cg, rz.getX() + m,      rz.getBottom() - m, sm, 0.55f);
+                    drawMedallion (cg, rz.getRight() - m,  rz.getBottom() - m, sm, 0.55f);
                 }
-            }
-            else if (oIdx == 2)
-            {
-                // 🌅 03 朝焼けの海: 水平線のサンライズ・ゴールドアンバー光彩ベール
-                const float horY = r.getY() + r.getHeight() * 0.48f;
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0x24ffbe0b), r.getCentreX(), horY,
-                                                         juce::Colours::transparentBlack, r.getCentreX(), horY - r.getHeight() * 0.25f, false));
-                g.fillRect (r.getX(), horY - r.getHeight() * 0.25f, r.getWidth(), r.getHeight() * 0.25f);
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0x20ff6b8b), r.getCentreX(), horY,
-                                                         juce::Colours::transparentBlack, r.getCentreX(), horY + r.getHeight() * 0.25f, false));
-                g.fillRect (r.getX(), horY, r.getWidth(), r.getHeight() * 0.25f);
-            }
-            else if (oIdx == 3)
-            {
-                // 🍁 04 晩秋から初冬へ: パネルの周縁を舞う紅葉（🍁）と初雪の結晶（❄）
-                for (int i = 0; i < 12; ++i)
+                else if (mode == 8)
                 {
-                    const float px = r.getX() + r.getWidth()  * (0.02f + 0.96f * hash01 (i * 41 + 5));
-                    const float py = r.getY() + r.getHeight() * (0.08f + 0.88f * hash01 (i * 41 + 17));
-                    if (i % 2 == 0)
-                        drawMapleLeaf (g, px, py, 7.5f + 5.0f * hash01 (i * 13), hash01 (i * 29) * 6.28f,
-                                       (i % 4 == 0) ? juce::Colour (0xffe11d48) : juce::Colour (0xfff59e0b), 0.34f);
+                    juce::uint32 s = 0x2545f491u;
+                    auto rnd = [&s] { s = s * 1664525u + 1013904223u; return (float) (s >> 8) / 16777216.0f; };
+                    for (int i = 0; i < 46; ++i)
+                    {
+                        const float x  = rz.getX() + rz.getWidth()  * rnd();
+                        const float y  = rz.getY() + rz.getHeight() * rnd();
+                        const float sz = 1.2f + rnd() * 1.5f;
+                        cg.setColour (juce::Colours::white.withAlpha (0.05f + rnd() * 0.04f));
+                        cg.fillEllipse (x, y, sz, sz);
+                    }
+                }
+                else if (Palette::isCoutureTheme (mode))
+                {
+                    for (int i = 0; i < 16; ++i)
+                    {
+                        const float sx = rz.getX() + rz.getWidth()  * hash01 (i * 19 + 5);
+                        const float sy = rz.getY() + rz.getHeight() * hash01 (i * 19 + 11);
+                        const float pulse = 0.5f + 0.5f * std::sin ((float) i * 1.3f);
+                        const float sr = (4.5f + 4.5f * hash01 (i * 7)) * (0.7f + 0.5f * pulse);
+                        const juce::Colour sc = (i % 2 == 0) ? Palette::salmon : Palette::blue;
+                        drawStar4 (cg, sx, sy, sr, sc.withAlpha (0.14f + 0.14f * pulse));
+                    }
+                }
+                else if (Palette::isOceanStarTheme (mode))
+                {
+                    const int oIdx = Palette::oceanStarIndex (mode);
+                    if (oIdx == 1)
+                    {
+                        for (int d = 0; d < 18; ++d)
+                        {
+                            const float dx = rz.getX() + rz.getWidth()  * (0.02f + 0.96f * hash01 (d * 37 + 7));
+                            const float dy = rz.getY() + rz.getHeight() * (0.08f + 0.88f * hash01 (d * 37 + 19));
+                            const float dr = 3.5f + 7.5f * hash01 (d * 37 + 29);
+                            drawWaterDroplet (cg, dx, dy, dr, Palette::ice, 0.36f);
+                        }
+                    }
+                    else if (oIdx == 2)
+                    {
+                        const float horY = rz.getY() + rz.getHeight() * 0.48f;
+                        cg.setGradientFill (juce::ColourGradient (juce::Colour (0x24ffbe0b), rz.getCentreX(), horY,
+                                                                  juce::Colours::transparentBlack, rz.getCentreX(), horY - rz.getHeight() * 0.25f, false));
+                        cg.fillRect (rz.getX(), horY - rz.getHeight() * 0.25f, rz.getWidth(), rz.getHeight() * 0.25f);
+                        cg.setGradientFill (juce::ColourGradient (juce::Colour (0x20ff6b8b), rz.getCentreX(), horY,
+                                                                  juce::Colours::transparentBlack, rz.getCentreX(), horY + rz.getHeight() * 0.25f, false));
+                        cg.fillRect (rz.getX(), horY, rz.getWidth(), rz.getHeight() * 0.25f);
+                    }
+                    else if (oIdx == 3)
+                    {
+                        for (int i = 0; i < 12; ++i)
+                        {
+                            const float px = rz.getX() + rz.getWidth()  * (0.02f + 0.96f * hash01 (i * 41 + 5));
+                            const float py = rz.getY() + rz.getHeight() * (0.08f + 0.88f * hash01 (i * 41 + 17));
+                            if (i % 2 == 0)
+                                drawMapleLeaf (cg, px, py, 7.5f + 5.0f * hash01 (i * 13), hash01 (i * 29) * 6.28f,
+                                               (i % 4 == 0) ? juce::Colour (0xffe11d48) : juce::Colour (0xfff59e0b), 0.34f);
+                            else
+                                drawSnowCrystal (cg, px, py, 5.5f + 4.5f * hash01 (i * 19), hash01 (i * 31) * 3.14f,
+                                                 juce::Colour (0xffe0f2fe), 0.36f);
+                        }
+                    }
                     else
-                        drawSnowCrystal (g, px, py, 5.5f + 4.5f * hash01 (i * 19), hash01 (i * 31) * 3.14f,
-                                         juce::Colour (0xffe0f2fe), 0.36f);
+                    {
+                        for (int b = 0; b < 12; ++b)
+                        {
+                            const float bx = rz.getX() + rz.getWidth()  * (0.06f + 0.88f * hash01 (b * 37 + oIdx * 13 + 5));
+                            const float by = rz.getY() + rz.getHeight() * (0.08f + 0.84f * hash01 (b * 37 + oIdx * 13 + 19));
+                            const float br = 16.0f + 32.0f * hash01 (b * 37 + 29);
+                            const juce::Colour bc = (b % 3 == 0) ? Palette::yellow
+                                                  : (b % 3 == 1) ? Palette::ice : Palette::salmon;
+                            drawLensBokeh (cg, bx, by, br, bc, 0.08f + 0.04f * (float) (b % 2));
+                        }
+                    }
+                    for (int i = 0; i < 18; ++i)
+                    {
+                        const float sx = rz.getX() + rz.getWidth()  * hash01 (i * 23 + 7);
+                        const float sy = rz.getY() + rz.getHeight() * hash01 (i * 23 + 13);
+                        const float pulse = 0.5f + 0.5f * std::sin ((float) i * 1.1f);
+                        const float sr = (4.0f + 4.8f * hash01 (i * 9 + 3)) * (0.75f + 0.45f * pulse);
+                        const juce::Colour sc = (i % 3 == 0) ? Palette::yellow : (i % 3 == 1 ? Palette::ice : Palette::salmon);
+                        drawStar4 (cg, sx, sy, sr, sc.withAlpha (0.14f + 0.12f * pulse));
+                    }
                 }
-            }
-            else
-            {
-                for (int b = 0; b < 12; ++b)
+                else if (mode == 6)
                 {
-                    const float bx = r.getX() + r.getWidth()  * (0.06f + 0.88f * hash01 (b * 37 + oIdx * 13 + 5));
-                    const float by = r.getY() + r.getHeight() * (0.08f + 0.84f * hash01 (b * 37 + oIdx * 13 + 19));
-                    const float br = 16.0f + 32.0f * hash01 (b * 37 + 29);
-                    const juce::Colour bc = (b % 3 == 0) ? Palette::yellow
-                                          : (b % 3 == 1) ? Palette::ice : Palette::salmon;
-                    drawLensBokeh (g, bx, by, br, bc, 0.08f + 0.04f * (float) (b % 2));
+                    cg.setColour (juce::Colour (0xff00f0ff).withAlpha (0.28f));
+                    const float L = 24.0f, M = 6.0f;
+                    cg.drawLine (rz.getX() + M, rz.getY() + M, rz.getX() + M + L, rz.getY() + M, 2.0f);
+                    cg.drawLine (rz.getX() + M, rz.getY() + M, rz.getX() + M, rz.getY() + M + L, 2.0f);
+                    cg.drawLine (rz.getRight() - M - L, rz.getY() + M, rz.getRight() - M, rz.getY() + M, 2.0f);
+                    cg.drawLine (rz.getRight() - M, rz.getY() + M, rz.getRight() - M, rz.getY() + M + L, 2.0f);
+                    cg.setColour (juce::Colour (0xffff2a85).withAlpha (0.28f));
+                    cg.drawLine (rz.getX() + M, rz.getBottom() - M, rz.getX() + M + L, rz.getBottom() - M, 2.0f);
+                    cg.drawLine (rz.getX() + M, rz.getBottom() - M - L, rz.getX() + M, rz.getBottom() - M, 2.0f);
+                    cg.drawLine (rz.getRight() - M - L, rz.getBottom() - M, rz.getRight() - M, rz.getBottom() - M, 2.0f);
+                    cg.drawLine (rz.getRight() - M, rz.getBottom() - M - L, rz.getRight() - M, rz.getBottom() - M, 2.0f);
                 }
             }
-            for (int i = 0; i < 18; ++i)
-            {
-                const float sx = r.getX() + r.getWidth()  * hash01 (i * 23 + 7);
-                const float sy = r.getY() + r.getHeight() * hash01 (i * 23 + 13);
-                const float pulse = 0.5f + 0.5f * std::sin (animT * 2.0f + (float) i * 1.1f);
-                const float sr = (4.0f + 4.8f * hash01 (i * 9 + 3)) * (0.75f + 0.45f * pulse);
-                const juce::Colour sc = (i % 3 == 0) ? Palette::yellow : (i % 3 == 1 ? Palette::ice : Palette::salmon);
-                drawStar4 (g, sx, sy, sr, sc.withAlpha (0.14f + 0.12f * pulse));
-            }
-        }
-        else if (mode == 6)
-        {
-            // Cyber Neon: コーナーのサイバーHUDフレーム装飾
-            g.setColour (juce::Colour (0xff00f0ff).withAlpha (0.28f));
-            const float L = 24.0f, M = 6.0f;
-            g.drawLine (r.getX() + M, r.getY() + M, r.getX() + M + L, r.getY() + M, 2.0f);
-            g.drawLine (r.getX() + M, r.getY() + M, r.getX() + M, r.getY() + M + L, 2.0f);
-            g.drawLine (r.getRight() - M - L, r.getY() + M, r.getRight() - M, r.getY() + M, 2.0f);
-            g.drawLine (r.getRight() - M, r.getY() + M, r.getRight() - M, r.getY() + M + L, 2.0f);
-            g.setColour (juce::Colour (0xffff2a85).withAlpha (0.28f));
-            g.drawLine (r.getX() + M, r.getBottom() - M, r.getX() + M + L, r.getBottom() - M, 2.0f);
-            g.drawLine (r.getX() + M, r.getBottom() - M - L, r.getX() + M, r.getBottom() - M, 2.0f);
-            g.drawLine (r.getRight() - M - L, r.getBottom() - M, r.getRight() - M, r.getBottom() - M, 2.0f);
-            g.drawLine (r.getRight() - M, r.getBottom() - M - L, r.getRight() - M, r.getBottom() - M, 2.0f);
+            g.drawImageAt (fgCache, area.getX(), area.getY());
         }
         if (jnActive)
             drawPenlights (g, r, 0.5f);
@@ -5558,6 +5576,7 @@ public:
 private:
     friend class PresetPalettePopup;
     friend class LegacyVersionPopup;
+    friend class VoiceChangerQuickPanel;
     void initialiseOverview();
     void updateOverviewVisibility();
     void restoreOverviewVisibility();
@@ -5570,6 +5589,7 @@ private:
     void openStreamOutPopup (juce::Rectangle<int> anchorScreenBounds);
     void openStandaloneAudioSettings();
     void openStageStudioPopup (juce::Rectangle<int> anchorScreenBounds);
+    void openVoiceChangerPopup (juce::Rectangle<int> anchorScreenBounds);
     void openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds);
     void openPresetMatrixMenu (juce::Rectangle<int> anchorScreenBounds);
     juce::Rectangle<int> detailVerBadgeRect; // 詳細・かんたん画面ヘッダの歴代バージョン切替バッジ領域
@@ -5634,6 +5654,32 @@ private:
     };
     Knob* activeDragKnob  { nullptr };
     Knob* lastTouchedKnob { nullptr };
+    mutable juce::Rectangle<int> lastLoupeRect;
+    int  lastOutMeterHash { -1 };
+    bool argonGestureActive { false };
+    void beginArgonGestures (int dragTarget);
+    void endArgonGestures();
+    void repaintArgonControls (bool includeHelp = false, bool includeVistas = false);
+    void repaintKnobInteraction (Knob* k, bool tipChanged = false);
+    void paintOverviewStaticBackdrop (juce::Graphics& g);
+
+    struct OverviewBackdropKey
+    {
+        int w { 0 }, h { 0 };
+        int themeMode { -1 }, layoutMode { -1 }, accessMode { -1 };
+        int legacyVerId { -1 };
+        bool liteMode { false }, english { false };
+        bool s0 { false }, s1 { false }, s2 { false };
+        bool operator== (const OverviewBackdropKey& o) const noexcept
+        {
+            return w == o.w && h == o.h && themeMode == o.themeMode
+                && layoutMode == o.layoutMode && accessMode == o.accessMode
+                && legacyVerId == o.legacyVerId && liteMode == o.liteMode
+                && english == o.english && s0 == o.s0 && s1 == o.s1 && s2 == o.s2;
+        }
+    };
+    OverviewBackdropKey overviewBackdropKey;
+    juce::Image         overviewBackdropCache;
 
     void timerCallback() override;   // learn-button state refresh
     void addKnob (Knob& k, const juce::String& paramID, const juce::String& text,
