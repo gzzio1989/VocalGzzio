@@ -2998,6 +2998,46 @@ public:
             addAndMakeVisible (mb);
         }
 
+        // ---- v5.3.0 新案①・②・④：🪶 ささやき浮上＆ドルビーAエアー ／ 🎯 音程追従オートスイートスポット ／ 🎧 骨伝導補正・歌い手専用モニター ----
+        upwardAirBtn.setClickingTogglesState (true);
+        upwardAirBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
+        upwardAirBtn.setToggleState (processor.getUpwardAirOn(), juce::dontSendNotification);
+        upwardAirBtn.setTooltip (language->T ("大声は一切潰さず、小声・ウィスパー・語尾の余韻(-54〜-14dBFS)だけを下から最大+5.2dB持ち上げ、さらにドルビーA方式の倍音エアー(5.2kHz+)を無音時ノイズ0で付加します。",
+                                              "Lifts quiet vocal details and breathy tails (-54 to -14 dBFS) from below by up to +5.2 dB without squashing loud peaks, plus gated Dolby-A harmonic air."));
+        upwardAirBtn.onClick = [this]
+        {
+            processor.setUpwardAirOn (upwardAirBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (upwardAirBtn);
+
+        pitchSweetSpotBtn.setClickingTogglesState (true);
+        pitchSweetSpotBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+        pitchSweetSpotBtn.setToggleState (processor.getPitchSweetSpotOn(), juce::dontSendNotification);
+        pitchSweetSpotBtn.setTooltip (language->T ("歌っている音程(Hz)をリアルタイム追跡し、高音域では中低域の厚み(+3.6dB)を自動補強して喉締め帯域(3.3kHz)を抑え、低音域では胸のボワつきをスッキリ引き締めます。",
+                                                   "Tracks fundamental pitch in real time: adds lower-body warmth and tames 3.3 kHz throat pinch on high notes, while tightening chest boominess on low notes."));
+        pitchSweetSpotBtn.onClick = [this]
+        {
+            processor.setPitchSweetSpotOn (pitchSweetSpotBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (pitchSweetSpotBtn);
+
+        singerCueBtn.setClickingTogglesState (true);
+        singerCueBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        singerCueBtn.setToggleState (processor.getSingerCueMonitorOn(), juce::dontSendNotification);
+        singerCueBtn.setTooltip (language->T ("配信・録音WAVの音は1ミリも変えず、あなたのヘッドホン返しモニターだけ頭蓋骨の骨伝導こもり(210Hz)を引き算し、ピッチが取りやすい芯(2.45kHz)をクリアに聴かせます。",
+                                              "Monitor-only cue enhancer (broadcast & recorded WAV untouched): cuts 210 Hz bone-conduction mud and enhances 2.45 kHz pitch-lock clarity in your headphones."));
+        singerCueBtn.onClick = [this]
+        {
+            processor.setSingerCueMonitorOn (singerCueBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (singerCueBtn);
+
         // ---- 柱④：絶叫セーフティガード・咳払い瞬間ミュート ＆ 💧 ペチャ音瞬間除去 ----
         coughBtn.setClickingTogglesState (true);
         coughBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
@@ -3098,7 +3138,7 @@ public:
             addAndMakeVisible (sb);
         }
 
-        setSize (780, 642);
+        setSize (780, 678);
         refresh();
         startTimerHz (10);
     }
@@ -3134,8 +3174,8 @@ public:
                          language->T ("② 🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（💿 -14LUFS完パケMIX＋Wet＋Dry同時保存）",
                                       "2. 1-Click WAV Recorder & 30s Retro Save (-14 LUFS FullMix + Wet + Dry 24-bit WAV)"));
         drawSectionCard (secDiagRect,  Palette::yellow,
-                         language->T ("③ 🎯 5秒声質ターゲットAI診断 ＆ 🎙️ ゼロ遅延・4大名機マイク・モデリング",
-                                      "3. 5s Voice Target AI Diagnosis & Zero-Latency Studio Mic Modeler (800G / U87 / SM7B / ASMR)"));
+                         language->T ("③ 🎯 5秒AI声質診断・🎙️ 4大名機マイク ＆ 🪶 ささやき浮上・🎯 音程追従・🎧 骨伝導モニター",
+                                      "3. 5s Voice AI, 4 Studio Mics, Upward Lifter & Air, Pitch Sweet Spot & Singer's Cue Monitor"));
         drawSectionCard (secGuardRect, Palette::ice,
                          language->T ("④ 🔥 サビ盛り・👏 SE ＆ 🏠 部屋鳴り消し・🌬️ 息継ぎ＆サ行保護・💧 ペチャ除去・🛡 絶叫ガード",
                                       "4. Chorus Boost, SE, Room De-Reverb, Breath & Velvet Split, Lip De-Click & Scream Guard"));
@@ -3205,7 +3245,7 @@ public:
             g.drawFittedText (processor.getLastSavedWavStatus(), wavStatusRect, juce::Justification::centredLeft, 2);
         }
 
-        // 5秒声質ターゲット診断ステータス＆4帯域バー描画
+        // 5秒声質ターゲット診断ステータス＆4帯域バー＋v5.3 ボーカル特化3エンジン稼働メーター描画
         {
             g.setColour (Palette::ink);
             g.setFont (GzzioLnF::uiFont (14.0f, false));
@@ -3230,6 +3270,30 @@ public:
                 const float tx = track.getX() + track.getWidth() * tVal;
                 g.setColour (Palette::yellow);
                 g.fillRect (tx - 1.5f, track.getY() - 2.0f, 3.0f, track.getHeight() + 4.0f);
+            }
+
+            const float upAirDb = processor.getUpwardAirMeterDb();
+            const float sweetDb = processor.getPitchSweetSpotDb();
+            const float cueDb   = processor.getSingerCueMeterDb();
+            g.setFont (GzzioLnF::uiFont (13.0f, true));
+            if (processor.getSingerCueMonitorOn() && cueDb >= upAirDb && cueDb >= std::abs (sweetDb) && cueDb > 0.1f)
+            {
+                g.setColour (Palette::green);
+                g.drawFittedText (language->T ("骨伝導:+", "Cue:+") + juce::String (cueDb, 1) + "dB",
+                                  v53MeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else if (processor.getPitchSweetSpotOn() && std::abs (sweetDb) >= upAirDb && std::abs (sweetDb) > 0.1f)
+            {
+                g.setColour (Palette::yellow);
+                const juce::String sign = sweetDb >= 0.0f ? "+" : "";
+                g.drawFittedText (language->T ("音程:", "Sweet:") + sign + juce::String (sweetDb, 1) + "dB",
+                                  v53MeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else
+            {
+                g.setColour (processor.getUpwardAirOn() && upAirDb > 0.1f ? Palette::ice : Palette::inkSoft);
+                g.drawFittedText (language->T ("浮上:+", "Lift:+") + juce::String (upAirDb, 1) + "dB",
+                                  v53MeterRect, juce::Justification::centredRight, 1, 0.85f);
             }
         }
 
@@ -3351,8 +3415,8 @@ public:
         }
         b.removeFromTop (8);
 
-        // ③ 5秒声質ターゲット診断 ＆ ゼロ遅延・名機マイクモデリング (178px)
-        secDiagRect = b.removeFromTop (178);
+        // ③ 5秒声質ターゲット診断 ＆ ゼロ遅延・名機マイクモデリング ＆ v5.3 ボーカル特化3エンジン (214px)
+        secDiagRect = b.removeFromTop (214);
         {
             auto inner = secDiagRect.reduced (10, 6);
             inner.removeFromTop (26);
@@ -3371,6 +3435,12 @@ public:
                 micModBtns[(size_t) i].setBounds (rMic.removeFromLeft (i == 4 ? rMic.getWidth() : mw));
                 if (i < 4) rMic.removeFromLeft (6);
             }
+            inner.removeFromTop (5);
+            auto rV53 = inner.removeFromTop (30);
+            upwardAirBtn     .setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (6);
+            pitchSweetSpotBtn.setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (6);
+            singerCueBtn     .setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (4);
+            v53MeterRect = rV53;
             inner.removeFromTop (4);
             diagBarsRect = inner.removeFromTop (22);
             inner.removeFromTop (2);
@@ -3584,6 +3654,24 @@ private:
         for (int i = 0; i < 5; ++i)
             micModBtns[(size_t) i].setToggleState (activeMicMod == i, juce::dontSendNotification);
 
+        const bool upAirOn = processor.getUpwardAirOn();
+        upwardAirBtn.setToggleState (upAirOn, juce::dontSendNotification);
+        upwardAirBtn.setButtonText (upAirOn
+            ? language->T ("🪶 ささやき浮上＆Air ON", "🪶 Upward & Air ON")
+            : language->T ("🪶 ささやき浮上＆Air", "🪶 Upward & Dolby Air"));
+
+        const bool sweetOn = processor.getPitchSweetSpotOn();
+        pitchSweetSpotBtn.setToggleState (sweetOn, juce::dontSendNotification);
+        pitchSweetSpotBtn.setButtonText (sweetOn
+            ? language->T ("🎯 音程追従スイート ON", "🎯 Pitch Sweet Spot ON")
+            : language->T ("🎯 音程追従スイート", "🎯 Pitch Sweet Spot"));
+
+        const bool cueOn = processor.getSingerCueMonitorOn();
+        singerCueBtn.setToggleState (cueOn, juce::dontSendNotification);
+        singerCueBtn.setButtonText (cueOn
+            ? language->T ("🎧 骨伝導モニター ON", "🎧 Singer's Cue ON")
+            : language->T ("🎧 骨伝導モニター補正", "🎧 Singer's Cue Monitor"));
+
         const bool cBoost = processor.getChorusBoostMode();
         chorusBoostBtn.setToggleState (cBoost, juce::dontSendNotification);
         chorusBoostBtn.setButtonText (cBoost
@@ -3640,7 +3728,7 @@ private:
     VocalGzzioProcessor& processor;
     juce::Rectangle<int> secBgmRect, secRecRect, secDiagRect, secGuardRect;
     juce::Rectangle<int> bgmStatusRect, bgmProgRect, bgmVolLabelRect, bgmDuckLabelRect, bgmDuckMeterRect;
-    juce::Rectangle<int> wavStatusRect, diagBarsRect, diagStatusRect, guardMeterRect;
+    juce::Rectangle<int> wavStatusRect, diagBarsRect, diagStatusRect, v53MeterRect, guardMeterRect;
     juce::TextButton loadBgmBtn, demoBgmBtn, playBgmBtn, rewBgmBtn, loopBgmBtn, addSetlistBtn, setlistMenuBtn;
     juce::TextButton keyDownBtn, keyZeroBtn, keyUpBtn, vocalCancelBtn, autoKeyBpmBtn, syncKeyBtn, bgmRouteBtn;
     juce::TextButton bgmUnmaskBtn, bgmRiderBtn;
@@ -3648,6 +3736,7 @@ private:
     juce::TextButton wavRecBtn, retroSaveBtn, autoMasterBtn, openRecDirBtn;
     std::array<juce::TextButton, 5> diagBtns;
     std::array<juce::TextButton, 5> micModBtns;
+    juce::TextButton upwardAirBtn, pitchSweetSpotBtn, singerCueBtn;
     juce::TextButton chorusBoostBtn, autoChorusBtn;
     std::array<juce::TextButton, 4> seBtns;
     juce::TextButton coughBtn, screamGuardBtn, lipDeclickBtn, roomDereverbBtn, breathCtrlBtn;
@@ -4903,6 +4992,9 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         processor.setBgmVocalRiderOn (false);
         processor.setRoomDereverbOn (false);
         processor.setBreathControlOn (false);
+        processor.setUpwardAirOn (false);
+        processor.setPitchSweetSpotOn (false);
+        processor.setSingerCueMonitorOn (false);
         processor.clearCustomIrFile();
         infoText.clear();
         fxInfoText.clear();
@@ -10388,11 +10480,11 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionSpec (int id) noexcept
 {
     static constexpr LegacyVersionSpec kSpecs[kLegacyVersionCount] = {
-        { 0,  520, "v5.2.0",
-          "最新フラッグシップ（声ポケット掘削・伴奏追従ライダー・部屋鳴り消し・息＆子音保護）",
-          "Current Flagship (Spectral Unmasker, BGM Rider, Room De-Reverb & Velvet Split)",
-          "最新の全機能（伴奏『声ポケット』自動掘り、伴奏追従ボーカルライダー、ゼロ遅延・部屋鳴り除去、息継ぎ整え＆母音/子音セパレート、キー＆BPM自動解析、4大名機マイク）をフル稼働します。",
-          "Full v5.2 flagship suite: Spectral Unmasker, BGM-Linked Vocal Rider, Zero-Lag Room De-Reverb, Smart Breath & Velvet Split, Auto-Key/BPM, and 4 Studio Mic models.",
+        { 0,  530, "v5.3.0",
+          "最新フラッグシップ（ささやき浮上＆Air・音程追従スイート・骨伝導モニター・声ポケット）",
+          "Current Flagship (Upward Lifter & Air, Pitch Sweet Spot, Singer's Cue & Unmasker)",
+          "最新の全機能（ささやき浮上＆倍音ドルビーAエアー、音程追従オートスイートスポット、骨伝導補正・歌い手専用モニター、伴奏『声ポケット』掘り、部屋鳴り除去、4大名機マイク）をフル稼働します。",
+          "Full v5.3 flagship suite: Upward Lifter & Dolby-A Air, Pitch-Tracked Sweet Spot, Singer's Cue Monitor, Spectral Unmasker, Room De-Reverb, and 4 Studio Mics.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
         { 1,  500, "v5.0.0",
@@ -10526,8 +10618,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     tuner.resized();
 
     const juce::String msg = (spec.id == 0)
-        ? language->T ("✨ 最新 v5.1.0（フル機能フラッグシップ）に戻しました。",
-                       "✨ Restored latest v5.1.0 (Full Flagship).")
+        ? language->T ("✨ 最新 v5.3.0（フル機能フラッグシップ）に戻しました。",
+                       "✨ Restored latest v5.3.0 (Full Flagship).")
         : (language->T ("🕰️ 歴代バージョン再現: ", "🕰️ Recalled Legacy Version: ")
            + juce::String (spec.verTag) + " — "
            + juce::String::fromUTF8 (language->english ? spec.titleEn : spec.titleJa)

@@ -655,6 +655,41 @@ public:
     void  toggleBreathControlOn() noexcept      { setBreathControlOn (! getBreathControlOn()); }
     float getBreathControlMeterDb() const noexcept { return meterBreathControlDb.load (std::memory_order_relaxed); }
 
+    //== v5.3.0 新案①：🪶 ささやき浮上・上向きコンプレッサー ＆ 💎 倍音ドルビーAエアー（Upward Micro-Detail Lifter & Dolby-A Air） ==
+    bool  getUpwardAirOn() const noexcept       { return upwardAirOn.load (std::memory_order_relaxed); }
+    void  setUpwardAirOn (bool b) noexcept
+    {
+        upwardAirOn.store (b, std::memory_order_relaxed);
+        if (! b) meterUpwardAirDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleUpwardAirOn() noexcept          { setUpwardAirOn (! getUpwardAirOn()); }
+    float getUpwardAirMeterDb() const noexcept  { return meterUpwardAirDb.load (std::memory_order_relaxed); }
+
+    //== v5.3.0 新案②：🎯 音程追従・オートスイートスポット（Pitch-Tracked Dynamic Body & Formant — 高音太らせ＆低音スッキリ） ==
+    bool  getPitchSweetSpotOn() const noexcept  { return pitchSweetSpotOn.load (std::memory_order_relaxed); }
+    void  setPitchSweetSpotOn (bool b) noexcept
+    {
+        pitchSweetSpotOn.store (b, std::memory_order_relaxed);
+        if (! b) meterPitchSweetSpotDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  togglePitchSweetSpotOn() noexcept     { setPitchSweetSpotOn (! getPitchSweetSpotOn()); }
+    float getPitchSweetSpotMeterDb() const noexcept { return meterPitchSweetSpotDb.load (std::memory_order_relaxed); }
+    float getPitchSweetSpotDb() const noexcept  { return getPitchSweetSpotMeterDb(); }
+
+    //== v5.3.0 新案④：🎧 骨伝導補正・歌い手専用モニターエンハンサー（Singer's Cue Monitor — 自分の耳への返しだけ音程芯をくっきり補正） ==
+    bool  getSingerCueMonitorOn() const noexcept { return singerCueMonitorOn.load (std::memory_order_relaxed); }
+    void  setSingerCueMonitorOn (bool b) noexcept
+    {
+        singerCueMonitorOn.store (b, std::memory_order_relaxed);
+        if (! b) meterSingerCueDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleSingerCueMonitorOn() noexcept   { setSingerCueMonitorOn (! getSingerCueMonitorOn()); }
+    float getSingerCueMonitorMeterDb() const noexcept { return meterSingerCueDb.load (std::memory_order_relaxed); }
+    float getSingerCueMeterDb() const noexcept  { return getSingerCueMonitorMeterDb(); }
+
     //== v5.1.4 ボイチェン＆ピッチ補正 4段階遅延モード ＆ フォルマント自動追従 ==
     //   0:🚀極限ゼロ感 (補正 ~0.1ms / ボイチェン ~5.3ms)
     //   1:⚡超低遅延   (補正 ~0.1ms / ボイチェン ~10.6ms)
@@ -694,7 +729,7 @@ public:
     void  setLegacyVersionState (int id, int era)
     {
         legacyVersionId.store (juce::jlimit (0, 13, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 520, era), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 530, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState)
@@ -1396,7 +1431,7 @@ private:
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 520 };
+    std::atomic<int>   legacyVersionEra   { 530 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
@@ -1467,6 +1502,28 @@ private:
     float              breathHoldSec      { 0.0f }, breathGain   { 1.0f };
     float              velvetCutDb        { 0.0f }, velvetAppliedDb { -99.0f };
     std::atomic<float> meterBreathControlDb { 0.0f };
+
+    // ---- v5.3.0 新案①：ささやき浮上・上向きコンプ (Upward Lifter) ＆ 倍音ドルビーAエアー (Dolby-A Air) ----
+    std::atomic<bool>  upwardAirOn        { false };
+    float              upwardEnv          { 0.0f };
+    float              upwardLiftDb       { 0.0f };
+    float              upAirLpL           { 0.0f }, upAirLpR     { 0.0f };
+    std::atomic<float> meterUpwardAirDb   { 0.0f };
+
+    // ---- v5.3.0 新案②：音程追従・オートスイートスポット (Pitch-Tracked Body & Formant) ----
+    std::atomic<bool>  pitchSweetSpotOn   { false };
+    juce::dsp::IIR::Filter<float> pitchSweetBodyL, pitchSweetBodyR, pitchSweetPinchL, pitchSweetPinchR;
+    float              pitchSweetTrackHz  { 220.0f };
+    float              pitchSweetBodyDb   { 0.0f }, pitchSweetPinchDb { 0.0f };
+    float              pitchSweetAppliedHz { -999.0f }, pitchSweetAppliedBodyDb { -99.0f }, pitchSweetAppliedPinchDb { -99.0f };
+    std::atomic<float> meterPitchSweetSpotDb { 0.0f };
+
+    // ---- v5.3.0 新案④：骨伝導補正・歌い手専用モニターエンハンサー (Singer's Cue Monitor) ----
+    std::atomic<bool>  singerCueMonitorOn { false };
+    juce::dsp::IIR::Filter<float> singerCueMudL, singerCueMudR, singerCueCoreL, singerCueCoreR;
+    float              singerCueEnv       { 0.0f };
+    float              singerCueBoostDb   { 0.0f }, singerCueAppliedDb { -99.0f };
+    std::atomic<float> meterSingerCueDb   { 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

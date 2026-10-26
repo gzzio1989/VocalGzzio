@@ -1223,6 +1223,70 @@ int main()
                 processor->setRoomDereverbOn (false);
                 processor->setBreathControlOn (false);
             }
+
+            // Verify v5.3.0 Pillars 1, 2 & 4:
+            //   1. Upward Micro-Detail Lifter & Dolby-A Trick Harmonic Air (upwardAirOn)
+            //   2. Pitch-Tracked Dynamic Body & Formant (pitchSweetSpotOn)
+            //   4. Bone-Conduction Singer's Cue Monitor (singerCueMonitorOn)
+            {
+                processor->setUpwardAirOn (true);
+                processor->setPitchSweetSpotOn (true);
+                processor->setSingerCueMonitorOn (true);
+                check (processor->getUpwardAirOn() && processor->getPitchSweetSpotOn() && processor->getSingerCueMonitorOn(),
+                       "v5.3.0 Pillars 1, 2 & 4 toggles enable cleanly");
+
+                // 1) Feed quiet high-note vocal signal (440 Hz A4 at -30 dBFS + 6000 Hz harmonic)
+                juce::MidiBuffer midi;
+                for (int blk = 0; blk < 28; ++blk)
+                {
+                    juce::AudioBuffer<float> buf (2, 256);
+                    for (int n = 0; n < 256; ++n)
+                    {
+                        const float t = (float) (blk * 256 + n) / 48000.0f;
+                        const float v = 0.032f * std::sin (2.0f * juce::MathConstants<float>::pi * 440.0f  * t)
+                                      + 0.008f * std::sin (2.0f * juce::MathConstants<float>::pi * 6000.0f * t);
+                        buf.setSample (0, n, v);
+                        buf.setSample (1, n, v);
+                    }
+                    processor->processBlock (buf, midi);
+                }
+                check (processor->getUpwardAirMeterDb() > 0.5f,
+                       "v5.3.0 Pillar 1: Upward Micro-Detail Lifter & Dolby-A Air lifts quiet vocal details and adds air");
+                check (processor->getPitchSweetSpotDb() > 0.3f,
+                       "v5.3.0 Pillar 2 (High Note): Pitch-Tracked Sweet Spot boosts lower-body warmth on high notes (440 Hz)");
+                check (processor->getSingerCueMeterDb() > 1.0f,
+                       "v5.3.0 Pillar 4: Bone-Conduction Singer's Cue Monitor actively shapes headphone cue monitor");
+
+                // 2) Feed low-note vocal signal (130 Hz C3) to verify chest boominess tightening
+                for (int blk = 0; blk < 28; ++blk)
+                {
+                    juce::AudioBuffer<float> buf (2, 256);
+                    for (int n = 0; n < 256; ++n)
+                    {
+                        const float t = (float) (blk * 256 + n) / 48000.0f;
+                        const float v = 0.18f * std::sin (2.0f * juce::MathConstants<float>::pi * 130.0f * t);
+                        buf.setSample (0, n, v);
+                        buf.setSample (1, n, v);
+                    }
+                    processor->processBlock (buf, midi);
+                }
+                check (processor->getPitchSweetSpotDb() < -0.2f,
+                       "v5.3.0 Pillar 2 (Low Note): Pitch-Tracked Sweet Spot tightens chest boominess on low notes (130 Hz)");
+
+                // 3) Verify XML state persistence of v5.3.0 flags
+                juce::MemoryBlock st53;
+                processor->getStateInformation (st53);
+                processor->setUpwardAirOn (false);
+                processor->setPitchSweetSpotOn (false);
+                processor->setSingerCueMonitorOn (false);
+                processor->setStateInformation (st53.getData(), (int) st53.getSize());
+                check (processor->getUpwardAirOn() && processor->getPitchSweetSpotOn() && processor->getSingerCueMonitorOn(),
+                       "v5.3.0 Pillars 1, 2 & 4 state flags round-trip through XML state");
+
+                processor->setUpwardAirOn (false);
+                processor->setPitchSweetSpotOn (false);
+                processor->setSingerCueMonitorOn (false);
+            }
         }
     }
     view.setLookAndFeel (nullptr);

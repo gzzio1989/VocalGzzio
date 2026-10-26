@@ -1273,6 +1273,42 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         breathHoldSec = 0.0f; breathGain = 1.0f;
         velvetCutDb = 0.0f; velvetAppliedDb = -99.0f;
         meterBreathControlDb.store (0.0f, std::memory_order_relaxed);
+
+        // v5.3.0 新案①・②・④ 初期化（ヒープ確保ゼロ用事前確保）
+        upwardEnv = upwardLiftDb = upAirLpL = upAirLpR = 0.0f;
+        meterUpwardAirDb.store (0.0f, std::memory_order_relaxed);
+
+        pitchSweetBodyL.prepare (mono);
+        pitchSweetBodyR.prepare (mono);
+        pitchSweetPinchL.prepare (mono);
+        pitchSweetPinchR.prepare (mono);
+        pitchSweetBodyL.coefficients  = Coefficients::makePeakFilter (safeSr, juce::jmin (260.0f,  maxF), 0.85f, 1.0f);
+        pitchSweetBodyR.coefficients  = Coefficients::makePeakFilter (safeSr, juce::jmin (260.0f,  maxF), 0.85f, 1.0f);
+        pitchSweetPinchL.coefficients = Coefficients::makePeakFilter (safeSr, juce::jmin (3300.0f, maxF), 1.25f, 1.0f);
+        pitchSweetPinchR.coefficients = Coefficients::makePeakFilter (safeSr, juce::jmin (3300.0f, maxF), 1.25f, 1.0f);
+        pitchSweetBodyL.reset(); pitchSweetBodyR.reset();
+        pitchSweetPinchL.reset(); pitchSweetPinchR.reset();
+        pitchSweetTrackHz = 220.0f;
+        pitchSweetBodyDb = pitchSweetPinchDb = 0.0f;
+        pitchSweetAppliedHz = -999.0f;
+        pitchSweetAppliedBodyDb = pitchSweetAppliedPinchDb = -99.0f;
+        meterPitchSweetSpotDb.store (0.0f, std::memory_order_relaxed);
+
+        singerCueMudL.prepare (mono);
+        singerCueMudR.prepare (mono);
+        singerCueCoreL.prepare (mono);
+        singerCueCoreR.prepare (mono);
+        const auto cCueMud = Coefficients::makePeakFilter (safeSr, juce::jmin (210.0f, maxF), 0.90f,
+                                 juce::Decibels::decibelsToGain (-3.2f));
+        singerCueMudL.coefficients  = cCueMud;
+        singerCueMudR.coefficients  = cCueMud;
+        singerCueCoreL.coefficients = Coefficients::makePeakFilter (safeSr, juce::jmin (2450.0f, maxF), 1.15f, 1.0f);
+        singerCueCoreR.coefficients = Coefficients::makePeakFilter (safeSr, juce::jmin (2450.0f, maxF), 1.15f, 1.0f);
+        singerCueMudL.reset(); singerCueMudR.reset();
+        singerCueCoreL.reset(); singerCueCoreR.reset();
+        singerCueEnv = singerCueBoostDb = 0.0f;
+        singerCueAppliedDb = -99.0f;
+        meterSingerCueDb.store (0.0f, std::memory_order_relaxed);
     }
     {
         const double seSr = juce::jmax (8000.0, sampleRate);
@@ -1632,7 +1668,7 @@ void VocalGzzioProcessor::updateParameters()
     // ではなく ArrayCoefficients (確保なし) を使う。→ PluginProcessor.h の ACoefs 参照
     // v2.10.0 #77/#78 音源モードで中心を持ち替える（うたは今までと同じ数値）
     const int  eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                             ? legacyVersionEra.load (std::memory_order_relaxed) : 520;
+                             ? legacyVersionEra.load (std::memory_order_relaxed) : 530;
     const int  srcMode = (eraNow >= 210) ? (int) apvts.getRawParameterValue ("src_mode")->load() : 0;
     const auto prof    = sourceProfile (srcMode);
 
@@ -1871,7 +1907,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // 🕰️ 世代タイムマシン・省負荷ゲート: 旧バージョンが選ばれているときは、
     // その世代以降に追加されたDSPステージを丸ごと休止させて当時の軽快なCPU負荷を再現する。
     const int   eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                              ? legacyVersionEra.load (std::memory_order_relaxed) : 520;
+                              ? legacyVersionEra.load (std::memory_order_relaxed) : 530;
     const bool  crushOn = (eraNow >= 300) && (apvts.getRawParameterValue ("crush_on")->load() > 0.5f);
     const float crushCg = crushOn ? crushGuard : 0.0f;
 
@@ -2917,7 +2953,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         //      correction by the retune speed, and feed it to the shared shifter as
         //      an added pitch offset. Formant stays preserved (source-filter split). ----
         float atCorr = 0.0f;
-        if (atOn || jnOn)
+        const bool wantPitchTrack = atOn || jnOn || (eraNow >= 530 && pitchSweetSpotOn.load (std::memory_order_relaxed));
+        if (wantPitchTrack)
         {
             if (! pitchWasTracking)
             {
@@ -3813,6 +3850,156 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             }
         }
         else if (ringGainDb != 0.0f) { ringGainDb = 0.0f; ringApplied = -99.0f; ringL.reset(); ringR.reset(); }
+    }
+
+    // ---- v5.3.0 新案①：🪶 ささやき浮上・上向きコンプレッサー ＆ 💎 倍音ドルビーAエアー (Upward Lifter & Dolby-A Air) ----
+    // 大きな声のピークは一切上から潰さず、消え入りそうなウィスパー・小さい歌い出し・語尾(-50dBFS〜-18dBFS)だけを
+    // 下から最大 +5.2dB 滑らかに持ち上げ、さらに発声時のみ 5.2kHz 以上の超高域へドルビーA方式の動的倍音エアーを付与する。
+    if (neiroRun)
+    {
+        const bool upSw = (eraNow >= 530) && upwardAirOn.load (std::memory_order_relaxed)
+                       && ! selfTestRunning.load (std::memory_order_relaxed);
+        if (upSw)
+        {
+            const double safeSr = juce::jmax (16000.0, currentSampleRate);
+            const float envAtk  = 1.0f - std::exp (-1.0f / (0.0060f * (float) safeSr)); // 6 ms
+            const float envRel  = 1.0f - std::exp (-1.0f / (0.0550f * (float) safeSr)); // 55 ms
+            const float liftSlew = 1.0f - std::exp (-1.0f / (0.0120f * (float) safeSr));
+            const float lpAlpha = 1.0f - std::exp (-2.0f * juce::MathConstants<float>::pi * 5200.0f / (float) safeSr);
+
+            auto* L = buffer.getWritePointer (0);
+            auto* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+            float maxUpDb = 0.0f;
+
+            for (int n = 0; n < numSamples; ++n)
+            {
+                const float xL = L[n];
+                const float xR = (R != nullptr) ? R[n] : xL;
+                const float pk = juce::jmax (std::abs (xL), std::abs (xR));
+                upwardEnv += (pk > upwardEnv ? envAtk : envRel) * (pk - upwardEnv);
+                const float envDb = juce::Decibels::gainToDecibels (upwardEnv, -80.0f);
+
+                // 1) 上向きコンプレッサー：ノイズ床(-54dBFS以下)は持ち上げず、-50dBFS〜-18dBFSの小声領域を下から最大+5.2dBリフト
+                float wantLiftDb = 0.0f;
+                if (envDb > -54.0f && envDb < -14.0f)
+                {
+                    const float floorGate = juce::jlimit (0.0f, 1.0f, (envDb + 54.0f) / 8.0f);
+                    const float quietSpan = juce::jlimit (0.0f, 1.0f, (-14.0f - envDb) / 30.0f);
+                    wantLiftDb = 5.2f * floorGate * quietSpan;
+                }
+                upwardLiftDb += liftSlew * (wantLiftDb - upwardLiftDb);
+                const float liftGain = juce::Decibels::decibelsToGain (upwardLiftDb);
+
+                // 2) ドルビーA方式・動的倍音エアー：声が出ている瞬間だけ 5.2kHz 以上の高域をソフト圧縮＋偶数次倍音付加
+                upAirLpL += lpAlpha * (xL - upAirLpL);
+                upAirLpR += lpAlpha * (xR - upAirLpR);
+                const float hfL = xL - upAirLpL;
+                const float hfR = xR - upAirLpR;
+                const float airGate = juce::jlimit (0.0f, 1.0f, (envDb + 48.0f) / 18.0f);
+                const float airDrive = 0.42f * airGate;
+                const float excL = (hfL / (1.0f + 2.4f * std::abs (hfL)) + 0.12f * hfL * std::abs (hfL)) * airDrive;
+                const float excR = (hfR / (1.0f + 2.4f * std::abs (hfR)) + 0.12f * hfR * std::abs (hfR)) * airDrive;
+
+                L[n] = xL * liftGain + excL;
+                if (R != nullptr)
+                    R[n] = xR * liftGain + excR;
+
+                const float totDb = upwardLiftDb + 1.8f * airGate;
+                if (totDb > maxUpDb) maxUpDb = totDb;
+            }
+            const float prevM = meterUpwardAirDb.load (std::memory_order_relaxed);
+            meterUpwardAirDb.store (maxUpDb > prevM ? maxUpDb : prevM * 0.90f, std::memory_order_relaxed);
+        }
+        else if (upwardLiftDb > 0.001f || meterUpwardAirDb.load (std::memory_order_relaxed) > 0.0f)
+        {
+            upwardEnv = upwardLiftDb = upAirLpL = upAirLpR = 0.0f;
+            meterUpwardAirDb.store (0.0f, std::memory_order_relaxed);
+        }
+    }
+
+    // ---- v5.3.0 新案②：🎯 音程追従・オートスイートスポット (Pitch-Tracked Dynamic Body & Formant) ----
+    // 検出したピッチ(Hz)をリアルタイム追跡し、ハイトーンや裏声(>260Hz)では声の土台(基音〜第2倍音)を自動で太らせつつ
+    // 3.3kHzの喉締まり帯域を和らげ、低音Aメロ(<215Hz)では胸ボワつき(210Hz)を自動でスッキリ引き締める。
+    if (neiroRun)
+    {
+        const bool ptSw = (eraNow >= 530) && pitchSweetSpotOn.load (std::memory_order_relaxed)
+                       && ! selfTestRunning.load (std::memory_order_relaxed);
+        if (ptSw)
+        {
+            const double safeSr = juce::jmax (16000.0, currentSampleRate);
+            const float maxF    = (float) (safeSr * 0.44);
+            const float detHz   = atDetectedHz.load (std::memory_order_relaxed);
+            const float bAlpha  = 1.0f - std::exp (-(float) numSamples / (0.018f * (float) safeSr));
+
+            if (detHz >= 65.0f && detHz <= 1100.0f)
+                pitchSweetTrackHz += bAlpha * (detHz - pitchSweetTrackHz);
+
+            const float activeVoiced = (detHz >= 65.0f && detHz <= 1100.0f) ? 1.0f
+                                     : juce::jlimit (0.0f, 1.0f, (beltFastDb + 45.0f) / 15.0f);
+            float wantBodyDb  = 0.0f;
+            float wantPinchDb = 0.0f;
+            float targetBodyHz = juce::jlimit (185.0f, 460.0f, pitchSweetTrackHz * 1.12f);
+
+            if (pitchSweetTrackHz > 250.0f)
+            {
+                // 高音・ハイトーン域：声の土台を最大 +3.6 dB 太らせ、3.3kHz の喉締まり感を最大 -3.2 dB 緩和
+                const float hiNorm = juce::jlimit (0.0f, 1.0f, (pitchSweetTrackHz - 250.0f) / 320.0f);
+                wantBodyDb  =  3.6f * hiNorm * activeVoiced;
+                wantPinchDb = -3.2f * hiNorm * activeVoiced;
+            }
+            else if (pitchSweetTrackHz < 215.0f)
+            {
+                // 低音チェスト域：210Hz のボワつきを最大 -2.8 dB 引き締め、3.2kHz の子音輪郭を最大 +1.8 dB 補助
+                const float loNorm = juce::jlimit (0.0f, 1.0f, (215.0f - pitchSweetTrackHz) / 110.0f);
+                targetBodyHz = 210.0f;
+                wantBodyDb   = -2.8f * loNorm * activeVoiced;
+                wantPinchDb  =  1.8f * loNorm * activeVoiced;
+            }
+
+            pitchSweetBodyDb  += bAlpha * (wantBodyDb  - pitchSweetBodyDb);
+            pitchSweetPinchDb += bAlpha * (wantPinchDb - pitchSweetPinchDb);
+
+            if (std::abs (pitchSweetBodyDb - pitchSweetAppliedBodyDb) > 0.08f
+                || std::abs (targetBodyHz - pitchSweetAppliedHz) > 6.0f)
+            {
+                pitchSweetAppliedBodyDb = pitchSweetBodyDb;
+                pitchSweetAppliedHz     = targetBodyHz;
+                const auto cB = ACoefs::makePeakFilter (safeSr, juce::jmin (targetBodyHz, maxF), 0.85f,
+                                    juce::Decibels::decibelsToGain (pitchSweetAppliedBodyDb));
+                *pitchSweetBodyL.coefficients = cB;
+                *pitchSweetBodyR.coefficients = cB;
+            }
+            if (std::abs (pitchSweetPinchDb - pitchSweetAppliedPinchDb) > 0.08f)
+            {
+                pitchSweetAppliedPinchDb = pitchSweetPinchDb;
+                const auto cP = ACoefs::makePeakFilter (safeSr, juce::jmin (3300.0f, maxF), 1.25f,
+                                    juce::Decibels::decibelsToGain (pitchSweetAppliedPinchDb));
+                *pitchSweetPinchL.coefficients = cP;
+                *pitchSweetPinchR.coefficients = cP;
+            }
+
+            if (std::abs (pitchSweetBodyDb) > 0.04f || std::abs (pitchSweetPinchDb) > 0.04f)
+            {
+                auto* L = buffer.getWritePointer (0);
+                auto* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+                for (int n = 0; n < numSamples; ++n)
+                {
+                    L[n] = pitchSweetPinchL.processSample (pitchSweetBodyL.processSample (L[n]));
+                    if (R != nullptr)
+                        R[n] = pitchSweetPinchR.processSample (pitchSweetBodyR.processSample (R[n]));
+                }
+            }
+            meterPitchSweetSpotDb.store (pitchSweetBodyDb, std::memory_order_relaxed);
+        }
+        else if (pitchSweetAppliedBodyDb != -99.0f || std::abs (meterPitchSweetSpotDb.load (std::memory_order_relaxed)) > 0.0f)
+        {
+            pitchSweetBodyDb = pitchSweetPinchDb = 0.0f;
+            pitchSweetAppliedHz = -999.0f;
+            pitchSweetAppliedBodyDb = pitchSweetAppliedPinchDb = -99.0f;
+            pitchSweetBodyL.reset(); pitchSweetBodyR.reset();
+            pitchSweetPinchL.reset(); pitchSweetPinchR.reset();
+            meterPitchSweetSpotDb.store (0.0f, std::memory_order_relaxed);
+        }
     }
 
     if (neiroRun) mods.restore (gz::ModuleChain::Neiro, buffer);
@@ -4999,6 +5186,54 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         streamOut.push (L, R, numSamples);
     }
 
+    // ---- v5.3.0 新案④：🎧 骨伝導補正・歌い手専用モニターエンハンサー (Singer's Cue Monitor) ----
+    // リスナーへ届く配信出力(StreamOut)およびWAV録音のキャプチャが終わった直後に配置することで、
+    // 配信・録音の音質には1サンプルも影響を与えず、自分のヘッドホンへ返るモニター音だけ
+    // 頭蓋骨の骨伝導でこもる 210Hz (-3.2dB) を引き算し、音程が取りやすい 2.45kHz のピッチ芯(最大+3.4dB)を際立たせる。
+    if (eraNow >= 530 && singerCueMonitorOn.load (std::memory_order_relaxed)
+        && ! monitorMute.load (std::memory_order_relaxed)
+        && ! compareBypass.load (std::memory_order_relaxed)
+        && ! selfTestRunning.load (std::memory_order_relaxed))
+    {
+        const double safeSr = juce::jmax (16000.0, currentSampleRate);
+        const float maxF    = (float) (safeSr * 0.44);
+        const float bAlpha  = 1.0f - std::exp (-(float) numSamples / (0.015f * (float) safeSr));
+
+        const float pk = buffer.getMagnitude (0, numSamples);
+        singerCueEnv += bAlpha * (pk - singerCueEnv);
+        const float envDb = juce::Decibels::gainToDecibels (singerCueEnv, -80.0f);
+        const float act   = juce::jlimit (0.0f, 1.0f, (envDb + 50.0f) / 22.0f);
+        const float wantCoreDb = 3.4f * act;
+        singerCueBoostDb += bAlpha * (wantCoreDb - singerCueBoostDb);
+
+        if (std::abs (singerCueBoostDb - singerCueAppliedDb) > 0.08f)
+        {
+            singerCueAppliedDb = singerCueBoostDb;
+            const auto cCore = ACoefs::makePeakFilter (safeSr, juce::jmin (2450.0f, maxF), 1.15f,
+                                   juce::Decibels::decibelsToGain (singerCueAppliedDb));
+            *singerCueCoreL.coefficients = cCore;
+            *singerCueCoreR.coefficients = cCore;
+        }
+
+        auto* L = buffer.getWritePointer (0);
+        auto* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+        for (int n = 0; n < numSamples; ++n)
+        {
+            L[n] = singerCueCoreL.processSample (singerCueMudL.processSample (L[n]));
+            if (R != nullptr)
+                R[n] = singerCueCoreR.processSample (singerCueMudR.processSample (R[n]));
+        }
+        meterSingerCueDb.store (singerCueBoostDb, std::memory_order_relaxed);
+    }
+    else if (singerCueAppliedDb != -99.0f || meterSingerCueDb.load (std::memory_order_relaxed) > 0.0f)
+    {
+        singerCueEnv = singerCueBoostDb = 0.0f;
+        singerCueAppliedDb = -99.0f;
+        singerCueMudL.reset(); singerCueMudR.reset();
+        singerCueCoreL.reset(); singerCueCoreR.reset();
+        meterSingerCueDb.store (0.0f, std::memory_order_relaxed);
+    }
+
     // 🛡️ ハードウェアループバック／スピーカー発振（ハウリング）自動遮断ガード
     // AG03/AG06の「LOOPBACK」やRubix 44の「LOOPBACKスイッチ」がONのまま返しミュートがOFFだと、
     // 出力がそのまま入力へ戻って無限増幅（ピーッという発振）を起こす。
@@ -5760,7 +5995,7 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         lv->setAttribute ("eco", legacyEcoGate.load (std::memory_order_relaxed) ? 1 : 0);
     }
 
-    // v5.1.0/v5.2.0 サビ自動検知・名機マイクモデリング・リップノイズ除去・声ポケット掘削・伴奏連動ライダー・部屋鳴り除去・息継ぎ＆Velvet保護・歌枠セットリスト状態
+    // v5.1.0〜v5.3.0 サビ自動検知・名機マイクモデリング・リップノイズ除去・声ポケット掘削・伴奏連動ライダー・部屋鳴り除去・息継ぎ＆Velvet保護・ささやき浮上＆ダイヤ高域・音程追従スイートスポット・骨伝導モニター補正・歌枠セットリスト状態
     {
         auto* s51 = root->createNewChildElement ("STAGE_V51");
         s51->setAttribute ("autoChorus",   autoChorusMode.load (std::memory_order_relaxed) ? 1 : 0);
@@ -5770,6 +6005,9 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         s51->setAttribute ("bgmRider",     bgmVocalRiderOn.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("roomDereverb", roomDereverbOn.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("breathCtrl",   breathControlOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("upwardAir",    upwardAirOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("pitchSweet",   pitchSweetSpotOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("singerCue",    singerCueMonitorOn.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("pitchLatMode4", pitchLatMode.load (std::memory_order_relaxed));
         s51->setAttribute ("vcFormLink",   vcFormAutoLink.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("setlistCur",   currentSetlistIdx.load (std::memory_order_relaxed));
@@ -5948,9 +6186,9 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
             if (auto* lv = xml.getChildByName ("LEGACY_VER"))
             {
                 const int loadedId  = juce::jlimit (0, 13,    lv->getIntAttribute ("id",  0));
-                int       loadedEra = juce::jlimit (100, 520, lv->getIntAttribute ("era", 520));
-                if (loadedId == 0 && loadedEra < 520)
-                    loadedEra = 520; // 最新版(id=0)が選ばれていた場合は v5.2.0 (era=520) へ自然昇格
+                int       loadedEra = juce::jlimit (100, 530, lv->getIntAttribute ("era", 530));
+                if (loadedId == 0 && loadedEra < 530)
+                    loadedEra = 530; // 最新版(id=0)が選ばれていた場合は v5.3.0 (era=530) へ自然昇格
                 legacyVersionId.store  (loadedId,  std::memory_order_relaxed);
                 legacyVersionEra.store (loadedEra, std::memory_order_relaxed);
                 legacyEcoGate.store    (lv->getIntAttribute ("eco", 1) != 0, std::memory_order_relaxed);
@@ -5958,19 +6196,22 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
             else if (gz::isTestDataIsolated())
             {
                 legacyVersionId.store  (0,    std::memory_order_relaxed);
-                legacyVersionEra.store (520,  std::memory_order_relaxed);
+                legacyVersionEra.store (530,  std::memory_order_relaxed);
                 legacyEcoGate.store    (true, std::memory_order_relaxed);
             }
 
             if (auto* s51 = xml.getChildByName ("STAGE_V51"))
             {
-                autoChorusMode.store  (s51->getIntAttribute ("autoChorus",   0) != 0, std::memory_order_relaxed);
-                micModelMode.store    (juce::jlimit (0, 4, s51->getIntAttribute ("micModel", 0)), std::memory_order_relaxed);
-                lipDeclickOn.store    (s51->getIntAttribute ("lipDeclick",   0) != 0, std::memory_order_relaxed);
-                bgmUnmaskOn.store     (s51->getIntAttribute ("bgmUnmask",    0) != 0, std::memory_order_relaxed);
-                bgmVocalRiderOn.store (s51->getIntAttribute ("bgmRider",     0) != 0, std::memory_order_relaxed);
-                roomDereverbOn.store  (s51->getIntAttribute ("roomDereverb", 0) != 0, std::memory_order_relaxed);
-                breathControlOn.store (s51->getIntAttribute ("breathCtrl",   0) != 0, std::memory_order_relaxed);
+                autoChorusMode.store     (s51->getIntAttribute ("autoChorus",   0) != 0, std::memory_order_relaxed);
+                micModelMode.store       (juce::jlimit (0, 4, s51->getIntAttribute ("micModel", 0)), std::memory_order_relaxed);
+                lipDeclickOn.store       (s51->getIntAttribute ("lipDeclick",   0) != 0, std::memory_order_relaxed);
+                bgmUnmaskOn.store        (s51->getIntAttribute ("bgmUnmask",    0) != 0, std::memory_order_relaxed);
+                bgmVocalRiderOn.store    (s51->getIntAttribute ("bgmRider",     0) != 0, std::memory_order_relaxed);
+                roomDereverbOn.store     (s51->getIntAttribute ("roomDereverb", 0) != 0, std::memory_order_relaxed);
+                breathControlOn.store    (s51->getIntAttribute ("breathCtrl",   0) != 0, std::memory_order_relaxed);
+                upwardAirOn.store        (s51->getIntAttribute ("upwardAir",    0) != 0, std::memory_order_relaxed);
+                pitchSweetSpotOn.store   (s51->getIntAttribute ("pitchSweet",   0) != 0, std::memory_order_relaxed);
+                singerCueMonitorOn.store (s51->getIntAttribute ("singerCue",    0) != 0, std::memory_order_relaxed);
                 // v5.1.2: 4段階化。旧3段階の保存値(0:10.6ms/1:21.3ms/2:42.6ms)は1つずらして同じ遅延へ移す
                 if (s51->hasAttribute ("pitchLatMode4"))
                     pitchLatMode.store (juce::jlimit (0, kPitchLatModes - 1, s51->getIntAttribute ("pitchLatMode4", 2)), std::memory_order_relaxed);
