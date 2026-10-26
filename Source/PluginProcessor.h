@@ -611,6 +611,50 @@ public:
     void  toggleLipDeclickOn() noexcept        { setLipDeclickOn (! getLipDeclickOn()); }
     float getLipDeclickMeterDb() const noexcept { return meterLip.load (std::memory_order_relaxed) * 12.0f; }
 
+    //== v5.2.0 柱A-1：🕳️ 伴奏「声ポケット」自動掘り（Spectral Unmasker — Trackspacer方式 4帯域Mid専用ダイナミック掘削） ==
+    bool  getBgmUnmaskOn() const noexcept       { return bgmUnmaskOn.load (std::memory_order_relaxed); }
+    void  setBgmUnmaskOn (bool b) noexcept
+    {
+        bgmUnmaskOn.store (b, std::memory_order_relaxed);
+        if (! b) meterBgmUnmaskDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleBgmUnmaskOn() noexcept          { setBgmUnmaskOn (! getBgmUnmaskOn()); }
+    float getBgmUnmaskMeterDb() const noexcept  { return meterBgmUnmaskDb.load (std::memory_order_relaxed); }
+
+    //== v5.2.0 柱A-2：🎢 伴奏連動・知能ボーカルライダー（BGM-Linked Vocal Rider — 伴奏音量と歌声の相対追従フェーダー） ==
+    bool  getBgmVocalRiderOn() const noexcept   { return bgmVocalRiderOn.load (std::memory_order_relaxed); }
+    void  setBgmVocalRiderOn (bool b) noexcept
+    {
+        bgmVocalRiderOn.store (b, std::memory_order_relaxed);
+        if (! b) { bgmRiderGainDb = 0.0f; meterBgmVocalRiderDb.store (0.0f, std::memory_order_relaxed); }
+        markStateDirty();
+    }
+    void  toggleBgmVocalRiderOn() noexcept      { setBgmVocalRiderOn (! getBgmVocalRiderOn()); }
+    float getBgmVocalRiderDb() const noexcept   { return meterBgmVocalRiderDb.load (std::memory_order_relaxed); }
+
+    //== v5.2.0 柱B-1：🏠 ゼロ遅延・部屋鳴り（反響・風呂場感）除去（Zero-Lag Room De-Reverb — 2時定数残響テール＆460Hz箱鳴り吸収） ==
+    bool  getRoomDereverbOn() const noexcept    { return roomDereverbOn.load (std::memory_order_relaxed); }
+    void  setRoomDereverbOn (bool b) noexcept
+    {
+        roomDereverbOn.store (b, std::memory_order_relaxed);
+        if (! b) meterRoomDereverbDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleRoomDereverbOn() noexcept       { setRoomDereverbOn (! getRoomDereverbOn()); }
+    float getRoomDereverbMeterDb() const noexcept { return meterRoomDereverbDb.load (std::memory_order_relaxed); }
+
+    //== v5.2.0 柱B-2：🌬️ 息継ぎ（ブレス）自動整え ＆ 母音/子音セパレート（Smart Breath Leveler & Velvet Split） ==
+    bool  getBreathControlOn() const noexcept   { return breathControlOn.load (std::memory_order_relaxed); }
+    void  setBreathControlOn (bool b) noexcept
+    {
+        breathControlOn.store (b, std::memory_order_relaxed);
+        if (! b) meterBreathControlDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleBreathControlOn() noexcept      { setBreathControlOn (! getBreathControlOn()); }
+    float getBreathControlMeterDb() const noexcept { return meterBreathControlDb.load (std::memory_order_relaxed); }
+
     //== v5.1.4 ボイチェン＆ピッチ補正 4段階遅延モード ＆ フォルマント自動追従 ==
     //   0:🚀極限ゼロ感 (補正 ~0.1ms / ボイチェン ~5.3ms)
     //   1:⚡超低遅延   (補正 ~0.1ms / ボイチェン ~10.6ms)
@@ -650,7 +694,7 @@ public:
     void  setLegacyVersionState (int id, int era)
     {
         legacyVersionId.store (juce::jlimit (0, 13, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 510, era), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 520, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState)
@@ -1352,7 +1396,7 @@ private:
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 510 };
+    std::atomic<int>   legacyVersionEra   { 520 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
@@ -1393,6 +1437,36 @@ private:
     float              vcNatLastPitch     { -999.0f };
     float              vcNatLastForm      { -999.0f };
     double             vcNatLastSr        { 0.0 };
+
+    // ---- v5.2.0 柱A：伴奏「声ポケット」自動掘り (Spectral Unmasker) ＆ 伴奏連動ボーカルライダー ----
+    std::atomic<bool>  bgmUnmaskOn        { false };
+    juce::dsp::IIR::Filter<float> bgmUnmaskVocDet[4], bgmUnmaskMidPeak[4];
+    float              bgmUnmaskEnv[4]    { 0.0f, 0.0f, 0.0f, 0.0f };
+    float              bgmUnmaskCutDb[4]  { 0.0f, 0.0f, 0.0f, 0.0f };
+    float              bgmUnmaskAppliedDb[4] { -99.0f, -99.0f, -99.0f, -99.0f };
+    std::atomic<float> meterBgmUnmaskDb   { 0.0f };
+
+    std::atomic<bool>  bgmVocalRiderOn    { false };
+    float              bgmRiderVocEnv     { 0.0f };
+    float              bgmRiderBgmEnv     { 0.0f };
+    float              bgmRiderGainDb     { 0.0f };
+    std::atomic<float> meterBgmVocalRiderDb { 0.0f };
+
+    // ---- v5.2.0 柱B：ゼロ遅延・部屋鳴り除去 (Room De-Reverb) ＆ 息継ぎ自動整え・母音/子音セパレート (Velvet Split) ----
+    std::atomic<bool>  roomDereverbOn     { false };
+    juce::dsp::IIR::Filter<float> derevBoxDet, derevBoxPeakL, derevBoxPeakR;
+    float              derevFastEnv       { 0.0f }, derevSlowEnv { 0.0f };
+    float              derevBoxFast       { 0.0f }, derevBoxSlow { 0.0f };
+    float              derevBoxCutDb      { 0.0f }, derevBoxAppliedDb { -99.0f };
+    float              derevTailGain      { 1.0f };
+    std::atomic<float> meterRoomDereverbDb { 0.0f };
+
+    std::atomic<bool>  breathControlOn    { false };
+    juce::dsp::IIR::Filter<float> breathLoDet, breathHiDet, velvetDeHarshL, velvetDeHarshR;
+    float              breathLoEnv        { 0.0f }, breathHiEnv  { 0.0f };
+    float              breathHoldSec      { 0.0f }, breathGain   { 1.0f };
+    float              velvetCutDb        { 0.0f }, velvetAppliedDb { -99.0f };
+    std::atomic<float> meterBreathControlDb { 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

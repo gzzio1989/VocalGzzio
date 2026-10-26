@@ -2889,6 +2889,33 @@ public:
         };
         addAndMakeVisible (bgmRouteBtn);
 
+        // ---- v5.2.0 柱A：🕳️ 伴奏「声ポケット」自動掘り (Spectral Unmasker) ＆ 🎢 伴奏連動ボーカルライダー ----
+        bgmUnmaskBtn.setClickingTogglesState (true);
+        bgmUnmaskBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
+        bgmUnmaskBtn.setToggleState (processor.getBgmUnmaskOn(), juce::dontSendNotification);
+        bgmUnmaskBtn.setTooltip (language->T ("歌っている瞬間だけ、あなたの声とぶつかる伴奏の真ん中(Mid)の周波数だけをピンポイントで最大-5.0dB掘り下げ、伴奏の迫力を保ったまま声をくっきり前に出します。",
+                                              "Dynamically carves out only the active vocal frequencies in the BGM's Mid channel by up to -5.0 dB so your voice sits clearly in front."));
+        bgmUnmaskBtn.onClick = [this]
+        {
+            processor.setBgmUnmaskOn (bgmUnmaskBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (bgmUnmaskBtn);
+
+        bgmRiderBtn.setClickingTogglesState (true);
+        bgmRiderBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+        bgmRiderBtn.setToggleState (processor.getBgmVocalRiderOn(), juce::dontSendNotification);
+        bgmRiderBtn.setTooltip (language->T ("伴奏の盛り上がりに合わせて歌声フェーダーを自動調整（静かなAメロは馴染ませ、爆音サビは最大+3.5dB自動リフト）します。",
+                                             "Automatically rides your vocal gain (-2.5 dB to +3.5 dB) following the backing track's energy from quiet verses to loud choruses."));
+        bgmRiderBtn.onClick = [this]
+        {
+            processor.setBgmVocalRiderOn (bgmRiderBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (bgmRiderBtn);
+
         // ---- 柱②：1クリックWAV録音 ＆ 直前30秒さかのぼり保存 ----
         wavRecBtn.setClickingTogglesState (true);
         wavRecBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
@@ -3002,6 +3029,33 @@ public:
         };
         addAndMakeVisible (lipDeclickBtn);
 
+        // ---- v5.2.0 柱B：🏠 ゼロ遅延・部屋鳴り除去 (Room De-Reverb) ＆ 🌬️ 息継ぎ自動整え・母音/子音セパレート (Velvet Split) ----
+        roomDereverbBtn.setClickingTogglesState (true);
+        roomDereverbBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+        roomDereverbBtn.setToggleState (processor.getRoomDereverbOn(), juce::dontSendNotification);
+        roomDereverbBtn.setTooltip (language->T ("ゼロ遅延で部屋の反響（風呂場感・壁の跳ね返り・460Hzの箱鳴り）だけを引き算し、防音ブースで録ったようなデッドな声にします。",
+                                                 "Zero-latency room de-reverb: strips away muddy room reflections and 460 Hz boxiness without dulling vocal attacks."));
+        roomDereverbBtn.onClick = [this]
+        {
+            processor.setRoomDereverbOn (roomDereverbBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (roomDereverbBtn);
+
+        breathCtrlBtn.setClickingTogglesState (true);
+        breathCtrlBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        breathCtrlBtn.setToggleState (processor.getBreathControlOn(), juce::dontSendNotification);
+        breathCtrlBtn.setTooltip (language->T ("コンプ前の息継ぎ（ブレス）音量を自動で自然に抑え、さらに母音と子音（サ行・ツ行）を自動分離して高域の刺さりを防ぎます（Velvet Split）。",
+                                               "Automatically tames loud breaths before compression and separates tonal vowels from sibilants to prevent harshness (Velvet Split)."));
+        breathCtrlBtn.onClick = [this]
+        {
+            processor.setBreathControlOn (breathCtrlBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (breathCtrlBtn);
+
         // ---- v5.0.0 柱④ ＆ v5.1.0 柱②：🔥 サビ1クリック華やか演出・🤖 サビ自動検知 ＆ 👏 4種ライブSEポン出しパッド ----
         chorusBoostBtn.setClickingTogglesState (true);
         chorusBoostBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
@@ -3074,8 +3128,8 @@ public:
         };
 
         drawSectionCard (secBgmRect,   Palette::green,
-                         language->T ("① 🎵 カラオケ・BGM ＆ 🎼 キー/BPM自動解析・📋 歌枠セットリスト・✨ ボーカル除去",
-                                      "1. Karaoke / BGM, Auto-Key/BPM Lock, Setlist Manager & 1-Click Vocal Remover"));
+                         language->T ("① 🎵 カラオケ・BGM ＆ 🕳️ 声ポケット自動掘り・🎢 伴奏追従ライダー・✨ ボーカル除去",
+                                      "1. Karaoke / BGM, Spectral Unmasker, BGM Vocal Rider & 1-Click Vocal Remover"));
         drawSectionCard (secRecRect,   Palette::salmon,
                          language->T ("② 🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（💿 -14LUFS完パケMIX＋Wet＋Dry同時保存）",
                                       "2. 1-Click WAV Recorder & 30s Retro Save (-14 LUFS FullMix + Wet + Dry 24-bit WAV)"));
@@ -3083,8 +3137,8 @@ public:
                          language->T ("③ 🎯 5秒声質ターゲットAI診断 ＆ 🎙️ ゼロ遅延・4大名機マイク・モデリング",
                                       "3. 5s Voice Target AI Diagnosis & Zero-Latency Studio Mic Modeler (800G / U87 / SM7B / ASMR)"));
         drawSectionCard (secGuardRect, Palette::ice,
-                         language->T ("④ 🔥 サビ盛り・🤖 サビ自動検知・👏 ライブSE ＆ 🛡 絶叫ガード・😷 咳払いミュート・💧 ペチャ音除去",
-                                      "4. Chorus Boost, Auto-Chorus AI, Live SE Pads, Scream Guard, Cough Mute & Lip De-Click"));
+                         language->T ("④ 🔥 サビ盛り・👏 SE ＆ 🏠 部屋鳴り消し・🌬️ 息継ぎ＆サ行保護・💧 ペチャ除去・🛡 絶叫ガード",
+                                      "4. Chorus Boost, SE, Room De-Reverb, Breath & Velvet Split, Lip De-Click & Scream Guard"));
 
         // BGM状態＆プログレスバー描画
         {
@@ -3114,16 +3168,34 @@ public:
             g.setColour (processor.isBgmPlaying() ? Palette::green : Palette::blue);
             g.fillRoundedRectangle (pb.withWidth (pb.getWidth() * processor.getBgmProgress()), 4.0f);
 
-            // スライダー見出し＋ダッキング減衰メーター
+            // スライダー見出し＋声ポケット掘削／伴奏追従ライダー／ダッキング減衰メーター
             g.setColour (Palette::inkSoft);
-            g.setFont (GzzioLnF::uiFont (14.0f, true));
-            g.drawText (language->T ("BGM音量:", "BGM Vol:"), bgmVolLabelRect, juce::Justification::centredLeft);
-            g.drawText (language->T ("声優先ダッキング:", "Vocal Duck:"), bgmDuckLabelRect, juce::Justification::centredLeft);
+            g.setFont (GzzioLnF::uiFont (13.0f, true));
+            g.drawText (language->T ("BGM:", "BGM:"), bgmVolLabelRect, juce::Justification::centredLeft);
+            g.drawText (language->T ("ダック:", "Duck:"), bgmDuckLabelRect, juce::Justification::centredLeft);
 
-            const float duckDb = processor.getBgmDuckMeterDb();
-            g.setColour (duckDb > 0.4f ? Palette::yellow : Palette::inkSoft);
-            g.drawText (language->T ("減衰: -", "Duck: -") + juce::String (duckDb, 1) + " dB",
-                        bgmDuckMeterRect, juce::Justification::centredRight);
+            const float unmaskDb = processor.getBgmUnmaskMeterDb();
+            const float riderDb  = processor.getBgmVocalRiderDb();
+            const float duckDb   = processor.getBgmDuckMeterDb();
+            if (processor.getBgmVocalRiderOn() && std::abs (riderDb) > 0.15f && std::abs (riderDb) >= unmaskDb)
+            {
+                g.setColour (Palette::yellow);
+                const juce::String sign = riderDb >= 0.0f ? "+" : "";
+                g.drawFittedText (language->T ("追従:", "Ride:") + sign + juce::String (riderDb, 1) + "dB",
+                                  bgmDuckMeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else if (processor.getBgmUnmaskOn() && unmaskDb > 0.15f)
+            {
+                g.setColour (Palette::ice);
+                g.drawFittedText (language->T ("掘削:-", "Unmask:-") + juce::String (unmaskDb, 1) + "dB",
+                                  bgmDuckMeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else
+            {
+                g.setColour (duckDb > 0.4f ? Palette::yellow : Palette::inkSoft);
+                g.drawFittedText (language->T ("減衰:-", "Duck:-") + juce::String (duckDb, 1) + "dB",
+                                  bgmDuckMeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
         }
 
         // WAV録音ステータス描画
@@ -3161,22 +3233,36 @@ public:
             }
         }
 
-        // 絶叫セーフティガード／リップノイズ瞬間除去メーター描画
+        // 絶叫セーフティガード／リップノイズ瞬間除去／部屋鳴り除去／息継ぎ＆Velvet保護メーター描画
         {
-            const float grDb = processor.getScreamGuardDb();
-            const float lipDb = processor.getLipDeclickMeterDb();
-            g.setFont (GzzioLnF::uiFont (13.5f, true));
-            if (processor.getLipDeclickOn() && lipDb > grDb && lipDb > 0.1f)
+            const float grDb     = processor.getScreamGuardDb();
+            const float lipDb    = processor.getLipDeclickMeterDb();
+            const float derevDb  = processor.getRoomDereverbMeterDb();
+            const float breathDb = processor.getBreathControlMeterDb();
+            g.setFont (GzzioLnF::uiFont (13.0f, true));
+            if (processor.getRoomDereverbOn() && derevDb >= breathDb && derevDb >= lipDb && derevDb > 0.1f)
+            {
+                g.setColour (Palette::yellow);
+                g.drawFittedText (language->T ("反響消:-", "DeRev:-") + juce::String (derevDb, 1) + "dB",
+                                  guardMeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else if (processor.getBreathControlOn() && breathDb >= lipDb && breathDb > 0.1f)
+            {
+                g.setColour (Palette::green);
+                g.drawFittedText (language->T ("息/子音:-", "Breath:-") + juce::String (breathDb, 1) + "dB",
+                                  guardMeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else if (processor.getLipDeclickOn() && lipDb > grDb && lipDb > 0.1f)
             {
                 g.setColour (Palette::ice);
-                g.drawText (language->T ("ペチャ除去: -", "Lip Cut: -") + juce::String (lipDb, 1) + " dB",
-                            guardMeterRect, juce::Justification::centredRight);
+                g.drawFittedText (language->T ("ペチャ:-", "Lip:-") + juce::String (lipDb, 1) + "dB",
+                                  guardMeterRect, juce::Justification::centredRight, 1, 0.85f);
             }
             else
             {
                 g.setColour (grDb > 0.2f ? Palette::salmon : Palette::inkSoft);
-                g.drawText (language->T ("ピーク抑制: -", "Peak Guard: -") + juce::String (grDb, 1) + " dB",
-                            guardMeterRect, juce::Justification::centredRight);
+                g.drawFittedText (language->T ("抑制:-", "Guard:-") + juce::String (grDb, 1) + "dB",
+                                  guardMeterRect, juce::Justification::centredRight, 1, 0.85f);
             }
         }
     }
@@ -3237,11 +3323,15 @@ public:
 
             inner.removeFromTop (5);
             auto rMix = inner.removeFromTop (28);
-            bgmVolLabelRect  = rMix.removeFromLeft (68);
-            bgmVolSlider.setBounds (rMix.removeFromLeft (210));
-            rMix.removeFromLeft (12);
-            bgmDuckLabelRect = rMix.removeFromLeft (118);
-            bgmDuckSlider.setBounds (rMix.removeFromLeft (192));
+            bgmVolLabelRect  = rMix.removeFromLeft (42);
+            bgmVolSlider.setBounds (rMix.removeFromLeft (148));
+            rMix.removeFromLeft (6);
+            bgmDuckLabelRect = rMix.removeFromLeft (52);
+            bgmDuckSlider.setBounds (rMix.removeFromLeft (134));
+            rMix.removeFromLeft (6);
+            bgmUnmaskBtn.setBounds (rMix.removeFromLeft (126));
+            rMix.removeFromLeft (5);
+            bgmRiderBtn .setBounds (rMix.removeFromLeft (124));
             bgmDuckMeterRect = rMix;
         }
         b.removeFromTop (8);
@@ -3304,9 +3394,11 @@ public:
             }
             inner.removeFromTop (6);
             auto r1 = inner.removeFromTop (32);
-            coughBtn      .setBounds (r1.removeFromLeft (198)); r1.removeFromLeft (6);
-            screamGuardBtn.setBounds (r1.removeFromLeft (204)); r1.removeFromLeft (6);
-            lipDeclickBtn .setBounds (r1.removeFromLeft (192)); r1.removeFromLeft (6);
+            coughBtn       .setBounds (r1.removeFromLeft (124)); r1.removeFromLeft (5);
+            screamGuardBtn .setBounds (r1.removeFromLeft (120)); r1.removeFromLeft (5);
+            lipDeclickBtn  .setBounds (r1.removeFromLeft (120)); r1.removeFromLeft (5);
+            roomDereverbBtn.setBounds (r1.removeFromLeft (122)); r1.removeFromLeft (5);
+            breathCtrlBtn  .setBounds (r1.removeFromLeft (128)); r1.removeFromLeft (4);
             guardMeterRect = r1;
         }
     }
@@ -3449,6 +3541,18 @@ private:
             ? language->T ("📡 配信混音", "📡 Stream")
             : language->T ("🎧 自分のみ", "🎧 Monitor"));
 
+        const bool unmaskOn = processor.getBgmUnmaskOn();
+        bgmUnmaskBtn.setToggleState (unmaskOn, juce::dontSendNotification);
+        bgmUnmaskBtn.setButtonText (unmaskOn
+            ? language->T ("🕳️ 声ポケット ON", "🕳️ Unmask ON")
+            : language->T ("🕳️ 声ポケット掘り", "🕳️ Unmask BGM"));
+
+        const bool riderOn = processor.getBgmVocalRiderOn();
+        bgmRiderBtn.setToggleState (riderOn, juce::dontSendNotification);
+        bgmRiderBtn.setButtonText (riderOn
+            ? language->T ("🎢 伴奏追従 ON", "🎢 BGM Rider ON")
+            : language->T ("🎢 伴奏追従ライド", "🎢 BGM Rider"));
+
         const bool rec = processor.isWavRecording();
         wavRecBtn.setToggleState (rec, juce::dontSendNotification);
         if (rec)
@@ -3501,20 +3605,32 @@ private:
         const bool cMute = processor.getCoughMute();
         coughBtn.setToggleState (cMute, juce::dontSendNotification);
         coughBtn.setButtonText (cMute
-            ? language->T ("🔇 咳払いミュート中(解除)", "🔇 COUGH MUTED (Unmute)")
-            : language->T ("😷 咳払い瞬間ミュート", "😷 Cough Instant Mute"));
+            ? language->T ("🔇 咳ミュート中", "🔇 COUGH MUTED")
+            : language->T ("😷 咳払いミュート", "😷 Cough Mute"));
 
         const bool sgOn = processor.getScreamGuardOn();
         screamGuardBtn.setToggleState (sgOn, juce::dontSendNotification);
         screamGuardBtn.setButtonText (sgOn
-            ? language->T ("🛡 絶叫セーフティガード ON", "🛡 Scream Safety Guard ON")
-            : language->T ("🛡 絶叫セーフティガード OFF", "🛡 Scream Safety Guard OFF"));
+            ? language->T ("🛡 絶叫ガード ON", "🛡 Scream Guard ON")
+            : language->T ("🛡 絶叫ガード OFF", "🛡 Scream Guard OFF"));
 
         const bool lipOn = processor.getLipDeclickOn();
         lipDeclickBtn.setToggleState (lipOn, juce::dontSendNotification);
         lipDeclickBtn.setButtonText (lipOn
-            ? language->T ("💧 ペチャ音・リップ除去 ON", "💧 Lip Click Remover ON")
-            : language->T ("💧 ペチャ音・リップ瞬間除去", "💧 Lip Click Remover"));
+            ? language->T ("💧 ペチャ除去 ON", "💧 Lip Click ON")
+            : language->T ("💧 ペチャ音除去", "💧 Lip Click Cut"));
+
+        const bool derevOn = processor.getRoomDereverbOn();
+        roomDereverbBtn.setToggleState (derevOn, juce::dontSendNotification);
+        roomDereverbBtn.setButtonText (derevOn
+            ? language->T ("🏠 部屋鳴り消 ON", "🏠 De-Reverb ON")
+            : language->T ("🏠 部屋鳴り消し", "🏠 Room De-Rev"));
+
+        const bool breathOn = processor.getBreathControlOn();
+        breathCtrlBtn.setToggleState (breathOn, juce::dontSendNotification);
+        breathCtrlBtn.setButtonText (breathOn
+            ? language->T ("🌬️ 息＆サ行保護ON", "🌬️ Breath/Velvet ON")
+            : language->T ("🌬️ 息＆サ行保護", "🌬️ Breath & Velvet"));
 
         repaint();
     }
@@ -3527,13 +3643,14 @@ private:
     juce::Rectangle<int> wavStatusRect, diagBarsRect, diagStatusRect, guardMeterRect;
     juce::TextButton loadBgmBtn, demoBgmBtn, playBgmBtn, rewBgmBtn, loopBgmBtn, addSetlistBtn, setlistMenuBtn;
     juce::TextButton keyDownBtn, keyZeroBtn, keyUpBtn, vocalCancelBtn, autoKeyBpmBtn, syncKeyBtn, bgmRouteBtn;
+    juce::TextButton bgmUnmaskBtn, bgmRiderBtn;
     juce::Slider bgmVolSlider, bgmDuckSlider;
     juce::TextButton wavRecBtn, retroSaveBtn, autoMasterBtn, openRecDirBtn;
     std::array<juce::TextButton, 5> diagBtns;
     std::array<juce::TextButton, 5> micModBtns;
     juce::TextButton chorusBoostBtn, autoChorusBtn;
     std::array<juce::TextButton, 4> seBtns;
-    juce::TextButton coughBtn, screamGuardBtn, lipDeclickBtn;
+    juce::TextButton coughBtn, screamGuardBtn, lipDeclickBtn, roomDereverbBtn, breathCtrlBtn;
     std::unique_ptr<juce::FileChooser> chooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StageStudioPanel)
@@ -4782,6 +4899,10 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         argonActiveTarget = -1;
         processor.setChorusBoostMode (false);
         processor.setAutoChorusMode (false);
+        processor.setBgmUnmaskOn (false);
+        processor.setBgmVocalRiderOn (false);
+        processor.setRoomDereverbOn (false);
+        processor.setBreathControlOn (false);
         processor.clearCustomIrFile();
         infoText.clear();
         fxInfoText.clear();
@@ -10267,11 +10388,11 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionSpec (int id) noexcept
 {
     static constexpr LegacyVersionSpec kSpecs[kLegacyVersionCount] = {
-        { 0,  510, "v5.1.0",
-          "最新フラッグシップ（伴奏キー＆BPM自動解析・サビ自動検知・4大名機マイク）",
-          "Current Flagship (Auto-Key/BPM, Auto-Chorus & 4 Studio Mic Models)",
-          "最新の全機能（伴奏キー＆BPM 1秒自動解析、サビ自動検知オートブースト、4大名機マイクモデリング、星空・海5景テーマ、3軸60種プリセット）をフル稼働します。",
-          "Full v5.1 flagship suite: Auto-Key/BPM analyzer, Auto-Chorus Director, 4 zero-latency Studio Mic models, 5 Sky/Sea themes, and 60 3-axis presets.",
+        { 0,  520, "v5.2.0",
+          "最新フラッグシップ（声ポケット掘削・伴奏追従ライダー・部屋鳴り消し・息＆子音保護）",
+          "Current Flagship (Spectral Unmasker, BGM Rider, Room De-Reverb & Velvet Split)",
+          "最新の全機能（伴奏『声ポケット』自動掘り、伴奏追従ボーカルライダー、ゼロ遅延・部屋鳴り除去、息継ぎ整え＆母音/子音セパレート、キー＆BPM自動解析、4大名機マイク）をフル稼働します。",
+          "Full v5.2 flagship suite: Spectral Unmasker, BGM-Linked Vocal Rider, Zero-Lag Room De-Reverb, Smart Breath & Velvet Split, Auto-Key/BPM, and 4 Studio Mic models.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
         { 1,  500, "v5.0.0",

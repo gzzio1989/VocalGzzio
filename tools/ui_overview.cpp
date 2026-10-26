@@ -1142,13 +1142,86 @@ int main()
             check (processor->getLegacyVersionId() == v1Idx && processor->getLegacyVersionEra() == 100,
                    "setStateInformation restores saved legacy version id=12 (v1.0.0) and era=100");
 
-            // Restore v5.0.0 and verify LegacyVersionPopup launches cleanly
+            // Restore v5.2.0 and verify LegacyVersionPopup launches cleanly
             view.applyLegacyVersion (0, true);
             view.openLegacyVersionPopup ({ 724, 20, 64, 34 });
             {
                 juce::Image popSnap (juce::Image::ARGB, view.getWidth(), view.getHeight(), true);
                 juce::Graphics pg (popSnap);
                 view.paintEntireComponent (pg, true);
+            }
+
+            // Verify v5.2.0 Pillar A (Spectral Unmasker & BGM-Linked Vocal Rider) and Pillar B (Zero-Lag Room De-Reverb & Smart Breath / Velvet Split)
+            {
+                processor->loadBuiltinDemoBgm();
+                processor->setBgmPlaying (true);
+                processor->setBgmGainDb (0.0f);
+                processor->setBgmUnmaskOn (true);
+                processor->setBgmVocalRiderOn (true);
+                processor->setRoomDereverbOn (true);
+                processor->setBreathControlOn (true);
+                setParameter ("argon_silk", 65.0f);
+
+                check (processor->getBgmUnmaskOn() && processor->getBgmVocalRiderOn()
+                    && processor->getRoomDereverbOn() && processor->getBreathControlOn(),
+                       "v5.2.0 Pillar A & B toggles enable cleanly");
+
+                // 1) Feed 1.0 kHz + 460 Hz vocal / boxy room signal while BGM plays
+                juce::MidiBuffer midi;
+                for (int blk = 0; blk < 30; ++blk)
+                {
+                    juce::AudioBuffer<float> buf (2, 256);
+                    for (int n = 0; n < 256; ++n)
+                    {
+                        const float t = (float) (blk * 256 + n) / 48000.0f;
+                        const float env = (blk < 12) ? 0.45f : 0.08f; // attack then room decay tail
+                        const float v = env * (0.6f * std::sin (2.0f * juce::MathConstants<float>::pi * 1000.0f * t)
+                                             + 0.4f * std::sin (2.0f * juce::MathConstants<float>::pi * 460.0f  * t));
+                        buf.setSample (0, n, v);
+                        buf.setSample (1, n, v);
+                    }
+                    processor->processBlock (buf, midi);
+                }
+                check (processor->getBgmUnmaskMeterDb() > 0.1f,
+                       "v5.2.0 Pillar A-1: BGM Spectral Unmasker carves active vocal frequencies in BGM Mid channel");
+                check (std::abs (processor->getBgmVocalRiderDb()) > 0.01f,
+                       "v5.2.0 Pillar A-2: BGM-Linked Vocal Rider actively rides vocal gain relative to BGM envelope");
+                check (processor->getRoomDereverbMeterDb() > 0.1f,
+                       "v5.2.0 Pillar B-1: Zero-Lag Room De-Reverb absorbs 460 Hz boxiness and room reflection tail");
+
+                // 2) Feed unvoiced high-frequency breath / sibilance (6.8 kHz) to verify Smart Breath & Velvet Split
+                for (int blk = 0; blk < 20; ++blk)
+                {
+                    juce::AudioBuffer<float> buf (2, 256);
+                    for (int n = 0; n < 256; ++n)
+                    {
+                        const float t = (float) (blk * 256 + n) / 48000.0f;
+                        const float s = 0.08f * std::sin (2.0f * juce::MathConstants<float>::pi * 6800.0f * t);
+                        buf.setSample (0, n, s);
+                        buf.setSample (1, n, s);
+                    }
+                    processor->processBlock (buf, midi);
+                }
+                check (processor->getBreathControlMeterDb() > 0.1f,
+                       "v5.2.0 Pillar B-2: Smart Breath Leveler & Velvet Split tame unvoiced breaths and sibilance");
+
+                // 3) Verify XML state persistence of v5.2.0 flags
+                juce::MemoryBlock st52;
+                processor->getStateInformation (st52);
+                processor->setBgmUnmaskOn (false);
+                processor->setBgmVocalRiderOn (false);
+                processor->setRoomDereverbOn (false);
+                processor->setBreathControlOn (false);
+                processor->setStateInformation (st52.getData(), (int) st52.getSize());
+                check (processor->getBgmUnmaskOn() && processor->getBgmVocalRiderOn()
+                    && processor->getRoomDereverbOn() && processor->getBreathControlOn(),
+                       "v5.2.0 Pillar A & B state flags round-trip through XML state");
+
+                processor->setBgmPlaying (false);
+                processor->setBgmUnmaskOn (false);
+                processor->setBgmVocalRiderOn (false);
+                processor->setRoomDereverbOn (false);
+                processor->setBreathControlOn (false);
             }
         }
     }

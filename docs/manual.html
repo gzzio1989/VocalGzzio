@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VocalGzzio 5.0.0 説明書・対応インターフェース一覧</title>
+<title>VocalGzzio 5.2.0 説明書・対応インターフェース一覧</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><nav><strong>VocalGzzio 5.0.0</strong><a href="index.html">紹介</a><a href="updates-5.0.0.md">更新情報</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a></nav></header>
+<header><nav><strong>VocalGzzio 5.2.0</strong><a href="index.html">紹介</a><a href="updates-5.2.0.md">更新情報</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a></nav></header>
 <main>
-<aside class="note" aria-label="配布状況"><strong>VocalGzzio 5.0.0（All-in-One Live &amp; Cover Production Suite）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
+<aside class="note" aria-label="配布状況"><strong>VocalGzzio 5.2.0（Spectral Unmasker, BGM Vocal Rider &amp; Zero-Lag Room De-Reverb Edition）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
 <h1>どんな機材でも、<br>歌枠から歌ってみた完パケまで1画面で。</h1>
 <p class="lead">総合画面で「仕上がり」や「🎯5秒AI声質診断」を選び、必要なところだけ調整します。原曲の1クリック伴奏ボーカル除去（カラオケ化）・-14 LUFS自動音圧マスタリング＆完パケ同時書き出し・4種ライブSEポン出し・サビ1クリック華やか演出・5大風景テーマ・4種の表示スタイル切替・cluster/通話との完全共存まで1画面で完結します。</p>
 <nav aria-label="目次"><a href="#start">はじめる</a><a href="#v5">v5.0 新機能</a><a href="#trial-vs-prod">体験版と製品版の違い・Q&amp;A</a><a href="#theme">風景テーマ・4種の表示スタイル</a><a href="#stage">伴奏・30秒録音・AI診断</a><a href="#interfaces">対応インターフェース・音消え対策</a><a href="#argon">声の質感</a><a href="#level">音量・絶叫/咳ガード</a><a href="#noise">ノイズ</a><a href="#pitch">音程</a><a href="#space">残響・IR</a><a href="#install">導入</a></nav>
@@ -22,11 +22,17 @@
 <li>「押して原音と比較」や「🔄5秒試聴ルーパー」で、処理前後の声を客観的に聴き比べます。</li>
 </ol>
 
-<h2 id="v5">v5.0.0 4大新機能：歌枠ライブ演出 ＆ 歌ってみた完パケ制作スイート</h2>
+<h2 id="v5">v5.2.0 / v5.1.0 / v5.0.0 新機能：プロMIX声ポケット・部屋鳴り除去・歌枠＆歌ってみた完パケスイート</h2>
 <ul>
+<li><strong>🕳️ 伴奏「声ポケット」自動掘り（Spectral Unmasker — v5.2.0新搭載）：</strong>「🎵BGM・録音」内の「🕳️声ポケット掘り」をONにすると、歌っている瞬間だけ声の主要4帯域（380Hz / 1.0kHz / 2.4kHz / 4.2kHz）とぶつかる伴奏の真ん中（Mid成分）だけを最大-5.0dBピンポイントで掘り下げます。伴奏のステレオ感や重低音・高域の煌めきを一切損なわずに歌声だけがくっきり前に出ます。</li>
+<li><strong>🎢 伴奏連動・知能ボーカルライダー（BGM-Linked Vocal Rider — v5.2.0新搭載）：</strong>「🎢伴奏追従ライド」をONにすると、内蔵BGMの音量包絡と歌声の音量包絡をリアルタイム比較し、静かなAメロでは声を自然に馴染ませ、激しいサビではコンプで潰さずに歌声フェーダーを最大+3.5dB自動で持ち上げます。</li>
+<li><strong>🏠 ゼロ遅延・部屋鳴り（反響・風呂場感）除去（Zero-Lag Room De-Reverb — v5.2.0新搭載）：</strong>「🏠部屋鳴り消し」をONにすると、追加遅延0.0msのまま、部屋の壁の跳ね返り（風呂場感・460Hz付近の箱鳴り）だけを引き算し、防音室で録ったようなデッドでクリアな声に整えます。</li>
+<li><strong>🌬️ 息継ぎ（ブレス）自動整え ＆ 母音/子音セパレート（Smart Breath &amp; Velvet Split — v5.2.0新搭載）：</strong>「🌬️息＆サ行保護」をONにすると、コンプ前の大きな息継ぎ音を最大-6.5dB自然に抑え、さらに母音と無声子音（サ行・ツ行）を自動分離して6.8kHzの刺さりだけを最大-4.2dBクッション保護します。</li>
+<li><strong>🎼 伴奏キー（24調）＆BPM 1秒自動解析 ＆ 📋 歌枠セットリスト（v5.1.0）：</strong>伴奏を読み込んだ瞬間にキーとBPMを自動解析し、曲ごとの設定をセトリに一括記憶できます。</li>
+<li><strong>🎙️ ゼロ遅延・4大名機マイクモデリング ＆ 💧 ペチャ音瞬間除去（v5.1.0）：</strong>手持ちのマイクを追加遅延0.0msで「✨800G真空管／👑U87王道／📻SM7B配信／💎ASMR極艶」の質感に変え、口元のクリック音を瞬間除去します。</li>
 <li><strong>✨ 伴奏ボーカル除去（原曲1クリック・カラオケ化）：</strong>「🎵BGM・録音」パネル内の「✨ボーカル除去」をONにするだけで、読み込んだ原曲の低音ベース（160Hz以下）と高域ステレオ空気感（8.5kHz以上）を保ったまま、中央のメインボーカル帯域だけをリアルタイムで引き算して即座にカラオケ伴奏化します。</li>
 <li><strong>💿 -14 LUFS 自動音圧マスタリング ＆ 完パケFullMix同時書き出し：</strong>WAV録音や「⏪直前30秒さかのぼり保存」の際、YouTube・ニコニコ動画・配信標準の <strong>-14.0 LUFS（ピーク -1.0 dBTP リミッター付）</strong>へ自動で音圧を揃えて書き出します。さらにBGM再生中は「①完成ボーカル(Wet)」「②素の声(Dry)」に加えて「<strong>③完パケMIX(-14LUFS).wav（声＋伴奏の完成音源）</strong>」の3ファイルを同時書き出しします。</li>
-<li><strong>🔥 サビ1クリック華やか演出（Chorus Boost）：</strong>総合画面フッター右の「<strong>★サビ盛</strong>」ピル（または「🎵BGM・録音」内の「🔥サビ華やか演出」）を押すと、25msの滑らかなクロスフェードで声の存在感（+1.2dB）・高域シルキーエアー・ステレオ幅（1.32倍）・残響の広がり（+18%）が一斉に華やかに開きます。</li>
+<li><strong>🔥 サビ1クリック華やか演出 ＆ 🤖 サビ自動検知（Auto-Chorus Director）：</strong>総合画面フッター右の「<strong>★サビ盛</strong>」ピル（または「🤖サビ自動検知」）で、サビに入った瞬間に声の存在感・高域エアー・ステレオ幅・残響が一斉に華やかに開きます。</li>
 <li><strong>👏 歌枠・VC盛り上げ 4種ライブSEポン出しパッド：</strong>総合画面フッター右の4連パッド（「<strong>♪拍手</strong>」「<strong>✦キラ</strong>」「<strong>◉ドラム</strong>」「<strong>♦ベル</strong>」）または「🎵BGM・録音」パネルから、外部サンプラー不要で自分のヘッドホンと配信出力（VocalGzzio Driver (WDM)）の両方へクリアな効果音を即座にポン出しできます。</li>
 </ul>
 
@@ -116,6 +122,6 @@
 <h2 id="install">インストールと更新</h2>
 <p>録音ソフトと単体起動アプリを終了してから、配布物のインストーラーを実行します。WindowsではVST3・単体起動アプリ・専用仮想ドライバ「VocalGzzio Driver (WDM)」が導入されます（元の既定スピーカー・マイクは自動で保護・復元されます）。Macは同梱の「ここから始める.html」に沿って .pkg を実行します。</p>
 </main>
-<footer>VocalGzzio 5.0.0 · <a href="https://gzzio.booth.pm/items/8764003">商品・問い合わせ先</a></footer>
+<footer>VocalGzzio 5.2.0 · <a href="https://gzzio.booth.pm/items/8764003">商品・問い合わせ先</a></footer>
 </body>
 </html>

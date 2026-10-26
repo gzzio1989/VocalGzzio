@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VocalGzzio VERSION 5.1.0 LANGUAGES C CXX)
+project(VocalGzzio VERSION 5.2.0 LANGUAGES C CXX)
+# 5.2.0: 柱A「伴奏『声ポケット』自動掘り（Spectral Unmasker — Trackspacer方式 4帯域Mid専用ダイナミック掘削）＆伴奏連動・知能ボーカルライダー（BGM-Linked Vocal Rider）」、柱B「ゼロ遅延・部屋鳴り除去（Zero-Lag Room De-Reverb）＆息継ぎ自動整え・母音/子音セパレート（Smart Breath Leveler & Velvet Split）」を搭載。
 # 5.1.0: 伴奏キー（調・長調/短調）＆BPM 1秒自動解析エンジン（Auto-Key & Auto-Tempo Lock）、サビ自動検知オートブースト（Auto-Chorus Director）、ゼロ遅延4大名機マイク・モデリング（✨800G真空管／👑U87王道／📻SM7B配信／💎ASMR極艶）、歴代14世代タイムマシン（v1.0.0〜v5.1.0）を搭載。
 # 5.0.0: 原曲1クリック伴奏ボーカル除去（Mid/Sideスペクトル・センターキャンセラー）、SNS・YouTube投稿用「-14 LUFS自動音圧マスタリング＆完パケMIX同時書き出し」、歌枠・VC・cluster盛り上げ「4種ライブSEポン出しパッド（拍手歓声／✨キラキラ／🥁ドラムロール／🔔チャイム）」、サビ1クリック華やか演出「🔥サビ盛り上げモード（Chorus Boost）」を搭載。
 # 4.9.0: 星空・海・黄昏5大風景コレクション（01銀河・02碧海・03朝焼・04晩秋・05蒼劇＆天球水鏡オーブ）、4種の表示・操作スタイル切替（標準デザイン／◉くっきり大文字／★かんたん3ステップ／●マット・具体表記）、文字・UIサイズ全域の自動フィット刷新、仮想ドライバ導入時の既定デバイス自動保護を搭載。
