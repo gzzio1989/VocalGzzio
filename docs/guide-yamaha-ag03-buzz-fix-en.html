@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Why the Yamaha AG03 / AG06 &amp; Steinberg USB Driver Makes a Loud "BZZZZ" Buzzing Noise—4 Causes Inside ysusb_w10_64.sys &amp; How to Fix Them | VocalGzzio</title>
+  <meta name="description" content="Technical breakdown of why the Yamaha AG03, AG06, MK2, and Steinberg UR-series interfaces suddenly blast a loud buzzing noise or beep on Windows when launching REAPER, SYNCROOM, or OBS—and 4 steps to fix it permanently.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <nav>
+    <strong>VocalGzzio 5.2.0</strong>
+    <a href="en.html">English Home</a>
+    <a href="guide-karaoke-stream-obs-vrchat-en.html">OBS/VRChat Karaoke Guide</a>
+    <a href="devlog-touch-knob-14gen-timemachine-en.html">Dev Notes</a>
+    <a href="https://gzzio.booth.pm/items/8764003">Free Trial &amp; Buy</a>
+    <a href="index.html">🇯🇵 日本語</a>
+  </nav>
+</header>
+
+<main>
+  <p class="eyebrow">Audio Interface Troubleshooting &amp; Driver Engineering Deep Dive</p>
+  <h1>Why the Yamaha AG03 / AG06 &amp; Steinberg USB Driver Suddenly Makes a Loud "BZZZZ" Buzzing Noise<br>(What I Found Inside <code>ysusb_w10_64.sys</code>)</h1>
+  <p class="lead">
+    If you use a <strong>Yamaha AG03, AG06 (or MK2)</strong> or a <strong>Steinberg UR-series</strong> audio interface on Windows, you may have experienced a terrifying bug: the moment you launch REAPER, a DAW, or a low-latency voice app while Discord or a browser is open, your headphones blast a deafening <code>"BZZZZZZZZ!"</code> buzzer noise. Here is what is actually happening inside the driver—and how to fix it today.
+  </p>
+
+  <h2>Why "Buy a New USB Cable" Doesn't Fix It</h2>
+  <p>Most forum threads tell you to replace your USB cable or reinstall Windows. While developing hardware protection routines for my vocal studio app (<a href="en.html">VocalGzzio</a>), I analyzed the behavior of the <strong>Yamaha Steinberg USB Driver (<code>ysusb_w10_64.sys</code>)</strong> and traced the exact four mechanisms that trigger this noise.</p>
+
+  <h2>Cause 1: The 4–10ms Digital Oscillation Loop (<code>LOOPBACK</code> Switch)</h2>
+  <p>This is the #1 culprit when launching a DAW or low-latency vocal app with input monitoring turned on:</p>
+  <ul>
+    <li>On the physical AG03/AG06 unit, if the <code>[TO PC]</code> slide switch is set to <strong><code>LOOPBACK</code></strong> (or Loopback is enabled in AG Controller on MK2), your PC's output audio is mixed directly back into your microphone input channel.</li>
+    <li>As soon as you open an ASIO or low-latency app with software monitoring enabled, the signal loops (<code>PC Output &rarr; AG Hardware Loopback &rarr; Mic Input &rarr; Software Monitor &rarr; PC Output</code>) with a round-trip period of <strong>4ms to 10ms</strong>.</li>
+    <li>A 4–10ms loop oscillates at <strong>100Hz to 250Hz</strong>, which sounds like a loud mechanical buzzer (<code>BZZZZ!</code>) the instant the app opens.</li>
+  </ul>
+  <p><strong>How to Fix:</strong> Whenever you use software monitoring in a DAW or vocal app, switch the hardware <code>[TO PC]</code> selector to <strong><code>DRY CH 1-2G</code></strong> or <strong><code>INPUT MIX</code></strong>. <em>(In <a href="en.html">VocalGzzio</a>, we built an automatic 0.35-second feedback circuit breaker that detects this exact oscillation and mutes the monitor return before it hurts your ears.)</em></p>
+
+  <h2>Cause 2: Forced Hardware USB Clock Reset on Sample Rate Mismatch</h2>
+  <p>Why does it buzz even when Loopback is turned off?</p>
+  <ul>
+    <li>Suppose your Windows Sound settings (WDM) are set to <strong><code>44,100 Hz</code></strong>, while your DAW or ASIO app requests <strong><code>48,000 Hz</code></strong> (or vice versa).</li>
+    <li>When the ASIO app initializes, an internal routine inside <code>ysusb_w10_64.sys</code> (at offset <code>0x134f0</code>) directly rewrites the Windows audio registry and forces a hardware USB clock reset on the interface while WDM audio streams are still active. That sudden clock jump produces a harsh digital screech or buzz.</li>
+  </ul>
+  <p><strong>How to Fix:</strong> Open the Windows Sound Control Panel (<code>mmsys.cpl</code>), go to both the <strong>Playback</strong> and <strong>Recording</strong> tabs for your AG03/AG06, open <strong>Properties &rarr; Advanced</strong>, and lock both to <strong><code>2 channel, 24 bit, 48000 Hz (Studio Quality)</code></strong> so they match your ASIO sample rate.</p>
+
+  <h2>Cause 3: Uncleared 5ms Ring Buffer Bug in Driver Versions v2.1.5 and Older</h2>
+  <p>In older builds of the Yamaha Steinberg USB Driver (<code>v2.1.5</code> and earlier), if WDM audio (like YouTube or Discord) is actively playing when an ASIO session starts, a ~5ms internal audio ring buffer fails to zero-clear during the transition. The driver gets stuck repeating that 5ms slice of waveform infinitely—creating a continuous 200Hz buzz until you unplug the unit.</p>
+  <p><strong>How to Fix:</strong> Update to <strong>Yamaha Steinberg USB Driver V2.1.9 (or latest)</strong>, which expands the internal buffer by 4x and fixes the ring-buffer zeroing bug.</p>
+
+  <h2>Cause 4: USB Selective Suspend &amp; Kernel IRP Queue Starvation (<code>MaxIrpNumber=4</code>)</h2>
+  <p>If you hear random single <code>"pop"</code> or <code>"beep"</code> noises while idle or talking, Windows USB Selective Suspend may be putting the USB host controller into a micro-sleep state while the driver's default kernel transfer queue (<code>MaxIrpNumber = 4</code>) starves under load.</p>
+  <p><strong>How to Fix:</strong> Disable <strong>USB Selective Suspend</strong> in Windows Power Options, and in the Yamaha Steinberg USB Driver Control Panel, set the mode to <strong>Stable</strong> if your system experiences USB bus spikes.</p>
+
+  <h2>Summary Checklist for a Buzz-Free AG03 / AG06 Setup</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Step</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Hardware Switch</strong></td>
+        <td>Set physical <code>[TO PC]</code> switch to <strong><code>DRY CH 1-2G</code></strong> or <strong><code>INPUT MIX</code></strong> when using software monitoring.</td>
+      </tr>
+      <tr>
+        <td><strong>2. Sample Rate</strong></td>
+        <td>Lock Windows Playback, Windows Recording, and ASIO sample rates to <strong><code>48,000 Hz</code></strong>.</td>
+      </tr>
+      <tr>
+        <td><strong>3. Driver Version</strong></td>
+        <td>Update Yamaha Steinberg USB Driver to <strong>V2.1.9 or newer</strong>.</td>
+      </tr>
+      <tr>
+        <td><strong>4. Power Management</strong></td>
+        <td>Disable Windows USB Selective Suspend and use <strong>Stable</strong> mode in the driver panel.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <aside class="note">
+    <strong>Built-In Protection in VocalGzzio v5.2</strong><br>
+    We built automatic sample-rate adaptation, Windows default-device protections, and the 0.35s AG03 loopback feedback circuit breaker directly into <strong>VocalGzzio</strong>—our standalone &amp; VST3/AU vocal studio for karaoke streamers, VTubers, and cover vocalists.
+  </aside>
+
+  <div class="actions">
+    <a class="button" href="en.html">📖 Explore VocalGzzio v5.2 (English Overview)</a>
+    <a class="button secondary" href="https://gzzio.booth.pm/items/8764003">🛒 Download Free Trial ($0) on BOOTH</a>
+  </div>
+</main>
+
+<footer>
+  © G’zzio · <a href="en.html">English Home</a> · <a href="guide-karaoke-stream-obs-vrchat-en.html">OBS/VRChat Karaoke Guide</a> · <a href="devlog-touch-knob-14gen-timemachine-en.html">Dev Notes</a> · <a href="https://gzzio.booth.pm/items/8764003">BOOTH Store</a>
+</footer>
+</body>
+</html>

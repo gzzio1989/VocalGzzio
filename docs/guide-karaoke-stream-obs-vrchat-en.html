@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Why Setting Up a Karaoke Stream in OBS &amp; VRChat Is Still So Painful (And How I Built a 0.08ms Zero-Routing Vocal Studio to Fix It) | VocalGzzio</title>
+  <meta name="description" content="How to set up a professional karaoke stream in OBS, Twitch, YouTube, and VRChat without a DAW or complex Voicemeeter routing. Featuring 0.08ms pitch correction, auto-key sync, spectral unmasking, and 3-stem WAV recording.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <nav>
+    <strong>VocalGzzio 5.2.0</strong>
+    <a href="en.html">English Home</a>
+    <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix</a>
+    <a href="devlog-touch-knob-14gen-timemachine-en.html">Dev Notes</a>
+    <a href="https://gzzio.booth.pm/items/8764003">Free Trial &amp; Buy</a>
+    <a href="guide-utawaku-obs.html">🇯🇵 日本語</a>
+  </nav>
+</header>
+
+<main>
+  <p class="eyebrow">Guide for VTubers, Karaoke Streamers &amp; VRChat Performers</p>
+  <h1>Why Setting Up a Karaoke Stream in OBS &amp; VRChat Is Still So Painful<br>(And How I Built a 0.08ms Zero-Routing Vocal Studio to Fix It)</h1>
+  <p class="lead">
+    If you have ever tried to set up a karaoke stream (Utawaku) on YouTube or Twitch, or wanted to sing live in VRChat, you probably went through the exact same rite of passage—fighting virtual cables, DAW crashes, and dizzying headphone delay. Here is how we solved it on a single screen.
+  </p>
+
+  <div class="actions">
+    <a class="button" href="en.html">📖 View VocalGzzio English Overview &amp; UI Guide</a>
+    <a class="button secondary" href="https://github.com/gzzio1989/VocalGzzio/releases/download/v5.2.0/VocalGzzio_v5.2.0_Windows_Trial.zip">⬇ Download Windows Free Trial (.zip)</a>
+    <a class="button secondary" href="https://gzzio.booth.pm/items/8764003">🛒 BOOTH Store (Free Trial / Full Version)</a>
+  </div>
+
+  <h2>The Classic Karaoke Stream Nightmare</h2>
+  <p>Usually, when a streamer wants studio reverb and pitch correction on OBS or VRChat, they are told to do this:</p>
+  <ol>
+    <li>Install three different virtual audio cables and Voicemeeter Banana.</li>
+    <li>Open a full DAW (like REAPER or Cubase) just to load a noise gate, compressor, EQ, pitch correction, and reverb.</li>
+    <li>Halfway through setup, desktop audio disappears in Discord or VRChat because Windows silently hijacked the default playback device.</li>
+    <li>When you finally turn on headphone monitoring to hear your own reverb and pitch correction, there is a 35ms slapback delay that makes it almost impossible to sing in time.</li>
+  </ol>
+  <p>I am an audio DSP developer and musician in Japan (<code>@gzzio1989</code>). Over the past year, after watching countless streamers and vocalists struggle with this exact setup, I built a self-contained vocal studio—<strong>VocalGzzio</strong>—that puts the entire vocal chain, backing track player, and virtual routing onto a single screen, with no DAW required.</p>
+  <p>Here are the five biggest technical headaches in live vocal streaming, and how the v5.2 engine solves them under the hood.</p>
+
+  <h2>1. The 40ms Pitch Correction Latency Problem (Solved down to 0.08ms)</h2>
+  <p>Standard FFT-based pitch correction plugins need to collect a full buffer of audio (often 20ms to 45ms) before they can detect your pitch and shift it. That works fine when mixing a recorded track, but if you are monitoring your own voice live in headphones, a 40ms delay feels like singing through a megaphone in a canyon.</p>
+  <p>In VocalGzzio v5.1/v5.2, I replaced the traditional FFT window wait with a time-domain pitch-synchronous shifter (<code>TdPitchShifter</code>) using phase-aligned crossfading per fundamental vocal period:</p>
+  <ul>
+    <li><strong>Added processing latency</strong>: <strong>4 samples (approx. 0.08ms at 48kHz)</strong>.</li>
+    <li><strong>Natural Vibrato Separation</strong>: Instead of flattening your voice into a robot, the engine distinguishes between accidental pitch instability (which it damps immediately with zero phase lag) and periodic 4.2–9Hz vibrato (preserving ~96.5% of your natural vibrato).</li>
+    <li><strong>Anti-Sag on Long Notes</strong>: When singers run out of breath at the end of a long note, pitch naturally drops flat. The engine locks onto the note's center of gravity after 180ms and gently supports the tail so your long notes stay in tune.</li>
+  </ul>
+
+  <h2>2. Carving a "Vocal Pocket" in Loud Backing Tracks (Spectral Unmasker &amp; BGM Rider)</h2>
+  <p>Even with a great microphone, singing over a pre-mastered karaoke track often makes your voice sound buried during loud choruses—or forces you to turn the backing track down so low that the stream loses energy.</p>
+  <ul>
+    <li><strong>🕳️ Spectral Unmasker (Track Pocket)</strong>: While you sing, VocalGzzio analyzes your voice across 4 key bands (380Hz warmth, 1.0kHz core, 2.4kHz presence, 4.2kHz clarity) and dynamically carves up to <strong>-5.0 dB out of the center (Mid channel) of the backing track</strong> at those exact frequencies. Stereo guitars/synths (Side channel), sub-bass (&lt;120Hz), and cymbals (&gt;7kHz) remain 100% untouched.</li>
+    <li><strong>🎢 BGM-Linked Vocal Rider</strong>: Compares the backing track's loudness envelope against your voice in real time, automatically riding your vocal fader between <strong>-2.5 dB and +3.5 dB</strong> so quiet verses blend naturally and loud rock choruses lift your voice upfront without over-compressing.</li>
+  </ul>
+
+  <h2>3. Changing Backing Track Keys Without Breaking Your Auto-Pitch Scale</h2>
+  <p>During a karaoke stream, you often realize a song is 2 semitones too high. Normally, if you pitch-shift the instrumental track, you also have to manually calculate the new musical key and update your pitch correction plugin—otherwise your auto-tune pulls your voice to the wrong notes.</p>
+  <ul>
+    <li>When you drop a backing track into VocalGzzio's built-in player, a 36-bin Goertzel chromagram + Krumhansl-Kessler 24-key correlation analyzer detects the song's <strong>Key (all 24 Major/Minor scales) and BPM in 1 second</strong>.</li>
+    <li>If you don't have an instrumental track, a band-selective <strong>Vocal Remover</strong> subtracts the center vocal while keeping bass below 160Hz, high cymbals, and stereo width intact so the backing track doesn't sound hollow.</li>
+    <li>When you move the <strong>Key Shift slider (±6 semitones)</strong>, the vocal pitch corrector and 5-voice harmony generator automatically transpose their target scale to match.</li>
+  </ul>
+
+  <h2>4. "I Just Sang My Best Take, But Forgot to Hit Record"</h2>
+  <p>When practicing or recording vocal covers ("Utattemita"), the best take almost always happens when the record button is off.</p>
+  <p>VocalGzzio keeps a continuous ring buffer in memory. Whether you press Record normally or click <strong>"Save Last 30 Seconds" (⏪ 直前30秒を保存)</strong> <em>after</em> singing a great phrase, it simultaneously writes <strong>three 24-bit WAV files</strong> to your folder:</p>
+  <ol>
+    <li><code>_Wet.wav</code>: Your processed vocal with reverb and polish.</li>
+    <li><code>_Dry.wav</code>: Your completely raw, unprocessed mic signal (ready to send to a mixing engineer).</li>
+    <li><code>_Mix(-14LUFS).wav</code>: Your vocal mixed with the backing track, automatically normalized to <code>-14 LUFS</code> streaming loudness standard.</li>
+  </ol>
+
+  <h2>5. Fixing Hardware Traps (AG03 Loopback Howling, Scarlett Solo Right-Ear Mics &amp; VRChat Mute Bugs)</h2>
+  <p>A huge part of audio troubleshooting has nothing to do with singing—it's hardware and OS quirks:</p>
+  <ul>
+    <li><strong>The Windows Default Speaker Hijack</strong>: Whenever you install a virtual audio driver on Windows, the OS loves to silently switch your default speakers to that virtual cable, muting VRChat, cluster, or Discord. VocalGzzio snapshots your default playback/recording devices before enabling its WHQL-signed WDM driver and immediately restores them.</li>
+    <li><strong>Yamaha AG03 / AG06 Loopback Feedback</strong>: If a streamer accidentally leaves the physical <code>[TO PC]</code> switch on <code>LOOPBACK</code> while monitoring their mic, a 100–250Hz digital feedback loop screams through the headphones. VocalGzzio detects this resonance within 0.35 seconds and automatically mutes the self-monitor return while keeping your OBS stream safe.</li>
+    <li><strong>Single-Ear XLR Inputs</strong>: Interfaces like the Focusrite Scarlett Solo put the XLR microphone on Input 2 (Right channel only). VocalGzzio automatically detects single-sided mic inputs and centers them to stereo <code>L+R</code>.</li>
+  </ul>
+
+  <div class="actions">
+    <a class="button" href="en.html">📖 See English Overview &amp; UI Cheat Sheet</a>
+    <a class="button secondary" href="https://gzzio.booth.pm/items/8764003">🛒 Try Free Trial ($0) on BOOTH</a>
+  </div>
+</main>
+
+<footer>
+  © G’zzio · <a href="en.html">English Home</a> · <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix Guide</a> · <a href="devlog-touch-knob-14gen-timemachine-en.html">Dev Notes</a> · <a href="https://gzzio.booth.pm/items/8764003">BOOTH Store</a>
+</footer>
+</body>
+</html>

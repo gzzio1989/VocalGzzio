@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Why Lifting Your Finger Off a Touch Screen Shifts a Knob by 0.5 dB (And Why I Kept All Historical UI Versions Inside My Vocal Plugin) | VocalGzzio</title>
+  <meta name="description" content="Audio plugin UI/DSP engineering notes: solving the 80ms touch-screen lift-off knob drift and building a zero-overhead Generation Time Machine inside VocalGzzio.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <nav>
+    <strong>VocalGzzio 5.2.0</strong>
+    <a href="en.html">English Home</a>
+    <a href="guide-karaoke-stream-obs-vrchat-en.html">OBS/VRChat Karaoke Guide</a>
+    <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix</a>
+    <a href="https://gzzio.booth.pm/items/8764003">Free Trial &amp; Buy</a>
+    <a href="index.html">🇯🇵 日本語</a>
+  </nav>
+</header>
+
+<main>
+  <p class="eyebrow">Indie Audio DSP &amp; UI Engineering Notes</p>
+  <h1>Why Lifting Your Finger Off a Touch Screen Shifts a Knob by 0.5 dB<br>(And Why I Kept Every Historical Version Inside My Vocal Plugin)</h1>
+  <p class="lead">
+    When you develop an audio plugin used by singers, VTubers, and home recordists every day, the improvements that matter most are rarely flashy buzzwords. They are about the tiny physical frustrations that happen while someone is actually trying to sing.
+  </p>
+
+  <h2>1. The "Last 80 Milliseconds" Touch-Screen Knob Drift</h2>
+  <p>Many singers run <a href="en.html">VocalGzzio</a> on a Windows tablet or touch monitor mounted next to their microphone stand. When I watched how people adjusted rotary knobs with their fingers, I noticed two recurring problems:</p>
+  <ol>
+    <li><strong>Your finger hides the knob</strong>: When you touch a compact rotary knob on screen, your fingertip completely covers both the dial and its numeric readout.</li>
+    <li><strong>The 0.5 dB lift-off slip</strong>: Even after you carefully dial in the exact dB value you want, in the final <strong>80 milliseconds (<code>0.08s</code>)</strong> as you lift your finger off the glass, the soft pad of your fingertip rolls slightly—shifting the value by <code>0.5 dB</code> right as you let go.</li>
+  </ol>
+
+  <h3>How We Fixed It</h3>
+  <ul>
+    <li>While your finger or mouse is holding any control, a high-contrast floating loupe appears <em>above</em> your fingertip so the numeric value is never obstructed.</li>
+    <li>The UI tracks pointer velocity during release and <strong>automatically freezes micro-jitter during the final 0.08 seconds before lift-off</strong>, locking in the exact value you intended before your finger rolled.</li>
+    <li>We also added dedicated <code>-</code> and <code>+</code> step buttons at the bottom of the window: tap any knob once to focus it, then tap <code>-</code> or <code>+</code> to nudge it by exact <code>0.5 dB</code> or <code>2%</code> steps without dragging at all.</li>
+  </ul>
+
+  <h2>2. Why I Built a "Generation Time Machine" Inside the Plugin</h2>
+  <p>As software grows from <code>v1.0</code> to <code>v5.2</code>, it gains powerful DSP: 0.08ms zero-lag pitch correction, spectral unmasking, 4 studio mic models (800G / U87 / SM7B / ASMR), auto-key &amp; BPM detection, a backing track vocal remover, and 3-stem WAV recording.</p>
+  <p>But every time any audio developer updates an interface, there are always users who think:</p>
+  <blockquote>"I really liked the simple two-row screen from v1.0. I knew where every knob was with my eyes closed."</blockquote>
+  <p>Instead of forcing everyone onto a single layout, we built an on-demand <strong>Generation Time Machine</strong> directly into VocalGzzio:</p>
+  <ul>
+    <li>With one click, you can recall the exact interface and sound behavior of every historical generation from <code>v1.0.0</code> through the latest release.</li>
+    <li>Loading over a dozen UIs at startup would waste memory, so the app lazy-loads only the single generation you select (<code>0 MB</code> idle RAM overhead).</li>
+    <li>More importantly, <strong>any DSP module that did not exist in the generation you selected is put into complete sleep (<code>0 CPU</code>)</strong>. If you switch back to the original <code>v1.0.0</code> mode on an older laptop, the plugin runs at roughly <strong>one-fifth (20%) of the CPU load</strong>.</li>
+    <li>Your chosen generation is saved directly inside your DAW project state and synced between the Standalone app and VST3 plugin.</li>
+  </ul>
+
+  <div class="actions">
+    <a class="button" href="en.html">📖 View VocalGzzio v5.2 English Overview &amp; UI Cheat Sheet</a>
+    <a class="button secondary" href="https://gzzio.booth.pm/items/8764003">🛒 Download Free Trial ($0) on BOOTH</a>
+  </div>
+</main>
+
+<footer>
+  © G’zzio · <a href="en.html">English Home</a> · <a href="guide-karaoke-stream-obs-vrchat-en.html">OBS/VRChat Karaoke Guide</a> · <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix Guide</a> · <a href="https://gzzio.booth.pm/items/8764003">BOOTH Store</a>
+</footer>
+</body>
+</html>
