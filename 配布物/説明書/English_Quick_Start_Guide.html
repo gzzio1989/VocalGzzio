@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VocalGzzio v5.4.0 — English Quick Start Guide &amp; UI Cheat Sheet</title>
+  <style>
+    :root {
+      --bg: #fdfaf3;
+      --card: #fffdf9;
+      --border: #e0d5c4;
+      --ink: #3e312a;
+      --sub: #705f54;
+      --accent: #c24470;
+      --teal: #2a8272;
+      --teal-bg: #e0f5ee;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.65;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    h1, h2, h3 { color: var(--ink); line-height: 1.3; }
+    h1 { font-size: 2rem; border-bottom: 3px solid var(--border); padding-bottom: 0.6rem; }
+    h2 { font-size: 1.4rem; margin-top: 2.2rem; color: var(--teal); }
+    .note {
+      background: var(--teal-bg);
+      border: 2px solid #8acebc;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin: 1.25rem 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .card {
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 1.1rem 1.25rem;
+    }
+    .card h3 { margin-top: 0; color: var(--accent); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid var(--border);
+      margin: 1rem 0;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.75rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { background: #f5ede0; font-weight: 700; }
+    code {
+      background: #f2e9dc;
+      padding: 0.15rem 0.4rem;
+      border-radius: 5px;
+      font-size: 0.92em;
+    }
+    a { color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>VocalGzzio v5.4.0 — English Quick Start Guide</h1>
+  <div class="note">
+    <strong>Online Visual UI Map &amp; Latest Guides:</strong>
+    <a href="https://gzzio1989.github.io/apps/vocalgzzio/en.html">https://gzzio1989.github.io/apps/vocalgzzio/en.html</a><br>
+    <strong>BOOTH Store Page (Free Trial &amp; Full Version):</strong>
+    <a href="https://gzzio.booth.pm/items/8764003">https://gzzio.booth.pm/items/8764003</a>
+  </div>
+
+  <h2>1. Get Sound in 60 Seconds (Choose A or B)</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>[A] Standalone App (OBS / VRChat / Discord / Recording — No DAW Needed)</h3>
+      <ol>
+        <li>Run the installer or double-click <code>VocalGzzio.exe</code> inside the <code>単体起動アプリ</code> folder.</li>
+        <li>Click <strong>🎤 うた自動</strong> (Auto-Setup: Sing) at the top bar and sing for 5 seconds.</li>
+        <li>In OBS, Discord, or VRChat microphone settings, select:<br>
+            <code>Line (VocalGzzio Driver (WDM))</code></li>
+        <li><em>Using hardware direct monitoring on your audio interface?</em> Turn ON <strong>🎧 自分の耳への返しミュート</strong> (Mute Self-Monitor) so you don't hear a doubled voice while OBS still receives the full processed audio.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>[B] VST3 / AU Plugin inside a DAW (REAPER / Cubase / Studio One / FL / Ableton)</h3>
+      <ol>
+        <li>Run the installer, or copy <code>VocalGzzio.vst3</code> from the <code>VST3プラグイン</code> folder into:<br>
+            <code>C:\Program Files\Common Files\VST3\</code><br>
+            (On macOS, run the <code>.pkg</code> installer for AU, VST3 &amp; Standalone).</li>
+        <li>Restart your DAW, insert <strong>VocalGzzio</strong> on your vocal track, and click <strong>🎤 うた自動</strong>.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>2. Japanese-to-English UI Button Cheat Sheet</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Japanese Label on Screen</th>
+        <th>English Meaning</th>
+        <th>What It Does</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>🎤 うた自動</strong> / <strong>💬 トーク自動</strong></td>
+        <td><strong>Auto-Setup (Sing / Talk)</strong></td>
+        <td><strong>Start here!</strong> Sing or speak for 5 seconds to auto-set optimal EQ, compression, and de-esser for your voice and mic.</td>
+      </tr>
+      <tr>
+        <td><strong>🎤 歌枠 ⇄ 💬 雑談MC</strong></td>
+        <td><strong>Singing Mode ⇄ Talk / MC Mode</strong></td>
+        <td>1-click toggle between lush vocal reverb for songs and crisp, dry voice for chatting between songs.</td>
+      </tr>
+      <tr>
+        <td><strong>👂 押して原音と比較</strong> / <strong>初期化</strong></td>
+        <td><strong>Hold to Compare (Dry/Wet) / Reset</strong></td>
+        <td>Hold to compare raw unprocessed mic input against processed sound; click <code>初期化</code> to reset.</td>
+      </tr>
+      <tr>
+        <td><strong>保存</strong> / <strong>読込</strong></td>
+        <td><strong>Save / Load Preset</strong></td>
+        <td>Save or load your custom vocal preset (Full Version also auto-restores your exact state on launch).</td>
+      </tr>
+      <tr>
+        <td><strong>01 整える</strong> &rarr; <strong>じどう学習</strong></td>
+        <td><strong>Zone 01: Clean Up &rarr; Auto Noise Learn</strong></td>
+        <td>Stay quiet for a second so it learns your room/PC fan noise, plus Gate (<code>無音時のカット</code>), Low-Cut (<code>低音カット</code>), De-Mud (<code>こもり</code>), and <strong>🏠 部屋鳴り消し</strong> (0ms Room De-Reverb).</td>
+      </tr>
+      <tr>
+        <td><strong>ARGON 3D (倍音 / 声芯 / 空気 / 立体)</strong></td>
+        <td><strong>3D Tone Sphere (Velvet / Focus / Silk / Halo)</strong></td>
+        <td>Drag the central 3D orb or click the 4 style presets (<code>★VELVET</code> / <code>♥ASMR</code> / <code>✦CRYSTAL</code> / <code>◆HALO</code>) to shape warmth, presence, air, and width.</td>
+      </tr>
+      <tr>
+        <td><strong>02 声をつくる</strong></td>
+        <td><strong>Zone 02: Shape Voice, Pitch &amp; Expression</strong></td>
+        <td>Includes Leveler (<code>音量そろえ</code>), De-Esser (<code>サ行おさえ</code>), Brightness (<code>声の明るさ</code>), Warmth (<code>厚み・歪み</code>), <strong>0.08ms Pitch Correction (<code>ピッチ補正</code>)</strong>, and <strong>5-Voice Unison (<code>5人ユニゾン</code>)</strong>.</td>
+      </tr>
+      <tr>
+        <td><strong>〰️ 語尾ビブラート / 🗣️ 母音フォーム統一 / ⚡ 歌い出し / 🌉 ミックス</strong></td>
+        <td><strong>v5.4.0 Vocal Expression Engines</strong></td>
+        <td>Adds natural 5.5Hz tail vibrato on long notes (&gt;180ms), balances tight "ee/eh" vowels with chest warmth, shapes the first 35ms attack, and bridges missing harmonics across high register breaks.</td>
+      </tr>
+      <tr>
+        <td><strong>🪶 ささやき浮上 / 💎 倍音ドルビーAエアー / 🎯 音程追従 / 🎧 歌い手モニター補正</strong></td>
+        <td><strong>v5.3.0 Lifter, Air, Sweet Spot &amp; Cue Monitor</strong></td>
+        <td>Lifts quiet whisper details (+4.5dB), adds vowel-only Dolby-A air, tracks pitch ($f_0$) to keep high notes thick, and removes 240Hz skull bone-conduction mud in your headphones only.</td>
+      </tr>
+      <tr>
+        <td><strong>🕳️ 声ポケット掘り / 🎢 伴奏連動ライダー</strong></td>
+        <td><strong>v5.2.0 Spectral Unmasker &amp; BGM Vocal Rider</strong></td>
+        <td>Carves up to -5.0 dB in the backing track's Mid channel at your vocal frequencies only while you sing, and rides your vocal fader (-2.5 to +3.5 dB) in choruses.</td>
+      </tr>
+      <tr>
+        <td><strong>03 空間をつくる</strong></td>
+        <td><strong>Zone 03: Reverb &amp; Space</strong></td>
+        <td>Reverb Amount (<code>残響の量</code>), Length (<code>残響の長さ</code>), Echo (<code>やまびこの量</code>), Stereo Width (<code>左右の広がり</code>), Tempo Fit (<code>テンポフィット</code>), Zero-Lag Mode (<code>低遅延モード</code>), and Custom IR Loader (<code>IR切替・読込</code>).</td>
+      </tr>
+      <tr>
+        <td><strong>🎵 BGM・録音</strong> &rarr; <strong>✨ ボーカル除去</strong></td>
+        <td><strong>BGM Player, 1-Click Vocal Remover &amp; 3-Stem WAV Recorder</strong></td>
+        <td>Load any song file, strip center vocals in 1 click, shift key (±6 semitones with automatic pitch-correction sync), and export 3 WAV files at once (<code>-14 LUFS Full Mix</code> + <code>Wet Vocal</code> + <code>Dry Vocal</code>).</td>
+      </tr>
+      <tr>
+        <td><strong>★ サビON!</strong> &amp; <strong>♪拍手 / ✦キラ / ●ドラム / ◆ベル + 自作SE 4枠</strong></td>
+        <td><strong>1-Click/Auto Chorus Boost &amp; 8 Live SE Pads</strong></td>
+        <td>Boosts vocal presence and stereo reverb during choruses, plus 4 built-in sound effects and 4 custom user audio file slots.</td>
+      </tr>
+      <tr>
+        <td><strong>🛠 cluster・通話 音消え一発修復</strong></td>
+        <td><strong>1-Click VR / Voice Chat Audio Fix</strong></td>
+        <td>Fixes Windows communications ducking, sample-rate locks, and missing audio in VRChat, cluster, and Discord.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Troubleshooting</h2>
+  <ul>
+    <li><strong>Other apps (VRChat / Discord / Browser) lose sound on Windows:</strong> Click <code>🛠 cluster・通話 音消え一発修復</code> or <code>🌐 全アプリ共存・共有モード</code> at the top of the screen.</li>
+    <li><strong>Loud buzzing noise on Yamaha AG03 / AG06 when switching apps:</strong> Set sample rate to <code>48000 Hz</code> and buffer size to <code>192</code> or <code>256 samples</code> in Yamaha Steinberg USB Driver Control Panel, or read our full English guide: <a href="https://gzzio1989.github.io/apps/vocalgzzio/guide-yamaha-ag03-buzz-fix-en.html">Fixing the Yamaha AG03/AG06 Buzz Bug</a>.</li>
+  </ul>
+</body>
+</html>
