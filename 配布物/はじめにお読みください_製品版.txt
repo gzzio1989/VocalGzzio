@@ -1,5 +1,5 @@
 ================================================================
- VocalGzzio v5.3.0 （製品版）
+ VocalGzzio v5.4.0 （製品版）
  お買い上げありがとうございます。
 ================================================================
 
@@ -22,8 +22,14 @@
     2. DAWをいったん終了して再起動し、ボーカルトラックに挿してください。
 
 
-■ v5.3.0 / v5.2.0 / v5.1.0 / v5.0.0 の主な新機能・便利機能
+■ v5.4.0 / v5.3.0 / v5.2.0 / v5.1.0 / v5.0.0 の主な新機能・便利機能
 
+  ・〰️ 語尾ビブラート・🗣️ 母音フォーム統一・⚡ 歌い出しグルーヴ・🌉 ミックス＆胸鳴り（v5.4.0）：
+    180ms以上のロングトーン語尾に自然な5.5Hzの揺らぎを添え、「い・え」で細くなる母音を太く揃え、
+    出だし35msの発声アタックと換声点の倍音抜けをゼロ遅延で自動サポートします。
+  ・🎵 自作音源カスタムSE 4枠ポン出しパッド（v5.4.0）：
+    既存の4種内蔵SE（拍手・キラ・ドラム・ベル）に加え、自分で用意した音声ファイル
+    （.wav / .mp3 / .flac / .ogg / .aiff）を4枠までセットして1クリックでポン出し再生できます。
   ・🪶 ささやき浮上・上向きコンプレッサー ＆ 💎 倍音ドルビーAエアー（v5.3.0）：
     大きな声のピークを潰さずにウィスパーや語尾の余韻だけを最大+4.5dBすくい上げ、
     母音が鳴っている瞬間だけ4帯域の倍音エアーを付加してサ行が刺さらない輝きを作ります。
@@ -95,7 +101,51 @@
 
   Gzzio（グッジオ）
   公式サイト・説明書: https://gzzio1989.github.io/apps/vocalgzzio/
+  English Guide:     https://gzzio1989.github.io/apps/vocalgzzio/en.html
   BOOTH:             https://gzzio.booth.pm/items/8764003
   X (旧Twitter):     https://x.com/gzzio1989
+
+
+================================================================
+ 🌐 English Quick Start Guide — VocalGzzio v5.4.0 (Full Version)
+ Thank you for purchasing VocalGzzio!
+================================================================
+
+1. How to Get Sound in 60 Seconds
+   [A] For OBS / Twitch / YouTube Karaoke Streams / VRChat / Discord (No DAW needed):
+     - Run the installer or launch "VocalGzzio.exe" inside "単体起動アプリ".
+     - Click "うた自動" (Auto-Setup: Sing) at the top bar and sing for 5 seconds.
+     - In OBS / Discord / VRChat mic settings, select:
+         Line (VocalGzzio Driver (WDM))
+     - If you already monitor your mic directly through your audio interface,
+       turn ON "🎧自分の耳への返しミュート" (Mute Self-Monitor) to prevent double audio.
+
+   [B] For DAWs (REAPER / Cubase / Studio One / FL Studio / Ableton):
+     - Copy "VocalGzzio.vst3" into: C:\Program Files\Common Files\VST3\
+       (On macOS, run the .pkg installer for AU / VST3 / Standalone).
+
+2. Built-in 100% English UI Mode & Quick Button Cheat Sheet
+   ★ 2-CLICK FULL ENGLISH UI: Click "文字・見た目" (top-right bar) -> "ブランド" (Brand)
+     to switch all buttons, knobs, 60 presets, and tooltips into 100% English!
+   - うた自動 / トーク自動     : 1-Click 5s AI Auto-Setup (Sing / Talk)
+   - 歌枠/MC                   : 1-Click Toggle (Singing Reverb <-> Dry Talk Mode)
+   - 押して原音と比較          : Hold to Compare Raw Mic (Dry) vs. Processed (Wet)
+   - 保存 / 読込               : Save / Load Presets (Auto-restores on every launch)
+   - BGM・録音 -> ボーカル除去 : Load Song + 1-Click Vocal Remover & Key Shift (±6)
+   - 録音 / 直前30秒を保存     : Exports 3 WAVs (-14 LUFS Mix + Wet Vocal + Dry Vocal)
+   - 01 整える                 : Noise Learn (じどう学習), Gate, 0ms Room De-Reverb
+   - 02 声をつくる             : Leveler, De-Esser, 0.08ms Pitch, 5-Voice Unison, v5.4 Expression
+   - 03 空間をつくる           : Reverb Amount/Length, Echo, Width, Zero-Lag Mode
+   - ★サビON! / 拍手・キラ     : 1-Click/Auto Chorus Boost + 8 Sound Effect Pads
+
+3. License & Commercial Use
+   - Install on up to 3 computers owned by you (both Windows & macOS included).
+   - One-time purchase with free lifetime updates.
+   - 100% free for commercial use: monetized streams, SuperChats, cover videos,
+     and music sales. No credit attribution or reporting required.
+
+   Visual English UI Map & Guides:
+     https://gzzio1989.github.io/apps/vocalgzzio/en.html
+     (Also see "説明書/English_Quick_Start_Guide.html" in this folder)
 
 ================================================================

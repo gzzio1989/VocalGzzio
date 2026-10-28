@@ -119,10 +119,10 @@ def make_visual_ui_map():
     d = ImageDraw.Draw(im)
 
     # Top Title Bar
-    d.rounded_rectangle([48, 24, 380, 78], radius=27, fill=PINK_ACCENT)
-    d.text((74, 34), "10-Second UI Map", font=get_mochi(26), fill=(255, 255, 255))
-    d.text((404, 28), "VocalGzzio — Visual English Cheat Sheet", font=get_mochi(34), fill=INK)
-    d.text((406, 74), "Even with Japanese labels on screen, these 10 numbered zones control everything you need.", font=get_sans(21, True), fill=SUB)
+    d.rounded_rectangle([48, 22, 410, 78], radius=28, fill=PINK_ACCENT)
+    d.text((72, 33), "Full English Mode + Map", font=get_mochi(24), fill=(255, 255, 255))
+    d.text((430, 26), "VocalGzzio — 2-Click English Mode & UI Map", font=get_mochi(32), fill=INK)
+    d.text((432, 72), "Click [文字・見た目] -> [ブランド (Brand)] for 100% English UI, or use this map with any Japanese theme!", font=get_sans(20, True), fill=TEAL_ACCENT)
 
     # Paste overview.png at (48, 112) scaled to 1504 x 848
     sx, sy, sw, sh = 48, 112, 1504, 848
@@ -136,9 +136,10 @@ def make_visual_ui_map():
     # Overlay numbered callout badges + short English tags right next to each badge
     # Coordinates relative to screenshot (0..1)
     callouts = [
+        ("EN", 0.785, 0.036, "Click [文字・見た目] -> [ブランド] = Full English UI!", PINK_ACCENT),
         ("1", 0.418, 0.098, "Auto-Setup (Sing/Talk)", TEAL_ACCENT),
-        ("2", 0.758, 0.098, "BGM & 3-Stem Rec", PINK_ACCENT),
-        ("3", 0.865, 0.052, "Hold = Dry Compare", ORANGE_ACCENT),
+        ("2", 0.715, 0.098, "BGM & 3-Stem Rec", PINK_ACCENT),
+        ("3", 0.875, 0.098, "Hold = Dry", ORANGE_ACCENT),
         ("4", 0.022, 0.165, "Pitch & Key Meter", TEAL_ACCENT),
         ("5", 0.022, 0.432, "01 Clean & De-Reverb", TEAL_ACCENT),
         ("6", 0.324, 0.165, "3D Tone & Air Sphere", PINK_ACCENT),
@@ -245,7 +246,7 @@ def make_simple_en_thumb():
     d.text((464, 418), "VTubers, Covers & VRChat.  (v5.4.0 / Win & Mac)", font=get_sans(27, True), fill=SUB)
 
     # Quick highlight pill under title
-    draw_pill(d, 464, 474, 680, 56, "★ Includes Visual English Cheat Sheet & WDM Driver",
+    draw_pill(d, 464, 474, 680, 56, "★ Built-in Full English UI Mode + WDM Virtual Driver",
               CREAM_CARD, CARD_BORDER, ORANGE_ACCENT, font_size=22, use_mochi=False)
 
     # 3 Big Numbered Cards
@@ -362,7 +363,7 @@ def make_specs_en():
     # Free Trial vs Full Version Box
     d.rounded_rectangle([56, 674, w - 56, 920], radius=20, fill=TEAL_BG, outline=TEAL_BORDER, width=2)
     d.text((84, 694), "★ Free Trial ($0) vs. Full Version (¥2,500 JPY)", font=get_sans(26, True), fill=TEAL_ACCENT)
-    d.text((84, 738), "• Identical audio engine, 19 themes, 160+ supported interfaces & WDM virtual driver.", font=get_sans(21, True), fill=INK)
+    d.text((84, 738), "• Built-in Full English UI Mode: Click [文字・見た目] -> [ブランド (Brand)] on top bar.", font=get_sans(21, True), fill=PINK_ACCENT)
     d.text((84, 778), "• Trial Limitation 1: Volume dips briefly for 0.6s once every 60 seconds.", font=get_sans(21, True), fill=INK)
     d.text((84, 818), "• Trial Limitation 2: Settings reset on app close (Full Version auto-saves everything).", font=get_sans(21, True), fill=INK)
     d.text((84, 858), "• Trial is installed separately as 'VocalGzzio Trial' so it never conflicts with Full.", font=get_sans(21, True), fill=SUB)

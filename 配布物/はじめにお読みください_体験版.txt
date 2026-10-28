@@ -1,5 +1,5 @@
 ================================================================
- VocalGzzio v5.3.0 （無料体験版）
+ VocalGzzio v5.4.0 （無料体験版）
 ================================================================
 
 ■ さいしょに ── 無料体験版（0円）と製品版（2,500円・買い切り）の違い
@@ -8,14 +8,15 @@
   ・音の処理エンジン、超低遅延モード、全8種類のエフェクト、
     全19種類のデザインテーマ、4つの表示スタイル（「★かんたん3ステップ」等）は
     すべて製品版とまったく同じです。
-  ・v5.3.0 / v5.2.0 / v5.1.0 / v5.0.0 の新機能（ささやき浮上＆ドルビーA倍音エアー／
-    音程追従オートスイートスポット／骨伝導モニター補正／伴奏「声ポケット」自動掘り／
-    伴奏追従ボーカルライダー／ゼロ遅延・部屋鳴り除去／息継ぎ＆母音・子音セパレート／
-    実質ゼロ遅延0.08ms知能ピッチ補正／伴奏キー＆BPM自動解析／歌枠セットリスト／
-    サビ自動検知／ペチャ音瞬間除去／4大名機マイクモデリング／伴奏ボーカル除去／
-    -14 LUFSマスタリング録音／4種ライブSEポン出し／🕰️歴代世代タイムマシン＆
-    省負荷ゲート）や、OBS直結用の仮想ドライバ「VocalGzzio Driver (WDM)」も
-    そのままお試しいただけます。
+  ・v5.4.0 / v5.3.0 / v5.2.0 / v5.1.0 / v5.0.0 の新機能（語尾ビブラート／
+    母音フォーム統一EQ／歌い出しグルーヴ／ミックス＆胸鳴り／自作音源カスタムSE 4枠／
+    ささやき浮上＆ドルビーA倍音エアー／音程追従オートスイートスポット／骨伝導モニター補正／
+    伴奏「声ポケット」自動掘り／伴奏追従ボーカルライダー／ゼロ遅延・部屋鳴り除去／
+    息継ぎ＆母音・子音セパレート／実質ゼロ遅延0.08ms知能ピッチ補正／伴奏キー＆BPM自動解析／
+    歌枠セットリスト／サビ自動検知／ペチャ音瞬間除去／4大名機マイクモデリング／
+    伴奏ボーカル除去／-14 LUFSマスタリング録音／4種ライブSEポン出し／
+    🕰️歴代世代タイムマシン＆省負荷ゲート）や、OBS直結用の仮想ドライバ
+    「VocalGzzio Driver (WDM)」もそのままお試しいただけます。
 
   【無料体験版の3つの制限（製品版で解除される点）】
     1. 60秒ごとに約0.6秒だけ音量がすーっと下がって戻ります
@@ -72,7 +73,51 @@
 
   Gzzio（グッジオ）
   公式サイト・説明書: https://gzzio1989.github.io/apps/vocalgzzio/
+  English Guide:     https://gzzio1989.github.io/apps/vocalgzzio/en.html
   BOOTH:             https://gzzio.booth.pm/items/8764003
   X (旧Twitter):     https://x.com/gzzio1989
+
+
+================================================================
+ 🌐 English Quick Start Guide — VocalGzzio v5.4.0 (Free Trial)
+================================================================
+
+1. How to Get Sound in 60 Seconds
+   [A] For OBS / Twitch / YouTube Karaoke Streams / VRChat / Discord (No DAW needed):
+     - Launch "VocalGzzio.exe" inside the "単体起動アプリ" (Standalone App) folder
+       or run the installer.
+     - Click "うた自動" (Auto-Setup: Sing) at the top bar and sing for 5 seconds.
+     - In OBS / Discord / VRChat mic settings, select:
+         Line (VocalGzzio Driver (WDM))
+     - If you already monitor your mic directly through your audio interface,
+       turn ON "🎧自分の耳への返しミュート" (Mute Self-Monitor) to prevent double audio.
+
+   [B] For DAWs (REAPER / Cubase / Studio One / FL Studio / Ableton):
+     - Copy "VocalGzzio.vst3" into: C:\Program Files\Common Files\VST3\
+       (On macOS, run the .pkg installer for AU / VST3 / Standalone).
+
+2. Built-in 100% English UI Mode & Quick Button Cheat Sheet
+   ★ 2-CLICK FULL ENGLISH UI: Click "文字・見た目" (top-right bar) -> "ブランド" (Brand)
+     to switch all buttons, knobs, 60 presets, and tooltips into 100% English!
+   - うた自動 / トーク自動     : 1-Click 5s AI Auto-Setup (Sing / Talk)
+   - 歌枠/MC                   : 1-Click Toggle (Singing Reverb <-> Dry Talk Mode)
+   - 押して原音と比較          : Hold to Compare Raw Mic (Dry) vs. Processed (Wet)
+   - BGM・録音 -> ボーカル除去 : Load Song + 1-Click Vocal Remover & Key Shift (±6)
+   - 録音 / 直前30秒を保存     : Exports 3 WAVs (-14 LUFS Mix + Wet Vocal + Dry Vocal)
+   - 01 整える                 : Noise Learn (じどう学習), Gate, 0ms Room De-Reverb
+   - 02 声をつくる             : Leveler, De-Esser, 0.08ms Pitch, 5-Voice Unison, v5.4 Expression
+   - 03 空間をつくる           : Reverb Amount/Length, Echo, Width, Zero-Lag Mode
+   - ★サビON! / 拍手・キラ     : 1-Click/Auto Chorus Boost + 8 Sound Effect Pads
+
+3. Free Trial ($0) vs. Full Version (¥2,500 JPY One-Time Purchase)
+   - Same DSP audio engine, 19 themes, and WDM virtual driver as the Full Version.
+   - Trial Limit 1: Volume dips briefly for 0.6s once every 60 seconds.
+   - Trial Limit 2: Settings reset on app close (Full Version auto-saves everything).
+   - Trial Limit 3: For hardware/voice testing only. Full Version grants full
+     commercial streaming & recording rights (no credit required, up to 3 PCs/Macs).
+
+   Visual English UI Map & Guides:
+     https://gzzio1989.github.io/apps/vocalgzzio/en.html
+     (Also see "説明書/English_Quick_Start_Guide.html" in this folder)
 
 ================================================================
