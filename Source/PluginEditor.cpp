@@ -478,7 +478,10 @@ void VocalTuner::timerCallback()
     const int savedString = (int) proc.apvts.state.getProperty ("ui_tuner_string", guitarString);
     if (savedMode != tuningMode) setTuningMode (savedMode);
     if (savedString != guitarString) setGuitarString (savedString);
-    analyse();
+    if (proc.getInputLevel() >= 0.0003f)
+        analyse();
+    else
+        hasPitch = false;
 
     // v1.6.0 gear meter: rotation speed follows the output level (near-still
     // when silent, lively while singing), like a living wound-up movement.
@@ -516,8 +519,9 @@ void VocalTuner::timerCallback()
     const auto rWant = rangeChecking ? language->range_stop() : language->range_label();
     if (rangeButton.getButtonText() != rWant)
         rangeButton.setButtonText (rWant);
-    rangeButton.setColour (juce::TextButton::buttonColourId,
-                           rangeChecking ? Palette::salmon : Palette::track.withAlpha (0.5f));
+    const auto rColWant = rangeChecking ? Palette::salmon : Palette::track.withAlpha (0.5f);
+    if (rangeButton.findColour (juce::TextButton::buttonColourId) != rColWant)
+        rangeButton.setColour (juce::TextButton::buttonColourId, rColWant);
 
     const bool activeNow = hasPitch || hold > 0 || activeHistFrames > 0 || rangeChecking
                         || dispIn > 0.001f || dispOut > 0.001f || dispGR > 0.02f
@@ -1077,8 +1081,8 @@ void EQGraph::paint (juce::Graphics& g)
 
     const int px = juce::jmax (2, (int) plot.getWidth());
 
-    // ---- output spectrum (behind curves): skipped in Lite Mode for zero FFT/GPU load ----
-    if (! liteMode)
+    // ---- output spectrum (behind curves): skipped in Lite Mode or when silent for zero FFT/GPU load ----
+    if (! liteMode && ! specQuiet)
     {
         if (specDb[10] < -110.0f && proc.getInputLevel() > 0.005f)
             updateSpectrum();
@@ -1145,14 +1149,47 @@ void EQGraph::paint (juce::Graphics& g)
     };
     auto rawGain = [] (float db) { return std::pow (10.0f, db / 20.0f); };
 
-    Co::Ptr chain[5] =
+    const float vLowcut = pv ("lowcut");
+    const float vMud    = pv ("mud");
+    const float vHarsh  = pv ("harsh");
+    const float vPres   = pv ("presence");
+    const float vAir    = pv ("air");
+
+    if (cachedPx != px || std::abs (cachedSr - sr) > 0.5
+        || std::abs (cachedLowcut - vLowcut) > 1.0e-4f
+        || std::abs (cachedMud    - vMud)    > 1.0e-4f
+        || std::abs (cachedHarsh  - vHarsh)  > 1.0e-4f
+        || std::abs (cachedPres   - vPres)   > 1.0e-4f
+        || std::abs (cachedAir    - vAir)    > 1.0e-4f
+        || (int) cachedStatDb.size() != px + 1)
     {
-        Co::makeHighPass   (sr, juce::jmax (20.0f, pv ("lowcut")), 0.707f),
-        Co::makePeakFilter (sr, 300.0,   1.0f,   rawGain (pv ("mud"))),
-        Co::makePeakFilter (sr, 3200.0,  1.2f,   rawGain (pv ("harsh"))),
-        Co::makePeakFilter (sr, 4200.0,  0.9f,   rawGain (pv ("presence"))),
-        Co::makeHighShelf  (sr, 11000.0, 0.707f, rawGain (pv ("air")))
-    };
+        cachedPx     = px;
+        cachedSr     = sr;
+        cachedLowcut = vLowcut;
+        cachedMud    = vMud;
+        cachedHarsh  = vHarsh;
+        cachedPres   = vPres;
+        cachedAir    = vAir;
+
+        Co::Ptr chain[5] =
+        {
+            Co::makeHighPass   (sr, juce::jmax (20.0f, vLowcut), 0.707f),
+            Co::makePeakFilter (sr, 300.0,   1.0f,   rawGain (vMud)),
+            Co::makePeakFilter (sr, 3200.0,  1.2f,   rawGain (vHarsh)),
+            Co::makePeakFilter (sr, 4200.0,  0.9f,   rawGain (vPres)),
+            Co::makeHighShelf  (sr, 11000.0, 0.707f, rawGain (vAir))
+        };
+
+        cachedStatDb.resize ((size_t) px + 1);
+        for (int i = 0; i <= px; ++i)
+        {
+            const double hz = (double) xToFreq (plot.getX() + (float) i);
+            double m = 1.0;
+            for (auto& c : chain)
+                m *= c->getMagnitudeForFrequency (hz, sr);
+            cachedStatDb[(size_t) i] = 20.0f * (float) std::log10 (juce::jmax (1.0e-4, m));
+        }
+    }
 
     const bool  eqOn = pv ("seq_on") > 0.5f;
     const int   nb   = juce::jmin (proc.getSeqBandCount(), 6);
@@ -1174,20 +1211,23 @@ void EQGraph::paint (juce::Graphics& g)
             }
         }
 
-    std::vector<float> statDb ((size_t) px + 1), liveDb ((size_t) px + 1);
-    for (int i = 0; i <= px; ++i)
+    const auto& statDb = cachedStatDb;
+    if (nAct > 0)
     {
-        const double hz = (double) xToFreq (plot.getX() + (float) i);
-        double m = 1.0;
-        for (auto& c : chain)
-            m *= c->getMagnitudeForFrequency (hz, sr);
-        const float s = 20.0f * (float) std::log10 (juce::jmax (1.0e-4, m));
-        double ma = 1.0;
-        for (int b = 0; b < nb; ++b)
-            if (bandCo[b] != nullptr)
-                ma *= bandCo[b]->getMagnitudeForFrequency (hz, sr);
-        statDb[(size_t) i] = s;
-        liveDb[(size_t) i] = s + 20.0f * (float) std::log10 (juce::jmax (1.0e-4, ma));
+        liveDb.resize ((size_t) px + 1);
+        for (int i = 0; i <= px; ++i)
+        {
+            const double hz = (double) xToFreq (plot.getX() + (float) i);
+            double ma = 1.0;
+            for (int b = 0; b < nb; ++b)
+                if (bandCo[b] != nullptr)
+                    ma *= bandCo[b]->getMagnitudeForFrequency (hz, sr);
+            liveDb[(size_t) i] = statDb[(size_t) i] + 20.0f * (float) std::log10 (juce::jmax (1.0e-4, ma));
+        }
+    }
+    else
+    {
+        liveDb = statDb;
     }
 
     auto curveOf = [&] (const std::vector<float>& v)
@@ -3038,6 +3078,59 @@ public:
         };
         addAndMakeVisible (singerCueBtn);
 
+        // ---- v5.4.0 新構想4本柱：〰️ 語尾・ロングトーン自然ビブラート生成 ／ 🗣️ 母音フォーム自動統一EQ ／ ⚡ 歌い出し発声アタック＆グルーヴ整形 ／ 🌉 ミックスボイス倍音ブリッジ＆胸鳴りサブアンカー ----
+        tailVibratoBtn.setClickingTogglesState (true);
+        tailVibratoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
+        tailVibratoBtn.setToggleState (processor.getTailVibratoOn(), juce::dontSendNotification);
+        tailVibratoBtn.setTooltip (language->T ("音程が180ms以上伸びる語尾・ロングトーンを自動検知し、棒立ちの伸ばし音に自然な喉ビブラート（5.5Hzピッチ＋音量＋倍音揺れ）をフェードイン生成します。自前のビブラートがある時は周期の乱れだけを滑らかに整えます。",
+                                                "Detects sustained notes (>180 ms) and fades in natural 5.5 Hz pitch + amplitude + formant vibrato on flat tails, or regularizes uneven natural vibrato."));
+        tailVibratoBtn.onClick = [this]
+        {
+            processor.setTailVibratoOn (tailVibratoBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (tailVibratoBtn);
+
+        vowelAlignBtn.setClickingTogglesState (true);
+        vowelAlignBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+        vowelAlignBtn.setToggleState (processor.getVowelAlignOn(), juce::dontSendNotification);
+        vowelAlignBtn.setTooltip (language->T ("歌っている最中の母音（あ・い・う・え・お）のF1/F2フォルマント比率をリアルタイム判定し、「い・え」の平べったい鼻声感や「う・お」のこもりを自動補正して、全母音が同じ太い声帯フォームで鳴るように統一します。",
+                                               "Tracks F1/F2 vowel formant ratios in real time to add warm body and tame nasal glare on thin vowels (/i/, /e/) while opening up muffled vowels (/u/, /o/)."));
+        vowelAlignBtn.onClick = [this]
+        {
+            processor.setVowelAlignOn (vowelAlignBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (vowelAlignBtn);
+
+        onsetGrooveBtn.setClickingTogglesState (true);
+        onsetGrooveBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+        onsetGrooveBtn.setToggleState (processor.getOnsetGrooveOn(), juce::dontSendNotification);
+        onsetGrooveBtn.setTooltip (language->T ("フレーズや言葉の歌い出し先頭35msだけを捉え、弱い入りは声帯の立ち上がりと1.2〜3.8kHzのアタック輪郭を前に出し、強すぎる破裂的な入りは丸めてプロのリズムポケットへ揃えます。",
+                                                "Shapes the first 35 ms of vocal phrase and syllable onsets: firms up hesitant attacks with 1.2-3.8 kHz articulation snap while rounding off harsh bursts."));
+        onsetGrooveBtn.onClick = [this]
+        {
+            processor.setOnsetGrooveOn (onsetGrooveBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (onsetGrooveBtn);
+
+        mixBridgeBtn.setClickingTogglesState (true);
+        mixBridgeBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        mixBridgeBtn.setToggleState (processor.getMixVoiceBridgeOn(), juce::dontSendNotification);
+        mixBridgeBtn.setTooltip (language->T ("換声点・裏声で倍音が抜けて線が細くなった瞬間に2倍音・3倍音をピンポイント補填して地声と裏声の境目を繋ぎ、さらに高音時のみ基音の1オクターブ下へ微小な胸鳴りサブアンカーを添えてハイトーンに安定感を与えます。",
+                                               "Detects falsetto/passaggio harmonic drop-off to synthesize 2nd/3rd harmonics for seamless mix-voice bridging, plus a subtle -1 octave sub-chest anchor on high notes."));
+        mixBridgeBtn.onClick = [this]
+        {
+            processor.setMixVoiceBridgeOn (mixBridgeBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (mixBridgeBtn);
+
         // ---- 柱④：絶叫セーフティガード・咳払い瞬間ミュート ＆ 💧 ペチャ音瞬間除去 ----
         coughBtn.setClickingTogglesState (true);
         coughBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
@@ -3138,7 +3231,39 @@ public:
             addAndMakeVisible (sb);
         }
 
-        setSize (780, 678);
+        // ---- 自分で用意した音源を4枠セットできる「🎵 自作カスタムSE 4枠ポン出しパッド」 ----
+        customSeMenuBtn.setButtonText (language->T ("📂 自作SE管理▼", "📂 Custom SE▼"));
+        customSeMenuBtn.setTooltip (language->T ("自分で用意した効果音ファイル（.wav / .mp3 / .flac / .ogg / .aiff）を4つの自作SE枠へ読み込む・入れ替える・消去するメニューを開きます。",
+                                                 "Open menu to load, replace, or clear your own audio files (.wav / .mp3 / .flac / .ogg / .aiff) in the 4 Custom SE slots."));
+        customSeMenuBtn.onClick = [this] { openCustomSeMenu(); };
+        addAndMakeVisible (customSeMenuBtn);
+
+        for (int i = 0; i < 4; ++i)
+        {
+            auto& cb = customSeBtns[(size_t) i];
+            cb.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+            cb.setTooltip (language->T ("自分で用意した効果音（.wav / .mp3 / .flac / .ogg / .aiff）をセットできる自作SE枠です。未設定時はクリックでファイル選択、設定後はクリックでポン出し再生／停止します。",
+                                        "Custom SE slot for your own audio file (.wav / .mp3 / .flac / .ogg / .aiff). Click when empty to load a file, or click when loaded to trigger/stop playback."));
+            cb.onClick = [this, i]
+            {
+                if (! processor.hasCustomSeLoaded (i) || juce::ModifierKeys::currentModifiers.isShiftDown() || juce::ModifierKeys::currentModifiers.isPopupMenu())
+                {
+                    browseCustomSeFile (i);
+                }
+                else
+                {
+                    if (processor.getActiveLiveSe() == 4 + i)
+                        processor.stopLiveSe();
+                    else
+                        processor.triggerLiveSe (4 + i);
+                    refresh();
+                    owner.repaint();
+                }
+            };
+            addAndMakeVisible (cb);
+        }
+
+        setSize (780, 748);
         refresh();
         startTimerHz (10);
     }
@@ -3168,17 +3293,17 @@ public:
         };
 
         drawSectionCard (secBgmRect,   Palette::green,
-                         language->T ("① 🎵 カラオケ・BGM ＆ 🕳️ 声ポケット自動掘り・🎢 伴奏追従ライダー・✨ ボーカル除去",
-                                      "1. Karaoke / BGM, Spectral Unmasker, BGM Vocal Rider & 1-Click Vocal Remover"));
+                         language->T ("① 🎵 カラオケ・BGM再生 ＆ 伴奏なじませ（ボーカル除去・声ポケット・自動ライダー）",
+                                      "1. Karaoke / BGM Player & Mix Blend (Vocal Cancel, Unmask & Auto Rider)"));
         drawSectionCard (secRecRect,   Palette::salmon,
-                         language->T ("② 🔴 1クリックWAV録音 ＆ ⏪ 直前30秒さかのぼり保存（💿 -14LUFS完パケMIX＋Wet＋Dry同時保存）",
-                                      "2. 1-Click WAV Recorder & 30s Retro Save (-14 LUFS FullMix + Wet + Dry 24-bit WAV)"));
+                         language->T ("② 🔴 WAV録音 ＆ 直前30秒さかのぼり保存（-14LUFS完パケ＋Wet＋Dry同時出力）",
+                                      "2. 1-Click WAV Recorder & 30s Retro Save (-14 LUFS Master + Wet + Dry)"));
         drawSectionCard (secDiagRect,  Palette::yellow,
-                         language->T ("③ 🎯 5秒AI声質診断・🎙️ 4大名機マイク ＆ 🪶 ささやき浮上・🎯 音程追従・🎧 骨伝導モニター",
-                                      "3. 5s Voice AI, 4 Studio Mics, Upward Lifter & Air, Pitch Sweet Spot & Singer's Cue Monitor"));
+                         language->T ("③ 🎯 5秒AI声質診断 ・ 🎙️ 名機マイクモデリング ・ 歌唱表現エンジン",
+                                      "3. 5s Voice AI Diagnosis, Studio Mic Models & Vocal Expression Engines"));
         drawSectionCard (secGuardRect, Palette::ice,
-                         language->T ("④ 🔥 サビ盛り・👏 SE ＆ 🏠 部屋鳴り消し・🌬️ 息継ぎ＆サ行保護・💧 ペチャ除去・🛡 絶叫ガード",
-                                      "4. Chorus Boost, SE, Room De-Reverb, Breath & Velvet Split, Lip De-Click & Scream Guard"));
+                         language->T ("④ 🔥 サビ盛り演出 ・ 👏 効果音ポン出し（内蔵4種＋自作4枠）＆ 配信ガード",
+                                      "4. Chorus Boost, Sound Pads (4 Built-in + 4 Custom) & Stream Safety Guards"));
 
         // BGM状態＆プログレスバー描画
         {
@@ -3294,6 +3419,35 @@ public:
                 g.setColour (processor.getUpwardAirOn() && upAirDb > 0.1f ? Palette::ice : Palette::inkSoft);
                 g.drawFittedText (language->T ("浮上:+", "Lift:+") + juce::String (upAirDb, 1) + "dB",
                                   v53MeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+
+            const float vibDb   = processor.getTailVibratoMeterDb();
+            const float vowelDb = processor.getVowelAlignMeterDb();
+            const float onsetDb = processor.getOnsetGrooveMeterDb();
+            const float mixBrDb = processor.getMixVoiceBridgeMeterDb();
+            if (processor.getMixVoiceBridgeOn() && mixBrDb >= vibDb && mixBrDb >= vowelDb && mixBrDb >= onsetDb && mixBrDb > 0.1f)
+            {
+                g.setColour (Palette::green);
+                g.drawFittedText (language->T ("倍音:+", "Mix:+") + juce::String (mixBrDb, 1) + "dB",
+                                  v54MeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else if (processor.getOnsetGrooveOn() && onsetDb >= vibDb && onsetDb >= vowelDb && onsetDb > 0.1f)
+            {
+                g.setColour (Palette::salmon);
+                g.drawFittedText (language->T ("発声:+", "Onset:+") + juce::String (onsetDb, 1) + "dB",
+                                  v54MeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else if (processor.getVowelAlignOn() && vowelDb >= vibDb && vowelDb > 0.1f)
+            {
+                g.setColour (Palette::yellow);
+                g.drawFittedText (language->T ("母音:+", "Vowel:+") + juce::String (vowelDb, 1) + "dB",
+                                  v54MeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else
+            {
+                g.setColour (processor.getTailVibratoOn() && vibDb > 0.1f ? Palette::ice : Palette::inkSoft);
+                g.drawFittedText (language->T ("ビブ:", "Vib:") + juce::String (vibDb, 1) + "ct",
+                                  v54MeterRect, juce::Justification::centredRight, 1, 0.85f);
             }
         }
 
@@ -3415,8 +3569,8 @@ public:
         }
         b.removeFromTop (8);
 
-        // ③ 5秒声質ターゲット診断 ＆ ゼロ遅延・名機マイクモデリング ＆ v5.3 ボーカル特化3エンジン (214px)
-        secDiagRect = b.removeFromTop (214);
+        // ③ 5秒声質ターゲット診断 ＆ ゼロ遅延・名機マイクモデリング ＆ v5.3/v5.4 ボーカル歌唱表現エンジン (248px)
+        secDiagRect = b.removeFromTop (248);
         {
             auto inner = secDiagRect.reduced (10, 6);
             inner.removeFromTop (26);
@@ -3427,7 +3581,7 @@ public:
                 diagBtns[(size_t) i].setBounds (r1.removeFromLeft (i == 4 ? r1.getWidth() : bw));
                 if (i < 4) r1.removeFromLeft (6);
             }
-            inner.removeFromTop (5);
+            inner.removeFromTop (4);
             auto rMic = inner.removeFromTop (30);
             const int mw = (rMic.getWidth() - 24) / 5;
             for (int i = 0; i < 5; ++i)
@@ -3435,12 +3589,19 @@ public:
                 micModBtns[(size_t) i].setBounds (rMic.removeFromLeft (i == 4 ? rMic.getWidth() : mw));
                 if (i < 4) rMic.removeFromLeft (6);
             }
-            inner.removeFromTop (5);
+            inner.removeFromTop (4);
             auto rV53 = inner.removeFromTop (30);
             upwardAirBtn     .setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (6);
             pitchSweetSpotBtn.setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (6);
             singerCueBtn     .setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (4);
             v53MeterRect = rV53;
+            inner.removeFromTop (4);
+            auto rV54 = inner.removeFromTop (30);
+            tailVibratoBtn.setBounds (rV54.removeFromLeft (160)); rV54.removeFromLeft (5);
+            vowelAlignBtn .setBounds (rV54.removeFromLeft (160)); rV54.removeFromLeft (5);
+            onsetGrooveBtn.setBounds (rV54.removeFromLeft (160)); rV54.removeFromLeft (5);
+            mixBridgeBtn  .setBounds (rV54.removeFromLeft (160)); rV54.removeFromLeft (4);
+            v54MeterRect = rV54;
             inner.removeFromTop (4);
             diagBarsRect = inner.removeFromTop (22);
             inner.removeFromTop (2);
@@ -3448,12 +3609,12 @@ public:
         }
         b.removeFromTop (8);
 
-        // ④ サビ盛り・サビ自動検知・ライブSEポン出し ＆ 絶叫セーフティガード・咳払いミュート・ペチャ音瞬間除去 (残り ~128px)
+        // ④ サビ盛り・サビ自動検知・ライブSEポン出し・自作SE 4枠 ＆ 絶叫セーフティガード・咳払いミュート・ペチャ音瞬間除去
         secGuardRect = b;
         {
             auto inner = secGuardRect.reduced (10, 6);
             inner.removeFromTop (26);
-            auto rLive = inner.removeFromTop (32);
+            auto rLive = inner.removeFromTop (30);
             chorusBoostBtn.setBounds (rLive.removeFromLeft (162)); rLive.removeFromLeft (5);
             autoChorusBtn .setBounds (rLive.removeFromLeft (148)); rLive.removeFromLeft (6);
             const int seW = (rLive.getWidth() - 18) / 4;
@@ -3462,8 +3623,18 @@ public:
                 seBtns[(size_t) i].setBounds (rLive.removeFromLeft (i == 3 ? rLive.getWidth() : seW));
                 if (i < 3) rLive.removeFromLeft (6);
             }
-            inner.removeFromTop (6);
-            auto r1 = inner.removeFromTop (32);
+            inner.removeFromTop (5);
+            auto rCustomSe = inner.removeFromTop (30);
+            customSeMenuBtn.setBounds (rCustomSe.removeFromLeft (136));
+            rCustomSe.removeFromLeft (6);
+            const int cseW = (rCustomSe.getWidth() - 18) / 4;
+            for (int i = 0; i < 4; ++i)
+            {
+                customSeBtns[(size_t) i].setBounds (rCustomSe.removeFromLeft (i == 3 ? rCustomSe.getWidth() : cseW));
+                if (i < 3) rCustomSe.removeFromLeft (6);
+            }
+            inner.removeFromTop (5);
+            auto r1 = inner.removeFromTop (30);
             coughBtn       .setBounds (r1.removeFromLeft (124)); r1.removeFromLeft (5);
             screamGuardBtn .setBounds (r1.removeFromLeft (120)); r1.removeFromLeft (5);
             lipDeclickBtn  .setBounds (r1.removeFromLeft (120)); r1.removeFromLeft (5);
@@ -3474,6 +3645,78 @@ public:
     }
 
 private:
+    void browseCustomSeFile (int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= 4) return;
+        chooser = std::make_unique<juce::FileChooser> (
+            language->T ("自作SE枠 [", "Select Audio File for Custom SE Slot [")
+                + juce::String (slotIndex + 1)
+                + language->T ("] にセットする音源ファイルを選択 (.wav / .mp3 / .flac / .ogg / .aiff)",
+                               "] (.wav / .mp3 / .flac / .ogg / .aiff)"),
+            juce::File(), "*.wav;*.mp3;*.flac;*.ogg;*.aif;*.aiff");
+        const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        juce::Component::SafePointer<StageStudioPanel> safe (this);
+        chooser->launchAsync (flags, [safe, slotIndex] (const juce::FileChooser& fc)
+        {
+            if (safe == nullptr) return;
+            const auto f = fc.getResult();
+            if (f.existsAsFile())
+            {
+                safe->processor.loadCustomSeFile (slotIndex, f);
+                safe->refresh();
+                safe->owner.repaint();
+            }
+        });
+    }
+
+    void openCustomSeMenu()
+    {
+        juce::PopupMenu m;
+        m.addSectionHeader (language->T ("🎵 自作カスタムSE 4枠（自分で用意した効果音 .wav / .mp3 / .flac / .ogg / .aiff）",
+                                         "🎵 Custom User SE 4 Slots (.wav / .mp3 / .flac / .ogg / .aiff)"));
+        for (int i = 0; i < 4; ++i)
+        {
+            const bool loaded = processor.hasCustomSeLoaded (i);
+            const juce::String title = loaded ? processor.getCustomSeTitle (i) : language->T ("未設定", "Empty");
+            m.addItem (100 + i,
+                       language->T ("📂 枠", "📂 Slot ") + juce::String (i + 1)
+                           + language->T (" に音源ファイルを選択... (現在: ", " — Select Audio File... (Current: ")
+                           + title + ")");
+            if (loaded)
+            {
+                m.addItem (200 + i,
+                           language->T ("▶ 枠", "▶ Slot ") + juce::String (i + 1)
+                               + language->T (" をテスト再生: ", " — Play: ") + title);
+                m.addItem (300 + i,
+                           language->T ("🗑 枠", "🗑 Slot ") + juce::String (i + 1)
+                               + language->T (" の音源をクリア", " — Clear Slot"));
+            }
+            if (i < 3) m.addSeparator();
+        }
+
+        juce::Component::SafePointer<StageStudioPanel> safe (this);
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&customSeMenuBtn),
+                         [safe] (int res)
+                         {
+                             if (safe == nullptr || res <= 0) return;
+                             if (res >= 100 && res < 104)
+                             {
+                                 safe->browseCustomSeFile (res - 100);
+                             }
+                             else if (res >= 200 && res < 204)
+                             {
+                                 safe->processor.triggerLiveSe (4 + (res - 200));
+                                 safe->refresh();
+                                 safe->owner.repaint();
+                             }
+                             else if (res >= 300 && res < 304)
+                             {
+                                 safe->processor.clearCustomSeSlot (res - 300);
+                                 safe->refresh();
+                                 safe->owner.repaint();
+                             }
+                         });
+    }
     void openSetlistPopup()
     {
         juce::PopupMenu m;
@@ -3672,6 +3915,30 @@ private:
             ? language->T ("🎧 骨伝導モニター ON", "🎧 Singer's Cue ON")
             : language->T ("🎧 骨伝導モニター補正", "🎧 Singer's Cue Monitor"));
 
+        const bool vibOn = processor.getTailVibratoOn();
+        tailVibratoBtn.setToggleState (vibOn, juce::dontSendNotification);
+        tailVibratoBtn.setButtonText (vibOn
+            ? language->T ("〰️ 語尾ビブラート ON", "〰️ Tail Vibrato ON")
+            : language->T ("〰️ 語尾ビブラート", "〰️ Tail Vibrato"));
+
+        const bool vowOn = processor.getVowelAlignOn();
+        vowelAlignBtn.setToggleState (vowOn, juce::dontSendNotification);
+        vowelAlignBtn.setButtonText (vowOn
+            ? language->T ("🗣️ 母音フォーム統一 ON", "🗣️ Vowel Align ON")
+            : language->T ("🗣️ 母音フォーム統一", "🗣️ Vowel Align EQ"));
+
+        const bool onsOn = processor.getOnsetGrooveOn();
+        onsetGrooveBtn.setToggleState (onsOn, juce::dontSendNotification);
+        onsetGrooveBtn.setButtonText (onsOn
+            ? language->T ("⚡ 歌い出しグルーヴ ON", "⚡ Onset Groove ON")
+            : language->T ("⚡ 歌い出しグルーヴ", "⚡ Onset Groove"));
+
+        const bool mixBrOn = processor.getMixVoiceBridgeOn();
+        mixBridgeBtn.setToggleState (mixBrOn, juce::dontSendNotification);
+        mixBridgeBtn.setButtonText (mixBrOn
+            ? language->T ("🌉 ミックス＆胸鳴り ON", "🌉 Mix & Chest ON")
+            : language->T ("🌉 ミックス＆胸鳴り", "🌉 Mix & Sub-Chest"));
+
         const bool cBoost = processor.getChorusBoostMode();
         chorusBoostBtn.setToggleState (cBoost, juce::dontSendNotification);
         chorusBoostBtn.setButtonText (cBoost
@@ -3689,6 +3956,28 @@ private:
         const int activeSe = processor.getActiveLiveSe();
         for (int i = 0; i < 4; ++i)
             seBtns[(size_t) i].setToggleState (activeSe == i, juce::dontSendNotification);
+
+        static const char* const kCircleNumJa[4] = { "①", "②", "③", "④" };
+        customSeMenuBtn.setButtonText (language->T ("📂 自作SE管理▼", "📂 Custom SE▼"));
+        for (int i = 0; i < 4; ++i)
+        {
+            auto& cb = customSeBtns[(size_t) i];
+            const bool loaded = processor.hasCustomSeLoaded (i);
+            cb.setToggleState (activeSe == 4 + i, juce::dontSendNotification);
+            if (loaded)
+            {
+                auto title = processor.getCustomSeTitle (i);
+                if (title.length() > 8)
+                    title = title.substring (0, 8) + "..";
+                cb.setButtonText (language->T ("🎵", "🎵") + juce::String::fromUTF8 (kCircleNumJa[i]) + " " + title);
+            }
+            else
+            {
+                cb.setButtonText (language->T ("➕ 音源", "➕ Slot ")
+                                  + (language->english ? juce::String (i + 1) : juce::String::fromUTF8 (kCircleNumJa[i]))
+                                  + language->T (" (読込)", " (Load)"));
+            }
+        }
 
         const bool cMute = processor.getCoughMute();
         coughBtn.setToggleState (cMute, juce::dontSendNotification);
@@ -3728,7 +4017,7 @@ private:
     VocalGzzioProcessor& processor;
     juce::Rectangle<int> secBgmRect, secRecRect, secDiagRect, secGuardRect;
     juce::Rectangle<int> bgmStatusRect, bgmProgRect, bgmVolLabelRect, bgmDuckLabelRect, bgmDuckMeterRect;
-    juce::Rectangle<int> wavStatusRect, diagBarsRect, diagStatusRect, v53MeterRect, guardMeterRect;
+    juce::Rectangle<int> wavStatusRect, diagBarsRect, diagStatusRect, v53MeterRect, v54MeterRect, guardMeterRect;
     juce::TextButton loadBgmBtn, demoBgmBtn, playBgmBtn, rewBgmBtn, loopBgmBtn, addSetlistBtn, setlistMenuBtn;
     juce::TextButton keyDownBtn, keyZeroBtn, keyUpBtn, vocalCancelBtn, autoKeyBpmBtn, syncKeyBtn, bgmRouteBtn;
     juce::TextButton bgmUnmaskBtn, bgmRiderBtn;
@@ -3737,8 +4026,11 @@ private:
     std::array<juce::TextButton, 5> diagBtns;
     std::array<juce::TextButton, 5> micModBtns;
     juce::TextButton upwardAirBtn, pitchSweetSpotBtn, singerCueBtn;
+    juce::TextButton tailVibratoBtn, vowelAlignBtn, onsetGrooveBtn, mixBridgeBtn;
     juce::TextButton chorusBoostBtn, autoChorusBtn;
     std::array<juce::TextButton, 4> seBtns;
+    juce::TextButton customSeMenuBtn;
+    std::array<juce::TextButton, 4> customSeBtns;
     juce::TextButton coughBtn, screamGuardBtn, lipDeclickBtn, roomDereverbBtn, breathCtrlBtn;
     std::unique_ptr<juce::FileChooser> chooser;
 
@@ -4995,6 +5287,10 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         processor.setUpwardAirOn (false);
         processor.setPitchSweetSpotOn (false);
         processor.setSingerCueMonitorOn (false);
+        processor.setTailVibratoOn (false);
+        processor.setVowelAlignOn (false);
+        processor.setOnsetGrooveOn (false);
+        processor.setMixVoiceBridgeOn (false);
         processor.clearCustomIrFile();
         infoText.clear();
         fxInfoText.clear();
@@ -6287,16 +6583,27 @@ void VocalGzzioContent::fillComboFromChoiceParam (juce::ComboBox& box, const juc
     box.clear (juce::dontSendNotification);
     if (auto* ch = dynamic_cast<juce::AudioParameterChoice*> (processor.apvts.getParameter (paramID)))
     {
+        const bool isRevType = (paramID == "rev_type");
+        if (isRevType && ch->getIndex() >= kHeyaFirst)
+        {
+            const int curIdx = ch->getIndex();
+            const int mapped = (curIdx == 12) ? 2 : (curIdx >= 10 ? 3 : 1);
+            ch->beginChangeGesture();
+            ch->setValueNotifyingHost (processor.apvts.getParameterRange ("rev_type").convertTo0to1 ((float) mapped));
+            ch->endChangeGesture();
+        }
         const juce::StringArray en = language->english ? choiceLabelsEnglish (paramID) : juce::StringArray();
         int id = 1;
         for (auto& s : ch->choices)
         {
             const int i = id - 1;
+            if (isRevType && i >= kHeyaFirst)
+                break;
             box.addItem (i < en.size() ? en[i] : s, id);
             ++id;
         }
     }
-    if (keep > 0) box.setSelectedId (keep, juce::dontSendNotification);
+    if (keep > 0 && keep <= box.getNumItems()) box.setSelectedId (keep, juce::dontSendNotification);
     addAndMakeVisible (box);
 }
 
@@ -6982,36 +7289,41 @@ void VocalGzzioContent::addKnob (Knob& k, const juce::String& paramID, const juc
 
 void VocalGzzioContent::timerCallback()
 {
-   #if JucePlugin_Build_Standalone
+    #if JucePlugin_Build_Standalone
     if (processor.isStandalone())
     {
-        if (auto* sfw = findParentComponentOfClass<juce::StandaloneFilterWindow>())
+        static int s_standalonePollTick = 0;
+        if (++s_standalonePollTick >= 10)
         {
-            const juce::String optTxt = language->T ("⚙ 音声・入出力・モノラル設定", "Audio / Mono I/O");
-            for (int c = 0; c < sfw->getNumChildComponents(); ++c)
+            s_standalonePollTick = 0;
+            if (auto* sfw = findParentComponentOfClass<juce::StandaloneFilterWindow>())
             {
-                if (auto* tb = dynamic_cast<juce::TextButton*> (sfw->getChildComponent (c)))
+                const juce::String optTxt = language->T ("⚙ 音声・入出力・モノラル設定", "Audio / Mono I/O");
+                for (int c = 0; c < sfw->getNumChildComponents(); ++c)
                 {
-                    if (tb->getButtonText() != optTxt)
+                    if (auto* tb = dynamic_cast<juce::TextButton*> (sfw->getChildComponent (c)))
                     {
-                        tb->setButtonText (optTxt);
-                        tb->setSize (198, juce::jmax (20, sfw->getTitleBarHeight() - 8));
+                        if (tb->getButtonText() != optTxt)
+                        {
+                            tb->setButtonText (optTxt);
+                            tb->setSize (198, juce::jmax (20, sfw->getTitleBarHeight() - 8));
+                        }
+                        break;
                     }
-                    break;
                 }
             }
-        }
-        auto& desk = juce::Desktop::getInstance();
-        for (int i = desk.getNumComponents(); --i >= 0;)
-        {
-            if (auto* dw = dynamic_cast<juce::DialogWindow*> (desk.getComponent (i)))
+            auto& desk = juce::Desktop::getInstance();
+            for (int i = desk.getNumComponents(); --i >= 0;)
             {
-                if (dw->getName() == "Audio/MIDI Settings" || dw->getName() == TRANS ("Audio/MIDI Settings"))
+                if (auto* dw = dynamic_cast<juce::DialogWindow*> (desk.getComponent (i)))
                 {
-                    dw->exitModalState (0);
-                    delete dw;
-                    openStandaloneAudioSettings();
-                    break;
+                    if (dw->getName() == "Audio/MIDI Settings" || dw->getName() == TRANS ("Audio/MIDI Settings"))
+                    {
+                        dw->exitModalState (0);
+                        delete dw;
+                        openStandaloneAudioSettings();
+                        break;
+                    }
                 }
             }
         }
@@ -7118,13 +7430,14 @@ void VocalGzzioContent::timerCallback()
         }
     }
 
-    // v1.7.0 yuru-kawa: animate the juice knobs (rising bubbles + surface wobble)
-    // v2.11.0: よる(8)でも同じように泡が上がる（配色が変わるだけの同じテーマなので）
-    if (juiceTheme())
+    // v1.7.0 yuru-kawa: animate the juice knobs while dragging or singing (avoid 20Hz idle full-window repaints)
+    if (juiceTheme() && ! liteMode
+        && (juce::ModifierKeys::currentModifiers.isAnyMouseButtonDown() || processor.getInputLevel() > 0.002f))
     {
         GzzioLnF::bumpJuicePhase (0.22f);
         for (auto* ch : getChildren())
-            if (dynamic_cast<juce::Slider*> (ch)) ch->repaint();
+            if (auto* sl = dynamic_cast<juce::Slider*> (ch))
+                if (sl->isMouseButtonDown()) sl->repaint();
     }
 
     // v1.8.0: background theme state update (no periodic full-window repaint; static backdrop is cached)
@@ -7135,11 +7448,15 @@ void VocalGzzioContent::timerCallback()
     }
 
     const bool learning = processor.isDenoiseLearning();
-    learnButton.setButtonText (learning ? language->T ("学習中…", "Learning…") : language->T ("ノイズを測る", "Learn noise"));
-    learnButton.setColour (juce::TextButton::buttonColourId,
-                           learning ? Palette::yellow : Palette::green.withAlpha (0.16f));
-    learnButton.setColour (juce::TextButton::textColourOffId,
-                           learning ? Palette::bgTop : Palette::ink);
+    const auto learnTxtWant = learning ? language->T ("学習中…", "Learning…") : language->T ("ノイズを測る", "Learn noise");
+    if (learnButton.getButtonText() != learnTxtWant)
+    {
+        learnButton.setButtonText (learnTxtWant);
+        learnButton.setColour (juce::TextButton::buttonColourId,
+                               learning ? Palette::yellow : Palette::green.withAlpha (0.18f));
+        learnButton.setColour (juce::TextButton::textColourOffId,
+                               learning ? Palette::bgTop : Palette::ink);
+    }
 
     // ---- v2.10.0 学習の結果を出す／覚えている間は「もどす」を出す ----
     {
@@ -7264,15 +7581,21 @@ void VocalGzzioContent::timerCallback()
             }
             refreshPresetDisplays();
         }
-        autoSetupButton.setButtonText (language->autoset_label());
-        autoSetupButton.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.18f));
-        autoSetupButton.setColour (juce::TextButton::textColourOffId, Palette::ink);
+        if (autoSetupButton.getButtonText() != language->autoset_label())
+        {
+            autoSetupButton.setButtonText (language->autoset_label());
+            autoSetupButton.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.18f));
+            autoSetupButton.setColour (juce::TextButton::textColourOffId, Palette::ink);
+        }
         if (easyComboPhase == 0)   // 10秒おまかせのカウントダウン表示を上書きしない
         {
-            songSetupButton.setButtonText (advancedMode ? language->autoset_sing_label()
-                                                        : language->easy_sing_label());
-            songSetupButton.setColour (juce::TextButton::buttonColourId, Palette::yellow);
-            songSetupButton.setColour (juce::TextButton::textColourOffId, Palette::readableOn (Palette::yellow));
+            const auto songLblWant = advancedMode ? language->autoset_sing_label() : language->easy_sing_label();
+            if (songSetupButton.getButtonText() != songLblWant)
+            {
+                songSetupButton.setButtonText (songLblWant);
+                songSetupButton.setColour (juce::TextButton::buttonColourId, Palette::yellow);
+                songSetupButton.setColour (juce::TextButton::textColourOffId, Palette::readableOn (Palette::yellow));
+            }
         }
     }
 
@@ -10078,12 +10401,6 @@ void VocalGzzioContent::mouseDown (const juce::MouseEvent& e)
         }
     }
 
-    if (! isOverview() && ! revTypeLabArea.isEmpty() && revTypeLabArea.contains (e.getPosition()))
-    {
-        openIrSelectorMenu (localAreaToGlobal (revTypeLabArea));
-        return;
-    }
-
     // v2.12.0: テーマチップ(0..5)は「文字・見た目」の吹き出しへ引っ越したので、
     //          ここに残っているのは 6 =「かんたんモード」スイッチだけ。
     if (crossArea.isEmpty()) return;
@@ -10351,122 +10668,8 @@ void VocalGzzioContent::openStageStudioPopup (juce::Rectangle<int> anchorScreenB
 
 void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds)
 {
-    auto setRevType = [this] (int idx)
-    {
-        if (auto* p = processor.apvts.getParameter ("rev_type"))
-        {
-            p->beginChangeGesture();
-            p->setValueNotifyingHost (processor.apvts.getParameterRange ("rev_type").convertTo0to1 ((float) idx));
-            p->endChangeGesture();
-        }
-        if (auto* pOn = processor.apvts.getParameter ("revon"))
-        {
-            if (pOn->getValue() < 0.5f)
-            {
-                pOn->beginChangeGesture();
-                pOn->setValueNotifyingHost (1.0f);
-                pOn->endChangeGesture();
-            }
-        }
-    };
-
-    if (! isShowing())
-    {
-        const int cur = (int) processor.apvts.getRawParameterValue ("rev_type")->load();
-        const int next = (cur < kHeyaFirst) ? (kHeyaFirst + 2)
-                       : (kHeyaFirst + ((cur - kHeyaFirst + 1) % heya::kNumRooms));
-        setRevType (next);
-        repaint();
-        return;
-    }
-
-    juce::PopupMenu menu;
-    menu.addSectionHeader (language->T ("内蔵IR（インパルス応答）空間モデル（6部屋）", "Built-in IR Spaces (6 Rooms)"));
-    const int curType = (int) processor.apvts.getRawParameterValue ("rev_type")->load();
-    for (int r = 0; r < heya::kNumRooms; ++r)
-    {
-        const int idx = kHeyaFirst + r;
-        const bool active = (! processor.hasCustomIr()) && (curType == idx);
-        const juce::String name = juce::String::fromUTF8 (language->english ? heya::rooms()[(size_t) r].nameEn : heya::rooms()[(size_t) r].nameJa);
-        menu.addItem (100 + r, name, true, active);
-    }
-    menu.addSeparator();
-    menu.addSectionHeader (language->T ("外部カスタムIRファイル (.wav / .aiff / .flac)", "External Custom IR File (.wav / .aiff / .flac)"));
-    if (processor.hasCustomIr())
-    {
-        menu.addItem (201, language->T ("使用中の外部IR: ", "Active Custom IR: ") + processor.getCustomIrName(), false, true);
-        menu.addItem (202, language->T ("外部IRを解除して内蔵の部屋へ戻す", "Clear Custom IR & Restore Built-in Room"));
-    }
-    menu.addItem (200, language->T ("外部IR音声ファイルを読み込む...", "Load Custom IR Audio File..."));
-
-    menu.addSeparator();
-    menu.addSectionHeader (language->T ("声優先ダッキング（歌っている最中は残響を抑え、語尾で広げる）",
-                                        "Vocal-Priority Space Ducking (Clear Lyrics, Blooming Tails)"));
-    const float curDuck = processor.apvts.getRawParameterValue ("duck")->load();
-    menu.addItem (300, language->T ("ダッキング 切 (0%・常時一定の残響)", "Ducking OFF (0% - Constant Reverb)"), true, curDuck < 10.0f);
-    menu.addItem (301, language->T ("自然な歌詞優先 (45%・歌枠おすすめ)", "Natural Lyric Priority (45% - Recommended)"), true, curDuck >= 10.0f && curDuck < 60.0f);
-    menu.addItem (302, language->T ("しっかり歌詞くっきり (75%・速い曲向け)", "Strong Lyric Clarity (75% - Fast Songs)"), true, curDuck >= 60.0f);
-
-    juce::Component::SafePointer<VocalGzzioContent> safe (this);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (anchorScreenBounds),
-                        [safe, setRevType] (int res)
-    {
-        if (safe == nullptr || res == 0) return;
-        if (res >= 100 && res < 100 + heya::kNumRooms)
-        {
-            safe->processor.clearCustomIrFile();
-            setRevType (kHeyaFirst + (res - 100));
-            safe->repaint();
-        }
-        else if (res >= 300 && res <= 302)
-        {
-            const float duckVals[3] = { 0.0f, 45.0f, 75.0f };
-            const float targetDuck = duckVals[res - 300];
-            if (auto* p = safe->processor.apvts.getParameter ("duck"))
-            {
-                p->beginChangeGesture();
-                p->setValueNotifyingHost (safe->processor.apvts.getParameterRange ("duck").convertTo0to1 (targetDuck));
-                p->endChangeGesture();
-            }
-            safe->overviewHint = (res == 300)
-                ? safe->language->T ("【声優先ダッキング 切】歌っている最中も一定の残響量を保ちます。",
-                                     "[Space Ducking OFF] Keeps reverb level constant while singing.")
-                : safe->language->T ("【声優先ダッキング 入】歌っている最中は残響・やまびこを自動で抑えて歌詞をくっきり届け、フレーズの切れ目で余韻をふわっと広げます。",
-                                     "[Space Ducking ON] Automatically ducks reverb and echo while singing so fast lyrics stay clear, then blooms in phrase gaps.");
-            safe->repaint();
-        }
-        else if (res == 202)
-        {
-            safe->processor.clearCustomIrFile();
-            safe->overviewHint = safe->language->T ("外部IRを解除し、内蔵IR空間モデルに戻しました。", "Cleared custom IR and restored built-in IR room.");
-            safe->repaint();
-        }
-        else if (res == 200)
-        {
-            safe->chooser = std::make_unique<juce::FileChooser> (
-                safe->language->T ("リバーブ用のIR音声ファイルを選択 (.wav/.aiff/.flac)", "Select Impulse Response Audio File (.wav/.aiff/.flac)"),
-                juce::File(), "*.wav;*.aif;*.aiff;*.flac");
-            const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-            safe->chooser->launchAsync (flags, [safe] (const juce::FileChooser& fc)
-            {
-                if (safe == nullptr) return;
-                const auto f = fc.getResult();
-                if (f.existsAsFile())
-                {
-                    if (safe->processor.loadCustomIrFile (f))
-                    {
-                        safe->overviewHint = safe->language->T ("外部IRファイルを読み込みました: ", "Loaded custom IR file: ") + safe->processor.getCustomIrName();
-                        safe->infoText = safe->overviewHint;
-                    }
-                    else
-                    {
-                        safe->overviewHint = safe->language->T ("IRファイルの読み込みに失敗しました（対応形式: WAV / AIFF / FLAC）。", "Failed to load IR file (supported: WAV / AIFF / FLAC).");
-                    }
-                    safe->repaint();
-                }
-            });
-        }
-    });
+    juce::ignoreUnused (anchorScreenBounds);
+    processor.clearCustomIrFile();
 }
 
 //==============================================================================
@@ -10480,11 +10683,11 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionSpec (int id) noexcept
 {
     static constexpr LegacyVersionSpec kSpecs[kLegacyVersionCount] = {
-        { 0,  530, "v5.3.0",
-          "最新フラッグシップ（ささやき浮上＆Air・音程追従スイート・骨伝導モニター・声ポケット）",
-          "Current Flagship (Upward Lifter & Air, Pitch Sweet Spot, Singer's Cue & Unmasker)",
-          "最新の全機能（ささやき浮上＆倍音ドルビーAエアー、音程追従オートスイートスポット、骨伝導補正・歌い手専用モニター、伴奏『声ポケット』掘り、部屋鳴り除去、4大名機マイク）をフル稼働します。",
-          "Full v5.3 flagship suite: Upward Lifter & Dolby-A Air, Pitch-Tracked Sweet Spot, Singer's Cue Monitor, Spectral Unmasker, Room De-Reverb, and 4 Studio Mics.",
+        { 0,  540, "v5.4.0",
+          "最新フラッグシップ（語尾ビブラート・母音フォーム統一・歌い出しグルーヴ・ミックス＆胸鳴り）",
+          "Current Flagship (Tail Vibrato, Vowel Align EQ, Onset Groove & Mix/Sub-Chest Bridge)",
+          "最新の全機能（語尾自然ビブラート生成＆整波、母音フォーム自動統一EQ、歌い出し発声アタック＆グルーヴ整形、ミックスボイス倍音ブリッジ＆胸鳴りサブアンカー、ささやき浮上、音程追従スイート、骨伝導モニター）をフル稼働します。",
+          "Full v5.4 flagship suite: Natural Tail Vibrato, Vowel-Homogenizing Formant EQ, Vocal Onset Groove, Mix-Voice Harmonic Bridge & Sub-Chest Anchor, Upward Lifter & Air, and Pitch Sweet Spot.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
         { 1,  500, "v5.0.0",

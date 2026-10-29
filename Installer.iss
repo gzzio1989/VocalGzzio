@@ -140,7 +140,7 @@ Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\VST3\{#MyVst3Name}\*"; \
 ; 単体起動版 ＆ 専用仮想オーディオドライバ (VocalGzzio Driver (WDM))
 Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\Standalone\{#MyExeName}"; \
     DestDir: "{#MyStandaloneDir}"; Components: standalone; Flags: ignoreversion
-Source: "VocalGzzioWdmInstaller.exe"; \
+Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\Standalone\VocalGzzioWdmInstaller.exe"; \
     DestDir: "{#MyStandaloneDir}"; Components: standalone; Flags: ignoreversion
 Source: "driver\syncroom.inf"; \
     DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion

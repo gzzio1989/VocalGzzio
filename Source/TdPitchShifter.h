@@ -205,9 +205,10 @@ private:
         if (fadePos >= fadeLen)                      // つなぎ中は次のジャンプを待つ
         {
             const int radius = std::clamp ((int) (period * 0.10f), 1, 24);
-            if (inEnv < kQuiet && std::abs (D - L0) > 0.01f)
+            if (inEnv < kQuiet && std::abs (step) < 1.0e-5f && std::abs (D - L0) > 0.01f)
             {
-                // 無音〜息継ぎ: 聞こえない所で原点(L0)へ戻す
+                // 完全無音かつシフト停止時のみ原点(L0)へ戻す
+                // (シフト中にL0へ戻すと4ms毎にL0⇔許容端を250Hzで往復ジャンプしチリチリ音の原因になるため禁止)
                 startFade (L0, plannedFade);
             }
             else if (D < lo)
@@ -239,7 +240,7 @@ private:
         return y;
     }
 
-    static constexpr float kQuiet = 0.0025f;   // 約 -52dBFS 未満を「無音」とみなす
+    static constexpr float kQuiet = 0.0025f;   // 約 -52dBFS 未満（部屋の暗騒音下でシフト停止時にL0へ一度だけ復帰する閾値）
 
     std::vector<float> buf;
     int    mask = 0, w = 0;

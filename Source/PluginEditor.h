@@ -870,7 +870,7 @@ public:
     static int  getKnobStyle      () noexcept              { return s_knobStyle; }
     static void setAccessMode     (int m) noexcept         { s_accessMode = juce::jlimit (0, 3, m); }
     static int  getAccessMode     () noexcept              { return s_accessMode; }
-    static void bumpJuicePhase    (float d)                { s_juicePhase += d; }
+    static void bumpJuicePhase    (float d)                { s_juicePhase = std::fmod (s_juicePhase + d, 6283.1853f); }
 
     juce::Typeface::Ptr getTypefaceForFont (const juce::Font& f) override
     {
@@ -1670,111 +1670,74 @@ public:
         //   音の方向性リング (カット・整音＝氷晶シアン / ブースト・空間・艶＝琥珀ゴールド) が浮かび上がる！
         if (isWorking)
         {
-            const float coronaR = radius + (isHero ? 12.0f : 9.5f);
+            const float coronaR = radius + (isHero ? 10.0f : 8.0f);
             const juce::Colour glowCol = groupAccent.interpolatedWith (dirTint, 0.38f);
-            g.setGradientFill (juce::ColourGradient (glowCol.withAlpha ((0.20f + 0.28f * effInt) * (isHero ? 1.15f : 1.0f)), c.x, c.y,
+            g.setGradientFill (juce::ColourGradient (glowCol.withAlpha ((0.16f + 0.22f * effInt) * (isHero ? 1.1f : 1.0f)), c.x, c.y,
                                                      glowCol.withAlpha (0.0f), c.x + coronaR, c.y, true));
             g.fillEllipse (c.x - coronaR, c.y - coronaR, coronaR * 2.0f, coronaR * 2.0f);
-
-            // 効き始め〜現在の角度までを結ぶ外周「ソニック・インパクト・リング」
-            juce::Path impactArc;
-            const float impR = radius + (isHero ? 5.6f : 4.6f);
-            impactArc.addCentredArc (c.x, c.y, impR, impR, 0.0f, startAngle, angle, true);
-            g.setColour (glowCol.withAlpha (0.35f + 0.45f * effInt));
-            g.strokePath (impactArc, juce::PathStrokeType (isHero ? 2.2f : 1.7f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
 
-        // ★ 主役ノブ(heroKnob)専用: 外周クロノグラフ・タービンベゼル (またはV-Liverクチュール・ティアラハロー)
-        if (isHero && radius > 34.0f)
+        // ★ 主役ノブ(heroKnob)専用: V-Liverクチュール・ティアラハロー
+        if (isHero && radius > 34.0f && (s_knobStyle == 2 || s_useKawaii))
         {
             const float outerR = radius + 6.5f;
-            if (s_knobStyle == 2 || s_useKawaii)
+            const juce::Colour goldCol = Palette::metalMid;
+            g.setColour (goldCol.withAlpha (isWorking ? 0.68f : 0.28f));
+            g.drawEllipse (c.x - outerR, c.y - outerR, outerR * 2.0f, outerR * 2.0f, 2.0f);
+            for (int q = 0; q < 4; ++q)
             {
-                // ♥ V-Liver / Kawaii 主役ノブ専用: クチュール宝飾メタルのティアラハロー＆4方位ジュエル
-                const juce::Colour goldCol = Palette::metalMid;
-                g.setColour (goldCol.withAlpha (isWorking ? 0.68f : 0.28f));
-                g.drawEllipse (c.x - outerR, c.y - outerR, outerR * 2.0f, outerR * 2.0f, 2.0f);
-                for (int q = 0; q < 4; ++q)
+                const float qa = (float) q * juce::MathConstants<float>::halfPi + juce::MathConstants<float>::pi * 0.25f;
+                const float gx = c.x + (outerR + 0.5f) * std::sin (qa);
+                const float gy = c.y - (outerR + 0.5f) * std::cos (qa);
+                g.setColour (goldCol.withAlpha (isWorking ? 1.0f : 0.45f));
+                g.fillEllipse (gx - 4.4f, gy - 4.4f, 8.8f, 8.8f);
+                g.setColour (accent.withAlpha (isWorking ? 0.95f : 0.45f));
+                g.fillEllipse (gx - 3.0f, gy - 3.0f, 6.0f, 6.0f);
+                if (isWorking)
                 {
-                    const float qa = (float) q * juce::MathConstants<float>::halfPi + juce::MathConstants<float>::pi * 0.25f;
-                    const float gx = c.x + (outerR + 0.5f) * std::sin (qa);
-                    const float gy = c.y - (outerR + 0.5f) * std::cos (qa);
-                    g.setColour (goldCol.withAlpha (isWorking ? 1.0f : 0.45f));
-                    g.fillEllipse (gx - 4.4f, gy - 4.4f, 8.8f, 8.8f);
-                    g.setColour (accent.withAlpha (isWorking ? 0.95f : 0.45f));
-                    g.fillEllipse (gx - 3.0f, gy - 3.0f, 6.0f, 6.0f);
-                    if (isWorking)
-                    {
-                        g.setColour (juce::Colours::white.withAlpha (0.95f));
-                        g.fillEllipse (gx - 1.3f, gy - 1.3f, 2.6f, 2.6f);
-                    }
-                }
-            }
-            else
-            {
-                g.setColour (Palette::bgTop.darker (0.45f).withAlpha (isWorking ? 0.65f : 0.35f));
-                g.drawEllipse (c.x - outerR, c.y - outerR, outerR * 2.0f, outerR * 2.0f, 3.2f);
-                // 4方位の重厚なメカ・ロックブラケット爪
-                for (int q = 0; q < 4; ++q)
-                {
-                    const float qa = (float) q * juce::MathConstants<float>::halfPi + juce::MathConstants<float>::pi * 0.25f;
-                    juce::Path claw;
-                    claw.addCentredArc (c.x, c.y, outerR + 1.2f, outerR + 1.2f, 0.0f, qa - 0.18f, qa + 0.18f, true);
-                    g.setColour (accent.withAlpha (isWorking ? (0.45f + 0.35f * effInt) : 0.20f));
-                    g.strokePath (claw, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::butt));
+                    g.setColour (juce::Colours::white.withAlpha (0.95f));
+                    g.fillEllipse (gx - 1.3f, gy - 1.3f, 2.6f, 2.6f);
                 }
             }
         }
 
-        // ★ Red Dot Design Award 仕様: 外周32ステップ・クロノグラフ精密クリック目盛り＆5方位ジュエルインデックス
-        const int numTicks = isHero ? 32 : 24;
+        // ★ すっきり見やすい外周目盛り（主役ノブ12分割・標準ノブ8分割）
+        const int numTicks = isHero ? 12 : 8;
         for (int tick = 0; tick <= numTicks; ++tick)
         {
             const float tNorm = (float) tick / (float) numTicks;
             const float a = startAngle + (endAngle - startAngle) * tNorm;
             const bool activeTick = isWorking && (tNorm <= pos + 0.005f);
-            const bool majorTick  = (tick % (isHero ? 8 : 6) == 0);
+            const bool majorTick  = (tick % (isHero ? 3 : 2) == 0);
             const juce::Colour tickAccent = accent.interpolatedWith (dirTint, tNorm * 0.48f);
             if (s_knobStyle == 2)   // V-Liver: クチュール宝飾メタル台座＋ジュエル・ドット目盛り
             {
                 const float dotR = radius + 6.2f;
-                const float sz = majorTick ? 4.4f : 2.5f;
+                const float sz = majorTick ? 4.2f : 2.5f;
                 const float dx = c.x + dotR * std::sin (a);
                 const float dy = c.y - dotR * std::cos (a);
-                if (activeTick && majorTick)
-                {
-                    g.setColour (Palette::metalMid.withAlpha (0.90f));
-                    g.fillEllipse (dx - sz * 0.78f, dy - sz * 0.78f, sz * 1.56f, sz * 1.56f);
-                }
-                g.setColour (activeTick ? tickAccent.withAlpha (0.98f)
-                                        : Palette::metalMid.withAlpha (isWorking ? (majorTick ? 0.58f : 0.30f) : (majorTick ? 0.32f : 0.15f)));
+                g.setColour (activeTick ? tickAccent.withAlpha (0.95f)
+                                        : Palette::metalMid.withAlpha (isWorking ? (majorTick ? 0.52f : 0.26f) : (majorTick ? 0.28f : 0.14f)));
                 g.fillEllipse (dx - sz * 0.5f, dy - sz * 0.5f, sz, sz);
             }
             else
             {
-                const float inner = radius + (isHero ? 4.0f : 3.4f);
-                const float outer = radius + (majorTick ? (isHero ? 11.2f : 9.2f) : (isHero ? 7.6f : 6.0f));
+                const float inner = radius + (isHero ? 4.2f : 3.6f);
+                const float outer = radius + (majorTick ? (isHero ? 9.5f : 8.0f) : (isHero ? 6.8f : 5.6f));
                 if (activeTick)
                 {
-                    g.setColour (tickAccent.withAlpha (majorTick ? 1.0f : 0.85f));
+                    g.setColour (tickAccent.withAlpha (majorTick ? 0.95f : 0.78f));
                     g.drawLine (c.x + inner * std::sin (a), c.y - inner * std::cos (a),
                                 c.x + outer * std::sin (a), c.y - outer * std::cos (a),
-                                majorTick ? (isHero ? 2.4f : 1.9f) : 1.3f);
-                    if (majorTick)
-                    {
-                        const float jx = c.x + (outer + 1.4f) * std::sin (a);
-                        const float jy = c.y - (outer + 1.4f) * std::cos (a);
-                        g.setColour (juce::Colours::white.withAlpha (0.95f));
-                        g.fillEllipse (jx - 1.5f, jy - 1.5f, 3.0f, 3.0f);
-                    }
+                                majorTick ? (isHero ? 2.2f : 1.8f) : 1.3f);
                 }
                 else
                 {
                     g.setColour ((s_knobStyle == 6 ? Palette::metalHi : Palette::inkSoft)
-                                   .withAlpha (isWorking ? (majorTick ? 0.48f : 0.22f) : (majorTick ? 0.24f : 0.10f)));
+                                   .withAlpha (isWorking ? (majorTick ? 0.42f : 0.20f) : (majorTick ? 0.22f : 0.10f)));
                     g.drawLine (c.x + inner * std::sin (a), c.y - inner * std::cos (a),
                                 c.x + outer * std::sin (a), c.y - outer * std::cos (a),
-                                majorTick ? (isHero ? 1.6f : 1.3f) : 0.9f);
+                                majorTick ? (isHero ? 1.5f : 1.2f) : 0.9f);
                 }
             }
         }
@@ -2284,71 +2247,34 @@ public:
         }
 
         // Standard / Argon Cockpit (0) & Cyber Neon (4):
-        // 重厚な3D削り出しロータリー・スカート＋回転タービンブレード＋ツインブレード発光ポインター
-        g.setColour (juce::Colours::black.withAlpha (0.44f));
-        g.fillEllipse (c.x - kr, c.y - kr + 4.0f, kr * 2.0f, kr * 2.0f);
-        // 外周の3Dメタリックスカート（主役ノブはさらに重厚な2段ステップベゼル）
-        g.setGradientFill (juce::ColourGradient (Palette::panel2.brighter (0.28f), c.x - kr * 0.5f, c.y - kr,
-                                                 Palette::bgTop.darker (0.45f),    c.x + kr * 0.5f, c.y + kr, false));
+        // すっきり見やすいマット立体ベゼル＋発光ポインター
+        g.setColour (juce::Colours::black.withAlpha (0.40f));
+        g.fillEllipse (c.x - kr, c.y - kr + 3.5f, kr * 2.0f, kr * 2.0f);
+        g.setGradientFill (juce::ColourGradient (Palette::panel2.brighter (0.24f), c.x - kr * 0.5f, c.y - kr,
+                                                 Palette::bgTop.darker (0.42f),    c.x + kr * 0.5f, c.y + kr, false));
         g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+        g.setColour (s_knobStyle == 4 || isHero ? accent.withAlpha (0.68f) : Palette::panelLn.brighter (0.22f));
+        g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.5f : 1.2f);
 
-        // スカート外周の立体グリップ・ローレット刻み（回す感触を視覚化）
-        const int numFlutes = isHero ? 20 : 12;
-        for (int f = 0; f < numFlutes; ++f)
-        {
-            const float fa = angle + (float) f * juce::MathConstants<float>::twoPi / (float) numFlutes;
-            const bool majorF = (f % 2 == 0);
-            g.setColour (majorF ? accent.withAlpha (isHero ? 0.42f : 0.26f)
-                                : Palette::inkSoft.withAlpha (0.18f));
-            g.drawLine (c.x + kr * 0.76f * std::sin (fa), c.y - kr * 0.76f * std::cos (fa),
-                        c.x + kr * 0.96f * std::sin (fa), c.y - kr * 0.96f * std::cos (fa),
-                        majorF ? 1.5f : 1.0f);
-        }
-        g.setColour (s_knobStyle == 4 || isHero ? accent.withAlpha (0.76f) : Palette::panelLn.brighter (0.26f));
-        g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.6f : 1.3f);
-
-        // 内側のキャップ天面（深いオブシディアン凹面＋ガラス光沢クレセント）
-        const float capR = kr * (isHero ? 0.74f : 0.76f);
-        g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (0.35f), c.x, c.y - capR,
-                                                 Palette::panel.brighter (0.12f), c.x, c.y + capR, false));
+        // 内側のキャップ天面（滑らかなダーク凹面＋上縁のソフトハイライト）
+        const float capR = kr * (isHero ? 0.78f : 0.80f);
+        g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (0.32f), c.x, c.y - capR,
+                                                 Palette::panel.brighter (0.10f), c.x, c.y + capR, false));
         g.fillEllipse (c.x - capR, c.y - capR, capR * 2.0f, capR * 2.0f);
-        g.setColour (s_knobStyle == 4 ? Palette::salmon.withAlpha (0.55f) : accent.withAlpha (isHero ? 0.58f : 0.40f));
-        g.drawEllipse (c.x - capR, c.y - capR, capR * 2.0f, capR * 2.0f, isHero ? 1.5f : 1.1f);
-
-        // ★ 主役ノブ(heroKnob): 内部で角度に連動して回る3スポーク・リアクターローター＆精密目盛りリング
-        if (isHero && capR > 16.0f)
-        {
-            const float innerRingR = capR * 0.68f;
-            g.setColour (accent.withAlpha (0.22f));
-            g.drawEllipse (c.x - innerRingR, c.y - innerRingR, innerRingR * 2.0f, innerRingR * 2.0f, 1.0f);
-            for (int sp = 0; sp < 3; ++sp)
-            {
-                const float sa = angle + (float) sp * juce::MathConstants<float>::twoPi / 3.0f;
-                g.setColour (accent.withAlpha (0.28f));
-                g.drawLine (c.x + kr * 0.24f * std::sin (sa), c.y - kr * 0.24f * std::cos (sa),
-                            c.x + capR * 0.92f * std::sin (sa), c.y - capR * 0.92f * std::cos (sa), 2.2f);
-            }
-        }
+        g.setColour (s_knobStyle == 4 ? Palette::salmon.withAlpha (0.45f) : accent.withAlpha (isHero ? 0.45f : 0.30f));
+        g.drawEllipse (c.x - capR, c.y - capR, capR * 2.0f, capR * 2.0f, 1.0f);
 
         // 天面ガラスの三日月ハイライト
-        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.24f), c.x, c.y - capR,
+        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.18f), c.x, c.y - capR,
                                                  juce::Colours::transparentWhite,        c.x, c.y, false));
-        g.fillEllipse (c.x - capR * 0.82f, c.y - capR * 0.90f, capR * 1.64f, capR * 0.85f);
+        g.fillEllipse (c.x - capR * 0.80f, c.y - capR * 0.88f, capR * 1.60f, capR * 0.80f);
 
-        if (s_knobStyle == 4)   // Cyber Neon: 内部クロスヘア・レティクル
-        {
-            g.setColour (accent.withAlpha (0.24f));
-            g.drawHorizontalLine (juce::roundToInt (c.y), c.x - kr * 0.55f, c.x + kr * 0.55f);
-            g.drawVerticalLine   (juce::roundToInt (c.x), c.y - kr * 0.55f, c.y + kr * 0.55f);
-        }
-        // 中心のホログラム・コアハブ
-        const float hubR = kr * (isHero ? 0.26f : 0.24f);
+        // 中心のコアハブ
+        const float hubR = kr * (isHero ? 0.20f : 0.18f);
         g.setColour (Palette::bgTop.darker (0.40f));
         g.fillEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f);
-        g.setColour (accent.withAlpha (0.78f));
-        g.drawEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f, 1.4f);
-        g.setColour (accent.withAlpha (0.55f));
-        g.fillEllipse (c.x - hubR * 0.45f, c.y - hubR * 0.45f, hubR * 0.90f, hubR * 0.90f);
+        g.setColour (accent.withAlpha (0.72f));
+        g.drawEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f, 1.2f);
 
         const float pOut = kr * 0.88f, pIn = kr * 0.26f;
         juce::Path pointer;
@@ -2983,18 +2909,18 @@ public:
         timeData.resize ((size_t) VocalGzzioProcessor::analyzerSize, 0.0f);
         fftData .resize ((size_t) VocalGzzioProcessor::analyzerSize * 2, 0.0f);
         specDb  .resize ((size_t) VocalGzzioProcessor::analyzerSize / 2 + 1, -120.0f);
-        startTimerHz (30);
+        startTimerHz (20);
     }
 
     void paint (juce::Graphics&) override;
-    void resized() override { gridImage = juce::Image(); }   // v1.5.0: invalidate grid cache
+    void resized() override { gridImage = juce::Image(); cachedPx = 0; }   // v1.5.0: invalidate grid & EQ curve cache
 
     // v1.7.0: run the FFT/analyzer only while actually visible. When the graph is
     // hidden (Effects tab, or the lightweight display modes) the timer stops, so no
     // FFT and no repaints happen — a real CPU saving.
     void visibilityChanged() override
     {
-        if (isVisible() && ! liteMode) startTimerHz (30);
+        if (isVisible() && ! liteMode) startTimerHz (20);
         else                           stopTimer();
     }
 
@@ -3002,7 +2928,7 @@ public:
     {
         liteMode = lite;
         if (liteMode || ! isVisible()) stopTimer();
-        else                           startTimerHz (30);
+        else                           startTimerHz (20);
         repaint();
     }
     bool isLiteMode() const noexcept { return liteMode; }
@@ -3072,6 +2998,11 @@ private:
     juce::dsp::WindowingFunction<float> window { (size_t) VocalGzzioProcessor::analyzerSize,
                                                  juce::dsp::WindowingFunction<float>::hann };
     std::vector<float> timeData, fftData, specDb;
+    std::vector<float> cachedStatDb, liveDb;
+    int    cachedPx     { 0 };
+    double cachedSr     { 0.0 };
+    float  cachedLowcut { -999.0f }, cachedMud { -999.0f }, cachedHarsh { -999.0f },
+           cachedPres   { -999.0f }, cachedAir { -999.0f };
 
     static constexpr float fMin  = 20.0f;
     static constexpr float fMax  = 20000.0f;
@@ -5592,6 +5523,8 @@ private:
     void openVoiceChangerPopup (juce::Rectangle<int> anchorScreenBounds);
     void openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds);
     void openPresetMatrixMenu (juce::Rectangle<int> anchorScreenBounds);
+    void browseCustomSeSlot (int slotIndex);
+    void openCustomSeSlotMenu (int slotIndex, juce::Rectangle<int> anchorScreenBounds);
     juce::Rectangle<int> detailVerBadgeRect; // 詳細・かんたん画面ヘッダの歴代バージョン切替バッジ領域
     int  lastAppliedLegacyVer { 0 };
     bool lastAppliedLegacyEco { true };
@@ -5615,7 +5548,8 @@ private:
     juce::Rectangle<int> coughPillRect;   // 😷 咳払い・くしゃみ瞬間ミュート（8ms無音フェード・残響鳴り残り防止）ピル
     juce::Rectangle<int> stagePillRect;   // 🎵 BGMプレイヤー・1クリックWAV録音・30秒さかのぼり保存・声質ターゲット診断ピル
     juce::Rectangle<int> chorusPillRect;  // 🔥 v5.0: サビ1クリック華やか演出 (Chorus Boost) ピル
-    std::array<juce::Rectangle<int>, 4> liveSeRects; // 👏 v5.0: 歌枠・VC盛り上げ 4種ライブSEポン出しパッド (拍手/キラキラ/ドラム/チャイム)
+    std::array<juce::Rectangle<int>, 4> liveSeRects;   // 👏 v5.0: 歌枠・VC盛り上げ 4種ライブSEポン出しパッド (拍手/キラキラ/ドラム/チャイム)
+    std::array<juce::Rectangle<int>, 4> customSeRects; // 🎵 自作音源カスタムSE 4枠ポン出しパッド (自分で用意した .wav/.mp3/.flac/.ogg/.aiff)
     juce::Rectangle<int> fineTargetRect;  // 🎯 指が太い人・タッチ対応：現在選択中のツマミ名＆数値表示ピル（タップで次のツマミへ順送り）
     juce::Rectangle<int> fineMinusRect;   // ➖ 指が太い人・タッチ対応：選択中ツマミを1ステップ下げる大型ボタン
     juce::Rectangle<int> finePlusRect;    // ➕ 指が太い人・タッチ対応：選択中ツマミを1ステップ上げる大型ボタン

@@ -2,7 +2,7 @@
 set(gz_unit_tests
     dsp_ornament dsp_hum dsp_consonant dsp_resonance dsp_popclick
     dsp_ride dsp_mixalign dsp_proximity dsp_longrun dsp_vc_uv dsp_heya
-    dsp_voiceshift_stress dsp_pitchquality dsp_tdshift)
+    dsp_voiceshift_stress dsp_pitchquality dsp_tdshift test_4hour_crackle)
 
 set(gz_integration_tests
     dsp_noalloc dsp_checkup dsp_dnlearn dsp_dnstartup dsp_dnpreinput dsp_srcmode dsp_rt_alloc dsp_cpu

@@ -551,17 +551,13 @@ int main()
                "Centered output is mirrored to extra multi-channel outputs (Out 3/4)");
         routeProc->releaseResources();
     }
-    // Verify IR Reverb Acoustic Decay Curve Visualizer, Custom IR WAV Loader, and 1st-Order ADAA saturation
+    // Verify non-working Reverb IR presets are removed from the UI (only the 7 algorithmic reverbs are exposed)
     {
         view.setOverview (true);
         view.setOverviewLayoutMode (0);
-        // In Argon Cockpit (mode 0), overviewCards[2] is at rightX=1102, y=360, spaceRow2 is at y=360+12+88=460, right side around x=1450..1530
-        const juce::Point<int> irPt (1480, 475);
-        check (view.overviewHelpAt (irPt).isNotEmpty(), "IR Reverb capsule in 03 SPACE has hover help");
-        setParameter ("rev_type", 0.0f);
-        check (view.handleOverviewMouseDown (irPt), "clicking IR Reverb capsule in 03 SPACE is handled");
-        check ((int) processor->apvts.getRawParameterValue ("rev_type")->load() >= kHeyaFirst,
-               "clicking IR Reverb capsule switches reverb type to Heya IR room");
+        auto* revBox = dynamic_cast<juce::ComboBox*> (find ("reverbType"));
+        check (revBox != nullptr && revBox->getNumItems() == kHeyaFirst,
+               "reverbType ComboBox exposes only the 7 algorithmic reverbs (built-in IR presets removed from UI)");
 
         float curve[24] {};
         processor->getReverbIrCurve (curve, 24);
@@ -775,6 +771,61 @@ int main()
         check (view.handleOverviewMouseDown (sePts[3]), "clicking active Live SE pad again stops SE");
         check (processor->getActiveLiveSe() == -1, "Live SE returns to stopped (-1)");
         check (view.overviewHelpAt ({ 100, 40 }).isNotEmpty(), "hovering top-left brand/version badge in Overview shows Legacy Time Machine help");
+
+        //   Verify 4 Custom User SE Slots (user-prepared audio files in slots 0..3 / activeLiveSe 4..7)
+        {
+            auto tmpSeFile = processor->getRecordingsDirectory().getChildFile ("test_custom_se.wav");
+            {
+                juce::WavAudioFormat wavFmt;
+                juce::AudioBuffer<float> seTestBuf (2, 12000);
+                for (int i = 0; i < 12000; ++i)
+                {
+                    const float v = 0.60f * std::sin (2.0f * juce::MathConstants<float>::pi * 523.25f * (float) i / 48000.0f);
+                    seTestBuf.setSample (0, i, v);
+                    seTestBuf.setSample (1, i, v);
+                }
+                tmpSeFile.deleteFile();
+                std::unique_ptr<juce::FileOutputStream> out (tmpSeFile.createOutputStream());
+                if (out != nullptr)
+                {
+                    std::unique_ptr<juce::AudioFormatWriter> writer (wavFmt.createWriterFor (out.get(), 48000.0, 2, 16, {}, 0));
+                    if (writer != nullptr)
+                    {
+                        out.release();
+                        writer->writeFromAudioSampleBuffer (seTestBuf, 0, seTestBuf.getNumSamples());
+                    }
+                }
+            }
+            const juce::Point<int> csePts[4] = {
+                { 1220, 859 }, { 1313, 859 }, { 1406, 859 }, { 1499, 859 }
+            };
+            check (view.overviewHelpAt (csePts[0]).isNotEmpty(), "hovering Custom SE pad shows explanation");
+            for (int s = 0; s < 4; ++s)
+            {
+                check (! processor->hasCustomSeLoaded (s), "Custom SE slot starts empty");
+                check (processor->loadCustomSeFile (s, tmpSeFile), "loadCustomSeFile loads WAV into custom SE slot");
+                check (processor->hasCustomSeLoaded (s), "hasCustomSeLoaded is true after loading");
+                check (processor->getCustomSeTitle (s) == "test_custom_se", "getCustomSeTitle returns file name without extension");
+                check (view.handleOverviewMouseDown (csePts[s]), "clicking loaded Custom SE pad triggers playback");
+                check (processor->getActiveLiveSe() == 4 + s, "activeLiveSe matches triggered Custom SE slot (4 + s)");
+                // Advance a couple blocks past the 3ms fade-in
+                for (int b = 0; b < 3; ++b)
+                {
+                    voiceBuf.clear();
+                    processor->processBlock (voiceBuf, loopMidi);
+                }
+                const float cMag = voiceBuf.getMagnitude (0, 256);
+                check (cMag > 0.05f && cMag <= 0.45f, "Custom SE slot outputs normalized non-clipping audio in processBlock");
+            }
+            check (view.handleOverviewMouseDown (csePts[3]), "clicking active Custom SE pad again stops playback");
+            check (processor->getActiveLiveSe() == -1, "Custom SE returns to stopped (-1)");
+            for (int s = 0; s < 4; ++s)
+            {
+                processor->clearCustomSeSlot (s);
+                check (! processor->hasCustomSeLoaded (s), "clearCustomSeSlot clears custom SE slot");
+            }
+            tmpSeFile.deleteFile();
+        }
 
         //   Pillar 1 & 2: 1-Click BGM Vocal Cancel (Karaoke) + -14 LUFS Auto-Master & FullMix Export
         check (! processor->getBgmVocalCancel(), "BGM Vocal Cancel starts OFF");
@@ -1286,6 +1337,72 @@ int main()
                 processor->setUpwardAirOn (false);
                 processor->setPitchSweetSpotOn (false);
                 processor->setSingerCueMonitorOn (false);
+            }
+
+            // Verify v5.4.0 Vocal Sound-Shaping 4 Pillars:
+            //   1. Natural Tail Vibrato & Throat Shimmer (tailVibratoOn)
+            //   2. Vowel-Homogenizing Formant Equalizer (vowelAlignOn)
+            //   3. Vocal Onset & Groove Articulator (onsetGrooveOn)
+            //   4. Mix-Voice Bridge & Sub-Chest Anchor (mixVoiceBridgeOn)
+            {
+                processor->setTailVibratoOn (true);
+                processor->setVowelAlignOn (true);
+                processor->setOnsetGrooveOn (true);
+                processor->setMixVoiceBridgeOn (true);
+                check (processor->getTailVibratoOn() && processor->getVowelAlignOn()
+                    && processor->getOnsetGrooveOn() && processor->getMixVoiceBridgeOn(),
+                       "v5.4.0 Pillars 1, 2, 3 & 4 toggles enable cleanly");
+
+                // 1) Feed silence then a sharp phrase onset into a sustained 440 Hz (A4) note with thin harmonic ratio & /i/-like formant
+                juce::MidiBuffer midi;
+                for (int blk = 0; blk < 24; ++blk)
+                {
+                    juce::AudioBuffer<float> sil (2, 256);
+                    sil.clear();
+                    processor->processBlock (sil, midi);
+                }
+                float maxOnsetDb = 0.0f;
+                for (int blk = 0; blk < 64; ++blk)
+                {
+                    juce::AudioBuffer<float> buf (2, 256);
+                    for (int n = 0; n < 256; ++n)
+                    {
+                        const float t = (float) (blk * 256 + n) / 48000.0f;
+                        // Fundamental 440 Hz + strong 2.25 kHz /i/ nasal formant, weak 2nd/3rd harmonic (falsetto/head-voice like)
+                        const float v = 0.06f * std::sin (2.0f * juce::MathConstants<float>::pi * 440.0f  * t)
+                                      + 0.005f * std::sin (2.0f * juce::MathConstants<float>::pi * 880.0f  * t)
+                                      + 0.14f * std::sin (2.0f * juce::MathConstants<float>::pi * 2250.0f * t);
+                        buf.setSample (0, n, v);
+                        buf.setSample (1, n, v);
+                    }
+                    processor->processBlock (buf, midi);
+                    maxOnsetDb = juce::jmax (maxOnsetDb, processor->getOnsetGrooveMeterDb());
+                }
+                check (processor->getTailVibratoMeterDb() > 1.0f,
+                       "v5.4.0 Pillar 1: Natural Tail Vibrato blooms on sustained notes (>180 ms)");
+                check (processor->getVowelAlignMeterDb() > 0.3f,
+                       "v5.4.0 Pillar 2: Vowel-Homogenizing Formant EQ balances thin /i/-like vowel formants");
+                check (maxOnsetDb > 0.2f,
+                       "v5.4.0 Pillar 3: Vocal Onset & Groove Articulator shapes the first 35 ms of phrase onsets");
+                check (processor->getMixVoiceBridgeMeterDb() > 0.3f,
+                       "v5.4.0 Pillar 4: Mix-Voice Bridge & Sub-Chest Anchor bridges thin high notes with harmonics & sub-octave chest");
+
+                // Verify XML state round-trip of v5.4.0 flags
+                juce::MemoryBlock st54;
+                processor->getStateInformation (st54);
+                processor->setTailVibratoOn (false);
+                processor->setVowelAlignOn (false);
+                processor->setOnsetGrooveOn (false);
+                processor->setMixVoiceBridgeOn (false);
+                processor->setStateInformation (st54.getData(), (int) st54.getSize());
+                check (processor->getTailVibratoOn() && processor->getVowelAlignOn()
+                    && processor->getOnsetGrooveOn() && processor->getMixVoiceBridgeOn(),
+                       "v5.4.0 Pillars 1, 2, 3 & 4 state flags round-trip through XML state");
+
+                processor->setTailVibratoOn (false);
+                processor->setVowelAlignOn (false);
+                processor->setOnsetGrooveOn (false);
+                processor->setMixVoiceBridgeOn (false);
             }
         }
     }

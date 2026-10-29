@@ -191,21 +191,31 @@ public:
         lastError = adm().initialise (0, 2, nullptr, false, deviceName, nullptr);
         if (lastError.isNotEmpty()) { adm().closeAudioDevice(); return false; }
 
+        int devBufSamples = 480;
         if (auto* dev = adm().getCurrentAudioDevice())
+        {
             devSr = dev->getCurrentSampleRate() > 0.0 ? dev->getCurrentSampleRate() : hostSr;
+            devBufSamples = juce::jmax (128, dev->getCurrentBufferSizeSamples());
+        }
         else
+        {
             devSr = hostSr;
+        }
+        lastDevBufSamples = devBufSamples;
 
-        // FIFO を目標量(約30ms)まで無音で満たしてから流し始める。
-        // 低遅延を保ちつつ出だしの数ブロックで在庫切れ→プチッと鳴るのを防ぐ。
+        // FIFO を目標量(約35ms または デバイスバッファ×3 の大きい方)まで無音で満たしてから流し始める。
+        // 低遅延を保ちつつ、2スレッド間の起床タイミング揺らぎや長時間稼働での在庫切れ・プチノイズを防ぐ。
         fifo.reset();
         ring.clear();
-        target = juce::jlimit (256, ringLen / 4, (int) (hostSr * 0.03));
+        target = juce::jlimit (512, ringLen / 4, juce::jmax ((int) (hostSr * 0.035), devBufSamples * 3));
         {
             int s1, sz1, s2, sz2;
             fifo.prepareToWrite (target, s1, sz1, s2, sz2);
             fifo.finishedWrite (sz1 + sz2);
         }
+        fillSm = (double) target;
+        lastOut[0] = lastOut[1] = 0.0f;
+        needCrossfade = false;
         ratioSm = hostSr / juce::jmax (8000.0, devSr);
         for (auto& i : interp) i.reset();
         underruns.store (0);
@@ -277,7 +287,8 @@ public:
         if (sr > 0.0 && std::abs (sr - hostSr) > 1.0)
         {
             hostSr = sr;
-            target = juce::jlimit (256, ringLen / 4, (int) (hostSr * 0.03));
+            target = juce::jlimit (512, ringLen / 4, juce::jmax ((int) (hostSr * 0.035), lastDevBufSamples * 3));
+            fillSm = (double) target;
             if (devSr > 0.0)
                 ratioSm = juce::jlimit (0.2, 4.5, hostSr / devSr);
         }
@@ -321,9 +332,14 @@ private:
         if (dev != nullptr)
         {
             devSr = dev->getCurrentSampleRate() > 0.0 ? dev->getCurrentSampleRate() : hostSr;
-            const int want = juce::jmax (4096, dev->getCurrentBufferSizeSamples() * 8 + 64);
+            lastDevBufSamples = juce::jmax (128, dev->getCurrentBufferSizeSamples());
+            target = juce::jlimit (512, ringLen / 4, juce::jmax ((int) (hostSr * 0.035), lastDevBufSamples * 3));
+            fillSm = (double) target;
+            const int want = juce::jmax (4096, lastDevBufSamples * 8 + 64);
             if (temp.getNumSamples() < want) temp.setSize (2, want, false, false, true);
         }
+        lastOut[0] = lastOut[1] = 0.0f;
+        needCrossfade = false;
         ratioSm = juce::jlimit (0.2, 4.5, hostSr / juce::jmax (8000.0, devSr));
     }
 
@@ -340,8 +356,8 @@ private:
 
         int fill = fifo.getNumReady();
 
-        // OSやVRワールド読み込み等でWASAPIスレッドが一時停止し、FIFOに90ms以上の遅延が溜まった場合は
-        // 目標量(30ms)まで即座にスキップし、通話相手に声が遅れて届き続ける現象を防ぐ
+        // OSやVRワールド読み込み等でWASAPIスレッドが一時停止し、FIFOに過大な遅延が溜まった場合は
+        // 目標量までスキップし、クロスフェードでプチノイズ無しに復帰する
         const int maxAllowedFill = juce::jmax (target * 3, 4096);
         if (fill > maxAllowedFill)
         {
@@ -350,19 +366,39 @@ private:
             fifo.prepareToRead (drop, ds1, dsz1, ds2, dsz2);
             fifo.finishedRead (dsz1 + dsz2);
             fill = fifo.getNumReady();
+            fillSm = (double) target;
+            for (auto& i : interp) i.reset();
+            needCrossfade = true;
         }
 
-        // --- クロックずれの吸収: たまり具合から再生速度を微調整 ---
-        const double err  = (double) (fill - target) / (double) juce::jmax (1, target);
-        const double corr = juce::jlimit (-0.005, 0.005, err * 0.05);   // 最大±0.5%
+        // --- クロックずれの吸収: 2スレッド間のブロック起床ジッターを平滑化してから再生速度を微調整 ---
+        fillSm += 0.015 * ((double) fill - fillSm);
+        const double diff = fillSm - (double) target;
+        const double deadband = 64.0;
+        const double effDiff = (std::abs (diff) <= deadband) ? 0.0
+                             : (diff > 0.0 ? diff - deadband : diff + deadband);
+        const double err  = effDiff / (double) juce::jmax (1, target);
+        const double corr = juce::jlimit (-0.0025, 0.0025, err * 0.015);   // 最大±0.25%の超滑らか追従
         const double want = (hostSr / juce::jmax (8000.0, devSr)) * (1.0 + corr);
-        ratioSm += 0.06 * (want - ratioSm);
+        ratioSm += 0.015 * (want - ratioSm);
         ratioSm = juce::jlimit (0.2, 4.5, ratioSm);
 
         const int numIn = (int) std::ceil ((double) numSamples * ratioSm) + 2;
         if (numIn > temp.getNumSamples() || fill < numIn)
         {
-            underruns.fetch_add (1);      // 在庫切れ: この回は無音のまま抜けることで次回すぐtarget分の蓄えを回復する
+            underruns.fetch_add (1);
+            // 在庫切れ時: いきなり0埋めすると境界でチリチリ・プチノイズが出るため、
+            // 直前サンプルから滑らかに減衰させつつ次回分の安全クッションを回復する
+            for (int i = 0; i < numSamples; ++i)
+            {
+                lastOut[0] *= 0.985f;
+                lastOut[1] *= 0.985f;
+                if (out[0] != nullptr) out[0][i] = lastOut[0];
+                if (numOut > 1 && out[1] != nullptr) out[1][i] = lastOut[1];
+            }
+            for (auto& i : interp) i.reset();
+            fillSm = (double) target;
+            needCrossfade = true;
             return;
         }
 
@@ -404,6 +440,26 @@ private:
                 if (out[ch] != nullptr) juce::FloatVectorOperations::clear (out[ch], numSamples);
         }
         fifo.finishedRead (juce::jlimit (0, numIn, used));
+
+        if (needCrossfade)
+        {
+            const int xfadeLen = juce::jmin (numSamples, 64);
+            for (int i = 0; i < xfadeLen; ++i)
+            {
+                const float g = (float) (i + 1) / (float) (xfadeLen + 1);
+                if (out[0] != nullptr)
+                    out[0][i] = lastOut[0] * (1.0f - g) + out[0][i] * g;
+                if (numOut > 1 && out[1] != nullptr)
+                    out[1][i] = lastOut[1] * (1.0f - g) + out[1][i] * g;
+            }
+            needCrossfade = false;
+        }
+        if (out[0] != nullptr)
+            lastOut[0] = out[0][numSamples - 1];
+        if (numOut > 1 && out[1] != nullptr)
+            lastOut[1] = out[1][numSamples - 1];
+        else
+            lastOut[1] = lastOut[0];
     }
 
     static constexpr int ringLen = 1 << 16;       // 65536 サンプル ≒ 1.3秒 @48k
@@ -423,8 +479,10 @@ private:
     std::atomic<bool> active { false };
     std::atomic<bool> forceMono { false };
     std::atomic<int>  underruns { 0 };
-    double hostSr = 48000.0, devSr = 48000.0, ratioSm = 1.0;
-    int    target = 1440;
+    double hostSr = 48000.0, devSr = 48000.0, ratioSm = 1.0, fillSm = 1680.0;
+    int    target = 1680, lastDevBufSamples = 480;
+    float  lastOut[2] { 0.0f, 0.0f };
+    bool   needCrossfade = false;
     juce::String deviceName_, lastError;
     bool allowMirror { true };
     std::unique_ptr<StreamOut> mirrorOut, mirrorOut2;

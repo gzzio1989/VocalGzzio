@@ -59,6 +59,13 @@ static float computePhraseSample (long idxInPhrase)
             s += ((double) (r & 0xffff) / 32768.0 - 1.0) * 0.05;
         }
     }
+    else if (t < 3.65)
+    {
+        // ささやき・語尾の微弱有声テール（-54dBFS付近: Upward Lifterで浮上する領域）
+        const double f0 = notes[2];
+        const double tailEnv = (3.65 - t) / 0.45;
+        s += 0.0020 * tailEnv * (std::sin (2.0 * M_PI * f0 * t) + 0.5 * std::sin (4.0 * M_PI * f0 * t));
+    }
     // 部屋の雑音（-60dB 程度・決定論的）
     unsigned q = (unsigned) (idxInPhrase * 2246822519u + 12345u);
     q ^= q >> 15; q *= 2654435761u; q ^= q >> 13;
@@ -122,7 +129,7 @@ static void runCase (const char* name, void (*setup) (VocalGzzioProcessor&), dou
         if (ph > basePhrase && ph < (long long) (minutes * 60.0 / kPhraseSec) - 1) marks.push_back ({ ph, lab });
     };
     addMark (120.0, "2分後"); addMark (300.0, "5分後"); addMark (3600.0, "1時間後");
-    addMark (6.0 * 3600.0, "6時間後"); addMark (12.5 * 3600.0, "12.5時間後(32bit溢れ直後)");
+    addMark (4.0 * 3600.0, "4時間後"); addMark (6.0 * 3600.0, "6時間後"); addMark (12.5 * 3600.0, "12.5時間後(32bit溢れ直後)");
     marks.push_back ({ (long long) (minutes * 60.0 / kPhraseSec) - 1, "終盤" });
     std::vector<std::vector<float>> caps (marks.size());
     std::vector<bool> printed (marks.size(), false);
@@ -236,6 +243,18 @@ int main (int argc, char** argv)
             setP (p, "dly_on", 1.0f); setP (p, "delay", 35.0f);
             setP (p, "revon", 1.0f); setP (p, "revmix", 35.0f); setP (p, "rev_type", 10.0f);
             setP (p, "duck", 50.0f);
+        } },
+        { "v5.3.0フル(ささやき浮上エアー+オートスイートスポット+骨伝導返り+部屋鳴り除去+息継ぎ+名機マイク+ピッチ)", [] (VocalGzzioProcessor& p) {
+            setupFull (p);
+            p.setUpwardAirOn (true);
+            p.setPitchSweetSpotOn (true);
+            p.setSingerCueMonitorOn (true);
+            p.setRoomDereverbOn (true);
+            p.setBreathControlOn (true);
+            p.setMicModelMode (1);
+            p.setLipDeclickOn (true);
+            p.setBgmUnmaskOn (true);
+            p.setBgmVocalRiderOn (true);
         } },
     };
     const int defaultCount = 6;

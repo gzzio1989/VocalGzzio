@@ -741,10 +741,10 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
-    // 1d-7. v5.0: フッター右デッキの「👏 歌枠・VC盛り上げ 4種ライブSEポン出しパッド」
+    // 1d-7. v5.0: フッター右デッキの「👏 歌枠・VC盛り上げ 4種ライブSEポン出しパッド」＋「🎵 自作音源カスタムSE 4枠」
     for (int s = 0; s < 4; ++s)
     {
-        if (! liveSeRects[(size_t) s].isEmpty() && liveSeRects[(size_t) s].expanded (2, 4).contains (pt))
+        if (! liveSeRects[(size_t) s].isEmpty() && liveSeRects[(size_t) s].expanded (2, 1).contains (pt))
         {
             static const char* const kSeHintJa[4] = {
                 "【👏 ライブSE：拍手歓声】温かみのあるステレオ拍手＆ステージ歓声SEを再生しました（ヘッドホンと配信出力 VocalGzzio Driver の両方へ流れます。再生中に再クリックで停止）。",
@@ -771,21 +771,49 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
             repaint();
             return true;
         }
+        if (! customSeRects[(size_t) s].isEmpty() && customSeRects[(size_t) s].expanded (2, 1).contains (pt))
+        {
+            const bool rightOrMod = juce::ModifierKeys::currentModifiers.isPopupMenu()
+                                 || juce::ModifierKeys::currentModifiers.isShiftDown()
+                                 || juce::ModifierKeys::currentModifiers.isCommandDown();
+            if (! processor.hasCustomSeLoaded (s))
+            {
+                overviewHint = language->T ("【🎵 自作SE枠 ", "[CUSTOM SE SLOT ")
+                             + juce::String (s + 1)
+                             + language->T ("】自分で用意した音源ファイル（.wav / .mp3 / .flac / .ogg / .aiff）を選択してセットします。",
+                                            "] Select your own audio file (.wav / .mp3 / .flac / .ogg / .aiff) to assign to this pad.");
+                browseCustomSeSlot (s);
+            }
+            else if (rightOrMod)
+            {
+                openCustomSeSlotMenu (s, localAreaToGlobal (customSeRects[(size_t) s]));
+            }
+            else
+            {
+                if (processor.getActiveLiveSe() == 4 + s)
+                {
+                    processor.stopLiveSe();
+                    overviewHint = language->T ("【自作SE 停止】再生中の自作効果音を停止しました（Shift＋クリックまたは右クリックで別の音源へ入れ替え・消去できます）。",
+                                                "[CUSTOM SE STOPPED] Stopped custom sound effect playback (Shift+Click or Right-Click to replace or clear).");
+                }
+                else
+                {
+                    processor.triggerLiveSe (4 + s);
+                    overviewHint = language->T ("【🎵 自作SE枠 ", "[CUSTOM SE SLOT ")
+                                 + juce::String (s + 1) + ": " + processor.getCustomSeTitle (s)
+                                 + language->T ("】セットした自作効果音を再生しました（Shift＋クリックまたは右クリックで音源の入れ替え・消去）。",
+                                                "] Triggered custom user audio effect (Shift+Click or Right-Click to replace or clear).");
+                }
+            }
+            repaint();
+            return true;
+        }
     }
 
     // 1e. Output boost trim. The visible button and this hit-test use the same action.
     if (! levelBadgeRect.isEmpty() && levelBadgeRect.expanded (3, 5).contains (pt))
     {
         trimOverviewOutputLevel();
-        return true;
-    }
-
-    // 1f. 03 SPACE カード内の「🌊 IR波形・外部IR読込・声優先ダッキング」カプセルクリック
-    if (! irOverviewRect.isEmpty() && irOverviewRect.expanded (2, 4).contains (pt))
-    {
-        openIrSelectorMenu (localAreaToGlobal (irOverviewRect));
-        overviewHint = language->T ("【🌊 IR残響・外部IR読込・声優先ダッキング】内蔵6部屋のIR切替、外部IRファイル(.wav/.aiff)の読込、および「声優先ダッキング（歌っている最中は残響を抑え語尾で広げる）」を設定します。",
-                                    "[IR CONVOLUTION & DUCKING] Switch between the 6 built-in IR spaces, load a custom IR (.wav/.aiff), or set Vocal-Priority Space Ducking.");
         return true;
     }
 
@@ -1121,7 +1149,7 @@ void VocalGzzioContent::updateOverviewVisibility()
     if (accessMode == 2)
     {
         for (auto* sub : { (juce::Component*) &jnOnButton, (juce::Component*) &vcOnButton,
-                           (juce::Component*) &tempoFitButton, (juce::Component*) &sessionButton })
+                           (juce::Component*) &tempoFitButton })
             sub->setVisible (false);
     }
 
@@ -1219,11 +1247,8 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
                             "Simultaneously streams processed audio to 'ライン (VocalGzzio Driver (WDM))' (or SYNCROOM Driver / VB-CABLE) while keeping your main interface on ASIO.");
     if ((! latBadgeArea.isEmpty() && latBadgeArea.contains (pt))
         || juce::Rectangle<int> (20, 10, 212, 50).contains (pt))
-        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.1.0までの14世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
-                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any of the 14 generations from v1.0.0 to v5.1.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
-    if (irOverviewRect.contains (pt))
-        return language->T ("実空間IR（インパルス応答）残響の音響減衰カーブと声優先ダッキングを表示します。クリックすると内蔵6部屋のIR切替・外部IRファイル(.wav/.aiff)の読込・歌っている最中の残響自動回避（声優先ダッキング）が選べます。",
-                            "Displays the IR convolution decay curve and vocal-priority space ducking. Click to switch between 6 built-in rooms, load a custom IR (.wav/.aiff), or set vocal-priority ducking.");
+        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.4.0までの歴代世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
+                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any generation from v1.0.0 to v5.4.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
     if (talkPillRect.contains (pt))
         return language->T ("【歌枠⇄雑談MC 瞬間切替】クリックすると歌設定（残響・エコー・ハモリ・広がり）を一切壊さず一時ミュートし、曲間のトークでもお風呂場にならないクリアなMC声へワンタッチで切り替えます。",
                             "[Singing / MC Talk Toggle] Non-destructively mutes reverb, echo, harmony, and stereo width for clean between-song MC talk while preserving 100% of your singing settings for instant return.");
@@ -1255,6 +1280,10 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
         if (! liveSeRects[s].isEmpty() && liveSeRects[s].contains (pt))
             return language->T ("【👏 歌枠・VC盛り上げ ライブSEポン出しパッド】クリックすると拍手歓声・キラキラ・ドラムロール・チャイムの効果音を即座に再生し、自分の耳と配信出力（VocalGzzio Driver）の両方へ届けます。",
                                 "[Live SE Trigger Pads] Instantly plays Applause, Sparkle, Drumroll, or Chime sound effects to both your headphones and the VocalGzzio Driver stream output.");
+    for (size_t s = 0; s < customSeRects.size(); ++s)
+        if (! customSeRects[s].isEmpty() && customSeRects[s].contains (pt))
+            return language->T ("【🎵 自作音源カスタムSE 4枠ポン出しパッド】自分で用意した音声ファイル（.wav / .mp3 / .flac / .ogg / .aiff）を4枠までセットしてポン出しできます。未設定時はクリックでファイル選択、設定後はクリックで再生（Shift＋クリックまたは右クリックで入れ替え・消去）します。",
+                                "[Custom User SE 4 Trigger Pads] Load up to 4 of your own audio files (.wav / .mp3 / .flac / .ogg / .aiff). Click when empty to load a file; click when loaded to trigger/stop playback (Shift+Click or Right-Click to replace/clear).");
     if (juce::Rectangle<int> (24, 72, 86, 40).contains (pt))
         return language->T ("【🎛 3軸直交プリセット・マトリクス（全60種）】クリックすると「①声質・発声・悩み補正（男女共通20種）× ②マイク・収録環境補正（20種）× ③音楽ジャンル・サブジャンル（アニソン4系統・ボカロ2系統・ロック3系統・バラード・R&B・ラップ・演歌・ASMR等20種）」を自由に組み合わせて呼び出せます。",
                             "[3-Axis Orthogonal Preset Matrix (60 Presets)] Click to combine Axis 1: Voice & Phonation (20) x Axis 2: Mic & Room (20) x Axis 3: Musical Genre & Sub-Genre (20).");
@@ -1276,26 +1305,45 @@ void VocalGzzioContent::updateOverviewState()
     const auto status = learning ? language->T ("測定中：声を出さないで", "Learning: stay quiet")
                       : ! enabled ? measured + language->T (" ／ ノイズ除去は切", " / Reduction OFF")
                       : measured + language->T (" ／ 除去量 ", " / Amount ") + juce::String (amount) + "%";
-    overviewNoiseStatus.setText (status, juce::dontSendNotification);
-    dnClearButton.setVisible (learned);
-    overviewNoiseStatus.setColour (juce::Label::textColourId, ! enabled || amount == 0 ? Palette::yellow : Palette::inkSoft);
+    if (overviewNoiseStatus.getText() != status)
+        overviewNoiseStatus.setText (status, juce::dontSendNotification);
+    if (dnClearButton.isVisible() != learned)
+        dnClearButton.setVisible (learned);
+    const auto nsColWant = ! enabled || amount == 0 ? Palette::yellow : Palette::inkSoft;
+    if (overviewNoiseStatus.findColour (juce::Label::textColourId) != nsColWant)
+        overviewNoiseStatus.setColour (juce::Label::textColourId, nsColWant);
     const auto help = language->learn_tip() + "\n" + language->T ("測定だけでは除去量は変わりません。処理を入れ、ノイズ除去を20〜40%から上げて聴き比べてください。", "Learning does not change the amount. Enable processing, then start noise reduction at 20-40% and compare.");
-    overviewNoiseStatus.setTooltip (help);
+    if (overviewNoiseStatus.getTooltip() != help)
+        overviewNoiseStatus.setTooltip (help);
     const bool canTrim = processor.getInputLevel() > juce::Decibels::decibelsToGain (-52.0f)
                      && processor.getOutputLevel() > juce::Decibels::decibelsToGain (-14.0f)
                      && processor.apvts.getRawParameterValue ("makeup")->load() > 0.05f;
-    overviewOutputTrim.setButtonText (canTrim ? language->T ("増幅を下げる", "Trim boost") : language->T ("音量確認", "Check level"));
+    const auto trimTxtWant = canTrim ? language->T ("増幅を下げる", "Trim boost") : language->T ("音量確認", "Check level");
+    if (overviewOutputTrim.getButtonText() != trimTxtWant)
+        overviewOutputTrim.setButtonText (trimTxtWant);
+    const auto pwrTipWant = language->T ("この区画の処理をまとめて入／切します。詳細画面で一部だけ切っている場合は「一部」と表示します。", "Enable or bypass this section. PART means some processors were bypassed in the detailed view.");
     for (int i = 0; i < 3; ++i)
     {
         const auto modules = overviewModules (i);
         int count = 0;
         for (auto* id : modules) if (active (id)) ++count;
         auto& button = overviewSectionPower[(size_t) i];
-        button.setToggleState (count > 0, juce::dontSendNotification);
-        button.setButtonText (count == (int) modules.size() ? language->T ("入", "ON") : count == 0 ? language->T ("切", "OFF") : language->T ("一部", "PART"));
-        button.setTooltip (language->T ("この区画の処理をまとめて入／切します。詳細画面で一部だけ切っている場合は「一部」と表示します。", "Enable or bypass this section. PART means some processors were bypassed in the detailed view."));
+        if (button.getToggleState() != (count > 0))
+            button.setToggleState (count > 0, juce::dontSendNotification);
+        const auto btnTxtWant = count == (int) modules.size() ? language->T ("入", "ON") : count == 0 ? language->T ("切", "OFF") : language->T ("一部", "PART");
+        if (button.getButtonText() != btnTxtWant)
+            button.setButtonText (btnTxtWant);
+        if (button.getTooltip() != pwrTipWant)
+            button.setTooltip (pwrTipWant);
     }
-    auto enable = [] (Knob& k, bool state) { k.slider.setEnabled (state); k.label.setAlpha (state ? 1.0f : 0.5f); };
+    auto enable = [] (Knob& k, bool state)
+    {
+        if (k.slider.isEnabled() != state)
+        {
+            k.slider.setEnabled (state);
+            k.label.setAlpha (state ? 1.0f : 0.5f);
+        }
+    };
     for (auto* k : { &denoiseK, &gate }) enable (*k, active ("mod_souji"));
     for (auto* k : { &lowCut, &mudK, &resK }) enable (*k, active ("mod_totonoe"));
     enable (comp2K, active ("mod_soroe"));
@@ -1305,17 +1353,20 @@ void VocalGzzioContent::updateOverviewState()
 
     // ボイス変換がONのときはボタン上に現在のピッチ／フォルマント変化量（例: ボイチェン +4.0/+2.8）を明示表示
     const bool vcActive = active ("vc_on") && active ("mod_henshin");
+    juce::String vcTxtWant;
     if (vcActive && isOverview())
     {
         const float vp = processor.apvts.getRawParameterValue ("vc_pitch")->load();
         const float vf = processor.apvts.getRawParameterValue ("vc_form")->load();
         const auto fmtS = [] (float v) { return (v >= 0.0f ? "+" : "") + juce::String (v, 1); };
-        vcOnButton.setButtonText (language->T ("ボイチェン ", "VC ") + fmtS (vp) + "/" + fmtS (vf));
+        vcTxtWant = language->T ("ボイチェン ", "VC ") + fmtS (vp) + "/" + fmtS (vf);
     }
     else
     {
-        vcOnButton.setButtonText (language->vc_on_label());
+        vcTxtWant = language->vc_on_label();
     }
+    if (vcOnButton.getButtonText() != vcTxtWant)
+        vcOnButton.setButtonText (vcTxtWant);
 }
 
 void VocalGzzioContent::refreshOverviewText()
@@ -1433,6 +1484,7 @@ void VocalGzzioContent::resizedOverview()
     finePlusRect   = {};
     fineResetRect  = {};
     for (auto& r : liveSeRects) r = {};
+    for (auto& r : customSeRects) r = {};
     for (auto& r : argonBarRects) r = {};
     for (auto& r : argonTargetRects) r = {};
     for (auto& r : coutureSwatchRects) r = {};
@@ -1921,32 +1973,21 @@ void VocalGzzioContent::resizedOverview()
     revTypeBox.setBounds (spaceRow1);
 
     auto spaceRow2 = overviewCards[2].reduced (12).withTrimmedTop (88).withHeight (30);
+    irOverviewRect = {};
     if (isClassicV4)
     {
-        irOverviewRect = {};
-    overviewBackdropKey.w = 0;
+        overviewBackdropKey.w = 0;
     }
-    else if (eraNow <= 440 && ! showAllKnobs)
+    else if (accessMode == 2)
+    {
+        sessionButton.setBounds (spaceRow2);
+    }
+    else
     {
         const int spBtnW = (spaceRow2.getWidth() - 6) / 2;
         tempoFitButton.setBounds (spaceRow2.removeFromLeft (spBtnW));
         spaceRow2.removeFromLeft (6);
         sessionButton .setBounds (spaceRow2);
-        irOverviewRect = {};
-    overviewBackdropKey.w = 0;
-    }
-    else if (accessMode == 2)
-    {
-        irOverviewRect = spaceRow2;
-    }
-    else
-    {
-        const int spBtnW = (spaceRow2.getWidth() - 12) * 32 / 100;
-        tempoFitButton.setBounds (spaceRow2.removeFromLeft (spBtnW));
-        spaceRow2.removeFromLeft (6);
-        sessionButton .setBounds (spaceRow2.removeFromLeft (spBtnW));
-        spaceRow2.removeFromLeft (6);
-        irOverviewRect = spaceRow2;
     }
 
     for (auto* lamp : { &lampDn, &lampGate, &lampDs, &lampDly }) lamp->btn.setSize (28, 28);
@@ -1978,12 +2019,87 @@ void VocalGzzioContent::resizedOverview()
         int dx = overviewHelp.getRight() - 488;
         chorusPillRect = { dx, deckY, 102, deckH };
         dx += 102 + 6;
+        const int seTopY = overviewHelp.getY() + 10; // y=824..846 (contains y=844)
+        const int seBotY = overviewHelp.getY() + 34; // y=848..870 (custom user SE 4 slots)
         for (int s = 0; s < 4; ++s)
         {
-            liveSeRects[(size_t) s] = { dx, deckY, 88, deckH };
+            liveSeRects[(size_t) s]   = { dx, seTopY, 88, 22 };
+            customSeRects[(size_t) s] = { dx, seBotY, 88, 22 };
             dx += 88 + 5;
         }
     }
+}
+
+void VocalGzzioContent::browseCustomSeSlot (int slotIndex)
+{
+    if (slotIndex < 0 || slotIndex >= 4) return;
+    chooser = std::make_unique<juce::FileChooser> (
+        language->T ("自作SE枠 [", "Select Audio File for Custom SE Slot [")
+            + juce::String (slotIndex + 1)
+            + language->T ("] にセットする音源ファイルを選択 (.wav / .mp3 / .flac / .ogg / .aiff)",
+                           "] (.wav / .mp3 / .flac / .ogg / .aiff)"),
+        juce::File(), "*.wav;*.mp3;*.flac;*.ogg;*.aif;*.aiff");
+    const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+    juce::Component::SafePointer<VocalGzzioContent> safe (this);
+    chooser->launchAsync (flags, [safe, slotIndex] (const juce::FileChooser& fc)
+    {
+        if (safe == nullptr) return;
+        const auto f = fc.getResult();
+        if (f.existsAsFile())
+        {
+            if (safe->processor.loadCustomSeFile (slotIndex, f))
+            {
+                safe->overviewHint = safe->language->T ("【✅ 自作SE枠 ", "[CUSTOM SE SLOT ")
+                                   + juce::String (slotIndex + 1) + ": " + safe->processor.getCustomSeTitle (slotIndex)
+                                   + safe->language->T ("】音源をセットしました！クリックですぐにポン出し再生できます。",
+                                                        "] Loaded custom audio! Click the pad anytime to trigger playback.");
+            }
+            safe->repaint();
+        }
+    });
+}
+
+void VocalGzzioContent::openCustomSeSlotMenu (int slotIndex, juce::Rectangle<int> anchorScreenBounds)
+{
+    if (slotIndex < 0 || slotIndex >= 4) return;
+    juce::PopupMenu m;
+    const bool loaded = processor.hasCustomSeLoaded (slotIndex);
+    const juce::String title = loaded ? processor.getCustomSeTitle (slotIndex) : language->T ("未設定", "Empty");
+    m.addSectionHeader (language->T ("🎵 自作SE枠 ", "🎵 Custom SE Slot ")
+                        + juce::String (slotIndex + 1) + " (" + title + ")");
+    if (loaded)
+    {
+        m.addItem (1, language->T ("▶ この自作SEを再生 / 停止", "▶ Play / Stop Custom SE"));
+        m.addSeparator();
+    }
+    m.addItem (2, language->T ("📂 別の音源ファイル（.wav / .mp3 / .flac / .ogg / .aiff）を選択...",
+                               "📂 Choose Audio File (.wav / .mp3 / .flac / .ogg / .aiff)..."));
+    if (loaded)
+        m.addItem (3, language->T ("🗑 この枠の音源をクリア", "🗑 Clear This Slot"));
+
+    juce::Component::SafePointer<VocalGzzioContent> safe (this);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (anchorScreenBounds),
+                     [safe, slotIndex] (int res)
+                     {
+                         if (safe == nullptr || res <= 0) return;
+                         if (res == 1)
+                         {
+                             if (safe->processor.getActiveLiveSe() == 4 + slotIndex)
+                                 safe->processor.stopLiveSe();
+                             else
+                                 safe->processor.triggerLiveSe (4 + slotIndex);
+                             safe->repaint();
+                         }
+                         else if (res == 2)
+                         {
+                             safe->browseCustomSeSlot (slotIndex);
+                         }
+                         else if (res == 3)
+                         {
+                             safe->processor.clearCustomSeSlot (slotIndex);
+                             safe->repaint();
+                         }
+                     });
 }
 
 void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
@@ -2518,19 +2634,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.fillPath (armorPath);
             }
 
-            // 台形コックピット・ネームプレート帯 (y .. y+46) + 斜めハザードテレメトリストライプ
+            // 台形コックピット・ネームプレート帯 (y .. y+46)
             {
                 const float trapW = rf.getWidth() * 0.66f;
-                g.setColour (accent.withAlpha (nightTheme() ? 0.16f : 0.10f));
+                g.setColour (accent.withAlpha (nightTheme() ? 0.14f : 0.08f));
                 g.fillRoundedRectangle (rf.getX() + 2.0f, rf.getY() + 2.0f, trapW - 4.0f, 42.0f, 10.0f);
-
-                // 斜めテレメトリ・シェブロンスリット (///)
-                g.setColour (accent.withAlpha (nightTheme() ? 0.28f : 0.18f));
-                for (int sl = 0; sl < 4; ++sl)
-                {
-                    const float sx = rf.getX() + trapW - 44.0f + (float) sl * 9.0f;
-                    g.drawLine (sx + 10.0f, rf.getY() + 8.0f, sx, rf.getY() + 38.0f, 2.2f);
-                }
             }
 
             // ヘッダー仕切りレーザーコンジットライン
@@ -2917,7 +3025,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             ? language->T ("✦ 星屑プラネタリウム天球儀 ＆ 輪郭モニター", "CELESTIAL ASTROLABE & SPECTRUM")
             : isStudioStyle
             ? language->T ("◆ アナログ位相ゴニオメーター ＆ スペクトラム RTA", "ANALOG GONIOMETER & RTA")
-            : language->T ("ARGON 3D 回転トラッカーボール ＆ 4軸トリガー機関", "ARGON 3D TRACKBALL & 4-AXIS TRIGGER");
+            : language->T ("声の質感パッド ＆ 4軸バランス調整", "VOICE TEXTURE PAD & 4-AXIS BALANCE");
         auto monTitleRect = overviewMonitor.reduced (28, 8).withHeight (28);
         if (hasSwatches)
             monTitleRect.setRight (juce::jmax (monTitleRect.getX() + 60, coutureSwatchRects[0].getX() - 6));
@@ -3521,16 +3629,6 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (rimAccent.withAlpha (0.55f));
                 g.drawEllipse (cx - socketR, cy - socketR, socketR * 2.0f, socketR * 2.0f, 1.4f);
 
-                for (int deg = 0; deg < 36; ++deg)
-                {
-                    const float a = (float) deg * juce::MathConstants<float>::twoPi / 36.0f;
-                    const bool major = (deg % 3 == 0);
-                    g.setColour (major ? rimAccent.withAlpha (0.65f) : Palette::inkSoft.withAlpha (0.28f));
-                    g.drawLine (cx + std::cos (a) * (socketR - 3.5f), cy + std::sin (a) * (socketR - 3.5f),
-                                cx + std::cos (a) * (socketR - 0.5f), cy + std::sin (a) * (socketR - 0.5f),
-                                major ? 1.4f : 0.9f);
-                }
-
                 if (isNatureAura)
                 {
                     drawSparkle4 (cx, cy - socketR - 1.0f, 5.5f, Palette::yellow);
@@ -3638,24 +3736,6 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
             else
             {
-                // ★ 32本の放射状ポーラー倍音スペクトラム・ハローバー
-                for (int sb = 0; sb < 32; ++sb)
-                {
-                    const float sa = (float) sb * juce::MathConstants<float>::twoPi / 32.0f;
-                    const float dirW = 0.5f + 0.5f * std::cos (sa - std::atan2 (oy - cy, ox - cx));
-                    const float waveMod = 0.5f + 0.5f * std::sin ((float) sb * 1.7f + (vVal + sVal) * 0.05f);
-                    const float barEnergy = juce::jlimit (0.15f, 1.0f,
-                        0.22f + 0.42f * dirW + 0.25f * waveMod + (vAct + fAct + sAct + hAct) * 0.25f);
-                    const float rIn  = socketR + 1.8f;
-                    const float rOut = rIn + 2.5f + barEnergy * 7.5f;
-                    const juce::Colour barCol = (sb % 4 == 0) ? Palette::yellow
-                                              : (sb % 2 == 0) ? Palette::ice : Palette::salmon;
-                    g.setColour (barCol.withAlpha (0.32f + barEnergy * 0.52f));
-                    g.drawLine (cx + std::cos (sa) * rIn,  cy + std::sin (sa) * rIn,
-                                cx + std::cos (sa) * rOut, cy + std::sin (sa) * rOut,
-                                (sb % 4 == 0) ? 2.0f : 1.3f);
-                }
-
                 if (! isNatureAura)
                 {
                     const float brAngles[4] = { juce::MathConstants<float>::pi, -juce::MathConstants<float>::halfPi, 0.0f, juce::MathConstants<float>::halfPi };
@@ -3669,7 +3749,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                                                ba - 0.24f + juce::MathConstants<float>::halfPi,
                                                ba + 0.24f + juce::MathConstants<float>::halfPi, true);
                         g.setColour (brCols[b].withAlpha (0.38f + 0.55f * (brVals[b] * 0.01f)));
-                        g.strokePath (bearing, juce::PathStrokeType (4.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                        g.strokePath (bearing, juce::PathStrokeType (3.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
                     }
                 }
 
@@ -3784,31 +3864,6 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                         g.drawEllipse (ox - pulseR * 1.45f, oy - pulseR * 1.45f, pulseR * 2.9f, pulseR * 2.9f, 1.1f);
                     }
 
-                    const float satVals[4] = { vVal, fVal, sVal, hVal };
-                    const float satActs[4] = { vAct, fAct, sAct, hAct };
-                    const juce::Colour satCols[4] = { Palette::salmon, Palette::yellow, Palette::ice, Palette::blue };
-                    const float baseAngles[4] = { -2.45f, -1.57f, -0.55f, 1.57f };
-                    for (int s = 0; s < 4; ++s)
-                    {
-                        const float satDist = 13.0f + satVals[s] * 0.13f + satActs[s] * 7.5f;
-                        const float satAng  = baseAngles[s] + satActs[s] * 1.2f;
-                        const float sx = ox + std::cos (satAng) * satDist;
-                        const float sy = oy + std::sin (satAng) * satDist;
-                        g.setColour (satCols[s].withAlpha (0.75f));
-                        g.drawLine (ox, oy, sx, sy, 1.5f);
-                        if (isNatureAura)
-                        {
-                            drawSparkle4 (sx, sy, 5.2f, satCols[s]);
-                        }
-                        else
-                        {
-                            g.setColour (satCols[s]);
-                            g.fillEllipse (sx - 3.8f, sy - 3.8f, 7.6f, 7.6f);
-                            g.setColour (juce::Colours::white.withAlpha (0.85f));
-                            g.fillEllipse (sx - 1.5f, sy - 1.5f, 3.0f, 3.0f);
-                        }
-                    }
-
                     // 球面上の3Dポインター・ホットスポット核
                     g.setGradientFill (juce::ColourGradient (Palette::yellow.brighter (0.40f), ox - 4.0f, oy - 4.0f,
                                                              Palette::yellowDk,                ox + 6.0f, oy + 7.0f, true));
@@ -3833,25 +3888,6 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 
                 g.setColour (rimAccent.withAlpha (0.82f));
                 g.drawEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f, 1.6f);
-            }
-        }
-
-        // ★ Red Dot 四隅マイクロテレメトリ・インジケーターバー（左上=VELVET、右上=SILK、左下=FOCUS、右下=HALO）
-        if (! staticPass && ! liteMode && argonPadRect.getWidth() >= 230)
-        {
-            const float cVals[4] = { vVal, sVal, fVal, hVal };
-            const juce::Colour cCols[4] = { Palette::salmon, Palette::ice, Palette::yellow, Palette::blue };
-            const float cxs[4] = { padF.getX() + 8.0f, padF.getRight() - 46.0f, padF.getX() + 8.0f, padF.getRight() - 46.0f };
-            const float cys[4] = { padF.getY() + 24.0f, padF.getY() + 24.0f, padF.getBottom() - 46.0f, padF.getBottom() - 46.0f };
-            for (int c = 0; c < 4; ++c)
-            {
-                const juce::Rectangle<float> cr (cxs[c], cys[c], 38.0f, 5.0f);
-                g.setColour (Palette::bgTop.darker (0.45f).withAlpha (0.72f));
-                g.fillRoundedRectangle (cr, 2.5f);
-                g.setColour (cCols[c].withAlpha (0.88f));
-                g.fillRoundedRectangle (cr.withWidth (juce::jmax (4.0f, cr.getWidth() * juce::jlimit (0.0f, 1.0f, cVals[c] * 0.01f))), 2.5f);
-                g.setColour (Palette::metalMid.withAlpha (0.55f));
-                g.drawRoundedRectangle (cr, 2.5f, 0.8f);
             }
         }
 
@@ -3892,7 +3928,6 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
     if (! staticPass && ! argonBarRects[0].isEmpty() && g.clipRegionIntersects (argonBarRects[0].getUnion (argonBarRects[3]).expanded (8)))
     {
         const float vals[4] = { vVal, fVal, sVal, hVal };
-        const float acts[4] = { vAct, fAct, sAct, hAct };
         const char* barJa[4] = { "倍音 VELVET", "声芯 FOCUS", "空気 SILK",  "立体 HALO" };
         const char* barEn[4] = { "VELVET",      "FOCUS",      "SILK AIR",   "3D HALO" };
         const juce::Colour barCols[4] = { Palette::salmon, Palette::yellow, Palette::ice, Palette::blue };
@@ -3980,69 +4015,34 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
             else
             {
-                // ★ Red Dot 仕様: 24セグメント・オプティカルライトパイプ・タッチフェーダー
+                // ★ すっきり見やすい連続グラデーション・タッチフェーダー
                 g.setColour (pastelTheme() ? Palette::panel2.darker (0.05f) : Palette::bgTop.darker (0.48f).withAlpha (0.94f));
                 g.fillRoundedRectangle (rf, 6.5f);
 
-                // 24個のマイクロLEDライトパイプセル（ラベル領域と右端%表示の間を精密切削）
                 const float lblW = juce::jmin (90.0f, rf.getWidth() * 0.44f);
                 const float pctW = 46.0f;
-                const float trkX = rf.getX() + lblW + 3.0f;
-                const float trkW = juce::jmax (24.0f, rf.getWidth() - lblW - pctW - 6.0f);
-                const int numCells = (trkW >= 72.0f) ? 20 : 10;
-                const float cellStep = trkW / (float) numCells;
-                const float cellW    = juce::jmax (1.8f, cellStep - 1.4f);
-                for (int c = 0; c < numCells; ++c)
+                const float trkX = rf.getX() + lblW + 4.0f;
+                const float trkW = juce::jmax (24.0f, rf.getWidth() - lblW - pctW - 8.0f);
+                const juce::Rectangle<float> trkRect (trkX, rf.getY() + 4.0f, trkW, rf.getHeight() - 8.0f);
+                g.setColour (Palette::track.withAlpha (0.65f));
+                g.fillRoundedRectangle (trkRect, trkRect.getHeight() * 0.45f);
+
+                if (norm > 0.005f)
                 {
-                    const float cNorm = (float) (c + 1) / (float) numCells;
-                    const bool lit = (norm >= cNorm - (0.5f / (float) numCells));
-                    const juce::Colour cellCol = barCols[b].interpolatedWith (Palette::yellow, cNorm * 0.32f);
-                    const float cxCell = trkX + (float) c * cellStep;
-                    g.setColour (lit ? cellCol.withAlpha (0.62f) : cellCol.withAlpha (0.12f));
-                    g.fillRoundedRectangle (cxCell, rf.getY() + 2.4f, cellW, rf.getHeight() - 4.8f, 1.8f);
-                    if (lit)
-                    {
-                        g.setColour (cellCol.brighter (0.38f).withAlpha (0.92f));
-                        g.fillRect (cxCell, rf.getY() + 2.0f, cellW, 2.0f);
-                        g.fillRect (cxCell, rf.getBottom() - 4.0f, cellW, 2.0f);
-                    }
+                    const float fillW = juce::jmax (4.0f, trkW * norm);
+                    const juce::Rectangle<float> fillRect (trkX, trkRect.getY(), fillW, trkRect.getHeight());
+                    g.setGradientFill (juce::ColourGradient (barCols[b].withAlpha (0.55f), fillRect.getX(), fillRect.getY(),
+                                                             barCols[b].brighter (0.20f).withAlpha (0.90f), fillRect.getRight(), fillRect.getY(), false));
+                    g.fillRoundedRectangle (fillRect, trkRect.getHeight() * 0.45f);
                 }
 
-                // 実音倍音ピーク輝線
-                if (acts[b] > 0.02f)
-                {
-                    const float liveNorm = juce::jlimit (0.0f, 1.0f, norm * 0.7f + acts[b] * 0.6f);
-                    const float peakX = trkX + liveNorm * (trkW - 4.0f);
-                    g.setColour (barCols[b].brighter (0.45f));
-                    g.fillRoundedRectangle (peakX, rf.getY() + 2.0f, 2.8f, rf.getHeight() - 4.0f, 1.4f);
-                }
-
-                // 3Dオプティカルプリズム・フェーダーキャリッジ（上下の貴金属/チタン爪＋中央ホワイトホットレーザー刃）
-                const float capW = 11.0f;
+                // スライダーノブ（つまみ）
+                const float capW = 8.0f;
                 const float capX = trkX + norm * juce::jmax (2.0f, trkW - capW);
-                const float cxCap = capX + capW * 0.5f;
-                g.setColour (oceanStarTheme() ? Palette::metalHi : Palette::panel2.brighter (0.38f));
-                g.fillRoundedRectangle (capX, rf.getY() + 0.5f, capW, 4.8f, 2.0f);
-                g.fillRoundedRectangle (capX, rf.getBottom() - 5.3f, capW, 4.8f, 2.0f);
+                g.setColour (juce::Colours::white.withAlpha (0.92f));
+                g.fillRoundedRectangle (capX, rf.getY() + 2.5f, capW, rf.getHeight() - 5.0f, 3.0f);
                 g.setColour (barCols[b]);
-                g.drawRoundedRectangle (capX, rf.getY() + 0.5f, capW, 4.8f, 2.0f, 1.1f);
-                g.drawRoundedRectangle (capX, rf.getBottom() - 5.3f, capW, 4.8f, 2.0f, 1.1f);
-                g.setColour (juce::Colours::white.withAlpha (0.95f));
-                g.fillRect (cxCap - 1.0f, rf.getY() + 2.5f, 2.0f, rf.getHeight() - 5.0f);
-
-                // 左端のダーククリスタル・ラベルカプセル下地（文字の視認性を100%保証）
-                const juce::Rectangle<float> lblPill (rf.getX() + 2.2f, rf.getY() + 2.2f, lblW - 1.0f, rf.getHeight() - 4.4f);
-                g.setColour (Palette::bgTop.darker (0.58f).withAlpha (0.86f));
-                g.fillRoundedRectangle (lblPill, 4.5f);
-                g.setColour (barCols[b].withAlpha (0.52f));
-                g.drawRoundedRectangle (lblPill, 4.5f, 0.9f);
-
-                // 右端のOLEDパーセント表示カプセル下地
-                const juce::Rectangle<float> pctPill (rf.getRight() - pctW, rf.getY() + 2.2f, pctW - 2.2f, rf.getHeight() - 4.4f);
-                g.setColour (Palette::bgTop.darker (0.58f).withAlpha (0.86f));
-                g.fillRoundedRectangle (pctPill, 4.5f);
-                g.setColour (barCols[b].withAlpha (0.58f));
-                g.drawRoundedRectangle (pctPill, 4.5f, 0.9f);
+                g.drawRoundedRectangle (capX, rf.getY() + 2.5f, capW, rf.getHeight() - 5.0f, 3.0f, 1.2f);
             }
 
             g.setColour (kawaiiBars ? Palette::metalMid : (oceanStarTheme() ? Palette::metalMid.withAlpha (0.85f) : barCols[b].withAlpha (0.88f)));
@@ -4258,31 +4258,19 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
             else
             {
-                // スタジオコンソール風 LEDバーグラフ (標準18セグメント / コンパクト幅10セグメント)
+                // すっきり見やすい連続レベルメーターバー
                 const auto brf = barR.toFloat();
                 g.setColour (pastelTheme() ? Palette::track.darker (0.08f) : Palette::bgTop.darker (0.30f).withAlpha (0.85f));
                 g.fillRoundedRectangle (brf, 4.0f);
-                g.setColour (Palette::panelLn.withAlpha (0.65f));
+                g.setColour (Palette::panelLn.withAlpha (0.55f));
                 g.drawRoundedRectangle (brf.reduced (0.5f), 4.0f, 1.0f);
 
-                const int numSegs = (barR.getWidth() < 64) ? 10 : 18;
-                const float padX = 2.0f;
-                const float segStep = (brf.getWidth() - padX * 2.0f) / (float) numSegs;
-                const float segW = juce::jmax (1.5f, segStep - 1.3f);
-                for (int s = 0; s < numSegs; ++s)
+                if (rows[i].norm > 0.008f)
                 {
-                    const float sNorm = (float) (s + 1) / (float) numSegs;
-                    const bool lit = (rows[i].norm >= sNorm - (0.5f / (float) numSegs));
-                    juce::Colour segCol = rows[i].col;
-                    if (rows[i].levelZone)
-                    {
-                        segCol = (sNorm > 0.88f) ? Palette::salmon
-                               : (sNorm > 0.70f) ? Palette::yellow
-                               : Palette::green;
-                    }
-                    g.setColour (lit ? segCol : segCol.withAlpha (0.14f));
-                    g.fillRoundedRectangle (brf.getX() + padX + (float) s * segStep, brf.getY() + 1.8f,
-                                            segW, brf.getHeight() - 3.6f, 1.2f);
+                    const float fillW = juce::jmax (4.0f, (brf.getWidth() - 2.0f) * rows[i].norm);
+                    const juce::Rectangle<float> fillR (brf.getX() + 1.0f, brf.getY() + 1.2f, fillW, brf.getHeight() - 2.4f);
+                    g.setColour (rows[i].col.withAlpha (0.88f));
+                    g.fillRoundedRectangle (fillR, 3.2f);
                 }
             }
             g.setColour (Palette::inkSoft);
@@ -4916,9 +4904,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             card (r, accents[i]);
 
             const int pwrX = overviewSectionPower[(size_t) i].getX();
-            const int titleMaxW = (overviewLayoutMode == 2) ? juce::jmax (60, pwrX - (r.getX() + 30))
-                                : (accessMode == 2 || accessMode == 3) ? (i == 1 ? 168 : 150)
-                                                                       : (i == 1 ? 138 : 112);
+            const int titleMaxW = juce::jmax (80, pwrX - (r.getX() + 32));
             auto titleR = juce::Rectangle<int> (r.getX() + 26, r.getY() + 8, titleMaxW, 34);
             g.setColour ((accessMode == 2) ? accents[i] : Palette::ink);
             const char* namesJaClassic[] = { "整える", "声をつくる", "空間をつくる" };
@@ -4945,19 +4931,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         float kEff[4] = {};
         int   kDir[4] = {};
         juce::String kTagJa[4], kTagEn[4];
-        int activeKnobCount = 0;
-        float sumEff = 0.0f;
         for (int kIdx = 0; kIdx < 4; ++kIdx)
         {
             auto& sl = cardKnobs[i][kIdx]->slider;
             const float pos = (float) sl.valueToProportionOfLength (sl.getValue());
             GzzioLnF::queryKnobEffect (sl, pos, kEff[kIdx], kDir[kIdx], kTagJa[kIdx], kTagEn[kIdx]);
             if (! sl.isEnabled()) kEff[kIdx] = 0.0f;
-            if (kEff[kIdx] > 0.02f)
-            {
-                ++activeKnobCount;
-                sumEff += kEff[kIdx];
-            }
         }
 
         // ★ 3ウイング配置 / 天球・水鏡ホライズン配置 (overviewLayoutMode == 0): ペルソナ別にノブ台座＆軌道を装飾
@@ -5223,119 +5202,6 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
         }
 
-        const int pwrX = overviewSectionPower[(size_t) i].getX();
-        const int titleMaxW = (overviewLayoutMode == 2) ? juce::jmax (60, pwrX - (r.getX() + 30))
-                            : (accessMode == 2 || accessMode == 3) ? (i == 1 ? 168 : 150)
-                                                                   : (i == 1 ? 138 : 112);
-        auto titleR = juce::Rectangle<int> (r.getX() + 26, r.getY() + 8, titleMaxW, 34);
-
-        // ★ 各セクション見出し横の「リアルタイム音変化ステータス・ピル」:
-        //   そのセクションで今どんな変化が起きているか（雑音・こもり除去 / 声量均一＆美声ツヤ / 残響＆やまびこ）を視覚表示！
-        const int badgeX = titleR.getRight() + 4;
-        const int badgeW = pwrX - badgeX - 6;
-        if (! isClassicV4 && badgeW >= 68 && ! liteMode)
-        {
-            const juce::Rectangle<float> stPill ((float) badgeX, (float) (r.getY() + 13), (float) badgeW, 24.0f);
-            const bool secActive = (activeKnobCount > 0);
-            const float avgEff = secActive ? juce::jlimit (0.15f, 1.0f, sumEff / (float) activeKnobCount) : 0.0f;
-            const juce::String secSummary = (accessMode == 3)
-                ? (secActive ? language->T ("● 動作中", "● ACTIVE") : language->T ("○ 待機中", "○ STANDBY"))
-                : (accessMode == 1)
-                ? (i == 0 ? language->T ("▼ 雑音・こもりカット", "▼ CUT")
-                 : i == 1 ? language->T ("▲ 声量・明るさ補正", "▲ TONE")
-                          : language->T ("▲ 残響・広がり付加", "▲ SPACE"))
-                : (i == 0)
-                ? (badgeW >= 118 ? language->T ("🧹 雑音・こもり除去", "🧹 CLEAN ACTIVE") : language->T ("🧹 整音中", "🧹 CLEAN"))
-                : (i == 1)
-                ? (badgeW >= 150 ? language->T ("✨ 声量均一＆美声ツヤ", "✨ LEVEL & TONE") : language->T ("✨ 美声中", "✨ TONE"))
-                : (badgeW >= 118 ? language->T ("🌊 残響・空間拡大", "🌊 3D SPACE ON")     : language->T ("🌊 空間ON", "🌊 SPACE"));
-
-            g.setColour (pastelTheme() && ! nightTheme() && (accessMode == 0 || accessMode == 2)
-                         ? (secActive ? accents[i].withAlpha (0.22f) : Palette::panel2.withAlpha (0.75f))
-                         : Palette::bgTop.darker (0.48f).withAlpha (0.92f));
-            g.fillRoundedRectangle (stPill, (accessMode == 3) ? 6.0f : 12.0f);
-            if (secActive && accessMode != 3)
-            {
-                g.setColour (accents[i].withAlpha (0.35f));
-                g.fillRoundedRectangle (stPill.getX() + 8.0f, stPill.getBottom() - 3.2f,
-                                        (stPill.getWidth() - 16.0f) * avgEff, 2.2f, 1.1f);
-            }
-            g.setColour (secActive ? accents[i].withAlpha (0.90f) : Palette::panelLn.withAlpha (0.55f));
-            g.drawRoundedRectangle (stPill, (accessMode == 3) ? 6.0f : 12.0f, (accessMode == 1) ? 1.8f : (secActive ? 1.2f : 0.8f));
-            g.setColour (secActive ? Palette::ink : Palette::inkSoft);
-            fitText (g, secSummary, stPill.toNearestInt().reduced (6, 0), juce::Justification::centred, 14.0f, secActive);
-        }
-    }
-
-    // ---- 🌊 03 SPACE カード内: 実空間IR 音響減衰カーブ・オシロスコープ＆外部IR(.wav/.aiff)読込カプセル ----
-    if (! staticPass && ! irOverviewRect.isEmpty() && g.clipRegionIntersects (irOverviewRect.expanded (6)))
-    {
-        const auto irF = irOverviewRect.toFloat();
-        const int revType = (int) processor.apvts.getRawParameterValue ("rev_type")->load();
-        const bool isHeya = (revType >= kHeyaFirst);
-        const bool hasCustom = processor.hasCustomIr();
-        const auto accentCol = hasCustom ? Palette::ice : (isHeya ? (isLiverStyle ? Palette::salmon : Palette::yellow) : Palette::inkSoft);
-        const float irRad = (isLiverStyle || isYuruStyle) ? irF.getHeight() * 0.5f : 7.5f;
-
-        if (liteMode)
-        {
-            g.setColour (isHeya ? accentCol.withAlpha (0.24f) : Palette::panel2);
-            g.fillRoundedRectangle (irF, irRad);
-        }
-        else
-        {
-            g.setColour (pastelTheme() ? Palette::panel2.brighter (0.04f).withAlpha (0.92f)
-                                       : Palette::bgTop.darker (0.28f).withAlpha (0.88f));
-            g.fillRoundedRectangle (irF, irRad);
-
-            float irCurve[24] {};
-            processor.getReverbIrCurve (irCurve, 24);
-            juce::Path waveStroke, waveFill;
-            const float wx0 = irF.getX() + 6.0f;
-            const float ww  = juce::jmax (10.0f, irF.getWidth() - 12.0f);
-            const float wyBot = irF.getBottom() - 2.5f;
-            const float wh  = juce::jmax (6.0f, irF.getHeight() - 7.0f);
-            waveFill.startNewSubPath (wx0, wyBot);
-            for (int p = 0; p < 24; ++p)
-            {
-                const float px = wx0 + ww * (float) p / 23.0f;
-                const float py = wyBot - wh * juce::jlimit (0.0f, 1.0f, irCurve[p]);
-                if (p == 0) waveStroke.startNewSubPath (px, py);
-                else        waveStroke.lineTo (px, py);
-                waveFill.lineTo (px, py);
-            }
-            waveFill.lineTo (wx0 + ww, wyBot);
-            waveFill.closeSubPath();
-
-            g.setColour (accentCol.withAlpha (isHeya ? 0.30f : 0.16f));
-            g.fillPath (waveFill);
-            g.setColour (accentCol.withAlpha (isHeya ? 0.85f : 0.45f));
-            g.strokePath (waveStroke, juce::PathStrokeType (isHeya ? 1.5f : 1.0f));
-        }
-
-        const float duckPct = processor.apvts.getRawParameterValue ("duck")->load();
-        const float duckDb  = processor.getSpaceDuckDb();
-        if (duckPct > 1.0f && ! liteMode)
-        {
-            const float duckRatio = juce::jlimit (0.05f, 1.0f, (duckDb > 0.2f ? duckDb / 12.0f : duckPct / 100.0f * 0.35f));
-            auto dBar = irF.reduced (6.0f, 0.0f);
-            dBar = dBar.withTop (irF.getY() + 2.0f).withHeight (2.2f);
-            g.setColour (Palette::yellow.withAlpha (duckDb > 0.2f ? 0.90f : 0.45f));
-            g.fillRoundedRectangle (dBar.withWidth (dBar.getWidth() * duckRatio), 1.1f);
-        }
-
-        g.setColour (isHeya ? accentCol : (duckPct > 1.0f ? Palette::yellow.withAlpha (0.75f) : Palette::panelLn));
-        g.drawRoundedRectangle (irF.reduced (0.5f), irRad, (isHeya || duckPct > 1.0f) ? 1.5f : 1.0f);
-        g.setColour ((isHeya || duckPct > 1.0f) ? Palette::ink : Palette::inkSoft);
-        const bool compactIr = (irOverviewRect.getWidth() < 110);
-        const juce::String irLabel = hasCustom
-            ? (compactIr ? language->T ("IR:外部", "IR:WAV") : language->T ("IR:外部読込", "IR: CUSTOM"))
-            : (duckPct > 1.0f)
-                ? (compactIr ? language->T ("IR/声優先", "IR/DUCK") : language->T ("IR・声優先", "IR + DUCK"))
-                : isHeya
-                    ? (compactIr ? language->T ("IR波形", "IR ON") : language->T ("IR波形・読込", "IR WAVE"))
-                    : (compactIr ? language->T ("IR読込", "IR...") : language->T ("IR切替・読込", "IR LOAD"));
-        fitText (g, irLabel, irOverviewRect.reduced (4, 0), juce::Justification::centred, 14.0f, isHeya || duckPct > 1.0f);
     }
 
     // パステル・ライバーテーマではぷにぐじマスコットとジュースサーバーも総合画面に優しく添える（軽量モード時は省略）
@@ -5350,7 +5216,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                          juce::Rectangle<float> ((float) getWidth() - mw - 72.0f, (float) getHeight() - mh - 14.0f, mw, mh));
             g.setOpacity (1.0f);
         }
-        if (! staticPass && juiceTheme())
+        if (staticPass && juiceTheme())
             drawJuiceServer (g);
     }
 
@@ -5394,6 +5260,24 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             g.fillRoundedRectangle (overviewHelp.toFloat(), 12.0f);
             g.setColour (Palette::panelLn);
             g.drawRoundedRectangle (overviewHelp.toFloat().reduced (0.5f), 12.0f, 1.0f);
+
+            // 微調整ドック＆ライブSEパッドの整理トレイ枠（ごちゃつきを防ぎ2ブロックに整頓）
+            if (! fineTargetRect.isEmpty() && ! fineResetRect.isEmpty())
+            {
+                const auto fineTray = fineTargetRect.getUnion (fineResetRect).expanded (4, 3).toFloat();
+                g.setColour (Palette::bgTop.darker (0.22f).withAlpha (0.55f));
+                g.fillRoundedRectangle (fineTray, rad + 2.0f);
+                g.setColour (Palette::panelLn.withAlpha (0.45f));
+                g.drawRoundedRectangle (fineTray, rad + 2.0f, 1.0f);
+            }
+            if (! chorusPillRect.isEmpty() && ! customSeRects[3].isEmpty())
+            {
+                const auto seTray = chorusPillRect.getUnion (customSeRects[3]).expanded (4, 3).toFloat();
+                g.setColour (Palette::bgTop.darker (0.22f).withAlpha (0.55f));
+                g.fillRoundedRectangle (seTray, rad + 2.0f);
+                g.setColour (Palette::panelLn.withAlpha (0.45f));
+                g.drawRoundedRectangle (seTray, rad + 2.0f, 1.0f);
+            }
 
             if (! fineMinusRect.isEmpty())
             {
@@ -5491,16 +5375,49 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             for (int s = 0; s < 4; ++s)
             {
                 const auto& sr = liveSeRects[(size_t) s];
-                if (sr.isEmpty()) continue;
-                const auto sf = sr.toFloat();
-                const bool sOn = (activeSe == s);
-                g.setColour (sOn ? Palette::yellow.withAlpha (0.34f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f));
-                g.fillRoundedRectangle (sf, rad);
-                g.setColour (sOn ? Palette::yellow : Palette::panelLn.withAlpha (0.70f));
-                g.drawRoundedRectangle (sf.reduced (0.5f), rad, sOn ? 1.8f : 1.0f);
-                g.setColour (sOn ? Palette::yellow : Palette::ink);
-                fitText (g, language->T (kSeShortJa[s], kSeShortEn[s]),
-                         sr.reduced (4, 0), juce::Justification::centred, 14.0f, sOn);
+                if (! sr.isEmpty())
+                {
+                    const auto sf = sr.toFloat();
+                    const bool sOn = (activeSe == s);
+                    g.setColour (sOn ? Palette::yellow.withAlpha (0.34f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f));
+                    g.fillRoundedRectangle (sf, rad);
+                    g.setColour (sOn ? Palette::yellow : Palette::panelLn.withAlpha (0.70f));
+                    g.drawRoundedRectangle (sf.reduced (0.5f), rad, sOn ? 1.8f : 1.0f);
+                    g.setColour (sOn ? Palette::yellow : Palette::ink);
+                    fitText (g, language->T (kSeShortJa[s], kSeShortEn[s]),
+                             sr.reduced (4, 0), juce::Justification::centred, 14.0f, sOn);
+                }
+
+                const auto& cr = customSeRects[(size_t) s];
+                if (! cr.isEmpty())
+                {
+                    const auto cf = cr.toFloat();
+                    const bool loaded = processor.hasCustomSeLoaded (s);
+                    const bool cOn    = (activeSe == 4 + s);
+                    const auto borderCol = cOn    ? Palette::yellow
+                                         : loaded ? Palette::ice.withAlpha (0.80f)
+                                                  : Palette::panelLn.withAlpha (0.55f);
+                    g.setColour (cOn ? Palette::yellow.withAlpha (0.34f)
+                                     : loaded ? Palette::ice.withAlpha (0.16f)
+                                              : Palette::bgTop.darker (0.40f).withAlpha (0.84f));
+                    g.fillRoundedRectangle (cf, rad);
+                    g.setColour (borderCol);
+                    g.drawRoundedRectangle (cf.reduced (0.5f), rad, cOn ? 1.8f : 1.0f);
+                    g.setColour (cOn ? Palette::yellow : loaded ? Palette::ink : Palette::inkSoft);
+                    juce::String cLabel;
+                    if (loaded)
+                    {
+                        auto t = processor.getCustomSeTitle (s);
+                        if (t.length() > 5)
+                            t = t.substring (0, 5) + "..";
+                        cLabel = juce::String::fromUTF8 ("🎵") + t;
+                    }
+                    else
+                    {
+                        cLabel = language->T ("➕音源", "➕SE ") + juce::String (s + 1);
+                    }
+                    fitText (g, cLabel, cr.reduced (4, 0), juce::Justification::centred, 14.0f, cOn || loaded);
+                }
             }
         }
     }

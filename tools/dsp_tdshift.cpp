@@ -188,6 +188,27 @@ int main()
                "10分たっても読み出し遅延が申告値の近くに留まる");
     }
 
+    // [8] v5.3.0 ささやき・語尾(-54dBFS付近)での250Hz原点復帰ループ(チリチリ音)防止検査
+    {
+        const double sr = 48000.0, hz = 220.0;
+        const float st = 1.5f;
+        gz::TdPitchShifter sh; sh.prepare (sr);
+        sh.setPitchHz ((float) hz); sh.setParams (st, 1.0f);
+        auto in = voice (sr, hz, 0.8);
+        for (auto& v : in) v *= 0.008f; // 約-54dBFS(ささやき・語尾領域: 旧kQuiet=0.0025f未満)
+        auto out = in;
+        sh.processBlock (out.data(), (int) out.size());
+        double inJ = 0.0, outJ = 0.0;
+        for (size_t i = (size_t) (0.05 * sr); i < out.size(); ++i)
+        {
+            inJ  = std::max (inJ,  (double) std::abs (in[i]  - in[i - 1]));
+            outJ = std::max (outJ, (double) std::abs (out[i] - out[i - 1]));
+        }
+        const double jumpRatio = outJ / std::max (inJ * std::pow (2.0, st / 12.0), 1e-9);
+        std::printf ("  ささやき・語尾(-54dBFS)シフト時の隣接サンプル跳躍比 %.2f\n", jumpRatio);
+        check (jumpRatio < 1.6, "ささやき・語尾(-54dBFS)でも250Hzチリチリ発振が起きない");
+    }
+
     std::printf ("\n不合格: %d 件\n", failures);
     return failures == 0 ? 0 : 1;
 }

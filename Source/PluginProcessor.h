@@ -527,12 +527,16 @@ public:
     void  toggleRecAutoMaster() noexcept       { recAutoMaster.store (! getRecAutoMaster(), std::memory_order_relaxed); }
     float getLastMasterGainDb() const noexcept { return lastMasterGainDb.load (std::memory_order_relaxed); }
 
-    //== v5.0.0 柱③：歌枠・VC盛り上げ「4種ライブSEポン出しパッド（0:拍手歓声 / 1:キラキラ / 2:ドラムロール / 3:チャイム）」 ==
+    //== v5.0.0 柱③：歌枠・VC盛り上げ「4種ライブSEポン出しパッド（0:拍手歓声 / 1:キラキラ / 2:ドラムロール / 3:チャイム）」＋ 自作音源カスタムSE 4枠（4..7 = customSlot 0..3） ==
+    static constexpr int kNumCustomSe = 4;
     void  ensureLiveSeBuilt (int index);
     void  triggerLiveSe (int index) noexcept
     {
-        if (index < 0 || index >= 4) { stopLiveSe(); return; }
-        ensureLiveSeBuilt (index);
+        if (index < 0 || index >= 4 + kNumCustomSe) { stopLiveSe(); return; }
+        if (index < 4)
+            ensureLiveSeBuilt (index);
+        else if (! hasCustomSeLoaded (index - 4))
+            return;
         liveSeReadPos.store (0, std::memory_order_relaxed);
         activeLiveSe.store (index, std::memory_order_release);
     }
@@ -542,6 +546,25 @@ public:
         liveSeReadPos.store (0, std::memory_order_relaxed);
     }
     int   getActiveLiveSe() const noexcept     { return activeLiveSe.load (std::memory_order_acquire); }
+    bool  loadCustomSeFile (int slotIndex, const juce::File& file);
+    void  clearCustomSeSlot (int slotIndex);
+    bool  hasCustomSeLoaded (int slotIndex) const noexcept
+    {
+        return (slotIndex >= 0 && slotIndex < kNumCustomSe)
+               && customSeLoadedFlags[(size_t) slotIndex].load (std::memory_order_acquire);
+    }
+    juce::String getCustomSeTitle (int slotIndex) const
+    {
+        if (slotIndex < 0 || slotIndex >= kNumCustomSe) return {};
+        const juce::ScopedLock sl (bgmMetaLock);
+        return customSeTitles[(size_t) slotIndex];
+    }
+    juce::String getCustomSeFilePath (int slotIndex) const
+    {
+        if (slotIndex < 0 || slotIndex >= kNumCustomSe) return {};
+        const juce::ScopedLock sl (bgmMetaLock);
+        return customSePaths[(size_t) slotIndex];
+    }
 
     //== v5.0.0 柱④：サビ1クリック華やか演出「サビ盛り上げモード（Chorus Boost）」 ==
     bool  getChorusBoostMode() const noexcept  { return chorusBoostMode.load (std::memory_order_relaxed); }
@@ -690,6 +713,50 @@ public:
     float getSingerCueMonitorMeterDb() const noexcept { return meterSingerCueDb.load (std::memory_order_relaxed); }
     float getSingerCueMeterDb() const noexcept  { return getSingerCueMonitorMeterDb(); }
 
+    //== v5.4.0 柱①：〰️ 語尾・ロングトーン自然ビブラート生成＆整波（Natural Tail Vibrato & Throat Shimmer） ==
+    bool  getTailVibratoOn() const noexcept      { return tailVibratoOn.load (std::memory_order_relaxed); }
+    void  setTailVibratoOn (bool b) noexcept
+    {
+        tailVibratoOn.store (b, std::memory_order_relaxed);
+        if (! b) meterTailVibratoDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleTailVibratoOn() noexcept         { setTailVibratoOn (! getTailVibratoOn()); }
+    float getTailVibratoMeterDb() const noexcept { return meterTailVibratoDb.load (std::memory_order_relaxed); }
+
+    //== v5.4.0 柱②：🗣️ 母音フォーム自動統一イコライザー（Vowel-Homogenizing Formant Equalizer） ==
+    bool  getVowelAlignOn() const noexcept       { return vowelAlignOn.load (std::memory_order_relaxed); }
+    void  setVowelAlignOn (bool b) noexcept
+    {
+        vowelAlignOn.store (b, std::memory_order_relaxed);
+        if (! b) meterVowelAlignDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleVowelAlignOn() noexcept          { setVowelAlignOn (! getVowelAlignOn()); }
+    float getVowelAlignMeterDb() const noexcept  { return meterVowelAlignDb.load (std::memory_order_relaxed); }
+
+    //== v5.4.0 柱③：⚡ 歌い出し発声アタック＆グルーヴ整形（Vocal Onset & Groove Articulator） ==
+    bool  getOnsetGrooveOn() const noexcept      { return onsetGrooveOn.load (std::memory_order_relaxed); }
+    void  setOnsetGrooveOn (bool b) noexcept
+    {
+        onsetGrooveOn.store (b, std::memory_order_relaxed);
+        if (! b) meterOnsetGrooveDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleOnsetGrooveOn() noexcept         { setOnsetGrooveOn (! getOnsetGrooveOn()); }
+    float getOnsetGrooveMeterDb() const noexcept { return meterOnsetGrooveDb.load (std::memory_order_relaxed); }
+
+    //== v5.4.0 柱④：🌉 ミックスボイス倍音ブリッジ ＆ 胸鳴りサブアンカー（Mix-Voice Bridge & Sub-Chest Anchor） ==
+    bool  getMixVoiceBridgeOn() const noexcept   { return mixVoiceBridgeOn.load (std::memory_order_relaxed); }
+    void  setMixVoiceBridgeOn (bool b) noexcept
+    {
+        mixVoiceBridgeOn.store (b, std::memory_order_relaxed);
+        if (! b) meterMixVoiceBridgeDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleMixVoiceBridgeOn() noexcept      { setMixVoiceBridgeOn (! getMixVoiceBridgeOn()); }
+    float getMixVoiceBridgeMeterDb() const noexcept { return meterMixVoiceBridgeDb.load (std::memory_order_relaxed); }
+
     //== v5.1.4 ボイチェン＆ピッチ補正 4段階遅延モード ＆ フォルマント自動追従 ==
     //   0:🚀極限ゼロ感 (補正 ~0.1ms / ボイチェン ~5.3ms)
     //   1:⚡超低遅延   (補正 ~0.1ms / ボイチェン ~10.6ms)
@@ -729,7 +796,7 @@ public:
     void  setLegacyVersionState (int id, int era)
     {
         legacyVersionId.store (juce::jlimit (0, 13, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 530, era), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 540, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState)
@@ -1423,15 +1490,19 @@ private:
                                            const juce::String& prefixTag,
                                            const juce::AudioBuffer<float>* bgmSrc = nullptr);
 
-    // ---- v5.0.0 柱③：4種ライブSEポン出しパッド（0:拍手歓声 / 1:キラキラ / 2:ドラムロール / 3:チャイム） ----
+    // ---- v5.0.0 柱③：4種ライブSEポン出しパッド（0:拍手歓声 / 1:キラキラ / 2:ドラムロール / 3:チャイム）＋ 自作音源カスタムSE 4枠（4..7） ----
     juce::AudioBuffer<float> liveSeBufs[4];
     std::array<bool, 4> liveSeBuilt       { false, false, false, false };
+    std::shared_ptr<const juce::AudioBuffer<float>> customSeAudioBufs[kNumCustomSe];
+    std::array<std::atomic<bool>, kNumCustomSe> customSeLoadedFlags { false, false, false, false };
+    std::array<juce::String, kNumCustomSe> customSeTitles;
+    std::array<juce::String, kNumCustomSe> customSePaths;
     std::atomic<int>   activeLiveSe       { -1 };
     std::atomic<int>   liveSeReadPos      { 0 };
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 530 };
+    std::atomic<int>   legacyVersionEra   { 540 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
@@ -1524,6 +1595,42 @@ private:
     float              singerCueEnv       { 0.0f };
     float              singerCueBoostDb   { 0.0f }, singerCueAppliedDb { -99.0f };
     std::atomic<float> meterSingerCueDb   { 0.0f };
+
+    // ---- v5.4.0 柱①：語尾・ロングトーン自然ビブラート生成＆整波 (Natural Tail Vibrato & Throat Shimmer) ----
+    std::atomic<bool>  tailVibratoOn      { false };
+    juce::dsp::IIR::Filter<float> tailVibFormL, tailVibFormR;
+    float              tailVibHoldSec     { 0.0f };
+    float              tailVibDepthEnv    { 0.0f };
+    float              tailVibPhase       { 0.0f };
+    float              tailVibLastHz      { 220.0f };
+    float              tailVibAppliedDb   { -99.0f };
+    float              tailVibDelayBufL[128] {}, tailVibDelayBufR[128] {};
+    int                tailVibDelayW      { 0 };
+    std::atomic<float> meterTailVibratoDb { 0.0f };
+
+    // ---- v5.4.0 柱②：母音フォーム自動統一イコライザー (Vowel-Homogenizing Formant Equalizer) ----
+    std::atomic<bool>  vowelAlignOn       { false };
+    juce::dsp::IIR::Filter<float> vowelDetLow, vowelDetMid, vowelDetHi;
+    juce::dsp::IIR::Filter<float> vowelEqBodyL, vowelEqBodyR, vowelEqHonkL, vowelEqHonkR, vowelEqGlareL, vowelEqGlareR;
+    float              vowelEnvLow        { 0.0f }, vowelEnvMid { 0.0f }, vowelEnvHi { 0.0f };
+    float              vowelBodyDb        { 0.0f }, vowelHonkDb { 0.0f }, vowelGlareDb { 0.0f };
+    float              vowelAppliedBodyDb { -99.0f }, vowelAppliedHonkDb { -99.0f }, vowelAppliedGlareDb { -99.0f };
+    std::atomic<float> meterVowelAlignDb  { 0.0f };
+
+    // ---- v5.4.0 柱③：歌い出し発声アタック＆グルーヴ整形 (Vocal Onset & Groove Articulator) ----
+    std::atomic<bool>  onsetGrooveOn      { false };
+    juce::dsp::IIR::Filter<float> onsetSnapL, onsetSnapR;
+    float              onsetFastEnv       { 0.0f }, onsetSlowEnv { 0.0f };
+    float              onsetGainDb        { 0.0f }, onsetSnapDb { 0.0f }, onsetAppliedSnapDb { -99.0f };
+    std::atomic<float> meterOnsetGrooveDb { 0.0f };
+
+    // ---- v5.4.0 柱④：ミックスボイス倍音ブリッジ ＆ 胸鳴りサブアンカー (Mix-Voice Bridge & Sub-Chest Anchor) ----
+    std::atomic<bool>  mixVoiceBridgeOn   { false };
+    juce::dsp::IIR::Filter<float> mixFundBp, mixHarmBp, mixBridgeBpL, mixBridgeBpR;
+    float              mixFundEnv         { 0.0f }, mixHarmEnv { 0.0f }, mixBridgeGain { 0.0f };
+    float              subChestLp         { 0.0f }, subChestSmoothL { 0.0f }, subChestSmoothR { 0.0f }, subChestHpL { 0.0f }, subChestHpR { 0.0f };
+    int                subChestSign       { 1 }, subChestFlip { 1 };
+    std::atomic<float> meterMixVoiceBridgeDb { 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };
