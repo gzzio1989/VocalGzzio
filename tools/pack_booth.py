@@ -179,29 +179,81 @@ def main():
         print("  インストーラーは 配布物をつくる.bat が作ります。\n")
         return
 
-    # --- 3. 中身を組む ---------------------------------------------
+    # --- 3. 中身を組む（公式インストーラー ＋ 手動配置用一式 ＋ 仮想ドライバ同梱） ---
     top = f"VocalGzzio_v{ver}_{jp}"
+    out_dir = Path(a.out)
     files = []
+
+    # 3-a. 公式インストーラー（VocalGzzio_Setup_vX.Y.Z.exe / VocalGzzio_Trial_Setup_vX.Y.Z.exe）を必須同梱
+    inst_prefix = "VocalGzzio_Trial_Setup_v" if ed == "trial" else "VocalGzzio_Setup_v"
+    inst_name = f"{inst_prefix}{ver}.exe"
+    inst_candidates = [
+        out_dir / inst_name,
+        ROOT / "installer_output" / inst_name,
+        ROOT / "release" / "windows" / inst_name,
+    ]
+    installer_exe = next((p for p in inst_candidates if p.is_file()), None)
+    if installer_exe is None:
+        die(f"公式インストーラー {inst_name} が見つかりません。\n"
+            f"   先に tools/package_windows.ps1 または installer.bat release でインストーラーを作成してください。\n"
+            f"   （インストーラー無しのZIP配布を防止するため中止しました）")
+    inst_sha_path = Path(str(installer_exe) + ".sha256")
+    if inst_sha_path.is_file():
+        recorded = inst_sha_path.read_text(encoding="utf-8").split()[0].lower()
+        actual = sha256(installer_exe).lower()
+        if recorded != actual:
+            die(f"{inst_name} の SHA-256 が {inst_sha_path.name} と一致しません。")
+    add(files, installer_exe, f"{top}/{inst_name}")
+    ok(f"公式インストーラー同梱: {inst_name}")
+
+    # 3-b. VST3 プラグイン（手動配置用）
     if vst3.is_dir():
         for p in vst3.rglob("*"):
             if p.is_file():
                 add(files, p, f"{top}/VST3プラグイン/{stem}.vst3/{p.relative_to(vst3).as_posix()}")
     else:
         add(files, vst3, f"{top}/VST3プラグイン/{stem}.vst3")
-    if standalone:
-        add(files, standalone, f"{top}/単体起動アプリ/{stem}.exe")
 
+    # 3-c. 単体起動アプリ ＋ 専用仮想ドライバ導入ツール（手動起動でもドライバ導入可能にする）
+    if not standalone:
+        die("単体起動版 (.exe) が見つかりません。本番配布ZIPには単体起動版が必須です。")
+    add(files, standalone, f"{top}/単体起動アプリ/{stem}.exe")
+
+    wdm_candidates = [
+        standalone.parent / "VocalGzzioWdmInstaller.exe",
+        build / "Release" / "VocalGzzioWdmInstaller.exe",
+        ROOT / "VocalGzzioWdmInstaller.exe",
+    ]
+    wdm_installer = next((p for p in wdm_candidates if p.is_file()), None)
+    if wdm_installer is None:
+        die("VocalGzzioWdmInstaller.exe が見つかりません。仮想ドライバ導入ツールの同梱が必須です。")
+    add(files, wdm_installer, f"{top}/単体起動アプリ/VocalGzzioWdmInstaller.exe")
+
+    drv_dir = ROOT / "driver"
+    for drv_file in ("syncroom.inf", "syncroom.cat", "syncroom.sys"):
+        add(files, drv_dir / drv_file, f"{top}/単体起動アプリ/driver/{drv_file}")
+    ok("単体起動アプリ用 VocalGzzioWdmInstaller.exe ＋ driver/ 一式同梱")
+
+    # 3-d. ライセンス・説明書・はじめにお読みください
     lic = ROOT / "配布物" / "ライセンス"
     for name in LICENSE_FILES:
         add(files, lic / name, f"{top}/ライセンス/{name}")
 
+    # 最新の docs/manual.html & docs/style.css を優先しつつ、配布物/説明書 内の英語ガイド等もすべて同梱
+    manual_html = ROOT / "docs" / "manual.html"
+    manual_css = ROOT / "docs" / "style.css"
+    if manual_html.is_file():
+        add(files, manual_html, f"{top}/説明書/取扱説明書.html")
+    if manual_css.is_file():
+        add(files, manual_css, f"{top}/説明書/style.css")
     doc = ROOT / "配布物" / "説明書"
     if doc.is_dir():
+        already_doc = {arc for _, arc in files}
         for p in doc.rglob("*"):
             if p.is_file():
-                add(files, p, f"{top}/説明書/{p.relative_to(doc).as_posix()}")
-    else:
-        note("説明書フォルダがありません（配布物/説明書/ に入れてください）")
+                arc_path = f"{top}/説明書/{p.relative_to(doc).as_posix()}"
+                if arc_path not in already_doc:
+                    add(files, p, arc_path)
 
     readme = ROOT / "配布物" / f"はじめにお読みください_{jp}.txt"
     if readme.exists():
@@ -218,9 +270,19 @@ def main():
     ok(f"ライセンス文 {len(LICENSE_FILES)} 本すべて同梱")
     ok(f"ファイル数 {len(files)}")
 
-    # --- 4. 書き出し ------------------------------------------------
-    out = Path(a.out) / f"{top}.zip"
+    # --- 4. 書き出し（BOOTH用の別名ZIPと .sha256 も一括同期） ----------------
+    out = out_dir / f"{top}.zip"
     build_zip(files, out)
+    digest = sha256(out)
+    Path(str(out) + ".sha256").write_text(f"{digest}  {out.name}\n", encoding="utf-8")
+
+    alias_names = [f"VocalGzzio_v{ver}_Windows_{jp}.zip"]
+    if ed == "trial":
+        alias_names.append(f"VocalGzzio_v{ver}_Windows_Trial.zip")
+    for alias in alias_names:
+        alias_path = out_dir / alias
+        shutil.copy2(out, alias_path)
+        Path(str(alias_path) + ".sha256").write_text(f"{digest}  {alias_path.name}\n", encoding="utf-8")
     mb = out.stat().st_size / 1024 / 1024
     print(f"\n===== できました =====")
     print(f"  {out}")

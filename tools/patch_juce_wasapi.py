@@ -328,6 +328,23 @@ NEW_BLOCK_2 = """                else
                         inputDevice->handleDeviceBuffer();
                 }"""
 
+OLD_BLOCK_3 = """            GUID session;
+            auto hr = client->Initialize (isExclusiveMode (deviceMode) ? AUDCLNT_SHAREMODE_EXCLUSIVE
+                                                                       : AUDCLNT_SHAREMODE_SHARED,
+                                          getStreamFlags(),
+                                          defaultPeriod,
+                                          isExclusiveMode (deviceMode) ? defaultPeriod : 0,
+                                          (WAVEFORMATEX*) &format,
+                                          &session);"""
+
+NEW_BLOCK_3 = """            auto hr = client->Initialize (isExclusiveMode (deviceMode) ? AUDCLNT_SHAREMODE_EXCLUSIVE
+                                                                       : AUDCLNT_SHAREMODE_SHARED,
+                                          getStreamFlags(),
+                                          defaultPeriod,
+                                          isExclusiveMode (deviceMode) ? defaultPeriod : 0,
+                                          (WAVEFORMATEX*) &format,
+                                          nullptr);"""
+
 
 def patch_file(path: pathlib.Path) -> bool:
     if not path.is_file():
@@ -352,6 +369,9 @@ def patch_file(path: pathlib.Path) -> bool:
     if OLD_BLOCK_2 in norm:
         norm = norm.replace(OLD_BLOCK_2, NEW_BLOCK_2, 1)
         changed = True
+    if OLD_BLOCK_3 in norm:
+        norm = norm.replace(OLD_BLOCK_3, NEW_BLOCK_3, 1)
+        changed = True
     if changed:
         path.write_text(norm, encoding="utf-8", newline="\r\n")
         print(f"Patched: {path}")
@@ -364,7 +384,7 @@ def main():
     root = pathlib.Path(__file__).resolve().parent.parent
     targets = list(sys.argv[1:])
     if not targets:
-        for bdir in ("build", "build_prod", "build_trial"):
+        for bdir in ("build", "build_prod", "build_trial", "build_tests"):
             p = root / bdir / "_deps" / "juce-src" / "modules" / "juce_audio_devices" / "native" / "juce_WASAPI_windows.cpp"
             if p.exists():
                 targets.append(str(p))

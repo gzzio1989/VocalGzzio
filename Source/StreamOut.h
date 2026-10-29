@@ -31,17 +31,12 @@ namespace gz
 class StreamOut : private juce::AudioIODeviceCallback
 {
 public:
-    explicit StreamOut (bool isPrimary = true) : allowMirror (isPrimary)
+    StreamOut()
     {
         ring.setSize (2, ringLen);
         ring.clear();
         temp.setSize (2, 16384);
         temp.clear();
-        if (allowMirror)
-        {
-            mirrorOut  = std::make_unique<StreamOut> (false);
-            mirrorOut2 = std::make_unique<StreamOut> (false);
-        }
     }
 
     ~StreamOut() override { stop(); }
@@ -223,40 +218,11 @@ public:
         deviceName_ = deviceName;
         active.store (true);
         adm().addAudioCallback (this);
-
-        // cluster / VRChat / Discord / OBS 等で「VocalGzzio Driver (WDM)」「Yamaha SYNCROOM Driver (WDM)」
-        // 「VB-CABLE」のどれがマイク選択されていても確実に声が届くよう、最大2系統の仮想ケーブルへ同時ミラー出力する
-        if (allowMirror && isVirtualLoopbackName (deviceName))
-        {
-            const auto names = getOutputDeviceNames();
-            juce::StringArray altDevs;
-            for (const auto& n : names)
-            {
-                if (n == deviceName) continue;
-                if (n.containsIgnoreCase ("VocalGzzio") || n.containsIgnoreCase ("SYNCROOM")
-                    || n.containsIgnoreCase ("CABLE") || n.containsIgnoreCase ("GzzioRoom"))
-                {
-                    altDevs.addIfNotAlreadyThere (n);
-                }
-            }
-            if (altDevs.size() >= 1 && mirrorOut != nullptr)
-            {
-                mirrorOut->setForceMono (forceMono.load (std::memory_order_relaxed));
-                mirrorOut->start (altDevs[0], hostSr);
-            }
-            if (altDevs.size() >= 2 && mirrorOut2 != nullptr)
-            {
-                mirrorOut2->setForceMono (forceMono.load (std::memory_order_relaxed));
-                mirrorOut2->start (altDevs[1], hostSr);
-            }
-        }
         return true;
     }
 
     void stop()
     {
-        if (mirrorOut != nullptr)  mirrorOut->stop();
-        if (mirrorOut2 != nullptr) mirrorOut2->stop();
         if (admPtr == nullptr) { active.store (false); return; }
         if (! active.exchange (false) && admPtr->getCurrentAudioDevice() == nullptr) return;
         admPtr->removeAudioCallback (this);
@@ -270,7 +236,7 @@ public:
                && admPtr->getCurrentAudioDevice()->isOpen();
     }
     juce::String getDeviceName() const       { return deviceName_; }
-    juce::String getMirrorDeviceName() const { return (mirrorOut != nullptr && mirrorOut->isRunning()) ? mirrorOut->getDeviceName() : juce::String(); }
+    juce::String getMirrorDeviceName() const { return {}; }
     juce::String getLastError() const        { return lastError; }
     double getDeviceSampleRate() const noexcept { return devSr; }
     int  getUnderrunCount() const noexcept   { return underruns.load(); }
@@ -278,8 +244,6 @@ public:
     void setForceMono (bool b) noexcept
     {
         forceMono.store (b, std::memory_order_relaxed);
-        if (mirrorOut != nullptr)  mirrorOut->setForceMono (b);
-        if (mirrorOut2 != nullptr) mirrorOut2->setForceMono (b);
     }
 
     void setHostSampleRate (double sr) noexcept
@@ -296,8 +260,6 @@ public:
         {
             hostSr = sr;
         }
-        if (mirrorOut != nullptr)  mirrorOut->setHostSampleRate (sr);
-        if (mirrorOut2 != nullptr) mirrorOut2->setHostSampleRate (sr);
     }
 
     //== オーディオスレッド ==================================================
@@ -321,9 +283,6 @@ public:
             juce::FloatVectorOperations::copy (ring.getWritePointer (1, s2), R + sz1,  sz2);
         }
         fifo.finishedWrite (sz1 + sz2);
-
-        if (mirrorOut != nullptr)  mirrorOut->push (L, R, n);
-        if (mirrorOut2 != nullptr) mirrorOut2->push (L, R, n);
     }
 
 private:
@@ -484,8 +443,6 @@ private:
     float  lastOut[2] { 0.0f, 0.0f };
     bool   needCrossfade = false;
     juce::String deviceName_, lastError;
-    bool allowMirror { true };
-    std::unique_ptr<StreamOut> mirrorOut, mirrorOut2;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StreamOut)
 };
