@@ -10,10 +10,11 @@
 <body>
 <header>
   <nav>
-    <strong>VocalGzzio 5.2.0</strong>
+    <strong>VocalGzzio 5.4.1</strong>
     <a href="en.html">English Home</a>
     <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix</a>
-    <a href="devlog-touch-knob-14gen-timemachine-en.html">Dev Notes</a>
+    <a href="devlog-touch-knob-14gen-timemachine-en.html">Touch &amp; Time Machine</a>
+    <a href="devlog-wasapi-4hour-drift-mixer-en.html">WASAPI 4h Fix</a>
     <a href="https://gzzio.booth.pm/items/8764003">Free Trial &amp; Buy</a>
     <a href="guide-utawaku-obs.html">🇯🇵 日本語</a>
   </nav>
@@ -28,7 +29,7 @@
 
   <div class="actions">
     <a class="button" href="en.html">📖 View VocalGzzio English Overview &amp; UI Guide</a>
-    <a class="button secondary" href="https://github.com/gzzio1989/VocalGzzio/releases/download/v5.2.0/VocalGzzio_v5.2.0_Windows_Trial.zip">⬇ Download Windows Free Trial (.zip)</a>
+    <a class="button secondary" href="https://github.com/gzzio1989/VocalGzzio/releases/download/v5.4.1/VocalGzzio_v5.4.1_Windows_Trial.zip">⬇ Download Windows Free Trial (.zip)</a>
     <a class="button secondary" href="https://gzzio.booth.pm/items/8764003">🛒 BOOTH Store (Free Trial / Full Version)</a>
   </div>
 
@@ -41,7 +42,7 @@
     <li>When you finally turn on headphone monitoring to hear your own reverb and pitch correction, there is a 35ms slapback delay that makes it almost impossible to sing in time.</li>
   </ol>
   <p>I am an audio DSP developer and musician in Japan (<code>@gzzio1989</code>). Over the past year, after watching countless streamers and vocalists struggle with this exact setup, I built a self-contained vocal studio—<strong>VocalGzzio</strong>—that puts the entire vocal chain, backing track player, and virtual routing onto a single screen, with no DAW required.</p>
-  <p>Here are the five biggest technical headaches in live vocal streaming, and how the v5.2 engine solves them under the hood.</p>
+  <p>Here are the five biggest technical headaches in live vocal streaming, and how the v5.4 engine solves them under the hood.</p>
 
   <h2>1. The 40ms Pitch Correction Latency Problem (Solved down to 0.08ms)</h2>
   <p>Standard FFT-based pitch correction plugins need to collect a full buffer of audio (often 20ms to 45ms) before they can detect your pitch and shift it. That works fine when mixing a recorded track, but if you are monitoring your own voice live in headphones, a 40ms delay feels like singing through a megaphone in a canyon.</p>
@@ -91,7 +92,7 @@
 </main>
 
 <footer>
-  © G’zzio · <a href="en.html">English Home</a> · <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix Guide</a> · <a href="devlog-touch-knob-14gen-timemachine-en.html">Dev Notes</a> · <a href="https://gzzio.booth.pm/items/8764003">BOOTH Store</a>
+  © G’zzio · <a href="en.html">English Home</a> · <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix Guide</a> · <a href="devlog-touch-knob-14gen-timemachine-en.html">Touch &amp; Time Machine</a> · <a href="devlog-wasapi-4hour-drift-mixer-en.html">WASAPI 4h Drift Postmortem</a> · <a href="https://gzzio.booth.pm/items/8764003">BOOTH Store</a>
 </footer>
 </body>
 </html>

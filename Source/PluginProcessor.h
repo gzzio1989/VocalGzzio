@@ -362,13 +362,15 @@ public:
         streamUserConfigured = true;
         streamDevWanted = deviceName;
         streamWanted    = on;
-        if (on) streamOut.start (deviceName, currentSampleRate);
-        else    streamOut.stop();
+        if (on && ! (standaloneVirtualLoopBlocked.load (std::memory_order_relaxed) && deviceName.containsIgnoreCase ("VocalGzzio")))
+            streamOut.start (deviceName, currentSampleRate);
+        else
+            streamOut.stop();
         markStateDirty();
     }
     void ensureStandaloneVirtualDriverActive()
     {
-        if (! isStandalone()) return;
+        if (! isStandalone() || standaloneVirtualLoopBlocked.load (std::memory_order_relaxed)) return;
         gz::StreamOut::rescueWindowsDefaultSpeakerAndGetSampleRate();
         if (streamUserConfigured && gz::StreamOut::isVirtualLoopbackName (streamDevWanted))
         {
@@ -388,6 +390,16 @@ public:
             streamOut.start (streamDevWanted, currentSampleRate);
         }
     }
+    bool isStandaloneVirtualLoopBlocked() const noexcept { return standaloneVirtualLoopBlocked.load (std::memory_order_relaxed); }
+    void setStandaloneVirtualLoopBlocked (bool blocked) noexcept
+    {
+        standaloneVirtualLoopBlocked.store (blocked, std::memory_order_relaxed);
+        if (blocked && streamOut.isRunning() && streamOut.getDeviceName().containsIgnoreCase ("VocalGzzio"))
+            streamOut.stop();
+    }
+    void ensureStandaloneAutosaveRestored();
+    void ensureStandaloneAppMutex() noexcept;
+    void closeStandaloneAppMutex() noexcept;
 
     //== v4.6.0 / v4.8.1 マイク入力の中央寄せルーティング(IN1〜IN4+対応) ＆ モノラル出力 ＆ 通話用ヘッドホン返しミュート ==
     // route: 0=自動センター(IN1〜IN4から声のある端子を自動追従), 1=入力1(Mic1)➔中央, 2=入力2(Mic2/Scarlett Solo等)➔中央,
@@ -599,7 +611,8 @@ public:
     }
     static const char* getMicModelName (int m, bool english = false) noexcept;
 
-    //== v5.1.0 柱④：📋 歌枠セットリスト（プレイリスト・曲ごとの伴奏・キー・ボーカル除去・声質設定一括記憶） ==
+    //== v5.1.0 柱④：📋 歌枠セットリスト（プレイリスト・曲ごとの伴奏・キー・ボーカル除去・声質設定一括記憶、最大32曲） ==
+    static constexpr int kMaxSetlistSongs = 32;
     struct SetlistItem
     {
         juce::String filePath;       // 空文字なら内蔵デモ伴奏
@@ -799,7 +812,7 @@ public:
         legacyVersionEra.store (juce::jlimit (100, 540, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
-        if (! restoringState)
+        if (! restoringState && isStandalone())
             flushAutosaveNow();
        #endif
     }
@@ -809,7 +822,7 @@ public:
         legacyEcoGate.store (on, std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
-        if (! restoringState)
+        if (! restoringState && isStandalone())
             flushAutosaveNow();
        #endif
     }
@@ -1410,6 +1423,8 @@ private:
     std::atomic<bool>         stateDirty  { false };
     std::atomic<juce::uint32> lastDirtyMs { 0 };
     bool restoringState = false;   // message-thread guard: ignore dirty marks mid-restore
+    bool standaloneAutosaveChecked = false; // 単体起動版のみ前回状態を1度だけ復元するガード
+    void* standaloneMutexHandle = nullptr;  // Windows インストーラ実行中検知用の名前付きMutexハンドル
 
     // ---- v2.2.0 配信出力 ＆ v4.6.0 入出力ルーティング ----
     gz::StreamOut streamOut;
@@ -1422,6 +1437,7 @@ private:
     std::atomic<bool> outputMonoMode { false };    // 最終出力も完全モノラル化(L=R=(L+R)/2)
     std::atomic<bool> monitorMute    { false };    // 通話・cluster用：配信出力(StreamOut)は鳴らしたまま、自分のヘッドホン返し音のみミュート
     std::atomic<bool> feedbackGuardTripped { false }; // ハードウェアループバック等の発振検知時に自分の耳への返しを自動ミュートしたか
+    std::atomic<bool> standaloneVirtualLoopBlocked { false }; // メイン入出力に VocalGzzio Driver が誤選択された際のデジタル発振遮断フラグ
     int               feedbackHoldSamples  { 0 };     // 連続発振サンプル数カウンタ
     std::atomic<int>  autoCenterCh   { 0 };        // 単体起動時の自動センターが現在掴んでいる入力ch (0..7)
     double            inRouteEnergy[8] {};         // 自動センター判定用の平滑エネルギー (最大8ch)
@@ -1450,6 +1466,7 @@ private:
     std::shared_ptr<const juce::AudioBuffer<float>> bgmAudioBuf;
     juce::String       bgmTitle;
     juce::String       bgmFilePath;
+    double             bgmLoadedSampleRate { 0.0 };
     std::atomic<int>   bgmLoadedSamples   { 0 };
     std::atomic<bool>  bgmPlaying         { false };
     std::atomic<bool>  bgmLooping         { true };
@@ -1497,6 +1514,9 @@ private:
     std::array<std::atomic<bool>, kNumCustomSe> customSeLoadedFlags { false, false, false, false };
     std::array<juce::String, kNumCustomSe> customSeTitles;
     std::array<juce::String, kNumCustomSe> customSePaths;
+    std::array<double, kNumCustomSe> customSeSampleRates { 0.0, 0.0, 0.0, 0.0 };
+    bool loadCustomSeFileInternal (int slotIndex, const juce::File& file, double targetSr, bool markDirty);
+    void refreshSampleRateDependentMedia (double newSampleRate);
     std::atomic<int>   activeLiveSe       { -1 };
     std::atomic<int>   liveSeReadPos      { 0 };
 

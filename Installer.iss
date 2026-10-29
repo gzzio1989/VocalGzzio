@@ -1,4 +1,4 @@
-; ============================================================
+﻿; ============================================================
 ;  VocalGzzio — Windows インストーラー (Inno Setup 6)
 ; ------------------------------------------------------------
 ;  作り方（2026-08-13 更新）:
@@ -66,6 +66,7 @@
   #define MyOutPrefix     "VocalGzzio_Trial_Setup_v"
   #define MyAppIdStr      "{7A2C4E83-1B5D-4A96-9C3E-2D4F6A8B0C1E}"
   #define MyStandaloneDir "{commonpf64}\VocalGzzio Trial"
+  #define MyAppMutexName  "VocalGzzioTrialStandaloneMutex"
 #else
   #define MyAppName2      "VocalGzzio"
   #ifndef MyBuildDir
@@ -76,11 +77,14 @@
   #define MyOutPrefix     "VocalGzzio_Setup_v"
   #define MyAppIdStr      "{5D7E3B21-9A4C-4F80-B6D2-8C1E2F3A4B5C}"
   #define MyStandaloneDir "{commonpf64}\VocalGzzio"
+  #define MyAppMutexName  "VocalGzzioStandaloneMutex"
 #endif
 
 [Setup]
 ; AppId はこのアプリ固有の識別子。変更しないでください（アンインストール紐付けに使用）
 AppId={{#MyAppIdStr}
+AppMutex={#MyAppMutexName}
+CloseApplications=yes
 AppName={#MyAppName2}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -118,7 +122,7 @@ Name: "vst3";       Description: "{cm:CompVst3}";       Types: full custom
 Name: "standalone"; Description: "{cm:CompStandalone}"; Types: full
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Components: standalone; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Components: standalone
 
 [Files]
 ; 使用許諾と、使用している第三者ライブラリ・フォントのライセンス文書。
@@ -152,6 +156,8 @@ Source: "driver\syncroom.sys"; \
 [Run]
 Filename: "{#MyStandaloneDir}\VocalGzzioWdmInstaller.exe"; Parameters: "--install --no-elevate"; \
     Components: standalone; Flags: runhidden waituntilterminated
+Filename: "{#MyStandaloneDir}\{#MyExeName}"; Description: "{cm:LaunchAfterInstall}"; \
+    Components: standalone; Flags: nowait postinstall skipifsilent shellexec
 
 #ifndef TrialBuild
 [UninstallRun]
@@ -203,10 +209,12 @@ japanese.RemoveFailed=アンインストーラーを起動できませんでし�
 english.RemoveFailed=Could not start the uninstaller. Please remove it from Apps & features instead.
 japanese.NeedOne=VST3 プラグインか単体起動アプリの、どちらかは選んでください。
 english.NeedOne=Select at least one part to install: the VST3 plug-in or the standalone app.
+japanese.LaunchAfterInstall={#MyAppName2}（単体起動アプリ）を今すぐ起動する
+english.LaunchAfterInstall=Launch {#MyAppName2} (Standalone App) now
 
 [Messages]
-japanese.FinishedLabel=VocalGzzio のインストールが完了しました。%n%nDAW を再起動し、FX 追加で「VocalGzzio」を検索してください（出てこない場合はプラグインの再スキャンを実行）。
-english.FinishedLabel=VocalGzzio has been installed.%n%nRestart your DAW and add "VocalGzzio" from the plug-in browser (run a plug-in re-scan if it does not appear).
+japanese.FinishedLabel={#MyAppName2} のインストールが完了しました。%n%n・歌枠配信・OBS・通話・単体録音で使う方：下のチェックを入れたまま「完了」を押すか、デスクトップ／スタートメニューの「{#MyAppName2}」から起動できます。%n・DAW で使う方：DAW を再起動し、FX 追加で「{#MyAppName2}」を検索してください。
+english.FinishedLabel={#MyAppName2} has been installed.%n%n- Standalone (OBS / Discord / VRChat / Recording): Keep the checkbox below checked or launch "{#MyAppName2}" from your Desktop / Start Menu.%n- DAW Plug-in: Restart your DAW and add "{#MyAppName2}" from the plug-in browser.
 
 [Code]
 var

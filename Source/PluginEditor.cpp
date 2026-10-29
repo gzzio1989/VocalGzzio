@@ -2036,12 +2036,59 @@ private:
 
 static void launchStandaloneAudioMonoDialog (VocalGzzioProcessor& processor, std::shared_ptr<tip::Language> language);
 
-// v4.8.1 全インターフェース対応・スタンドアロン自動診断＆修復エンジン：
+// v5.4.1: アプリ内（単体起動版・DAWプラグイン版の両方）からオフライン取扱説明書を1クリックで開く
+static void openVocalGzzioUserManual()
+{
+    const auto binFile = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    const auto appFile = juce::File::getSpecialLocation (juce::File::currentApplicationFile);
+    const auto binDir  = binFile.getParentDirectory();
+    const auto appDir  = appFile.getParentDirectory();
+
+    const juce::File candidates[] = {
+        binDir.getChildFile (juce::String::fromUTF8 ("取扱説明書.html")),
+        binDir.getChildFile (juce::String::fromUTF8 ("説明書.html")),
+        binDir.getChildFile (juce::String::fromUTF8 ("説明書")).getChildFile (juce::String::fromUTF8 ("説明書.html")),
+        binDir.getParentDirectory().getChildFile (juce::String::fromUTF8 ("取扱説明書.html")),
+        binDir.getParentDirectory().getChildFile (juce::String::fromUTF8 ("説明書")).getChildFile (juce::String::fromUTF8 ("取扱説明書.html")),
+        binDir.getParentDirectory().getChildFile (juce::String::fromUTF8 ("説明書")).getChildFile (juce::String::fromUTF8 ("説明書.html")),
+        binDir.getParentDirectory().getParentDirectory().getChildFile (juce::String::fromUTF8 ("取扱説明書.html")),
+        appFile.getChildFile (juce::String::fromUTF8 ("取扱説明書.html")),
+        appDir.getChildFile (juce::String::fromUTF8 ("取扱説明書.html")),
+        appDir.getChildFile (juce::String::fromUTF8 ("説明書")).getChildFile (juce::String::fromUTF8 ("説明書.html")),
+       #if JUCE_MAC
+        juce::File ("/Library/Application Support/Gzzio/VocalGzzio").getChildFile (juce::String::fromUTF8 ("説明書")).getChildFile (juce::String::fromUTF8 ("説明書.html")),
+        juce::File ("/Library/Application Support/Gzzio/VocalGzzio Trial").getChildFile (juce::String::fromUTF8 ("説明書")).getChildFile (juce::String::fromUTF8 ("説明書.html")),
+       #endif
+        binDir.getChildFile ("docs").getChildFile ("manual.html")
+    };
+
+    for (const auto& f : candidates)
+    {
+        if (f.existsAsFile())
+        {
+            juce::URL (f).launchInDefaultBrowser();
+            return;
+        }
+    }
+    juce::URL ("https://gzzio1989.github.io/apps/vocalgzzio/manual.html").launchInDefaultBrowser();
+}
+
+// 初回起動時に自動で掴まれると YouTube / Discord / OBS 等のPC音声を排他ロックで消してしまう汎用ASIOラッパー判定
+static bool isGenericExclusiveAsioWrapper (const juce::String& devName)
+{
+    return devName.containsIgnoreCase ("ASIO4ALL")
+        || devName.containsIgnoreCase ("Generic Low Latency ASIO")
+        || devName.containsIgnoreCase ("Realtek ASIO")
+        || devName.containsIgnoreCase ("FL Studio ASIO")
+        || devName.containsIgnoreCase ("Magix Low Latency");
+}
+
+// v4.8.1 / v5.4.1 全インターフェース対応・スタンドアロン自動診断＆修復エンジン：
 //  1. Windowsの既定スピーカーが仮想ドライバに奪われていたら実スピーカー(Roland Rubix / AG03 / Scarlett / MOTU / Volt等)へ即時復元し、通信時80%減衰も無効化
-//  2. 使用中ハードウェアのWindows再生(OUT)と録音(IN)のサンプルレート不一致を検出し、48000Hz等へ統一してASIO起動時のクロック反転によるcluster/VRChat/Discordの音消えを根治
-//  3. Rubix 44 / UR44C / Scarlett 4i4 / MOTU M4 等の多チャンネル機では IN 1〜4 ＆ OUT 1〜4(2系統目のヘッドホン端子含む) を自動で有効化
-//  4. ASIO4ALL / Realtek ASIO 等の排他ラッパーや USBマイク＋別ヘッドホン環境向けに、ワンクリック「WASAPI共有モード(全アプリ共存)」切替も搭載
-//  5. 仮想マイク(VocalGzzio Driver (WDM) ＋ SYNCROOM Driver ＋ VB-CABLE トリプルミラー出力)を即時有効化
+//  2. 初回起動時の強制マイクミュート(shouldMuteInput=true)および英語警告バーを自動解除し、排他汎用ASIOラッパー(ASIO4ALL等)の自動選択によるPC音消えを未然に回避
+//  3. 使用中ハードウェアのWindows再生(OUT)と録音(IN)のサンプルレート不一致を検出し、48000Hz等へ統一してASIO起動時のクロック反転によるcluster/VRChat/Discordの音消えを根治
+//  4. Rubix 44 / UR44C / Scarlett 4i4 / MOTU M4 等の多チャンネル機では IN 1〜4 ＆ OUT 1〜4(2系統目のヘッドホン端子含む) を自動で有効化
+//  5. 本体のメイン入出力に VocalGzzio Driver が誤選択されていたら実デバイスへ自動退避し、万一選択中なら発振防止ガードを作動
 static juce::String syncStandaloneAudioForCluster (VocalGzzioProcessor& processor, bool forceEnableStreamOut, bool switchToSharedWasapi = false)
 {
     if (! processor.isStandalone())
@@ -2073,8 +2120,36 @@ static juce::String syncStandaloneAudioForCluster (VocalGzzioProcessor& processo
         holder->deviceManager.getAudioDeviceSetup (setup);
         bool changed = false;
 
-        // 「🌐 全アプリ共存・安全共有モード」が押された場合、または排他ASIOラッパーが原因で開けない場合
-        if (switchToSharedWasapi || (holder->deviceManager.getCurrentAudioDevice() == nullptr && realSpk.isNotEmpty()))
+        // v5.4.1: JUCE標準の初回強制マイクミュート(shouldMuteInput=true)＋英語バナーを初回起動時に自動解除する。
+        // （体験版は設定ファイルを跨いで保持しないため、プロセス起動ごとに最初の1回だけ自動解除する）
+        static bool s_sessionMuteUnblocked = false;
+        const bool hasSavedAudioSetup = (holder->settings != nullptr && holder->settings->containsKey ("audioSetup"));
+        const bool hasMuteInitKey     = (holder->settings != nullptr && holder->settings->containsKey ("gz_audio_init_v541"));
+       #if VOCALGZZIO_TRIAL
+        const bool shouldAutoUnmute = ! s_sessionMuteUnblocked;
+       #else
+        const bool shouldAutoUnmute = (! hasMuteInitKey && ! s_sessionMuteUnblocked);
+       #endif
+        if (shouldAutoUnmute)
+        {
+            s_sessionMuteUnblocked = true;
+            if ((bool) holder->getMuteInputValue().getValue())
+            {
+                holder->getMuteInputValue().setValue (false);
+                changed = true;
+            }
+            if (holder->settings != nullptr)
+                holder->settings->setValue ("gz_audio_init_v541", true);
+        }
+
+        const bool autoPickedExclusiveWrapper = (! hasSavedAudioSetup
+            && holder->deviceManager.getCurrentAudioDeviceType() == "ASIO"
+            && isGenericExclusiveAsioWrapper (activeHwName));
+
+        // 「🌐 全アプリ共存・安全共有モード」が押された場合、初回にASIO4ALL等の排他ラッパーが勝手に掴まれた場合、またはデバイスが開けない場合
+        if (switchToSharedWasapi
+            || autoPickedExclusiveWrapper
+            || (holder->deviceManager.getCurrentAudioDevice() == nullptr && realSpk.isNotEmpty()))
         {
             holder->deviceManager.setCurrentAudioDeviceType ("Windows Audio", true);
             holder->deviceManager.getAudioDeviceSetup (setup);
@@ -2092,6 +2167,23 @@ static juce::String syncStandaloneAudioForCluster (VocalGzzioProcessor& processo
             // 48000Hzで再生中のclusterやブラウザのWindows標準音声(WDM)が突然消える！
             // そのためハードウェアWDM出力／既定スピーカーのサンプルレート(48000Hz等)へ自動同期する。
             bool needApply = false;
+
+            // v5.4.1: Windows Audio 使用時に本体のメイン入力またはメイン出力に VocalGzzio Driver 自身が誤選択されていたら、
+            // 自己ループ発振やヘッドホン無音を防ぐため実デバイスへ自動退避する。
+            if (holder->deviceManager.getCurrentAudioDeviceType() == "Windows Audio")
+            {
+                if (setup.outputDeviceName.containsIgnoreCase ("VocalGzzio") && realSpk.isNotEmpty())
+                {
+                    setup.outputDeviceName = realSpk;
+                    needApply = true;
+                }
+                if (setup.inputDeviceName.containsIgnoreCase ("VocalGzzio") && realMic.isNotEmpty())
+                {
+                    setup.inputDeviceName = realMic;
+                    needApply = true;
+                }
+            }
+
             if (sysSr >= 44100.0 && std::abs (setup.sampleRate - sysSr) > 1.0)
             {
                 setup.sampleRate = sysSr;
@@ -2140,6 +2232,12 @@ static juce::String syncStandaloneAudioForCluster (VocalGzzioProcessor& processo
             activeSr = cur->getCurrentSampleRate();
             activeHwName = cur->getName();
         }
+
+        holder->deviceManager.getAudioDeviceSetup (setup);
+        const bool virtLoop = setup.inputDeviceName.containsIgnoreCase ("VocalGzzio")
+                           || setup.outputDeviceName.containsIgnoreCase ("VocalGzzio")
+                           || activeHwName.containsIgnoreCase ("VocalGzzio");
+        processor.setStandaloneVirtualLoopBlocked (virtLoop);
 
         if (changed)
             holder->saveAudioDeviceState();
@@ -2409,7 +2507,10 @@ private:
     {
         auto& so = processor.getStreamOut();
         juce::String t;
-        if (processor.getFeedbackGuardTripped())
+        if (processor.isStandaloneVirtualLoopBlocked())
+            t = language->T ("⚠️ 本体入出力にVocalGzzio Driverが選択中のため発振防止で配信送出を一時停止中",
+                             "⚠️ Stream Out paused to prevent loop (VocalGzzio Driver selected as main I/O)");
+        else if (processor.getFeedbackGuardTripped())
             t = language->T ("🛡️ ループバック発振を自動遮断 (返しミュートON・配信継続中)", "🛡️ Feedback Loop Guard Active (Self-Monitor Muted)");
         else if (lastFixMsg.isNotEmpty())
             t = lastFixMsg;
@@ -5950,8 +6051,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (sb);
                 }
 
-                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.1.0までの全14世代をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
-                                                      "Select and recall any of the 14 generations from v1.0.0 to v5.1.0 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
+                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.4.1までの全14世代をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
+                                                      "Select and recall any of the 14 generations from v1.0.0 to v5.4.1 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
                 legacyVerBtn.onClick = [this]
                 {
                     const auto anchor = ow.localAreaToGlobal (ow.sizePopBtn.getBounds());
@@ -5966,8 +6067,19 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 };
                 addAndMakeVisible (legacyVerBtn);
 
+                manualBtn.setButtonText (language->T ("📖 取扱説明書・OBS/DAW配線ガイドを開く", "📖 Open User Manual & Routing Guide"));
+                manualBtn.setTooltip (language->T ("オフラインで読める同梱の取扱説明書（OBS・Discord・VRChat配線や対応インターフェース一覧）をブラウザで開きます。",
+                                                   "Opens the bundled offline User Manual & Audio Interface / OBS Routing Guide in your browser."));
+                manualBtn.onClick = [this]
+                {
+                    if (auto* cb = findParentComponentOfClass<juce::CallOutBox>())
+                        cb->dismiss();
+                    openVocalGzzioUserManual();
+                };
+                addAndMakeVisible (manualBtn);
+
                 refresh();
-                setSize (420, 608);   // テーマ9種＋コスメ5色＋星空・海5色＋見やすさスタイル4種＋下部2スイッチ＋歴代バージョンボタンが収まる高さ
+                setSize (420, 650);   // テーマ9種＋コスメ5色＋星空・海5色＋見やすさスタイル4種＋下部2スイッチ＋歴代バージョン＋取扱説明書ボタンが収まる高さ
             }
 
             // テーマを変えると Palette が丸ごと入れ替わるので、色も名前も貼り直す。
@@ -6056,10 +6168,13 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     const auto& vSpec = VocalGzzioContent::getLegacyVersionSpec (legId);
                     legacyVerBtn.setButtonText (legId > 0
                         ? language->T ("🕰 歴代バージョン切替 (現在: ", "🕰 Legacy Version (Active: ") + vSpec.verTag + ")"
-                        : language->T ("🕰 歴代バージョン呼び出し (v1.0〜v5.1)", "🕰 Recall Legacy Versions (v1.0–v5.1)"));
+                        : language->T ("🕰 歴代バージョン呼び出し (v1.0〜v5.4)", "🕰 Recall Legacy Versions (v1.0–v5.4)"));
                     legacyVerBtn.setColour (juce::TextButton::buttonColourId, legId > 0 ? Palette::yellow.withAlpha (0.28f) : Palette::panel2);
                     legacyVerBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 }
+                manualBtn.setButtonText (language->T ("📖 取扱説明書・OBS/DAW配線ガイドを開く", "📖 Open User Manual & Routing Guide"));
+                manualBtn.setColour (juce::TextButton::buttonColourId, Palette::blue.withAlpha (0.22f));
+                manualBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 for (auto* s : { &bigFont, &bigZoom })
                 {
                     s->setColour (juce::Slider::textBoxTextColourId, Palette::ink);
@@ -6105,14 +6220,15 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     styleBtns[a]->setBounds (10 + a * 101, 460, 97, 34);
                 showAllBtn  .setBounds (10,  506, 196, 36);
                 liteBtn     .setBounds (214, 506, 196, 36);
-                legacyVerBtn.setBounds (10,  550, 400, 42);
+                legacyVerBtn.setBounds (10,  550, 400, 40);
+                manualBtn   .setBounds (10,  598, 400, 38);
             }
         private:
             VocalGzzioContent& ow;
             juce::Slider bigFont, bigZoom;
             juce::Label  labFont, labZoom, labTheme, labCouture, labOcean, labStyle;
             juce::OwnedArray<juce::TextButton> themeBtns, coutureBtns, oceanBtns, styleBtns;
-            juce::TextButton showAllBtn, liteBtn, legacyVerBtn;
+            juce::TextButton showAllBtn, liteBtn, legacyVerBtn, manualBtn;
         };
         auto panel = std::make_unique<SizePanel> (*this, fontSlider, zoomSlider);
         // 親に this を渡す → GzzioLnF とテーマ色を継承する(nullptrだと素のJUCEの
@@ -7296,6 +7412,23 @@ void VocalGzzioContent::timerCallback()
         if (++s_standalonePollTick >= 10)
         {
             s_standalonePollTick = 0;
+            if (auto* holder = juce::StandalonePluginHolder::getInstance())
+            {
+                juce::AudioDeviceManager::AudioDeviceSetup s;
+                holder->deviceManager.getAudioDeviceSetup (s);
+                juce::String curName;
+                if (auto* cur = holder->deviceManager.getCurrentAudioDevice())
+                    curName = cur->getName();
+                const bool virtLoop = s.inputDeviceName.containsIgnoreCase ("VocalGzzio")
+                                   || s.outputDeviceName.containsIgnoreCase ("VocalGzzio")
+                                   || curName.containsIgnoreCase ("VocalGzzio");
+                if (processor.isStandaloneVirtualLoopBlocked() != virtLoop)
+                {
+                    processor.setStandaloneVirtualLoopBlocked (virtLoop);
+                    if (! virtLoop && processor.isStreamOutputWanted() && ! processor.getStreamOut().isRunning())
+                        processor.ensureStandaloneVirtualDriverActive();
+                }
+            }
             if (auto* sfw = findParentComponentOfClass<juce::StandaloneFilterWindow>())
             {
                 const juce::String optTxt = language->T ("⚙ 音声・入出力・モノラル設定", "Audio / Mono I/O");
@@ -10683,7 +10816,7 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionSpec (int id) noexcept
 {
     static constexpr LegacyVersionSpec kSpecs[kLegacyVersionCount] = {
-        { 0,  540, "v5.4.0",
+        { 0,  540, "v5.4.1",
           "最新フラッグシップ（語尾ビブラート・母音フォーム統一・歌い出しグルーヴ・ミックス＆胸鳴り）",
           "Current Flagship (Tail Vibrato, Vowel Align EQ, Onset Groove & Mix/Sub-Chest Bridge)",
           "最新の全機能（語尾自然ビブラート生成＆整波、母音フォーム自動統一EQ、歌い出し発声アタック＆グルーヴ整形、ミックスボイス倍音ブリッジ＆胸鳴りサブアンカー、ささやき浮上、音程追従スイート、骨伝導モニター）をフル稼働します。",

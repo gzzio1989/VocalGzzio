@@ -170,7 +170,7 @@ def make(card, out_path):
     return out_path
 
 
-VER = 'VocalGzzio v5.4.0'
+VER = 'VocalGzzio v5.4.1'
 
 CARDS = [
     dict(

@@ -1,0 +1,22 @@
+WEBVTT
+
+00:00.000 --> 00:04.800
+[Test 1 BEFORE] Raw unprocessed bedroom mic: boxy room reflections (300-460Hz) and PC fan hiss.
+
+00:04.800 --> 00:10.400
+[Test 1 AFTER — VocalGzzio v5.4.0 ON] 0ms Room De-Reverb + Denoise + Dolby-A Air + Lush Studio Reverb!
+
+00:10.400 --> 00:14.700
+[Test 2 BEFORE] Singing over a loud backing track: raw vocal fights with piano & guitars in the center.
+
+00:14.700 --> 00:19.000
+[Test 2 AFTER — VocalGzzio v5.4.0 ON] Spectral Unmasker carves a -5dB Mid pocket + BGM Rider + 5-Voice Unison!
+
+00:19.000 --> 00:23.200
+[Test 3 Singing Mode] Lush concert reverb + v5.4 Natural Tail Vibrato (5.5Hz) & Vowel Formant EQ.
+
+00:23.200 --> 00:28.000
+[Test 3 Talk/MC Mode] 1 click mutes reverb in 25ms for crisp, dry voice chat between songs!
+
+00:28.000 --> 00:34.000
+VocalGzzio v5.4.0 — Built-in 100% English UI Mode ([文字・見た目] -> [ブランド]) & $0 Free Trial for Win & Mac!

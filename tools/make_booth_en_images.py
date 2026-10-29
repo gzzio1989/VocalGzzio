@@ -104,7 +104,7 @@ def draw_footer(d: ImageDraw.ImageDraw, w: int, h: int, right_text: str):
     y_line = h - 78
     d.line([56, y_line, w - 56, y_line], fill=(216, 204, 188), width=2)
     f = get_sans(19, bold=True)
-    d.text((56, h - 52), "G'zzio  |  VocalGzzio v5.4.0", font=f, fill=(142, 126, 112))
+    d.text((56, h - 52), "G'zzio  |  VocalGzzio v5.4.1", font=f, fill=(142, 126, 112))
     bb = d.textbbox((0, 0), right_text, font=f)
     tw = bb[2] - bb[0]
     d.text((w - 56 - tw, h - 52), right_text, font=f, fill=SUB)
@@ -243,7 +243,7 @@ def make_simple_en_thumb():
     d.text((456, 178), "VocalGzzio", font=get_mochi(82), fill=INK)
     d.text((460, 294), "Put Your Voice Up Front.", font=get_mochi(42), fill=(194, 75, 114))
     d.text((464, 376), "All-in-One Vocal Studio for Karaoke Streams (OBS),", font=get_sans(27, True), fill=SUB)
-    d.text((464, 418), "VTubers, Covers & VRChat.  (v5.4.0 / Win & Mac)", font=get_sans(27, True), fill=SUB)
+    d.text((464, 418), "VTubers, Covers & VRChat.  (v5.4.1 / Win & Mac)", font=get_sans(27, True), fill=SUB)
 
     # Quick highlight pill under title
     draw_pill(d, 464, 474, 680, 56, "★ Built-in Full English UI Mode + WDM Virtual Driver",
@@ -288,7 +288,7 @@ def make_features_en():
     im = make_cream_canvas(w, h, mascot_pos=(48, 44), mascot_size=(235, 235))
     d = ImageDraw.Draw(im)
 
-    d.text((310, 48), "What's Inside VocalGzzio v5.4.0", font=get_sans(24, True), fill=ORANGE_ACCENT)
+    d.text((310, 48), "What's Inside VocalGzzio v5.4.1", font=get_sans(24, True), fill=ORANGE_ACCENT)
     d.text((310, 88), "Pro Vocal Expression & Mix", font=get_mochi(44), fill=INK)
     d.text((310, 154), "Without a DAW or Booth.", font=get_mochi(44), fill= PINK_ACCENT)
     d.text((310, 224), "Every DSP module runs at 0.0ms–0.08ms latency for live monitoring.", font=get_sans(22, True), fill=SUB)

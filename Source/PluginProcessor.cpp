@@ -34,67 +34,34 @@ VocalGzzioProcessor::VocalGzzioProcessor()
         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
         .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
 {
-    // v1.5.0 autosave: restore the last-used settings even when the host never
-    // hands us a saved project state (fresh insert, unsaved project, standalone).
-    // A host-provided setStateInformation later simply overwrites this.
-   #if ! VOCALGZZIO_TRIAL   // 体験版は前回の設定を覚えない（保存しないので読む物も作らない）
+    // v5.4.1: コンストラクタ時点では JUCE 側で wrapperType がまだ設定されていないため、
+    // autosave.xml の自動復元は単体起動版(isStandalone() == true)と確定した段階でのみ行う。
+    // これにより DAW 上の VST3/AU トラック挿入時は常にクリーンな初期状態で立ち上がり、
+    // 単体起動版の設定や別トラックの設定が混入しない。
+   #if ! VOCALGZZIO_TRIAL
+    if (gz::isTestDataIsolated())
     {
-        auto f = autosaveFile();
-        bool loadedFromStandaloneSettings = false;
-        if (! gz::isTestDataIsolated())
-        {
-            const auto sf = gz::dataDirectory().getChildFile ("VocalGzzio.settings");
-            if (sf.existsAsFile() && (! f.existsAsFile() || sf.getLastModificationTime() > f.getLastModificationTime()))
-            {
-                if (auto sxml = juce::XmlDocument::parse (sf))
-                {
-                    for (auto* v = sxml->getFirstChildElement(); v != nullptr; v = v->getNextElement())
-                    {
-                        if (v->hasTagName ("VALUE") && v->getStringAttribute ("name") == "filterState")
-                        {
-                            juce::MemoryBlock mb;
-                            if (mb.fromBase64Encoding (v->getStringAttribute ("val")) && mb.getSize() > 0)
-                            {
-                                if (auto stateXml = getXmlFromBinary (mb.getData(), (int) mb.getSize()))
-                                {
-                                    applyStateXml (*stateXml);
-                                    flushAutosaveNow();
-                                    loadedFromStandaloneSettings = true;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        if (! loadedFromStandaloneSettings && f.existsAsFile())
-            if (auto xml = juce::XmlDocument::parse (f))
-                applyStateXml (*xml);
-
-        if (gz::isTestDataIsolated())
-        {
-            legacyVersionId.store  (0,    std::memory_order_relaxed);
-            legacyVersionEra.store (510,  std::memory_order_relaxed);
-            legacyEcoGate.store    (true, std::memory_order_relaxed);
-        }
+        legacyVersionId.store  (0,    std::memory_order_relaxed);
+        legacyVersionEra.store (540,  std::memory_order_relaxed);
+        legacyEcoGate.store    (true, std::memory_order_relaxed);
     }
    #endif
 
     apvts.state.addListener (this);
     stateDirty.store (false);
     usageLog.load();    // v2.10.0 使われ方（手元に貯めるだけ・送信しない）
-    startTimer (500);   // autosave poll: writes ~1.2 s after the last change
+    startTimer (500);   // autosave poll: writes ~1.2 s after the last change (Standalone only)
 }
 
 VocalGzzioProcessor::~VocalGzzioProcessor()
 {
     stopTimer();
     cancelPendingUpdate();          // v2.1.0: 実行待ちのMIDI切替を破棄
-   #if ! VOCALGZZIO_TRIAL          // 体験版は閉じるときも autosave を書かない
-    if (stateDirty.load())
+   #if ! VOCALGZZIO_TRIAL          // 体験版およびDAWプラグイン版は閉じるときも autosave を書かない
+    if (isStandalone() && stateDirty.load())
         flushAutosaveNow();
    #endif
+    closeStandaloneAppMutex();
     usageLog.save();                // v2.10.0 使われ方を手元へ（送信はしない）
     apvts.state.removeListener (this);
 }
@@ -1387,6 +1354,7 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
             liveSeBufs[3].setSize (2, len3, false, true, true);
             liveSeBuilt = { false, false, false, false };
         }
+        refreshSampleRateDependentMedia (sampleRate);
     }
 
     // AUTO SETUP analysis band-pass bank (side-chain only, never touches audio)
@@ -1473,7 +1441,11 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     streamOut.setHostSampleRate (sampleRate);
     if (isStandalone())
     {
-        if (streamWanted && streamDevWanted.isNotEmpty())
+        ensureStandaloneAppMutex();
+        if (juce::MessageManager::existsAndIsCurrentThread())
+            ensureStandaloneAutosaveRestored();
+        if (streamWanted && streamDevWanted.isNotEmpty()
+            && ! (standaloneVirtualLoopBlocked.load (std::memory_order_relaxed) && streamDevWanted.containsIgnoreCase ("VocalGzzio")))
             streamOut.start (streamDevWanted, sampleRate);
         else if (! streamUserConfigured && ! streamAutoChecked)
         {
@@ -1920,12 +1892,14 @@ void VocalGzzioProcessor::updateParameters()
 //==============================================================================
 bool VocalGzzioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
+    const auto in  = layouts.getMainInputChannelSet();
     const auto out = layouts.getMainOutputChannelSet();
     if (isStandalone())
-        return out.size() >= 1 && out.size() <= 16 && layouts.getMainInputChannelSet().size() <= 16;
+        return out.size() >= 1 && out.size() <= 16 && in.size() <= 16;
     if (out != juce::AudioChannelSet::mono() && out != juce::AudioChannelSet::stereo())
         return false;
-    return layouts.getMainInputChannelSet() == out;
+    // v5.4.1: DAW のモノラルボーカルトラックにステレオ空間系プラグインとして挿す「1ch入力 → 2ch出力」に正式対応
+    return in == out || (in == juce::AudioChannelSet::mono() && out == juce::AudioChannelSet::stereo());
 }
 
 // v2.6.0: ブロック全体が有限か(NaN/Infを含まないか)を1回の加算走査で調べる。
@@ -1978,8 +1952,12 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // また、32bitフロート対応インターフェース(ZOOM UAC-232/432等)でゲイン調整なしに大声を出して |x| > 1.0f (+0dBFS超え) の
     // 浮動小数点信号がそのまま入ってきても絶対にクリップしないよう、0dBFS超えを検知した瞬間だけ滑らかに自動パッドを入れる。
     // (通常の16/24bit整数インターフェースでは |x| <= 1.0f のため 1サンプルも変化しない)
+    // v5.4.1: 1ch入力→2ch出力のVST3構成では ch1 側が未初期化の出力専用バッファになるため、
+    // 有効な入力チャンネル (0..sanitizeCh-1) のみを検査・パッドし、出力専用chは先にゼロクリアする。
+    const int activeInCh = juce::jlimit (0, totalCh, getTotalNumInputChannels());
+    const int sanitizeCh = activeInCh > 0 ? activeInCh : totalCh;
     float blockMaxIn = 0.0f;
-    for (int ch = 0; ch < totalCh; ++ch)
+    for (int ch = 0; ch < sanitizeCh; ++ch)
     {
         float* p = fullBuffer.getWritePointer (ch);
         if (! gzBlockFinite (p, numSamples))
@@ -1993,6 +1971,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             if (a > blockMaxIn) blockMaxIn = a;
         }
     }
+    for (int ch = sanitizeCh; ch < totalCh; ++ch)
+        fullBuffer.clear (ch, 0, numSamples);
     if (blockMaxIn > 1.0f || floatPadGain < 0.9999f)
     {
         const float targetPad = (blockMaxIn > 1.0f) ? juce::jlimit (0.05f, 1.0f, 0.92f / blockMaxIn) : 1.0f;
@@ -2002,7 +1982,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             floatPadGain += 0.04f * (targetPad - floatPadGain); // 通常域へ戻ったら滑らかに復帰
         if (floatPadGain > 0.9995f) floatPadGain = 1.0f;
 
-        for (int ch = 0; ch < totalCh; ++ch)
+        for (int ch = 0; ch < sanitizeCh; ++ch)
             juce::FloatVectorOperations::multiply (fullBuffer.getWritePointer (ch), floatPadGain, numSamples);
     }
 
@@ -5659,7 +5639,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
 
     // ---- v2.2.0 配信出力: 仕上がった音を配信用デバイスへも流す ----
     // FIFOに書くだけ(ロック・確保なし)。配信側が詰まっても本線には影響しない。
-    if (streamOut.isRunning())
+    // v5.4.1: 単体起動版のメイン入出力に VocalGzzio Driver が誤選択されている場合はデジタル発振を防ぐため送出を遮断する。
+    if (streamOut.isRunning() && ! standaloneVirtualLoopBlocked.load (std::memory_order_relaxed))
     {
         const float* L = buffer.getReadPointer (0);
         const float* R = numCh > 1 ? buffer.getReadPointer (1) : L;
@@ -6716,7 +6697,7 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
                     setlistItems.clear();
                     for (auto* el : s51->getChildWithTagNameIterator ("SONG"))
                     {
-                        if ((int) setlistItems.size() >= 20) break;
+                        if ((int) setlistItems.size() >= kMaxSetlistSongs) break;
                         SetlistItem item;
                         item.filePath    = el->getStringAttribute ("path");
                         item.title       = el->getStringAttribute ("title", "Song");
@@ -6756,7 +6737,13 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
 
 bool VocalGzzioProcessor::loadCustomSeFile (int slotIndex, const juce::File& file)
 {
-    if (slotIndex < 0 || slotIndex >= kNumCustomSe || ! file.existsAsFile())
+    const double targetSr = currentSampleRate > 1000.0 ? currentSampleRate : 48000.0;
+    return loadCustomSeFileInternal (slotIndex, file, targetSr, true);
+}
+
+bool VocalGzzioProcessor::loadCustomSeFileInternal (int slotIndex, const juce::File& file, double targetSr, bool markDirty)
+{
+    if (slotIndex < 0 || slotIndex >= kNumCustomSe || ! file.existsAsFile() || targetSr <= 1000.0)
         return false;
     juce::AudioFormatManager fm;
     fm.registerBasicFormats();
@@ -6764,7 +6751,6 @@ bool VocalGzzioProcessor::loadCustomSeFile (int slotIndex, const juce::File& fil
     if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0)
         return false;
 
-    const double targetSr = currentSampleRate > 1000.0 ? currentSampleRate : 48000.0;
     const int maxInSamples = (int) juce::jmin<juce::int64> (reader->lengthInSamples,
                                                             (juce::int64) std::lround (reader->sampleRate * 30.0)); // 最大30秒
     if (maxInSamples <= 0)
@@ -6822,6 +6808,7 @@ bool VocalGzzioProcessor::loadCustomSeFile (int slotIndex, const juce::File& fil
     {
         const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
         customSeAudioBufs[(size_t) slotIndex] = finalBuf;
+        customSeSampleRates[(size_t) slotIndex] = targetSr;
         customSeLoadedFlags[(size_t) slotIndex].store (true, std::memory_order_release);
     }
     {
@@ -6829,7 +6816,8 @@ bool VocalGzzioProcessor::loadCustomSeFile (int slotIndex, const juce::File& fil
         customSeTitles[(size_t) slotIndex] = file.getFileNameWithoutExtension();
         customSePaths[(size_t) slotIndex]  = file.getFullPathName();
     }
-    markStateDirty();
+    if (markDirty && ! restoringState)
+        markStateDirty();
     return true;
 }
 
@@ -6842,6 +6830,7 @@ void VocalGzzioProcessor::clearCustomSeSlot (int slotIndex)
     {
         const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
         customSeAudioBufs[(size_t) slotIndex].reset();
+        customSeSampleRates[(size_t) slotIndex] = 0.0;
         customSeLoadedFlags[(size_t) slotIndex].store (false, std::memory_order_release);
     }
     {
@@ -6849,7 +6838,92 @@ void VocalGzzioProcessor::clearCustomSeSlot (int slotIndex)
         customSeTitles[(size_t) slotIndex].clear();
         customSePaths[(size_t) slotIndex].clear();
     }
-    markStateDirty();
+    if (! restoringState)
+        markStateDirty();
+}
+
+void VocalGzzioProcessor::refreshSampleRateDependentMedia (double newSampleRate)
+{
+    if (newSampleRate <= 1000.0)
+        return;
+
+    // 1. カスタムSE 4枠：デバイスやホストのサンプルレートが切り替わった場合（44.1kHz <-> 48kHz <-> 96kHz）、
+    //    元ファイルが存在すれば再デコードし、無ければメモリ上のバッファをリサンプリングしてピッチ・速度ずれを防ぐ。
+    for (int s = 0; s < kNumCustomSe; ++s)
+    {
+        if (! customSeLoadedFlags[(size_t) s].load (std::memory_order_acquire))
+            continue;
+        const double oldSr = customSeSampleRates[(size_t) s];
+        if (oldSr <= 1000.0 || std::abs (oldSr - newSampleRate) <= 1.0)
+            continue;
+
+        juce::String savedPath;
+        {
+            const juce::ScopedLock sl (bgmMetaLock);
+            savedPath = customSePaths[(size_t) s];
+        }
+        if (savedPath.isNotEmpty() && juce::File (savedPath).existsAsFile())
+        {
+            if (loadCustomSeFileInternal (s, juce::File (savedPath), newSampleRate, false))
+                continue;
+        }
+
+        std::shared_ptr<const juce::AudioBuffer<float>> oldBuf;
+        {
+            const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
+            oldBuf = customSeAudioBufs[(size_t) s];
+        }
+        if (oldBuf != nullptr && oldBuf->getNumSamples() > 0)
+        {
+            const double ratio = oldSr / newSampleRate;
+            const int inSamples = oldBuf->getNumSamples();
+            const int outSamples = juce::jmax (1, (int) std::lround ((double) inSamples / ratio));
+            auto resampled = std::make_shared<juce::AudioBuffer<float>> (2, outSamples);
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                const int srcCh = juce::jmin (ch, oldBuf->getNumChannels() - 1);
+                juce::LagrangeInterpolator interp;
+                interp.process (ratio, oldBuf->getReadPointer (srcCh), resampled->getWritePointer (ch), outSamples);
+            }
+            if (activeLiveSe.load (std::memory_order_acquire) == 4 + s)
+                stopLiveSe();
+            const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
+            customSeAudioBufs[(size_t) s] = resampled;
+            customSeSampleRates[(size_t) s] = newSampleRate;
+        }
+    }
+
+    // 2. カラオケBGMバッファ：同様にサンプルレート変更時は再生位置比率を保ったままリサンプリングする。
+    const int curBgmSamples = bgmLoadedSamples.load (std::memory_order_acquire);
+    if (curBgmSamples > 0 && bgmLoadedSampleRate > 1000.0 && std::abs (bgmLoadedSampleRate - newSampleRate) > 1.0)
+    {
+        std::shared_ptr<const juce::AudioBuffer<float>> oldBgm;
+        double oldReadPos = 0.0;
+        {
+            const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
+            oldBgm = bgmAudioBuf;
+            oldReadPos = bgmReadPos.load (std::memory_order_relaxed);
+        }
+        if (oldBgm != nullptr && oldBgm->getNumSamples() > 0)
+        {
+            const double ratio = bgmLoadedSampleRate / newSampleRate;
+            const int inSamples = oldBgm->getNumSamples();
+            const int outSamples = juce::jmax (1, (int) std::lround ((double) inSamples / ratio));
+            auto resampled = std::make_shared<juce::AudioBuffer<float>> (2, outSamples);
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                const int srcCh = juce::jmin (ch, oldBgm->getNumChannels() - 1);
+                juce::LagrangeInterpolator interp;
+                interp.process (ratio, oldBgm->getReadPointer (srcCh), resampled->getWritePointer (ch), outSamples);
+            }
+            const double normPos = juce::jlimit (0.0, 1.0, oldReadPos / (double) juce::jmax (1, inSamples));
+            const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
+            bgmAudioBuf = resampled;
+            bgmLoadedSampleRate = newSampleRate;
+            bgmLoadedSamples.store (outSamples, std::memory_order_release);
+            bgmReadPos.store (normPos * (double) juce::jmax (0, outSamples - 1), std::memory_order_relaxed);
+        }
+    }
 }
 
 bool VocalGzzioProcessor::loadCustomIrFile (const juce::File& file)
@@ -7037,6 +7111,11 @@ juce::File VocalGzzioProcessor::autosaveFile()
 
 void VocalGzzioProcessor::flushAutosaveNow()
 {
+    if (! isStandalone())
+    {
+        stateDirty.store (false);
+        return;
+    }
     auto f = autosaveFile();
     f.getParentDirectory().createDirectory();
     if (auto xml = makeStateXml())
@@ -7044,8 +7123,55 @@ void VocalGzzioProcessor::flushAutosaveNow()
     stateDirty.store (false);
 }
 
+void VocalGzzioProcessor::ensureStandaloneAutosaveRestored()
+{
+   #if VOCALGZZIO_TRIAL
+    standaloneAutosaveChecked = true;
+   #else
+    if (standaloneAutosaveChecked || ! isStandalone() || gz::isTestDataIsolated())
+        return;
+    standaloneAutosaveChecked = true;
+
+    auto f = autosaveFile();
+    bool loadedFromStandaloneSettings = false;
+    const auto sf = gz::dataDirectory().getChildFile ("VocalGzzio.settings");
+    if (sf.existsAsFile() && (! f.existsAsFile() || sf.getLastModificationTime() > f.getLastModificationTime()))
+    {
+        if (auto sxml = juce::XmlDocument::parse (sf))
+        {
+            for (auto* v = sxml->getFirstChildElement(); v != nullptr; v = v->getNextElement())
+            {
+                if (v->hasTagName ("VALUE") && v->getStringAttribute ("name") == "filterState")
+                {
+                    juce::MemoryBlock mb;
+                    if (mb.fromBase64Encoding (v->getStringAttribute ("val")) && mb.getSize() > 0)
+                    {
+                        if (auto stateXml = getXmlFromBinary (mb.getData(), (int) mb.getSize()))
+                        {
+                            applyStateXml (*stateXml);
+                            flushAutosaveNow();
+                            loadedFromStandaloneSettings = true;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    if (! loadedFromStandaloneSettings && f.existsAsFile())
+        if (auto xml = juce::XmlDocument::parse (f))
+            applyStateXml (*xml);
+   #endif
+}
+
 void VocalGzzioProcessor::timerCallback()
 {
+    if (isStandalone())
+    {
+        ensureStandaloneAppMutex();
+        ensureStandaloneAutosaveRestored();
+    }
+
     // v3.1 使いかたが変わっていたら、その使いかたの値を出し入れする。
     //  画面のコンボからも即座に同じものを呼ぶので、ふつうはここは空振りする。
     //  ここが要るのは「画面が開いていないのにホストのオートメーションで
@@ -7055,9 +7181,15 @@ void VocalGzzioProcessor::timerCallback()
    #if VOCALGZZIO_TRIAL
     stateDirty.store (false);      // 体験版は autosave を書かない
    #else
-    if (stateDirty.load()
-        && juce::Time::getMillisecondCounter() - lastDirtyMs.load() > 400)
+    if (! isStandalone())
+    {
+        stateDirty.store (false);  // v5.4.1: DAW/VST3版はプロジェクトチャンクにのみ保存し、グローバル autosave.xml を汚染しない
+    }
+    else if (stateDirty.load()
+             && juce::Time::getMillisecondCounter() - lastDirtyMs.load() > 400)
+    {
         flushAutosaveNow();
+    }
    #endif
 }
 
@@ -7147,29 +7279,35 @@ void VocalGzzioProcessor::setStateInformation (const void* data, int sizeInBytes
    #endif
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
     {
-        if (! gz::isTestDataIsolated())
+        // v5.4.1: autosave.xml とのタイムスタンプ比較・優先復元は単体起動版 (Standalone) のみに限定する。
+        // DAW (VST3/AU) ではホストがプロジェクトファイルに保存したチャンクを100%忠実に復元し、
+        // 別トラックや単体起動版の設定でプロジェクト状態が上書きされる事故を防止する。
+        if (isStandalone())
         {
-            // スタンドアローン版とVST3版の間で直近に更新された設定・歴代バージョンを引き継ぐ：
-            // ホスト(DAW/OBS/StandaloneFilterWindow)が渡してきた保存チャンクよりも
-            // autosave.xml の方が新しい場合は、最新の autosave.xml 側を優先して適用する。
-            const auto chunkMs = xml->getStringAttribute ("savedAtMs").getLargeIntValue();
-            if (auto f = autosaveFile(); f.existsAsFile())
+            ensureStandaloneAppMutex();
+            standaloneAutosaveChecked = true;
+            if (! gz::isTestDataIsolated())
             {
-                if (auto autoXml = juce::XmlDocument::parse (f))
+                const auto chunkMs = xml->getStringAttribute ("savedAtMs").getLargeIntValue();
+                if (auto f = autosaveFile(); f.existsAsFile())
                 {
-                    const auto autoMs = juce::jmax<juce::int64> (
-                        autoXml->getStringAttribute ("savedAtMs").getLargeIntValue(),
-                        f.getLastModificationTime().toMilliseconds());
-                    if (autoMs > chunkMs + 1500)
+                    if (auto autoXml = juce::XmlDocument::parse (f))
                     {
-                        applyStateXml (*autoXml);
-                        return;
+                        const auto autoMs = juce::jmax<juce::int64> (
+                            autoXml->getStringAttribute ("savedAtMs").getLargeIntValue(),
+                            f.getLastModificationTime().toMilliseconds());
+                        if (autoMs > chunkMs + 1500)
+                        {
+                            applyStateXml (*autoXml);
+                            return;
+                        }
                     }
                 }
             }
         }
         applyStateXml (*xml);
-        markStateDirty();   // keep the autosave in sync with the restored project
+        if (isStandalone())
+            markStateDirty();   // 単体起動版のみ autosave を最新状態と同期
     }
 }
 
@@ -7213,6 +7351,7 @@ bool VocalGzzioProcessor::loadBgmFile (const juce::File& file)
     {
         const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
         bgmAudioBuf = finalBuf;
+        bgmLoadedSampleRate = targetSr;
         bgmLoadedSamples.store (finalBuf->getNumSamples(), std::memory_order_release);
         bgmReadPos.store (0.0, std::memory_order_relaxed);
     }
@@ -7284,6 +7423,7 @@ void VocalGzzioProcessor::loadBuiltinDemoBgm()
     {
         const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
         bgmAudioBuf = buf;
+        bgmLoadedSampleRate = sr;
         bgmLoadedSamples.store (totalSamples, std::memory_order_release);
         bgmReadPos.store (0.0, std::memory_order_relaxed);
     }
@@ -7498,6 +7638,7 @@ void VocalGzzioProcessor::clearBgm()
     {
         const juce::SpinLock::ScopedLockType sl (bgmAudioLock);
         bgmAudioBuf.reset();
+        bgmLoadedSampleRate = 0.0;
         bgmLoadedSamples.store (0, std::memory_order_release);
         bgmReadPos.store (0.0, std::memory_order_relaxed);
     }
@@ -7564,7 +7705,7 @@ int VocalGzzioProcessor::addCurrentSongToSetlist()
     int newIdx = 0;
     {
         const juce::ScopedLock sl (bgmMetaLock);
-        // 同じ曲名/パスがあれば上書き更新、無ければ追加（最大20曲）
+        // 同じ曲名/パスがあれば上書き更新、無ければ追加（最大32曲）
         int found = -1;
         for (int i = 0; i < (int) setlistItems.size(); ++i)
         {
@@ -7581,7 +7722,7 @@ int VocalGzzioProcessor::addCurrentSongToSetlist()
         }
         else
         {
-            if ((int) setlistItems.size() >= 20)
+            if ((int) setlistItems.size() >= kMaxSetlistSongs)
                 setlistItems.erase (setlistItems.begin());
             setlistItems.push_back (item);
             newIdx = (int) setlistItems.size() - 1;
@@ -8097,6 +8238,32 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 #include <mmdeviceapi.h>
 #include <audioclient.h>
 #include <functiondiscoverykeys_devpkey.h>
+
+void VocalGzzioProcessor::ensureStandaloneAppMutex() noexcept
+{
+    if (! isStandalone() || standaloneMutexHandle != nullptr || gz::isTestDataIsolated())
+        return;
+   #if VOCALGZZIO_TRIAL
+    standaloneMutexHandle = ::CreateMutexW (nullptr, FALSE, L"VocalGzzioTrialStandaloneMutex");
+   #else
+    standaloneMutexHandle = ::CreateMutexW (nullptr, FALSE, L"VocalGzzioStandaloneMutex");
+   #endif
+}
+
+void VocalGzzioProcessor::closeStandaloneAppMutex() noexcept
+{
+    if (standaloneMutexHandle != nullptr)
+    {
+        ::CloseHandle ((HANDLE) standaloneMutexHandle);
+        standaloneMutexHandle = nullptr;
+    }
+}
+#else
+void VocalGzzioProcessor::ensureStandaloneAppMutex() noexcept {}
+void VocalGzzioProcessor::closeStandaloneAppMutex() noexcept {}
+#endif
+
+#if JUCE_WINDOWS
 
 namespace
 {

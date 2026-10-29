@@ -80,6 +80,34 @@ static const wchar_t* VOCALGZZIO_WDM_ADAPTER_NAME = L"VocalGzzio Driver (WDM)";
 static const wchar_t* VOCALGZZIO_WDM_LINE_NAME    = L"ライン";
 static const wchar_t* VOCALGZZIO_WDM_FULL_NAME    = L"ライン (VocalGzzio Driver (WDM))";
 
+// ARM64 版 Windows 上で実行されているかを判定する。
+// x64 カーネルドライバ (.sys) は ARM64 カーネルにロードできないため、安全にスキップするために使用する。
+typedef BOOL (WINAPI *PFN_IsWow64Process2)(HANDLE, USHORT*, USHORT*);
+static bool IsRunningOnArm64Windows() {
+#if defined(_M_ARM64) || defined(__aarch64__)
+    return true;
+#else
+    HMODULE hKernel = GetModuleHandleW(L"kernel32.dll");
+    if (hKernel != NULL) {
+        PFN_IsWow64Process2 pfnWow2 = (PFN_IsWow64Process2)GetProcAddress(hKernel, "IsWow64Process2");
+        if (pfnWow2 != NULL) {
+            USHORT processMachine = 0;
+            USHORT nativeMachine = 0;
+            if (pfnWow2(GetCurrentProcess(), &processMachine, &nativeMachine)) {
+                // IMAGE_FILE_MACHINE_ARM64 (0xAA64) / IMAGE_FILE_MACHINE_ARMNT (0x01C4)
+                if (nativeMachine == 0xAA64 || nativeMachine == 0x01C4)
+                    return true;
+            }
+        }
+    }
+    SYSTEM_INFO si;
+    ZeroMemory(&si, sizeof(si));
+    GetNativeSystemInfo(&si);
+    // PROCESSOR_ARCHITECTURE_ARM64 (12) / PROCESSOR_ARCHITECTURE_ARM (5)
+    return (si.wProcessorArchitecture == 12 || si.wProcessorArchitecture == 5);
+#endif
+}
+
 static bool IsVirtualCableNameW(const wchar_t* name) {
     if (!name) return false;
     return wcsstr(name, L"VocalGzzio") != NULL ||
@@ -411,8 +439,10 @@ static int PrintStatusJson() {
     }
 
     bool installed = (renderGuid[0] != 0 && captureGuid[0] != 0);
-    printf("{\"ok\":true,\"installed\":%s,\"adapterName\":\"VocalGzzio Driver (WDM)\",\"fullName\":\"",
-           installed ? "true" : "false");
+    bool skippedArm64 = (!installed && IsRunningOnArm64Windows());
+    printf("{\"ok\":true,\"installed\":%s,\"skippedArm64\":%s,\"adapterName\":\"VocalGzzio Driver (WDM)\",\"fullName\":\"",
+           installed ? "true" : "false",
+           skippedArm64 ? "true" : "false");
     PrintUtf8(VOCALGZZIO_WDM_FULL_NAME);
     printf("\",\"renderGuid\":\"");
     PrintUtf8(renderGuid);
@@ -424,20 +454,19 @@ static int PrintStatusJson() {
     return 0;
 }
 
-// 既存の VocalGzzio Driver (WDM) デバイスノード (ROOT\MEDIA\xxxx) を探す
-// 注意: ROOT\MEDIA\0001 (Yamaha SYNCROOM Driver (WDM)) および
-//       GzzioRoom Driver (WDM) は絶対に触らない
+// 既存の VocalGzzio Driver (WDM) デバイスノード (ROOT\MEDIA\xxxx) を探し、重複ノードがあれば1つに整理する。
+// 注意: FriendlyName / DeviceDesc が "VocalGzzio Driver (WDM)" と完全一致するノードのみを対象とするため、
+//       Yamaha SYNCROOM Driver (WDM) や GzzioRoom Driver (WDM) はインスタンス番号に関わらず一切触らない。
 static bool FindExistingVocalGzzioWdmNode(wchar_t* outInstanceId, size_t maxCount) {
     HDEVINFO hDevInfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_MEDIA_CUSTOM, L"ROOT\\MEDIA", NULL, DIGCF_PRESENT);
     if (hDevInfo == INVALID_HANDLE_VALUE) return false;
 
+    bool foundPrimary = false;
     SP_DEVINFO_DATA devData;
     devData.cbSize = sizeof(SP_DEVINFO_DATA);
     for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &devData); ++i) {
         wchar_t instId[256] = {0};
         if (!SetupDiGetDeviceInstanceIdW(hDevInfo, &devData, instId, 256, NULL)) continue;
-        // ROOT\MEDIA\0001 は元の Yamaha SYNCROOM Driver なのでスキップ
-        if (_wcsicmp(instId, L"ROOT\\MEDIA\\0001") == 0) continue;
 
         wchar_t hwId[256] = {0};
         if (!SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_HARDWAREID, NULL, (PBYTE)hwId, sizeof(hwId), NULL)) continue;
@@ -451,17 +480,26 @@ static bool FindExistingVocalGzzioWdmNode(wchar_t* outInstanceId, size_t maxCoun
 
         if (_wcsicmp(friendly, VOCALGZZIO_WDM_ADAPTER_NAME) == 0 ||
             _wcsicmp(desc, VOCALGZZIO_WDM_ADAPTER_NAME) == 0) {
-            wcscpy_s(outInstanceId, maxCount, instId);
-            SetupDiDestroyDeviceInfoList(hDevInfo);
-            return true;
+            if (!foundPrimary) {
+                wcscpy_s(outInstanceId, maxCount, instId);
+                foundPrimary = true;
+            } else {
+                // 旧版で重複生成された余分な VocalGzzio Driver (WDM) ノードがあれば自動整理する
+                SetupDiCallClassInstaller(DIF_REMOVE, hDevInfo, &devData);
+            }
         }
     }
     SetupDiDestroyDeviceInfoList(hDevInfo);
-    return false;
+    return foundPrimary;
 }
 
 // VocalGzzio Driver (WDM) の新規作成・インストール
 static int InstallVocalGzzioWdmDriver() {
+    if (IsRunningOnArm64Windows()) {
+        printf("{\"ok\":true,\"installed\":false,\"skippedArm64\":true,\"adapterName\":\"VocalGzzio Driver (WDM)\"}\n");
+        return 0;
+    }
+
     SavedDefaultEndpoints savedDefaults;
     SnapshotRealDefaultEndpoints(&savedDefaults);
 
@@ -600,8 +638,6 @@ static int UninstallVocalGzzioWdmDriver() {
     for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &devData); ++i) {
         wchar_t instId[256] = {0};
         if (!SetupDiGetDeviceInstanceIdW(hDevInfo, &devData, instId, 256, NULL)) continue;
-        // ROOT\MEDIA\0001 は元の Yamaha SYNCROOM Driver なので残す
-        if (_wcsicmp(instId, L"ROOT\\MEDIA\\0001") == 0) continue;
 
         wchar_t hwId[256] = {0};
         if (!SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_HARDWAREID, NULL, (PBYTE)hwId, sizeof(hwId), NULL)) continue;
@@ -612,7 +648,8 @@ static int UninstallVocalGzzioWdmDriver() {
         SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_FRIENDLYNAME, NULL, (PBYTE)friendly, sizeof(friendly), NULL);
         SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_DEVICEDESC, NULL, (PBYTE)desc, sizeof(desc), NULL);
 
-        // VocalGzzio Driver (WDM) のみ削除し、GzzioRoom Driver (WDM) や Yamaha SYNCROOM Driver (WDM) は残す
+        // FriendlyName / DeviceDesc が VocalGzzio Driver (WDM) と一致するノードのみ削除し、
+        // GzzioRoom Driver (WDM) や Yamaha SYNCROOM Driver (WDM) はインスタンス番号に関わらず保護する
         if (_wcsicmp(friendly, VOCALGZZIO_WDM_ADAPTER_NAME) == 0 ||
             _wcsicmp(desc, VOCALGZZIO_WDM_ADAPTER_NAME) == 0) {
             SetupDiCallClassInstaller(DIF_REMOVE, hDevInfo, &devData);
@@ -629,6 +666,11 @@ int wmain(int argc, wchar_t* argv[]) {
 
     bool wantUninstall = (argc >= 2 && _wcsicmp(argv[1], L"--uninstall") == 0);
     bool noElevate     = (argc >= 3 && _wcsicmp(argv[2], L"--no-elevate") == 0);
+
+    if (!wantUninstall && IsRunningOnArm64Windows()) {
+        printf("{\"ok\":true,\"installed\":false,\"skippedArm64\":true,\"adapterName\":\"VocalGzzio Driver (WDM)\"}\n");
+        return 0;
+    }
 
     if (!IsUserAnAdmin()) {
         if (noElevate) {

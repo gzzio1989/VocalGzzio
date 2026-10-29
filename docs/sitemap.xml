@@ -2,47 +2,52 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/en.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/guide-karaoke-stream-obs-vrchat-en.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/guide-yamaha-ag03-buzz-fix-en.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/devlog-touch-knob-14gen-timemachine-en.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://gzzio1989.github.io/apps/vocalgzzio/devlog-wasapi-4hour-drift-mixer-en.html</loc>
+    <lastmod>2026-10-30</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/manual.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/guide-cluster-vrchat.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/guide-utawaku-obs.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://gzzio1989.github.io/apps/vocalgzzio/mac-install.html</loc>
-    <lastmod>2026-10-27</lastmod>
+    <lastmod>2026-10-30</lastmod>
     <priority>0.7</priority>
   </url>
 </urlset>

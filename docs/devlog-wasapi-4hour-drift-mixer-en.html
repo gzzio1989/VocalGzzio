@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Why Windows WASAPI Audio Apps Start Crackling After 3.9 Hours (And Why Uninitialized Session GUIDs Spawn Duplicate Volume Mixer Sliders in C++/JUCE) | VocalGzzio</title>
+  <meta name="description" content="Real-world Windows WASAPI C++/JUCE debugging postmortem: fixing the 3.9-hour +2.2 ppm clock-drift ReleaseBuffer(0) reservoir wedge and eliminating duplicate Windows Volume Mixer sliders caused by uninitialized AudioSessionGuid.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <nav>
+    <strong>VocalGzzio 5.4.1</strong>
+    <a href="en.html">English Home</a>
+    <a href="guide-karaoke-stream-obs-vrchat-en.html">OBS/VRChat Karaoke Guide</a>
+    <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix</a>
+    <a href="devlog-touch-knob-14gen-timemachine-en.html">Touch &amp; Time Machine</a>
+    <a href="https://gzzio.booth.pm/items/8764003">Free Trial &amp; Buy</a>
+    <a href="index.html">🇯🇵 日本語</a>
+  </nav>
+</header>
+
+<main>
+  <p class="eyebrow">Windows Audio &amp; C++/JUCE DSP Engineering Postmortem</p>
+  <h1>Why Windows WASAPI Audio Apps Start Crackling After 3.9 Hours<br>(And Why Duplicate Sliders Appear in Windows Volume Mixer)</h1>
+  <p class="lead">
+    Short 5-minute studio tests never catch marathon streaming bugs. When VTubers and karaoke streamers run a standalone vocal processor in Windows WASAPI Shared Mode for 4 to 5 hours straight—often pairing a USB microphone on one crystal oscillator with headphones on a separate DAC—two subtle bugs inside stock WASAPI wrappers surface. Here is how we reproduced both mathematically across 864 million samples and fixed them in <a href="en.html">VocalGzzio v5.4.1</a>.
+  </p>
+
+  <h2>1. The 3.9-Hour <code>+2.2 ppm</code> Clock-Drift Reservoir Wedge</h2>
+  <p>When an audio interface uses its own unified ASIO driver, the ADC (microphone input) and DAC (headphone output) are driven by the exact same hardware word clock. Zero drift ever occurs.</p>
+  <p>However, many streamers use a <strong>USB condenser/dynamic microphone</strong> (such as an AT2020USB-X, Shure MV7+, HyperX QuadCast, or Blue Yeti) for input while listening through <strong>motherboard audio, a gaming DAC, or a VR headset</strong> via Windows WASAPI Shared Mode. Even though both devices report <code>48,000 Hz</code> to Windows, they run on two physically independent quartz crystals.</p>
+  <p>A completely normal crystal tolerance of just <strong><code>+2.2 ppm</code> to <code>+2.5 ppm</code></strong> means the microphone delivers roughly <code>48,000.11</code> samples per second while the output consumes <code>48,000.00</code> samples per second—an excess of <strong><code>0.11 samples/sec</code></strong>.</p>
+
+  <h3>What Happens at Hour 3.9 in Stock JUCE 8 WASAPI</h3>
+  <p>In stock JUCE 8.0.12 (<code>juce_WASAPI_windows.cpp</code>), <code>WASAPIInputDevice</code> allocates a lock-free SPSC FIFO reservoir sized tightly around a single callback period:</p>
+  <pre><code>const auto reservoirSize = nextPowerOfTwo ((int) (actualBufferSize + (UINT32) userBufferSizeIn));
+// For 480-sample (10 ms @ 48 kHz) WASAPI packets: nextPowerOfTwo(960) == 1024 or 2048 samples</code></pre>
+  <p>And inside <code>handleDeviceBuffer()</code>, whenever a new 480-sample packet arrives from <code>IAudioCaptureClient::GetBuffer()</code>:</p>
+  <pre><code>if (numSamplesAvailable &gt; (UINT32) queue.getRemainingSpace())
+{
+    captureClient-&gt;ReleaseBuffer (0);
+    return;
+}</code></pre>
+  <p>Look closely at what happens after <strong>3.9 hours</strong> (<code>~1.4 million</code> 10ms callbacks) at <code>+2.5 ppm</code> drift:</p>
+  <ol>
+    <li>At <code>+0.12 samples/sec</code>, the unread cushion inside the 2,048-sample FIFO creeps upward by ~430 samples per hour.</li>
+    <li>At hour 3.9, <code>queue.getRemainingSpace()</code> drops below <code>480</code> samples.</li>
+    <li><code>handleDeviceBuffer()</code> calls <code>ReleaseBuffer(0)</code> and returns early without draining the Windows capture packet, pinning the reservoir right at the ceiling so periodic capture packets are dropped—producing a continuous <strong>"chiri-chiri" crackle</strong> until the user restarts the audio device.</li>
+    <li>Conversely, at <strong><code>-2.5 ppm</code></strong> (mic slightly slower than DAC), the reservoir drains to <code>0</code> after a few hours, and <code>copyBuffersFromReservoir()</code> repeatedly injects <code>zeromem()</code> silence gaps at the front of every underfilled block—creating sharp step discontinuities.</li>
+  </ol>
+
+  <h3>How We Fixed It (Verified Across 5 Hours / 864 Million Samples)</h3>
+  <p>We added an automated build-time patch (<code>patch_juce_wasapi.py</code>) paired with a deterministic 5-hour stress test (<code>test_4hour_crackle.cpp</code>):</p>
+  <ul>
+    <li><strong>Expanded 16,384-Sample Reservoir &amp; Shared-Mode Poll Fallback</strong>: Raised the minimum FIFO capacity to <code>16,384</code> frames and ensured non-exclusive Shared Mode callbacks always drain pending capture packets even if event signaling coalesces under CPU load.</li>
+    <li><strong>Elastic Low/High-Water Single-Sample Drift Absorption</strong>: Defined hysteresis thresholds (<code>lowWater</code> and <code>highWater</code>) around the nominal operating cushion. When clock drift pushes the FIFO above <code>highWater</code>, the reader smoothly absorbs 1 extra sample via linear cross-blend; when drift pulls the FIFO below <code>lowWater</code>, it stretches by 1 sample—and if an extreme OS stall ever starves the queue, it exponentially decays from <code>lastInputSample</code> (<code>s *= 0.985f</code>) instead of slamming to hard digital <code>0.0f</code>.</li>
+    <li><strong>Result</strong>: Across 5 simulated hours (<code>1,800,000</code> callbacks at both <code>+2.5 ppm</code> and <code>-2.5 ppm</code>), packet drops = <code>0</code>, zero-injections = <code>0</code>, and our 0.08ms time-domain pitch shifter maintains a <code>0.9999+</code> waveform correlation from minute 1 through hour 5.</li>
+  </ul>
+
+  <h2>2. Why Duplicate Sliders Appear in Windows Volume Mixer (<code>GUID session;</code>)</h2>
+  <p>A standalone streaming vocal studio actually opens <em>multiple</em> Windows audio streams simultaneously: your microphone capture stream, your headphone monitor output stream, and a secondary mirror output stream (<code>StreamOut</code>) feeding our WHQL-signed virtual cable (<code>VocalGzzio Driver (WDM)</code>) for OBS, VRChat, and Discord.</p>
+  <p>During testing on Windows 10/11, opening Volume Mixer (<code>sndvol.exe</code> or Win+G Game Bar) sometimes showed <strong>two or three separate VocalGzzio sliders</strong>.</p>
+  <p>Tracing <code>IAudioClient::Initialize</code> inside stock JUCE 8's <code>juce_WASAPI_windows.cpp</code> revealed the culprit immediately:</p>
+  <pre><code>GUID session; // Uninitialized stack variable!
+auto hr = client-&gt;Initialize (...,
+                              getStreamFlags(),
+                              defaultPeriod,
+                              ...,
+                              (WAVEFORMATEX*) &amp;format,
+                              &amp;session);</code></pre>
+  <p>In Microsoft's WASAPI specification, passing <code>nullptr</code> (or a zeroed <code>GUID_NULL</code>) for <code>AudioSessionGuid</code> instructs Windows to assign the stream to the process's default audio session so all streams in the app share a single Volume Mixer slider. Because <code>GUID session;</code> on the C++ stack was left <strong>uninitialized</strong>, every call to <code>client-&gt;Initialize()</code> passed 16 bytes of random stack bytes as a brand-new session GUID—forcing Windows Audio Endpoint Builder to spawn separate Volume Mixer entries!</p>
+  <p>Passing <code>nullptr</code> for <code>AudioSessionGuid</code> (and removing redundant secondary WASAPI session wrappers in <code>StreamOut</code>) immediately collapsed all streams into a single, clean Windows Volume Mixer entry.</p>
+
+  <aside class="note">
+    <strong>Shipped in VocalGzzio v5.4.1 (Free Trial &amp; Full Version)</strong><br>
+    Both WASAPI fixes—along with our 1-click all-in-one Windows installer (<code>VocalGzzio_Trial_Setup_v5.4.1.exe</code>) bundling the Standalone App, VST3 Plugin, and WHQL-signed WDM Virtual Driver—are live now in <strong>VocalGzzio v5.4.1</strong>.
+  </aside>
+
+  <div class="actions">
+    <a class="button" href="en.html">📖 Explore VocalGzzio v5.4.1 (English Overview &amp; 34s Audio Demo)</a>
+    <a class="button secondary" href="https://github.com/gzzio1989/VocalGzzio/releases/download/v5.4.1/VocalGzzio_v5.4.1_Windows_Trial.zip">⬇ Direct Download: Windows Free Trial (.zip)</a>
+    <a class="button secondary" href="https://gzzio.booth.pm/items/8764003">🛒 BOOTH Store ($0 Trial / Full Version)</a>
+  </div>
+</main>
+
+<footer>
+  © G’zzio · <a href="en.html">English Home</a> · <a href="guide-karaoke-stream-obs-vrchat-en.html">OBS/VRChat Karaoke Guide</a> · <a href="guide-yamaha-ag03-buzz-fix-en.html">AG03 Buzz Fix Guide</a> · <a href="devlog-touch-knob-14gen-timemachine-en.html">Touch &amp; Time Machine</a> · <a href="https://gzzio.booth.pm/items/8764003">BOOTH Store</a>
+</footer>
+</body>
+</html>

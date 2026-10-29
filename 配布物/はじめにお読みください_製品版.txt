@@ -1,14 +1,16 @@
 ================================================================
- VocalGzzio v5.4.0 （製品版）
+ VocalGzzio v5.4.1 （製品版）
  お買い上げありがとうございます。
 ================================================================
 
 ■ 3分で音が出るまで（使い方に合わせて A または B を選んでください）
 
   【推奨】まずはこのフォルダ内のインストーラー
-         「VocalGzzio_Setup_v5.4.0.exe」を実行してください。
+         「VocalGzzio_Setup_v5.4.1.exe」を実行してください。
          単体起動アプリ・VST3プラグイン・OBS/通話直結用の専用仮想ドライバ
          「VocalGzzio Driver (WDM)」がすべて一括で自動導入されます。
+         ※ Windowsで青い画面「Windows によって PC が保護されました」が出たときは、
+            画面内の「詳細情報」をクリック →「実行」を押すとそのまま進めます。
 
   【A】歌枠配信・OBS・VC通話・歌ってみた完パケ録音で使う方（DAW不要）
     1. 上記インストーラーで導入した「VocalGzzio」を起動します
@@ -71,7 +73,7 @@
   ・🌌 全19テーマ ＆「★かんたん3ステップ」など4つの表示スタイル切替：
     好きなテーマデザイン（星空・海・朝焼け・LIVER等）をそのまま反映しながら、
     「STEP 1 ▶ STEP 2 ▶ STEP 3」のガイド付きで迷わず操作できます。
-  ・🕰️ 歴代バージョン呼び出し・世代タイムマシン（v1.0.0〜v5.3.0）：
+  ・🕰️ 歴代バージョン呼び出し・世代タイムマシン（v1.0.0〜v5.4.1）：
     ヘッダーのバージョンバッジや「文字・見た目」から初代 v1.0.0〜最新世代まで
     オンデマンド呼び出し可能（未搭載DSPを休止し最大-80%の省負荷動作）。
 
@@ -113,13 +115,21 @@
 
 
 ================================================================
- 🌐 English Quick Start Guide — VocalGzzio v5.4.0 (Full Version)
+ 🌐 English Quick Start Guide — VocalGzzio v5.4.1 (Full Version)
  Thank you for purchasing VocalGzzio!
 ================================================================
 
 1. How to Get Sound in 60 Seconds
+   ★ RECOMMENDED: Run "VocalGzzio_Setup_v5.4.1.exe" included right inside
+     this folder! It installs the Standalone App, VST3 Plugin, and WHQL-signed
+     "VocalGzzio Driver (WDM)" for OBS / Discord / VRChat in one step.
+     (Note: If Windows SmartScreen shows "Windows protected your PC", click
+      "More info" -> "Run anyway" to proceed.)
+
    [A] For OBS / Twitch / YouTube Karaoke Streams / VRChat / Discord (No DAW needed):
-     - Run the installer or launch "VocalGzzio.exe" inside "単体起動アプリ".
+     - Launch "VocalGzzio" installed above (or manually run "VocalGzzio.exe"
+       inside "単体起動アプリ"; you can also install the virtual driver via
+       "VocalGzzioWdmInstaller.exe" in the same folder).
      - Click "うた自動" (Auto-Setup: Sing) at the top bar and sing for 5 seconds.
      - In OBS / Discord / VRChat mic settings, select:
          Line (VocalGzzio Driver (WDM))
@@ -127,7 +137,8 @@
        turn ON "🎧自分の耳への返しミュート" (Mute Self-Monitor) to prevent double audio.
 
    [B] For DAWs (REAPER / Cubase / Studio One / FL Studio / Ableton):
-     - Copy "VocalGzzio.vst3" into: C:\Program Files\Common Files\VST3\
+     - Run "VocalGzzio_Setup_v5.4.1.exe", or manually copy "VocalGzzio.vst3"
+       into: C:\Program Files\Common Files\VST3\
        (On macOS, run the .pkg installer for AU / VST3 / Standalone).
 
 2. Built-in 100% English UI Mode & Quick Button Cheat Sheet

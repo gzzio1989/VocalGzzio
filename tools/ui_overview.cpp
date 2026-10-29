@@ -1403,6 +1403,44 @@ int main()
                 processor->setVowelAlignOn (false);
                 processor->setOnsetGrooveOn (false);
                 processor->setMixVoiceBridgeOn (false);
+
+                // Verify v5.4.1 Real-World Stability & DAW Compatibility Guarantees:
+                {
+                    juce::AudioProcessor::BusesLayout monoToStereo;
+                    monoToStereo.inputBuses.add (juce::AudioChannelSet::mono());
+                    monoToStereo.outputBuses.add (juce::AudioChannelSet::stereo());
+                    check (processor->checkBusesLayoutSupported (monoToStereo),
+                           "v5.4.1 DAW Mono-in -> Stereo-out (1ch -> 2ch) bus layout is supported");
+
+                    check (VocalGzzioProcessor::kMaxSetlistSongs == 32,
+                           "v5.4.1 Setlist capacity matches documented 32-song maximum");
+
+                    // Verify non-Standalone (DAW VST3/AU) setStateInformation is never overwritten by a newer autosave.xml
+                    // (heap-allocate via unique_ptr because sizeof(VocalGzzioProcessor) is too large for 1 MB Windows stack)
+                    auto dawProc = std::make_unique<VocalGzzioProcessor>();
+                    dawProc->setTailVibratoOn (false);
+                    juce::MemoryBlock dawChunk;
+                    dawProc->getStateInformation (dawChunk);
+
+                    auto newerAutoProc = std::make_unique<VocalGzzioProcessor>();
+                    newerAutoProc->setTailVibratoOn (true);
+                    juce::MemoryBlock newerChunk;
+                    newerAutoProc->getStateInformation (newerChunk);
+                    newerAutoProc.reset();
+                    if (auto newerXml = juce::AudioProcessor::getXmlFromBinary (newerChunk.getData(), (int) newerChunk.getSize()))
+                    {
+                        newerXml->setAttribute ("savedAtMs", juce::String (juce::Time::currentTimeMillis() + 60000));
+                        const auto autoPath = gz::dataDirectory().getChildFile ("autosave.xml");
+                        autoPath.getParentDirectory().createDirectory();
+                        newerXml->writeTo (autoPath);
+
+                        dawProc->setTailVibratoOn (true);
+                        dawProc->setStateInformation (dawChunk.getData(), (int) dawChunk.getSize());
+                        check (! dawProc->getTailVibratoOn(),
+                               "v5.4.1 DAW project chunk is never overwritten by a newer global autosave.xml");
+                        autoPath.deleteFile();
+                    }
+                }
             }
         }
     }

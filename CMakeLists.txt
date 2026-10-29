@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VocalGzzio VERSION 5.4.0 LANGUAGES C CXX)
+project(VocalGzzio VERSION 5.4.1 LANGUAGES C CXX)
+# 5.4.1: クリーンWindows環境向けMSVC静的ランタイム(/MT)統合、初回起動時の自動マイクミュート解除＆1クリック解除バナー、DAW/VST3と単体起動版の設定完全分離、1chモノラル入力→2chステレオ出力VST3バス対応、MP3デコード標準有効化、ARM64安全スキップ＆WDM重複ノード自動整理、アプリ内説明書ボタン、セットリスト32曲統一＆カスタムSEサンプルレート自動追従を搭載。
 # 5.4.0: ボーカル歌唱表現4大エンジン（「〰️語尾ナチュラル・ビブラート＆喉揺らしシマー」「🗣️母音フォーム統一・イコライザー」「⚡歌い出し発声アタック＆リズムポケット・シェイパー」「🌉ミックスボイス・倍音ブリッジ＆胸鳴りアンカー」）および「🎵自作音源カスタムSE 4枠ポン出しパッド（.wav/.mp3/.flac/.ogg/.aiff対応）」を搭載、空間IRメニューを整理。
 # 5.3.0: 新案①「ささやき浮上・上向きコンプレッサー（Upward Micro-Detail Lifter）＆倍音ドルビーAエアー（Dolby-A Trick Harmonic Air）」、新案②「音程追従・オートスイートスポット（Pitch-Tracked Dynamic Body & Formant — ハイトーン自動太らせ・喉締まり緩和＆低音ボワつき自動スッキリ）」、新案④「骨伝導補正・歌い手専用モニターエンハンサー（Singer's Cue Monitor — 配信・録音本線は無傷のまま自分のヘッドホン返しだけ音程芯をくっきり補正）」を搭載。
 # 5.2.0: 柱A「伴奏『声ポケット』自動掘り（Spectral Unmasker — Trackspacer方式 4帯域Mid専用ダイナミック掘削）＆伴奏連動・知能ボーカルライダー（BGM-Linked Vocal Rider）」、柱B「ゼロ遅延・部屋鳴り除去（Zero-Lag Room De-Reverb）＆息継ぎ自動整え・母音/子音セパレート（Smart Breath Leveler & Velvet Split）」を搭載。
@@ -36,6 +37,12 @@ message(STATUS "VocalGzzio: バージョン ${PROJECT_VERSION} で構成しま�
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# v5.4.1: Visual C++ 再頒布可能パッケージ未導入のクリーンな Windows 環境でも
+# MSVCP140.dll / VCRUNTIME140.dll 不足エラーを起こさず単体で動作するよう、MSVC CRT を静的リンク(/MT)に統一する。
+if (MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 include(FetchContent)
 FetchContent_Declare(
@@ -180,6 +187,7 @@ endif()
 target_compile_definitions(VocalGzzio PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_MP3AUDIOFORMAT=1
     JUCE_VST3_CAN_REPLACE_VST2=0)
 if (WIN32)
     target_compile_definitions(VocalGzzio PUBLIC JUCE_ASIO=1)
