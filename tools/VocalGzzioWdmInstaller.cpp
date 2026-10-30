@@ -16,6 +16,8 @@
 #include <shlobj.h>
 #include <mmdeviceapi.h>
 #include <propsys.h>
+#include <softpub.h>
+#include <wintrust.h>
 #include <stdio.h>
 #include <wchar.h>
 
@@ -25,6 +27,7 @@
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "wintrust.lib")
 
 // MEDIA クラス GUID: {4d36e96c-e325-11ce-bfc1-08002be10318}
 static const GUID GUID_DEVCLASS_MEDIA_CUSTOM = {
@@ -79,6 +82,62 @@ public:
 static const wchar_t* VOCALGZZIO_WDM_ADAPTER_NAME = L"VocalGzzio Driver (WDM)";
 static const wchar_t* VOCALGZZIO_WDM_LINE_NAME    = L"ライン";
 static const wchar_t* VOCALGZZIO_WDM_FULL_NAME    = L"ライン (VocalGzzio Driver (WDM))";
+static const wchar_t* VOCALGZZIO_NATIVE_HWID      = L"ROOT\\VocalGzzioAudio";
+static const wchar_t* VOCALGZZIO_LEGACY_HWID      = L"*SYNCROOMSimple";
+
+// カタログファイル (.cat) に信頼済みの Microsoft / Authenticode 署名が付与されているか検証する
+static bool IsAuthenticodeSignatureTrusted(const wchar_t* filePath) {
+    if (!filePath || GetFileAttributesW(filePath) == INVALID_FILE_ATTRIBUTES)
+        return false;
+
+    WINTRUST_FILE_INFO fileInfo;
+    ZeroMemory(&fileInfo, sizeof(fileInfo));
+    fileInfo.cbStruct       = sizeof(WINTRUST_FILE_INFO);
+    fileInfo.pcwszFilePath  = filePath;
+
+    WINTRUST_DATA wtd;
+    ZeroMemory(&wtd, sizeof(wtd));
+    wtd.cbStruct            = sizeof(WINTRUST_DATA);
+    wtd.dwUIChoice          = WTD_UI_NONE;
+    wtd.fdwRevocationChecks = WTD_REVOKE_NONE;
+    wtd.dwUnionChoice       = WTD_CHOICE_FILE;
+    wtd.pFile               = &fileInfo;
+    wtd.dwStateAction       = WTD_STATEACTION_VERIFY;
+    wtd.dwProvFlags         = WTD_CACHE_ONLY_URL_RETRIEVAL;
+
+    GUID policyGuid = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+    LONG status = WinVerifyTrust((HWND)INVALID_HANDLE_VALUE, &policyGuid, &wtd);
+
+    wtd.dwStateAction = WTD_STATEACTION_CLOSE;
+    WinVerifyTrust((HWND)INVALID_HANDLE_VALUE, &policyGuid, &wtd);
+    return (status == ERROR_SUCCESS);
+}
+
+// .sys バイナリの PE ヘッダから対象アーキテクチャ (0x8664 = x64, 0xAA64 = ARM64) を読み取る
+static WORD GetPeMachineArchitecture(const wchar_t* sysPath) {
+    HANDLE hFile = CreateFileW(sysPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE)
+        return 0;
+
+    IMAGE_DOS_HEADER dosHdr;
+    ZeroMemory(&dosHdr, sizeof(dosHdr));
+    DWORD cbRead = 0;
+    WORD machine = 0;
+    if (ReadFile(hFile, &dosHdr, sizeof(dosHdr), &cbRead, NULL) && cbRead == sizeof(dosHdr) && dosHdr.e_magic == IMAGE_DOS_SIGNATURE) {
+        if (SetFilePointer(hFile, dosHdr.e_lfanew, NULL, FILE_BEGIN) != INVALID_SET_FILE_POINTER) {
+            DWORD peSig = 0;
+            IMAGE_FILE_HEADER fileHdr;
+            ZeroMemory(&fileHdr, sizeof(fileHdr));
+            if (ReadFile(hFile, &peSig, sizeof(peSig), &cbRead, NULL) && cbRead == sizeof(peSig) && peSig == IMAGE_NT_SIGNATURE) {
+                if (ReadFile(hFile, &fileHdr, sizeof(fileHdr), &cbRead, NULL) && cbRead == sizeof(fileHdr)) {
+                    machine = fileHdr.Machine;
+                }
+            }
+        }
+    }
+    CloseHandle(hFile);
+    return machine;
+}
 
 // ARM64 版 Windows 上で実行されているかを判定する。
 // x64 カーネルドライバ (.sys) は ARM64 カーネルにロードできないため、安全にスキップするために使用する。
@@ -454,10 +513,49 @@ static int PrintStatusJson() {
     return 0;
 }
 
-// 既存の VocalGzzio Driver (WDM) デバイスノード (ROOT\MEDIA\xxxx) を探し、重複ノードがあれば1つに整理する。
-// 注意: FriendlyName / DeviceDesc が "VocalGzzio Driver (WDM)" と完全一致するノードのみを対象とするため、
+// 同梱 driver\ 内に Microsoft 署名済みの自社製 VocalGzzioAudio.{inf,cat,sys} が揃っており、
+// かつ実行中の Windows カーネルアーキテクチャ (x64 / ARM64) と一致するかを判定する
+static bool HasSignedNativeVocalGzzioDriver(wchar_t* outDriverDir, size_t dirMax, wchar_t* outInfPath, size_t infMax) {
+    wchar_t exePath[MAX_PATH] = {0};
+    GetModuleFileNameW(NULL, exePath, MAX_PATH);
+    wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+    if (lastSlash) *lastSlash = 0;
+
+    wchar_t drvDir[MAX_PATH] = {0};
+    wchar_t infPath[MAX_PATH] = {0};
+    wchar_t catPath[MAX_PATH] = {0};
+    wchar_t sysPath[MAX_PATH] = {0};
+    swprintf_s(drvDir,  L"%s\\driver", exePath);
+    swprintf_s(infPath, L"%s\\driver\\VocalGzzioAudio.inf", exePath);
+    swprintf_s(catPath, L"%s\\driver\\VocalGzzioAudio.cat", exePath);
+    swprintf_s(sysPath, L"%s\\driver\\VocalGzzioAudio.sys", exePath);
+
+    if (outDriverDir && dirMax > 0)
+        wcscpy_s(outDriverDir, dirMax, drvDir);
+
+    if (GetFileAttributesW(infPath) == INVALID_FILE_ATTRIBUTES ||
+        GetFileAttributesW(catPath) == INVALID_FILE_ATTRIBUTES ||
+        GetFileAttributesW(sysPath) == INVALID_FILE_ATTRIBUTES) {
+        return false;
+    }
+
+    const WORD expectedMachine = IsRunningOnArm64Windows() ? 0xAA64 : 0x8664;
+    if (GetPeMachineArchitecture(sysPath) != expectedMachine)
+        return false;
+
+    if (!IsAuthenticodeSignatureTrusted(catPath))
+        return false;
+
+    if (outInfPath && infMax > 0)
+        wcscpy_s(outInfPath, infMax, infPath);
+    return true;
+}
+
+// 既存の VocalGzzio Driver (WDM) デバイスノード (ROOT\MEDIA\xxxx) を探し、重複・旧世代ノードを整理する。
+// 注意: 自社ハードウェアID (ROOT\VocalGzzioAudio) または FriendlyName / DeviceDesc が
+//       "VocalGzzio Driver (WDM)" と完全一致するノードのみを対象とするため、
 //       Yamaha SYNCROOM Driver (WDM) や GzzioRoom Driver (WDM) はインスタンス番号に関わらず一切触らない。
-static bool FindExistingVocalGzzioWdmNode(wchar_t* outInstanceId, size_t maxCount) {
+static bool FindExistingVocalGzzioWdmNode(const wchar_t* desiredHwId, wchar_t* outInstanceId, size_t maxCount) {
     HDEVINFO hDevInfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_MEDIA_CUSTOM, L"ROOT\\MEDIA", NULL, DIGCF_PRESENT);
     if (hDevInfo == INVALID_HANDLE_VALUE) return false;
 
@@ -470,23 +568,27 @@ static bool FindExistingVocalGzzioWdmNode(wchar_t* outInstanceId, size_t maxCoun
 
         wchar_t hwId[256] = {0};
         if (!SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_HARDWAREID, NULL, (PBYTE)hwId, sizeof(hwId), NULL)) continue;
-        if (_wcsicmp(hwId, L"*SYNCROOMSimple") != 0) continue;
 
-        // FriendlyName または DeviceDesc が "VocalGzzio Driver (WDM)" と一致するノードのみを対象とする
+        const bool isNativeHw = (_wcsicmp(hwId, VOCALGZZIO_NATIVE_HWID) == 0);
+        const bool isLegacyHw = (_wcsicmp(hwId, VOCALGZZIO_LEGACY_HWID) == 0);
+        if (!isNativeHw && !isLegacyHw) continue;
+
         wchar_t friendly[256] = {0};
         wchar_t desc[256] = {0};
         SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_FRIENDLYNAME, NULL, (PBYTE)friendly, sizeof(friendly), NULL);
         SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_DEVICEDESC, NULL, (PBYTE)desc, sizeof(desc), NULL);
 
-        if (_wcsicmp(friendly, VOCALGZZIO_WDM_ADAPTER_NAME) == 0 ||
-            _wcsicmp(desc, VOCALGZZIO_WDM_ADAPTER_NAME) == 0) {
-            if (!foundPrimary) {
-                wcscpy_s(outInstanceId, maxCount, instId);
-                foundPrimary = true;
-            } else {
-                // 旧版で重複生成された余分な VocalGzzio Driver (WDM) ノードがあれば自動整理する
-                SetupDiCallClassInstaller(DIF_REMOVE, hDevInfo, &devData);
-            }
+        const bool isOwnedByVocalGzzio = isNativeHw ||
+                                         (_wcsicmp(friendly, VOCALGZZIO_WDM_ADAPTER_NAME) == 0) ||
+                                         (_wcsicmp(desc, VOCALGZZIO_WDM_ADAPTER_NAME) == 0);
+        if (!isOwnedByVocalGzzio) continue;
+
+        if (_wcsicmp(hwId, desiredHwId) == 0 && !foundPrimary) {
+            wcscpy_s(outInstanceId, maxCount, instId);
+            foundPrimary = true;
+        } else {
+            // 重複生成された余分なノード、または自社製ドライバ移行時に不要となった旧世代ノードを自動整理する
+            SetupDiCallClassInstaller(DIF_REMOVE, hDevInfo, &devData);
         }
     }
     SetupDiDestroyDeviceInfoList(hDevInfo);
@@ -495,7 +597,11 @@ static bool FindExistingVocalGzzioWdmNode(wchar_t* outInstanceId, size_t maxCoun
 
 // VocalGzzio Driver (WDM) の新規作成・インストール
 static int InstallVocalGzzioWdmDriver() {
-    if (IsRunningOnArm64Windows()) {
+    wchar_t bundledDriverDir[MAX_PATH] = {0};
+    wchar_t bundledInfPath[MAX_PATH] = {0};
+    const bool useNativeDriver = HasSignedNativeVocalGzzioDriver(bundledDriverDir, MAX_PATH, bundledInfPath, MAX_PATH);
+
+    if (!useNativeDriver && IsRunningOnArm64Windows()) {
         printf("{\"ok\":true,\"installed\":false,\"skippedArm64\":true,\"adapterName\":\"VocalGzzio Driver (WDM)\"}\n");
         return 0;
     }
@@ -504,19 +610,13 @@ static int InstallVocalGzzioWdmDriver() {
     SnapshotRealDefaultEndpoints(&savedDefaults);
 
     wchar_t targetInstanceId[256] = {0};
+    const wchar_t* activeHwId = useNativeDriver ? VOCALGZZIO_NATIVE_HWID : VOCALGZZIO_LEGACY_HWID;
 
-    // 同梱の WHQL 署名済み WDM ループバックドライバ (driver\syncroom.inf + .cat + .sys) が存在すれば
-    // クリーンな Windows 環境でも確実に動作するよう DriverStore へ事前登録する
-    wchar_t exePath[MAX_PATH] = {0};
-    GetModuleFileNameW(NULL, exePath, MAX_PATH);
-    wchar_t* lastSlash = wcsrchr(exePath, L'\\');
-    if (lastSlash) *lastSlash = 0;
+    if (!useNativeDriver) {
+        swprintf_s(bundledInfPath, L"%s\\syncroom.inf", bundledDriverDir);
+    }
 
-    wchar_t bundledDriverDir[MAX_PATH] = {0};
-    wchar_t bundledInfPath[MAX_PATH] = {0};
-    swprintf_s(bundledDriverDir, L"%s\\driver", exePath);
-    swprintf_s(bundledInfPath, L"%s\\driver\\syncroom.inf", exePath);
-
+    // 同梱の署名済みドライバ (.inf + .cat + .sys) を DriverStore へ事前登録する
     wchar_t stagedOemInf[MAX_PATH] = L"C:\\Windows\\INF\\oem69.inf";
     if (GetFileAttributesW(bundledInfPath) != INVALID_FILE_ATTRIBUTES) {
         wcscpy_s(stagedOemInf, bundledInfPath);
@@ -528,8 +628,8 @@ static int InstallVocalGzzioWdmDriver() {
         }
     }
 
-    if (!FindExistingVocalGzzioWdmNode(targetInstanceId, 256)) {
-        // 新しい ROOT\MEDIA デバイスノードを作成し、WHQL署名済みのループバックドライバ (*SYNCROOMSimple) をバインド
+    if (!FindExistingVocalGzzioWdmNode(activeHwId, targetInstanceId, 256)) {
+        // 新しい ROOT\MEDIA デバイスノードを作成し、署名済みドライバ (ROOT\VocalGzzioAudio またはフォールバック) をバインド
         HDEVINFO hDevInfo = SetupDiCreateDeviceInfoList(&GUID_DEVCLASS_MEDIA_CUSTOM, NULL);
         if (hDevInfo == INVALID_HANDLE_VALUE) {
             printf("{\"ok\":false,\"error\":\"SetupDiCreateDeviceInfoList failed (%lu)\"}\n", GetLastError());
@@ -553,8 +653,9 @@ static int InstallVocalGzzioWdmDriver() {
             return 1;
         }
 
-        wchar_t hwIdMultiSz[64] = L"*SYNCROOMSimple\0";
-        DWORD hwIdBytes = (DWORD)((wcslen(L"*SYNCROOMSimple") + 2) * sizeof(wchar_t));
+        wchar_t hwIdMultiSz[64] = {0};
+        wcscpy_s(hwIdMultiSz, activeHwId);
+        DWORD hwIdBytes = (DWORD)((wcslen(activeHwId) + 2) * sizeof(wchar_t));
         if (!SetupDiSetDeviceRegistryPropertyW(
                 hDevInfo,
                 &devInfoData,
@@ -580,7 +681,7 @@ static int InstallVocalGzzioWdmDriver() {
             // フォールバック: 同梱INFまたはDriverStoreのINFを指定して UpdateDriverForPlugAndPlayDevicesW を実行
             if (!UpdateDriverForPlugAndPlayDevicesW(
                     NULL,
-                    L"*SYNCROOMSimple",
+                    activeHwId,
                     stagedOemInf,
                     INSTALLFLAG_FORCE | INSTALLFLAG_NONINTERACTIVE,
                     &needReboot)) {
@@ -611,14 +712,13 @@ static int InstallVocalGzzioWdmDriver() {
         SetupDiDestroyDeviceInfoList(hDevInfo);
     }
 
-    // AudioEndpointBuilder が Render / Capture エンドポイントを生成するのを待機してリネーム
+    // AudioEndpointBuilder が Render / Capture エンドポイントを生成するのを待機して名称・有効化を揃える
     int updated = 0;
     for (int retry = 0; retry < 15; ++retry) {
         updated = RenameEndpointsForInstance(targetInstanceId, true);
         if (updated >= 2) break;
         Sleep(250);
     }
-    // 確実な反映のためもう一度実行
     Sleep(200);
     RenameEndpointsForInstance(targetInstanceId, true);
 
@@ -641,16 +741,19 @@ static int UninstallVocalGzzioWdmDriver() {
 
         wchar_t hwId[256] = {0};
         if (!SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_HARDWAREID, NULL, (PBYTE)hwId, sizeof(hwId), NULL)) continue;
-        if (_wcsicmp(hwId, L"*SYNCROOMSimple") != 0) continue;
+        const bool isNativeHw = (_wcsicmp(hwId, VOCALGZZIO_NATIVE_HWID) == 0);
+        const bool isLegacyHw = (_wcsicmp(hwId, VOCALGZZIO_LEGACY_HWID) == 0);
+        if (!isNativeHw && !isLegacyHw) continue;
 
         wchar_t friendly[256] = {0};
         wchar_t desc[256] = {0};
         SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_FRIENDLYNAME, NULL, (PBYTE)friendly, sizeof(friendly), NULL);
         SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devData, SPDRP_DEVICEDESC, NULL, (PBYTE)desc, sizeof(desc), NULL);
 
-        // FriendlyName / DeviceDesc が VocalGzzio Driver (WDM) と一致するノードのみ削除し、
+        // 自社製ノード (ROOT\VocalGzzioAudio) または名称が VocalGzzio Driver (WDM) と一致するノードのみ削除し、
         // GzzioRoom Driver (WDM) や Yamaha SYNCROOM Driver (WDM) はインスタンス番号に関わらず保護する
-        if (_wcsicmp(friendly, VOCALGZZIO_WDM_ADAPTER_NAME) == 0 ||
+        if (isNativeHw ||
+            _wcsicmp(friendly, VOCALGZZIO_WDM_ADAPTER_NAME) == 0 ||
             _wcsicmp(desc, VOCALGZZIO_WDM_ADAPTER_NAME) == 0) {
             SetupDiCallClassInstaller(DIF_REMOVE, hDevInfo, &devData);
         }
@@ -667,7 +770,7 @@ int wmain(int argc, wchar_t* argv[]) {
     bool wantUninstall = (argc >= 2 && _wcsicmp(argv[1], L"--uninstall") == 0);
     bool noElevate     = (argc >= 3 && _wcsicmp(argv[2], L"--no-elevate") == 0);
 
-    if (!wantUninstall && IsRunningOnArm64Windows()) {
+    if (!wantUninstall && IsRunningOnArm64Windows() && !HasSignedNativeVocalGzzioDriver(NULL, 0, NULL, 0)) {
         printf("{\"ok\":true,\"installed\":false,\"skippedArm64\":true,\"adapterName\":\"VocalGzzio Driver (WDM)\"}\n");
         return 0;
     }

@@ -46,6 +46,23 @@ LICENSE_FILES = [
     "MochiyPopOne-OFL-1.1.txt",
 ]
 
+def resolve_bundled_driver_files(drv_dir: Path) -> list[str]:
+    """driver/ 内に Microsoft 署名済みの自社製 VocalGzzioAudio 一式があれば優先同梱し、
+    移行期間中は既存のフォールバック一式もあれば併せて同梱する。どちらも欠けている場合は欠落検知のため一覧を返す。"""
+    native_set = ("VocalGzzioAudio.inf", "VocalGzzioAudio.cat", "VocalGzzioAudio.sys")
+    legacy_set = ("syncroom.inf", "syncroom.cat", "syncroom.sys")
+    has_native = all((drv_dir / f).is_file() for f in native_set)
+    has_legacy = all((drv_dir / f).is_file() for f in legacy_set)
+    result: list[str] = []
+    if has_native:
+        result.extend(native_set)
+    if has_legacy:
+        result.extend(legacy_set)
+    if not result:
+        any_native = any((drv_dir / f).exists() for f in native_set)
+        return list(native_set if any_native else legacy_set)
+    return result
+
 def die(msg):
     print("\n!! 中止: " + msg + "\n", file=sys.stderr)
     sys.exit(1)
@@ -230,7 +247,7 @@ def main():
     add(files, wdm_installer, f"{top}/単体起動アプリ/VocalGzzioWdmInstaller.exe")
 
     drv_dir = ROOT / "driver"
-    for drv_file in ("syncroom.inf", "syncroom.cat", "syncroom.sys"):
+    for drv_file in resolve_bundled_driver_files(drv_dir):
         add(files, drv_dir / drv_file, f"{top}/単体起動アプリ/driver/{drv_file}")
     ok("単体起動アプリ用 VocalGzzioWdmInstaller.exe ＋ driver/ 一式同梱")
 

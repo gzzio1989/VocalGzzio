@@ -146,12 +146,22 @@ Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\Standalone\{#MyExeName}"; \
     DestDir: "{#MyStandaloneDir}"; Components: standalone; Flags: ignoreversion
 Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\Standalone\VocalGzzioWdmInstaller.exe"; \
     DestDir: "{#MyStandaloneDir}"; Components: standalone; Flags: ignoreversion
+#if FileExists("driver\VocalGzzioAudio.inf") && FileExists("driver\VocalGzzioAudio.cat") && FileExists("driver\VocalGzzioAudio.sys")
+Source: "driver\VocalGzzioAudio.inf"; \
+    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
+Source: "driver\VocalGzzioAudio.cat"; \
+    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
+Source: "driver\VocalGzzioAudio.sys"; \
+    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
+#endif
+#if FileExists("driver\syncroom.inf") && FileExists("driver\syncroom.cat") && FileExists("driver\syncroom.sys")
 Source: "driver\syncroom.inf"; \
     DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
 Source: "driver\syncroom.cat"; \
     DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
 Source: "driver\syncroom.sys"; \
     DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
+#endif
 
 [Run]
 Filename: "{#MyStandaloneDir}\VocalGzzioWdmInstaller.exe"; Parameters: "--install --no-elevate"; \

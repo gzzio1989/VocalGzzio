@@ -195,7 +195,7 @@ if (WIN32)
     if (MSVC)
         target_compile_options(VocalGzzioWdmInstaller PRIVATE /utf-8)
     endif()
-    target_link_libraries(VocalGzzioWdmInstaller PRIVATE setupapi newdev cfgmgr32 shell32 ole32 advapi32)
+    target_link_libraries(VocalGzzioWdmInstaller PRIVATE setupapi newdev cfgmgr32 shell32 ole32 advapi32 wintrust)
     if (TARGET VocalGzzio_Standalone)
         add_custom_command(TARGET VocalGzzio_Standalone POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different

@@ -1,0 +1,8 @@
+# WDK NuGet キャッシュおよびドライバのビルド成果物は Git に含めない
+.wdk_cache/
+out/
+*.obj
+*.pdb
+*.res
+*.exp
+*.lib

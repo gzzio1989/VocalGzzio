@@ -1,0 +1,34 @@
+// ============================================================================
+// VocalGzzioAudio.rc
+// VocalGzzioAudio.sys バージョンリソース定義
+// ============================================================================
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0x0L
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_DRV
+FILESUBTYPE     VFT2_DRV_SOUND
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041104B0"
+        BEGIN
+            VALUE "CompanyName",      "Gzzio\0"
+            VALUE "FileDescription",  "VocalGzzio Virtual Audio Driver (WaveRT)\0"
+            VALUE "FileVersion",      "1.0.0.0\0"
+            VALUE "InternalName",     "VocalGzzioAudio.sys\0"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 Gzzio. All rights reserved.\0"
+            VALUE "OriginalFilename", "VocalGzzioAudio.sys\0"
+            VALUE "ProductName",      "VocalGzzio Driver (WDM)\0"
+            VALUE "ProductVersion",   "1.0.0.0\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0411, 1200
+    END
+END
