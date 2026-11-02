@@ -104,7 +104,7 @@ def draw_footer(d: ImageDraw.ImageDraw, w: int, h: int, right_text: str):
     y_line = h - 78
     d.line([56, y_line, w - 56, y_line], fill=(216, 204, 188), width=2)
     f = get_sans(19, bold=True)
-    d.text((56, h - 52), "G'zzio  |  VocalGzzio v5.4.1", font=f, fill=(142, 126, 112))
+    d.text((56, h - 52), "G'zzio  |  VocalGzzio v5.5.0", font=f, fill=(142, 126, 112))
     bb = d.textbbox((0, 0), right_text, font=f)
     tw = bb[2] - bb[0]
     d.text((w - 56 - tw, h - 52), right_text, font=f, fill=SUB)
@@ -243,10 +243,10 @@ def make_simple_en_thumb():
     d.text((456, 178), "VocalGzzio", font=get_mochi(82), fill=INK)
     d.text((460, 294), "Put Your Voice Up Front.", font=get_mochi(42), fill=(194, 75, 114))
     d.text((464, 376), "All-in-One Vocal Studio for Karaoke Streams (OBS),", font=get_sans(27, True), fill=SUB)
-    d.text((464, 418), "VTubers, Covers & VRChat.  (v5.4.1 / Win & Mac)", font=get_sans(27, True), fill=SUB)
+    d.text((464, 418), "VTubers, Covers & VRChat.  (v5.5.0 / Win & Mac)", font=get_sans(27, True), fill=SUB)
 
     # Quick highlight pill under title
-    draw_pill(d, 464, 474, 680, 56, "★ Built-in Full English UI Mode + WDM Virtual Driver",
+    draw_pill(d, 464, 474, 680, 56, "★ Full English UI + App Audio Capture & Mini-Bar",
               CREAM_CARD, CARD_BORDER, ORANGE_ACCENT, font_size=22, use_mochi=False)
 
     # 3 Big Numbered Cards
@@ -288,16 +288,16 @@ def make_features_en():
     im = make_cream_canvas(w, h, mascot_pos=(48, 44), mascot_size=(235, 235))
     d = ImageDraw.Draw(im)
 
-    d.text((310, 48), "What's Inside VocalGzzio v5.4.1", font=get_sans(24, True), fill=ORANGE_ACCENT)
+    d.text((310, 48), "What's Inside VocalGzzio v5.5.0", font=get_sans(24, True), fill=ORANGE_ACCENT)
     d.text((310, 88), "Pro Vocal Expression & Mix", font=get_mochi(44), fill=INK)
     d.text((310, 154), "Without a DAW or Booth.", font=get_mochi(44), fill= PINK_ACCENT)
     d.text((310, 224), "Every DSP module runs at 0.0ms–0.08ms latency for live monitoring.", font=get_sans(22, True), fill=SUB)
 
     cards = [
-        ("★ NEW v5.4 & v5.3: Vocal Expression, Sweet Spot & Cue Monitor",
-         "• Tail Vibrato & Vowel EQ: Natural 5.5Hz vibrato on long notes + uniform vowel body.\n"
-         "• Upward Whisper Lifter & Dolby-A Air: Lifts quiet details +4.5dB; silky vowel-only air.\n"
-         "• Pitch-Tracked Sweet Spot & Bone-Conduction Cue Monitor: Easy high notes in your cans.",
+        ("★ NEW v5.5: App Karaoke Capture, Smart Sleep, Mini-Bar & .mp4 Export",
+         "• Driverless App Audio Capture, ±300ms 1-Click Auto Sync & Chord-Follow Harmony.\n"
+         "• Smart Sleep Ultra-Light DSP (-40~70% load), 520x115 Mini-Bar & Global Hotkeys.\n"
+         "• 100% Vocal Dynamics Mode, 0–250% Output Vol, 19-Era Time Machine & .mp4 Export.",
          PINK_BG, PINK_BORDER, PINK_ACCENT),
         ("♪ Spectral Unmasker, BGM Vocal Rider & 1-Click Karaoke Maker",
          "• Spectral Unmasker: Carves up to -5dB in the track's Mid channel only while you sing.\n"
@@ -321,10 +321,10 @@ def make_features_en():
         cy += 232
 
     draw_pill(d, 56, 994, 348, 60, "♪ 1-Click Vocal Remover & Key ±6", PINK_BG, PINK_BORDER, PINK_ACCENT, 20)
-    draw_pill(d, 422, 994, 356, 60, "★ -14 LUFS 3-Stem WAV Export", TEAL_BG, TEAL_BORDER, TEAL_ACCENT, 20)
+    draw_pill(d, 422, 994, 356, 60, "★ -14 LUFS WAV + .mp4 Video", TEAL_BG, TEAL_BORDER, TEAL_ACCENT, 20)
     draw_pill(d, 796, 994, 348, 60, "◎ 4 Built-in + 4 Custom SE Pads", CREAM_CARD, CARD_BORDER, INK, 20)
 
-    draw_footer(d, w, h, "Includes WHQL-signed WDM Virtual Driver for direct OBS / Discord / VRChat routing")
+    draw_footer(d, w, h, "OBS native VST3 direct loading, interface loopback & external virtual cable ready")
     out = OUT_DIR / "BOOTH_EN_2_Features_v540.png"
     im.convert("RGB").save(out, quality=95)
     if ART_DIR.exists():
@@ -346,11 +346,11 @@ def make_specs_en():
 
     d.rounded_rectangle([56, 274, w - 56, 650], radius=22, fill=CREAM_CARD, outline=CARD_BORDER, width=2)
     rows = [
-        ("Windows", "Windows 10 / 11 (64-bit) — Standalone (.exe) + VST3 + WHQL WDM Driver", INK),
+        ("Windows", "Windows 10 / 11 (64-bit) — Standalone (.exe) + VST3 + App Audio Capture", INK),
         ("macOS", "macOS 11+ (Apple Silicon & Intel Universal) — Standalone + AU + VST3", TEAL_ACCENT),
         ("Price", "¥2,500 JPY (~$17 USD) One-Time Purchase — No subscription, free updates", ORANGE_ACCENT),
         ("Commercial", "100% OK for monetized streams, SuperChats, covers & sales (No credit needed)", PINK_ACCENT),
-        ("Devices", "Install on up to 3 computers owned by you (Win & Mac both included)", SUB),
+        ("Devices", "Install on up to 3 computers owned by you (Win & Mac v5.5.0 both included)", SUB),
     ]
     ry = 296
     for k, v, col in rows:

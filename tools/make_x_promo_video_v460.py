@@ -111,25 +111,25 @@ def draw_ab_banner(canvas: Image.Image, is_after: bool, label_main: str, label_s
     d.text((x + 302, y + 36), label_sub, font=get_font(16), fill=(220, 208, 228, 255))
 
 def draw_stage_studio_overlay(canvas: Image.Image, highlight_sec: int = 0):
-    """v4.8.0 StageStudioPanel（BGM＆キー変更・30秒さかのぼり録音・5秒AI声質診断・絶叫＆咳ガード）の拡大図解カード"""
+    """v5.5.0 StageStudioPanel（アプリ別カラオケ取込・コード追従ハモリ・SNS動画書き出し・声量10割＆超軽量ミニバー）の拡大図解カード"""
     d = ImageDraw.Draw(canvas, "RGBA")
     px, py, pw, ph = 536, 166, 624, 384
     d.rounded_rectangle([px + 6, py + 8, px + pw + 6, py + ph + 8], radius=16, fill=(0, 0, 0, 170))
     d.rounded_rectangle([px, py, px + pw, py + ph], radius=16, fill=(24, 18, 32, 248), outline=(110, 225, 245, 255), width=3)
-    d.text((px + 20, py + 14), "♪ v4.8.0 新搭載「BGM・録音・AI声質診断」パネル", font=get_font(20), fill=(130, 235, 255, 255))
+    d.text((px + 20, py + 14), "♪ v5.5.0 新搭載「アプリ別カラオケ取込・コード追従・SNS動画化」", font=get_font(19), fill=(130, 235, 255, 255))
 
     secs = [
-        ("① カラオケ伴奏プレイヤー ＆ キー変更（±6半音）",
-         "伴奏キー変更で歌声ピッチ補正も自動同期！歌うとBGMが-4.5dB下がる声優先ダッキング搭載",
+        ("① ドライバ不要『アプリ別カラオケ音声取込』＆ ±300ms音ズレ自動計測",
+         "YouTube等の音だけ直接取込＆キー変更±6・ボーカル除去・声ポケット掘りを適用！",
          (90, 210, 245)),
-        ("② 1クリックWAV録音 ＆ 直前30秒さかのぼり保存",
-         "録音忘れでも直前30秒を救出！【完成音(Wet)】とMIX用【素の声(Dry)】を24bit WAV同時保存",
+        ("② 伴奏コード追従スマートハモリ ＆ 🎬 SNS動画(.mp4)1クリック保存",
+         "借用和音や転調でもハモリが濁らない！横16:9／縦9:16（Before➔After比較可）動画出力",
          (245, 105, 155)),
-        ("③ 5秒AI声質ターゲット診断（オートオーブ調律）",
-         "5秒歌うだけで声の重心を分析し「透明感・アイドル・ロック・イケボ・ASMR」へ自動調律！",
+        ("③ 🎤 10割ダイレクト声量表現 ＆ 歪みゼロ『最終音量（0〜250%）』",
+         "全力で歌った熱量が頭打ちせずそのまま伸びる！大音量でも一切歪まない新設計",
          (85, 220, 185)),
-        ("④ 絶叫セーフティガード ＆ 咳払い8ms瞬間ミュート",
-         "突発的な叫び声を0.2msで抑え、咳払いはプツッという音ゼロ（8msフェード）で完全無音化",
+        ("④ ⚡ Smart Sleep 超軽量エンジン ＆ 📌 配信ミニバー（520×115px）",
+         "CPU/UI負荷40〜70%削減！裏画面グローバルホットキー＆歴代全19世代タイムマシン搭載",
          (245, 190, 95)),
     ]
     sy = py + 52
@@ -403,12 +403,12 @@ def main():
     OUT_X_DIR.mkdir(parents=True, exist_ok=True)
     ui_Sz = (1080, 609)
     uis = {
-        "rose": load_ui("v4.8.0_couture_stage.png", "v4.7.0_couture_stage.png", ui_Sz),
+        "rose": load_ui("v550_couture_mint_switches.png", "v4.8.0_couture_stage.png", ui_Sz),
         "lilac": load_ui("v4.8.0_couture_02_lilac.png", "v4.6.0_couture_02_lilac.png", ui_Sz),
         "noir": load_ui("v4.8.0_couture_03_noir.png", "v4.6.0_couture_03_noir.png", ui_Sz),
-        "mint": load_ui("v4.8.0_couture_04_mint.png", "v4.6.0_couture_04_mint.png", ui_Sz),
+        "mint": load_ui("v550_couture_mint_switches.png", "v4.6.0_couture_04_mint.png", ui_Sz),
         "peach": load_ui("v4.8.0_couture_05_peach.png", "v4.6.0_couture_05_peach.png", ui_Sz),
-        "argon": load_ui("v4.8.0_argon_cockpit.png", "v4.7.0_argon_cockpit.png", ui_Sz),
+        "argon": load_ui("v550_overview_final.png", "v4.8.0_argon_cockpit.png", ui_Sz),
         "yurufuwa": load_ui("v4.8.0_persona_yurufuwa_cafe.png", "v4.6.0_persona_yurufuwa_cafe.png", ui_Sz),
         "studio": load_ui("v4.8.0_persona_studio_pro.png", "v4.6.0_persona_studio_pro.png", ui_Sz),
     }
@@ -433,7 +433,7 @@ def main():
         wav_path = tmp / "audio.wav"
         build_audio_track(wav_path)
 
-        out_mp4 = OUT_X_DIR / "VocalGzzio_v4.8.0_X_操作説明_音比較.mp4"
+        out_mp4 = OUT_X_DIR / "VocalGzzio_v5.5.0_X_操作説明_音比較.mp4"
         cmd = [
             FFMPEG, "-y",
             "-f", "rawvideo",
@@ -481,7 +481,7 @@ def main():
                 d.rounded_rectangle([910, 124, 1020, 160], radius=8, outline=(120, 225, 255, 255), width=3)
                 draw_callout(canvas, (116, 565, 1048, 84),
                              "♪ 比較① BEFORE：無加工の素の声（部屋のこもり・細い輪郭・環境ノイズ）",
-                             "このあとすぐ、まったく同じ歌フレーズで VocalGzzio v4.8.0 を ON にします！",
+                             "このあとすぐ、まったく同じ歌フレーズで VocalGzzio v5.5.0 を ON にします！",
                              (90, 195, 240))
                 draw_cursor(canvas, cx, cy, clicking=True, ripple_prog=(sub_t * 2.0) % 1.0)
 
@@ -518,18 +518,18 @@ def main():
                 cy = int(lerp(310, 142, min(1.0, sub_t * 2.5)))
                 draw_callout(canvas, (116, 565, 1048, 84),
                              "♪ 比較② BEFORE：伴奏にそのまま素の声を乗せると、こもって伴奏に埋もれてしまいます",
-                             "次は v4.8.0 新機能「内蔵BGMプレイヤー（声優先オートダッキング）＋5人ユニゾン」をONにします！",
+                             "次は v5.5.0「アプリ別カラオケ取込＋声ポケット掘り＋伴奏コード追従ハモリ」をONにします！",
                              (90, 195, 240))
                 draw_cursor(canvas, cx, cy, clicking=True, ripple_prog=(sub_t * 2.0) % 1.0)
 
             elif t < 19.0:
-                # 比較② AFTER: v4.8.0 内蔵BGMダッキング＋5人ユニゾンハモリ＋直前30秒保存（14.2s - 19.0s）
-                step_txt = "聴き比べ② [v4.8.0 新機能]  声優先BGMダッキング＋5人ハモリで歌声が主役に！"
-                audio_badge = ("★ 再生中：BGM自動ダッキング＋5人ハモリ（After）", (235, 68, 132))
+                # 比較② AFTER: v5.5.0 内蔵BGMダッキング＋5人ユニゾンハモリ＋直前30秒保存（14.2s - 19.0s）
+                step_txt = "聴き比べ② [v5.5.0 新機能]  声ポケット掘り＋コード追従ハモリ＋10割声量で主役に！"
+                audio_badge = ("★ 再生中：声ポケット掘り＋コード追従ハモリ（After）", (235, 68, 132))
                 canvas.paste(uis["rose"], (ui_x, ui_y))
                 draw_ab_banner(canvas, True,
-                               "歌うと自動で伴奏がすっと下がる！＋5人ユニゾン＆ホール残響で圧倒的な存在感",
-                               "伴奏キー変更（±6半音）でピッチ補正も自動同期！練習中の神テイクは「直前30秒さかのぼり保存」で救出")
+                               "伴奏のMidから声の居場所を掘り、借用和音・転調にも追従する5人ハモリで主役に！",
+                               "ドライバ不要のアプリ別カラオケ取込＆±300ms音ズレ自動計測＋SNS用.mp4動画1クリック保存搭載")
                 sub_t = (t - 14.2) / 4.8
                 hi_idx = 0 if sub_t < 0.5 else 1
                 draw_stage_studio_overlay(canvas, highlight_sec=hi_idx)
@@ -579,22 +579,22 @@ def main():
 
             else:
                 # エンディング（27.5s - 34.0s）：何が売り？どんな人に最適？ひと目でわかるまとめカード
-                step_txt = "VocalGzzio v4.8.0  —  歌枠・歌ってみた・配信がこれ1台で完結！（無料体験版あり）"
+                step_txt = "VocalGzzio v5.5.0  —  歌枠・歌ってみた・配信がこれ1台で完結！（無料体験版あり）"
                 audio_badge = ("★ BOOTHにて無料体験版＆製品版（2,500円）公開中", (235, 85, 148))
                 d.rounded_rectangle([48, 88, W - 48, 662], radius=22, fill=(26, 18, 34, 248), outline=(238, 165, 192, 230), width=3)
-                d.text((82, 108), "VocalGzzio v4.8.0 — なぜ今選ばれているのか？（3つの強み）", font=f_big, fill=(255, 245, 250, 255))
-                d.text((82, 160), "DAWも仮想ケーブルも高価なプラグインも不要。買い切り2,500円で歌枠・録音・配信護身が全部入り！", font=f_med, fill=(242, 192, 212, 255))
+                d.text((82, 108), "VocalGzzio v5.5.0 — なぜ今選ばれているのか？（3つの強み）", font=f_big, fill=(255, 245, 250, 255))
+                d.text((82, 160), "DAWも仮想ケーブルも高価なプラグインも不要。買い切り2,500円で歌枠・録音・SNS動画化が全部入り！", font=f_med, fill=(242, 192, 212, 255))
 
                 # 3つのターゲット別メリットボックス
                 targets = [
                     ("① 歌枠・Vライバー・配信者へ",
-                     "・専用WDM仮想ドライバ同梱でOBSへ直結\n・伴奏再生＆キー変更±6＆自動ダッキング\n・歌枠⇄雑談MC 1クリック切替＆クチュール5色",
+                     "・ドライバ不要アプリ別カラオケ音声取込\n・配信ミニバー(520×115)＆裏ホットキー\n・声⇄伴奏 1クリック音ズレ自動計測(±300ms)",
                      (238, 95, 152)),
                     ("② 歌ってみた・宅録シンガーへ",
-                     "・直前30秒さかのぼり保存で神テイクを救出\n・完成音(Wet)＋MIX用素の声(Dry)同時WAV保存\n・5秒歌うだけのAI声質ターゲット自動調律",
+                     "・伴奏コード追従ハモリ＆10割声量モード\n・-14 LUFS 3本WAV＋SNS用.mp4動画保存\n・0ms部屋鳴り除去＆0.08ms知能ピッチ補正",
                      (75, 215, 190)),
-                    ("③ 実況・VC通話・DAW時短勢へ",
-                     "・AIノイズ学習でエアコン・PCファン音消去\n・絶叫セーフティガード＆咳払い8ms無音遮断\n・追加遅延0.0ms ／ VST3・AUプラグイン同梱",
+                    ("③ 超軽量＆全19世代タイムマシン",
+                     "・Smart SleepでCPU/UI負荷40〜70%削減\n・v1.0.0〜v5.5.0 全19世代を呼び出し可能\n・VST3/AU/単体同梱（Win & Mac v5.5.0）",
                      (120, 195, 250)),
                 ]
                 tx = 78
@@ -617,11 +617,11 @@ def main():
                     d.text((mx + 68, my + 96), m_title, font=f_badge, fill=m_col + (255,))
                     mx += mini_sz[0] + 12
 
-                d.text((82, 554), "★ 製品版 2,500円（買い切り・Win & Mac同梱・既存購入者は無料でv4.8.0へ更新OK） ／ まずは0円の無料体験版へ！",
+                d.text((82, 554), "★ 製品版 2,500円（買い切り・Win & Mac v5.5.0同梱・既存購入者は無料で更新OK） ／ まずは0円の無料体験版へ！",
                        font=get_font(21), fill=(255, 238, 175, 255))
                 d.text((82, 590), "Vocal Source: Come Inside (pell) / Madam Snowflake (2019) CC BY 3.0 (ccmixter.org/files/snowflake/59563)",
                        font=f_sm, fill=(175, 162, 185, 255))
-                d.text((82, 618), "https://gzzio.booth.pm/items/8764003   （Mac版は未公証／音程補正は単独の声向け・48kHzで約42.6ms遅延）",
+                d.text((82, 618), "https://gzzio.booth.pm/items/8764003   ｜   公式サイト: https://gzzio1989.github.io/apps/vocalgzzio/",
                        font=f_sm, fill=(235, 205, 165, 255))
 
             # 上部バーのテキストと右上の音声状態バッジを描画
@@ -647,8 +647,8 @@ def main():
             stderr_out = (tmp / "ffmpeg_err.log").read_text(encoding="utf-8", errors="replace")
             raise RuntimeError(f"FFmpeg failed ({ret}):\n{stderr_out}")
 
-    # アーティファクトディレクトリとv4.7.0互換パスにもコピー
-    art_mp4 = ART_DIR / "VocalGzzio_v4.8.0_X_操作説明_音比較.mp4"
+    # アーティファクトディレクトリにもコピー
+    art_mp4 = ART_DIR / "VocalGzzio_v5.5.0_X_操作説明_音比較.mp4"
     shutil.copy2(out_mp4, art_mp4)
     print("Created X Promo Video:", out_mp4, f"({out_mp4.stat().st_size / 1024 / 1024:.2f} MB)")
 

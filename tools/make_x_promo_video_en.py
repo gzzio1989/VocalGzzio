@@ -131,20 +131,20 @@ def draw_stage_studio_overlay(canvas: Image.Image, highlight_sec: int = 0):
     px, py, pw, ph = 520, 166, 640, 384
     d.rounded_rectangle([px + 6, py + 8, px + pw + 6, py + ph + 8], radius=16, fill=(0, 0, 0, 170))
     d.rounded_rectangle([px, py, px + pw, py + ph], radius=16, fill=(24, 18, 32, 248), outline=(110, 225, 245, 255), width=3)
-    d.text((px + 20, py + 14), "♪ VocalGzzio v5.4.0 — Stage, Studio & Expression Suite", font=get_font(19), fill=(130, 235, 255, 255))
+    d.text((px + 20, py + 14), "♪ VocalGzzio v5.5.0 — Stage, Studio & Smart Sleep Suite", font=get_font(19), fill=(130, 235, 255, 255))
 
     secs = [
-        ("1. Spectral Unmasker, BGM Rider & 1-Click Vocal Remover",
-         "Carves a -5dB pocket in the track's Mid channel + Key Shift (±6) & Auto-Key Sync",
+        ("1. App Karaoke Capture, ±300ms Sync & Spectral Unmasker",
+         "Driverless app audio capture + 1-Click Vocal Remover, Key Shift (±6) & Mid Pocket",
          (90, 210, 245)),
-        ("2. -14 LUFS 3-Stem WAV Export & Save Last 30 Seconds",
-         "Simultaneously exports -14 LUFS Master + Wet Vocal + Raw Dry Vocal (24-bit WAV)",
+        ("2. Chord-Follow Harmony, 3-Stem WAV & .mp4 Video Export",
+         "Borrowed-chord smart harmonies + -14 LUFS WAV stems & 16:9/9:16 .mp4 video export",
          (245, 105, 155)),
-        ("3. v5.4 Tail Vibrato, Vowel Formant EQ & Cue Monitor",
-         "Smooth 5.5Hz tail vibrato, uniform vowel warmth & bone-conduction headphone cue",
+        ("3. 100% Vocal Dynamics, 0–250% Vol & 19-Era Time Machine",
+         "Full dynamic expression without ceiling squash + all 19 legacy versions (v1.0–v5.5)",
          (85, 220, 185)),
-        ("4. 1-Click Sing/MC Toggle, Cough Mute & Scream Guard",
-         "Instant dry voice for chatting between songs + 8ms pop-free Cough Mute & 8 SE Pads",
+        ("4. Smart Sleep (-40~70% Load), Mini-Bar & Global Hotkeys",
+         "520x115 Streaming Mini-Bar, Hold-F9 Cough Mute, Sing/MC Toggle & 8 SE Pads",
          (245, 190, 95)),
     ]
     sy = py + 52
@@ -189,23 +189,23 @@ def write_english_srt(srt_path: Path):
 
 7
 00:00:27,500 --> 00:00:34,000
-VocalGzzio v5.4.0 (Win & Mac) — Built-in Full English UI Mode ([文字・見た目] -> [ブランド]). Try the $0 Free Trial on BOOTH!
+VocalGzzio v5.5.0 (Win & Mac) — Built-in Full English UI Mode ([文字・見た目] -> [ブランド]). Try the $0 Free Trial on BOOTH!
 """
     srt_path.write_text(srt_content, encoding="utf-8")
 
 
 def main():
     OUT_EN_DIR.mkdir(parents=True, exist_ok=True)
-    write_english_srt(OUT_EN_DIR / "YouTube_English_Captions_v5.4.0.srt")
+    write_english_srt(OUT_EN_DIR / "YouTube_English_Captions_v5.5.0.srt")
 
     ui_Sz = (1080, 609)
     uis = {
-        "rose": load_ui("v4.8.0_couture_stage.png", "v4.7.0_couture_stage.png", ui_Sz),
+        "rose": load_ui("v550_couture_mint_switches.png", "v4.8.0_couture_stage.png", ui_Sz),
         "lilac": load_ui("v4.8.0_couture_02_lilac.png", "v4.6.0_couture_02_lilac.png", ui_Sz),
         "noir": load_ui("v4.8.0_couture_03_noir.png", "v4.6.0_couture_03_noir.png", ui_Sz),
-        "mint": load_ui("v4.8.0_couture_04_mint.png", "v4.6.0_couture_04_mint.png", ui_Sz),
+        "mint": load_ui("v550_couture_mint_switches.png", "v4.6.0_couture_04_mint.png", ui_Sz),
         "peach": load_ui("v4.8.0_couture_05_peach.png", "v4.6.0_couture_05_peach.png", ui_Sz),
-        "argon": load_ui("v4.8.0_argon_cockpit.png", "v4.7.0_argon_cockpit.png", ui_Sz),
+        "argon": load_ui("v550_overview_final.png", "v4.8.0_argon_cockpit.png", ui_Sz),
     }
 
     mini_sz = (224, 126)
@@ -228,7 +228,7 @@ def main():
         wav_path = tmp / "audio.wav"
         build_audio_track(wav_path)
 
-        out_mp4 = OUT_EN_DIR / "VocalGzzio_v5.4.0_X_Promo_EN_BeforeAfter.mp4"
+        out_mp4 = OUT_EN_DIR / "VocalGzzio_v5.5.0_X_Promo_EN_BeforeAfter.mp4"
         cmd = [
             FFMPEG, "-y",
             "-f", "rawvideo",
@@ -293,7 +293,7 @@ def main():
                 d.ellipse([cx - r_glow, cy - r_glow, cx + r_glow, cy + r_glow], outline=(255, 115, 175, 230), width=4)
                 draw_callout(canvas, (116, 565, 1048, 84),
                              "★ Test 1 AFTER: Room mud & fan noise vanish; silky Dolby-A air and studio reverb bloom!",
-                             "No DAW or Voicemeeter required — includes WHQL-signed WDM Virtual Driver for OBS & Discord",
+                             "No DAW required — OBS native VST3 direct loading, interface loopback & App Audio Capture!",
                              (235, 85, 148))
                 draw_cursor(canvas, cx, cy, clicking=True, ripple_prog=(sub_t * 3.0) % 1.0)
 
@@ -366,21 +366,21 @@ def main():
                 draw_cursor(canvas, cx, cy, clicking=True, ripple_prog=(sub_t * 2.5) % 1.0)
 
             else:
-                step_txt = "VocalGzzio v5.4.0 — All-in-One Vocal Studio for Win & Mac ($0 Free Trial Available)"
+                step_txt = "VocalGzzio v5.5.0 — All-in-One Vocal Studio for Win & Mac ($0 Free Trial Available)"
                 audio_badge = ("★ Built-in Full English UI Mode Included!", (235, 85, 148))
                 d.rounded_rectangle([48, 88, W - 48, 662], radius=22, fill=(26, 18, 34, 248), outline=(238, 165, 192, 230), width=3)
-                d.text((78, 108), "VocalGzzio v5.4.0 — One Screen. Zero Routing Headaches.", font=f_big, fill=(255, 245, 250, 255))
+                d.text((78, 108), "VocalGzzio v5.5.0 — One Screen. Ultra-Light DSP.", font=f_big, fill=(255, 245, 250, 255))
                 d.text((78, 158), "Built-in 100% English UI Mode: Click [文字・見た目] -> [ブランド (Brand)] at top-right!", font=f_med, fill=(130, 235, 215, 255))
 
                 targets = [
                     ("1. Karaoke Streamers & VTubers",
-                     "• Direct OBS/VRChat WDM Driver\n• Spectral Unmasker & BGM Rider\n• 1-Click Sing/MC & 8 SE Pads",
+                     "• Driverless App Audio Capture\n• 520x115 Mini-Bar & Hotkeys\n• ±300ms 1-Click Auto Sync",
                      (238, 95, 152)),
                     ("2. Cover Vocalists & Home Studio",
-                     "• 0ms Room De-Reverb & 4 Mics\n• 0.08ms Pitch & 5-Voice Unison\n• -14 LUFS 3-Stem WAV Recorder",
+                     "• Chord-Follow Smart Harmony\n• 100% Vocal Dynamics & 0ms Room\n• 3-Stem WAV & .mp4 Video Export",
                      (75, 215, 190)),
-                    ("3. v5.4 Expression & Cue Monitor",
-                     "• 5.5Hz Tail Vibrato & Vowel EQ\n• Mix-Voice Harmonic Bridge\n• Bone-Conduction Headphone Cue",
+                    ("3. Smart Sleep & 19-Era Suite",
+                     "• -40% to -70% CPU/UI Load\n• All 19 Legacy Versions (v1.0-v5.5)\n• Bone-Conduction Headphone Cue",
                      (120, 195, 250)),
                 ]
                 tx = 78
@@ -430,8 +430,9 @@ def main():
             stderr_out = (tmp / "ffmpeg_err.log").read_text(encoding="utf-8", errors="replace")
             raise RuntimeError(f"FFmpeg failed ({ret}):\n{stderr_out}")
 
-    if CUR_ART_DIR.exists():
-        shutil.copy2(out_mp4, CUR_ART_DIR / "VocalGzzio_v5.4.0_X_Promo_EN_BeforeAfter.mp4")
+    shutil.copy2(out_mp4, ROOT / "docs" / "assets" / "promo-en-v540.mp4")
+    if SRC_ART_DIR.exists():
+        shutil.copy2(out_mp4, SRC_ART_DIR / "VocalGzzio_v5.5.0_X_Promo_EN_BeforeAfter.mp4")
     print("Created English Promo Video:", out_mp4, f"({out_mp4.stat().st_size / 1024 / 1024:.2f} MB)")
 
 
