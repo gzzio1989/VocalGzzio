@@ -2,8 +2,6 @@
 
 このディレクトリには、他社製コード・バイナリを一切使用しない **100%独自実装の Windows 10 / 11 (x64 & ARM64) カーネルモード仮想オーディオドライバ（`VocalGzzioAudio.sys`）** のソースコード一式と、Microsoft Hardware Dashboard（Attestation Signing：構成証明署名）提出用の自動パッケージングスクリプトが含まれています。
 
-事業届出（開業届）から EV コード署名証明書・Microsoft Partner Center 登録までの事務手続きチェックリストは、ローカル管理の `販売/独自仮想ドライバ_EV証明書_Microsoft登録手順書.md` を参照してください。
-
 ---
 
 ## 設計の特徴

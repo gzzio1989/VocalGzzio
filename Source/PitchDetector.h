@@ -21,7 +21,11 @@
 
 #include <vector>
 #include <cmath>
+#include <cstring>
 #include <algorithm>
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+ #include <emmintrin.h>
+#endif
 
 namespace gz
 {
@@ -31,7 +35,7 @@ class PitchDetector
 public:
     // fMin/fMax bound the search (vocal range). The integration window covers
     // one longest period, so ~2 periods of fMin are buffered before a reading.
-    void prepare (double sampleRate, float fMin = 65.0f, float fMax = 1000.0f)
+    void prepare (double sampleRate, float fMin = 65.0f, float fMax = 1000.0f, float hopSec = 0.0010f)
     {
         fsIn  = (float) sampleRate;
         decim = (int) std::lround (sampleRate / 22050.0); if (decim < 1) decim = 1;
@@ -43,7 +47,8 @@ public:
         W      = tauMax;                               // integration window = longest lag
 
         const int cap = W + tauMax + 4;                // room for x[j] and x[j+tau]
-        buf.assign ((size_t) cap, 0.0f);
+        buf.assign    ((size_t) cap, 0.0f);
+        linBuf.assign ((size_t) cap, 0.0f);
         d .assign ((size_t) (tauMax + 1), 0.0f);
         dp.assign ((size_t) (tauMax + 1), 0.0f);
 
@@ -52,7 +57,7 @@ public:
         const float pole = std::exp (-2.0f * kPi * fc / fsIn);
         lpA = pole; lpB = 1.0f - pole;
 
-        hopIn = (int) (fsIn * 0.0010f); if (hopIn < 16) hopIn = 16;   // ~1.0 ms 1000Hz超高速応答ホップ（旧4.5ms→2.0ms→1.0msへ追従ラグ78%短縮）
+        hopIn = (int) (fsIn * std::max (0.0005f, hopSec)); if (hopIn < 16) hopIn = 16;
         reset();
     }
 
@@ -120,21 +125,47 @@ private:
         const int cap  = (int) buf.size();
         const int need = Wloc + tHi;
         int start = writePos - need; while (start < 0) start += cap;
-        auto at = [&] (int k) -> float { int idx = start + k; if (idx >= cap) idx -= cap; return buf[(size_t) idx]; };
+        const int firstChunk = std::min (need, cap - start);
+        std::memcpy (linBuf.data(), buf.data() + start, sizeof (float) * (size_t) firstChunk);
+        if (firstChunk < need)
+            std::memcpy (linBuf.data() + firstChunk, buf.data(), sizeof (float) * (size_t) (need - firstChunk));
+        const float* __restrict x0 = linBuf.data();
 
         // 1) difference function d(tau) = sum_j (x[j] - x[j+tau])^2
         // CMNDF の分母は探索下限に関係なく lag=1 から累積する。
         // 下限から始めると、同じ音でも前回の検出音によって結果が変わる。
         double energy = 0.0, dc = 0.0;
-        for (int j = 0; j < Wloc; ++j) { const double x = at(j); energy += x*x; dc += x; }
+        for (int j = 0; j < Wloc; ++j) { const double x = x0[j]; energy += x * x; dc += x; }
         if (energy / Wloc - (dc / Wloc) * (dc / Wloc) < 1.0e-9)
         { confOut = 0.0f; return -1.0f; } // 無音・直流・-90dBFS未満を音程としない
         for (int tau = 1; tau <= tHi; ++tau)
         {
+            const float* __restrict xt = x0 + tau;
+            int j = 0;
             float sum = 0.0f;
-            for (int j = 0; j < Wloc; ++j)
+           #if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+            __m128 acc0 = _mm_setzero_ps();
+            __m128 acc1 = _mm_setzero_ps();
+            for (; j + 8 <= Wloc; j += 8)
             {
-                const float diff = at (j) - at (j + tau);
+                const __m128 v0 = _mm_sub_ps (_mm_loadu_ps (x0 + j),     _mm_loadu_ps (xt + j));
+                const __m128 v1 = _mm_sub_ps (_mm_loadu_ps (x0 + j + 4), _mm_loadu_ps (xt + j + 4));
+                acc0 = _mm_add_ps (acc0, _mm_mul_ps (v0, v0));
+                acc1 = _mm_add_ps (acc1, _mm_mul_ps (v1, v1));
+            }
+            acc0 = _mm_add_ps (acc0, acc1);
+            for (; j + 4 <= Wloc; j += 4)
+            {
+                const __m128 v0 = _mm_sub_ps (_mm_loadu_ps (x0 + j), _mm_loadu_ps (xt + j));
+                acc0 = _mm_add_ps (acc0, _mm_mul_ps (v0, v0));
+            }
+            alignas(16) float tmp[4];
+            _mm_store_ps (tmp, acc0);
+            sum = (tmp[0] + tmp[1]) + (tmp[2] + tmp[3]);
+           #endif
+            for (; j < Wloc; ++j)
+            {
+                const float diff = x0[j] - xt[j];
                 sum += diff * diff;
             }
             d[(size_t) tau] = sum;
@@ -220,7 +251,7 @@ private:
     float fsIn = 44100.0f, fs = 22050.0f, fLo = 65.0f, fHi = 1000.0f;
     int   decim = 2, tauMin = 22, tauMax = 340, W = 340, hopIn = 200;
     int   lockTau = 0, lastTau = 0;   // v1.9.3: adaptive-window state
-    std::vector<float> buf, d, dp;
+    std::vector<float> buf, linBuf, d, dp;
     float lpA = 0.0f, lpB = 1.0f, lp1 = 0.0f, lp2 = 0.0f;
     int   decimCnt = 0, writePos = 0, filled = 0, sinceAnalyze = 0;
     float lastHz = 0.0f, lastConf = 0.0f;

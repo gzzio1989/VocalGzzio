@@ -389,7 +389,9 @@ int main()
     {
         for (double sr : { 44100.0, 48000.0, 96000.0 })
         {
-            VocalGzzioProcessor proc;
+            // VocalGzzioProcessor は大容量のため、Windows 既定 1 MB スタック溢れを防ぐようヒープ確保する
+            auto procPtr = std::make_unique<VocalGzzioProcessor>();
+            auto& proc = *procPtr;
             // A processor restores the last closed instance's settings. The trim
             // test above intentionally saved the tone module OFF; restore a known
             // signal chain before testing the Argon detector, for every sample rate.
@@ -467,7 +469,8 @@ int main()
             // 3) State save & restore preserves all 4 Argon parameters
             juce::MemoryBlock stateData;
             proc.getStateInformation (stateData);
-            VocalGzzioProcessor restored;
+            auto restoredPtr = std::make_unique<VocalGzzioProcessor>();
+            auto& restored = *restoredPtr;
             restored.setPlayConfigDetails (2, 2, sr, 256);
             restored.prepareToPlay (sr, 256);
             restored.setStateInformation (stateData.getData(), (int) stateData.getSize());
@@ -1440,6 +1443,268 @@ int main()
                                "v5.4.1 DAW project chunk is never overwritten by a newer global autosave.xml");
                         autoPath.deleteFile();
                     }
+                }
+
+                // Verify v5.5.0 5 Core Pillars:
+                //   1. Smart Sleep Silence Gate & Lock-Free Vocal F0 Sharing (VocalTuner O(1) vocal read)
+                //   2. Voice <-> BGM Sync Offset (-300..+300 ms sample-accurate delay & XML persistence)
+                //   3. Global Hotkey toggle persistence & Safe Virtual Driver no-op policy
+                //   4. Streaming Mini-Bar Mode (520x115 px, Brand English compliance, zero overlaps, full restore)
+                {
+                    processor->setPlayConfigDetails (2, 2, 48000.0, 256);
+                    processor->prepareToPlay (48000.0, 256);
+                    processor->setSyncOffsetMs (0);
+
+                    // (A) Smart Sleep Silence Gate (>0.5s silence enters sleep; 1st active block wakes & shares F0)
+                    juce::MidiBuffer midi55;
+                    for (int blk = 0; blk < 140; ++blk)
+                    {
+                        juce::AudioBuffer<float> sil (2, 256);
+                        sil.clear();
+                        processor->processBlock (sil, midi55);
+                    }
+                    check (processor->isSmartSleepActive(),
+                           "v5.5.0 Smart Sleep enters zero-CPU idle sleep after >0.5s input silence");
+
+                    VocalTuner vocalTuner (*processor);
+                    vocalTuner.setTuningMode (0);
+                    double ph220 = 0.0;
+                    for (int blk = 0; blk < 80; ++blk)
+                    {
+                        juce::AudioBuffer<float> tone (2, 256);
+                        for (int n = 0; n < 256; ++n)
+                        {
+                            const float s = 0.22f * (float) std::sin (ph220);
+                            ph220 += juce::MathConstants<double>::twoPi * 220.0 / 48000.0;
+                            tone.setSample (0, n, s);
+                            tone.setSample (1, n, s);
+                        }
+                        processor->processBlock (tone, midi55);
+                    }
+                    check (! processor->isSmartSleepActive(),
+                           "v5.5.0 Smart Sleep wakes immediately on vocal input");
+                    check (std::abs (processor->getSharedVocalF0Hz() - 220.0f) < 1.5f
+                           && processor->getSharedVocalF0Confidence() > 0.5f,
+                           "v5.5.0 Lock-free shared vocal F0 accurately tracks 220 Hz on audio thread");
+                    check (std::abs (vocalTuner.measureForTest() - 220.0f) < 1.5f,
+                           "v5.5.0 VocalTuner reads O(1) lock-free shared F0 in vocal mode without UI-thread YIN");
+
+                    // (B) Voice <-> BGM Sync Offset (+20 ms = 960 samples @ 48 kHz)
+                    for (int m = 0; m < gz::ModuleChain::Count; ++m)
+                        setParameter (gz::ModuleChain::paramId (m), 0.0f);
+                    setParameter ("argon_velvet", 0.0f);
+                    setParameter ("argon_focus",  0.0f);
+                    setParameter ("argon_silk",   0.0f);
+                    setParameter ("argon_halo",   0.0f);
+                    setParameter ("trim_in",      0.0f);
+                    setParameter ("trim_out",     0.0f);
+                    processor->setPlayConfigDetails (2, 2, 48000.0, 256);
+                    processor->prepareToPlay (48000.0, 256);
+                    processor->setSyncOffsetMs (20); // +20 ms = 960 samples at 48 kHz
+                    check (processor->getSyncOffsetMs() == 20,
+                           "v5.5.0 Sync Offset setter clamps and stores +20 ms");
+
+                    int firstImpulseSample = -1;
+                    for (int blk = 0; blk < 12; ++blk)
+                    {
+                        juce::AudioBuffer<float> imp (2, 256);
+                        imp.clear();
+                        if (blk == 0)
+                        {
+                            imp.setSample (0, 0, 0.5f);
+                            imp.setSample (1, 0, 0.5f);
+                        }
+                        processor->processBlock (imp, midi55);
+                        for (int n = 0; n < 256 && firstImpulseSample < 0; ++n)
+                            if (std::abs (imp.getSample (0, n)) > 0.1f)
+                                firstImpulseSample = blk * 256 + n;
+                    }
+                    check (firstImpulseSample == 960,
+                           "v5.5.0 Sync Offset (+20 ms @ 48kHz) delays mic vocal output by exact 960 samples");
+
+                    // (C) XML state round-trip of sync_offset_ms & global_hotkeys_on + Safe Driver no-op
+                    processor->setSyncOffsetMs (-135);
+                    processor->setGlobalHotkeysOn (false);
+                    juce::MemoryBlock st55;
+                    processor->getStateInformation (st55);
+                    processor->setSyncOffsetMs (0);
+                    processor->setGlobalHotkeysOn (true);
+                    processor->setStateInformation (st55.getData(), (int) st55.getSize());
+                    check (processor->getSyncOffsetMs() == -135 && ! processor->getGlobalHotkeysOn(),
+                           "v5.5.0 sync_offset_ms (-135 ms) and global_hotkeys_on round-trip through XML state");
+                    processor->setSyncOffsetMs (0);
+                    processor->setGlobalHotkeysOn (true);
+                    check (! gz::StreamOut::installVocalGzzioWdmDriver(),
+                           "v5.5.0 installVocalGzzioWdmDriver() is a safe zero-side-effect no-op");
+
+                    // (D) Streaming Mini-Bar Mode (520x115 px, Brand English, non-overlap, full restore)
+                    std::unique_ptr<juce::AudioProcessorEditor> rawEd (processor->createEditor());
+                    auto* vgEd = dynamic_cast<VocalGzzioEditor*> (rawEd.get());
+                    check (vgEd != nullptr && ! vgEd->isMiniBarMode(),
+                           "v5.5.0 VocalGzzioEditor starts in normal full UI mode by default");
+                    if (vgEd != nullptr)
+                    {
+                        const int normalW = vgEd->getWidth();
+                        const int normalH = vgEd->getHeight();
+                        vgEd->setMiniBarMode (true);
+                        check (vgEd->isMiniBarMode()
+                               && vgEd->getWidth() == VocalGzzioEditor::miniW
+                               && vgEd->getHeight() == VocalGzzioEditor::miniH,
+                               "v5.5.0 setMiniBarMode(true) resizes editor cleanly to 520x115 px");
+
+                        if (auto* mb = vgEd->findChildWithID ("streamingMiniBar"))
+                        {
+                            std::vector<juce::Component*> mbBtns;
+                            for (auto* c : mb->getChildren())
+                            {
+                                if (! c->isVisible()) continue;
+                                check (! c->getBounds().isEmpty() && mb->getLocalBounds().contains (c->getBounds()),
+                                       "v5.5.0 Mini-Bar control stays strictly inside 520x115 bounds");
+                                if (dynamic_cast<juce::Button*> (c)) mbBtns.push_back (c);
+                            }
+                            for (size_t i = 0; i < mbBtns.size(); ++i)
+                                for (size_t j = i + 1; j < mbBtns.size(); ++j)
+                                    check (! mbBtns[i]->getBounds().intersects (mbBtns[j]->getBounds()),
+                                           "v5.5.0 Mini-Bar buttons never overlap");
+                        }
+                        else
+                        {
+                            check (false, "v5.5.0 streamingMiniBar component exists when Mini-Bar mode is active");
+                        }
+
+                        juce::Image miniImg (juce::Image::ARGB, vgEd->getWidth(), vgEd->getHeight(), true);
+                        {
+                            juce::Graphics gMini (miniImg);
+                            vgEd->paintEntireComponent (gMini, false);
+                        }
+
+                        vgEd->setMiniBarMode (false);
+                        check (! vgEd->isMiniBarMode()
+                               && vgEd->getWidth() == normalW
+                               && vgEd->getHeight() == normalH,
+                               "v5.5.0 setMiniBarMode(false) restores exact normal UI window dimensions");
+                    }
+
+                    // (E) Full 19-Generation Legacy Version Recall (restoring v5.0.0 .. v5.4.1 back-numbers)
+                    check (VocalGzzioContent::kLegacyVersionCount == 19,
+                           "v5.5.0 Legacy Version Time Machine exposes all 19 generations (v1.0.0 - v5.5.0)");
+                    const char* expectedTags[7] = { "v5.5.0", "v5.4.1", "v5.4.0", "v5.3.0", "v5.2.0", "v5.1.0", "v5.0.0" };
+                    const int   expectedEras[7] = { 550,      541,      540,      530,      520,      510,      500 };
+                    for (int gi = 0; gi < 7; ++gi)
+                    {
+                        const auto& sp = VocalGzzioContent::getLegacyVersionSpec (gi);
+                        check (juce::String (sp.verTag) == expectedTags[gi] && sp.era == expectedEras[gi],
+                               "v5.5.0 v5.x back-number slot matches expected version tag and DSP era");
+                    }
+                    check (juce::String (VocalGzzioContent::getLegacyVersionSpec (18).verTag) == "v1.0.0"
+                           && VocalGzzioContent::getLegacyVersionSpec (18).era == 100,
+                           "v5.5.0 Legacy slot 18 preserves original v1.0.0 (era 100)");
+
+                    for (int testLegId : { 1, 3, 5, 6, 18, 0 })
+                    {
+                        view.applyLegacyVersion (testLegId, true);
+                        check (processor->getLegacyVersionId() == testLegId
+                               && processor->getLegacyVersionEra() == VocalGzzioContent::getLegacyVersionSpec (testLegId).era,
+                               "v5.5.0 applyLegacyVersion activates exact era state including v5.1.0/v5.3.0/v5.4.1");
+                        for (auto* c : view.getChildren())
+                        {
+                            if (! c->isVisible()) continue;
+                            check (! c->getBounds().isEmpty() && view.getLocalBounds().contains (c->getBounds()),
+                                   "v5.5.0 Recalled legacy version keeps every visible control strictly inside window");
+                        }
+                    }
+
+                    // (F) Knob Inner Artwork ON/OFF toggle & offscreen rendering across jewel/gear/juice themes
+                    view.setOverview (true);
+                    view.setKnobInnerArtOn (false);
+                    check (! view.isKnobInnerArtOn() && ! GzzioLnF::getKnobInnerArt(),
+                           "v5.5.0 setKnobInnerArtOn(false) disables decorative inner knob artwork");
+                    for (int artTheme : { 12, 14, 1 })
+                    {
+                        view.setThemeMode (artTheme);
+                        juce::Image cleanKnobImg (juce::Image::ARGB, 320, 220, true);
+                        juce::Graphics gk (cleanKnobImg);
+                        view.paintEntireComponent (gk, false);
+                    }
+                    view.setKnobInnerArtOn (true);
+                    check (view.isKnobInnerArtOn() && GzzioLnF::getKnobInnerArt(),
+                           "v5.5.0 setKnobInnerArtOn(true) restores decorative inner knob artwork");
+
+                    // (G) Intuitive Output Volume (outputVolumePct 0..250%) & Vocal Expression Mode pill (ioExprRect)
+                    check (std::abs (processor->getOutputVolumePct() - 100.0f) < 0.5f,
+                           "v5.5.0 outputVolumePct defaults to 100% unity volume");
+                    processor->setOutputVolumePct (165.0f);
+                    check (std::abs (processor->getOutputVolumePct() - 165.0f) < 0.5f,
+                           "v5.5.0 setOutputVolumePct updates linear output volume percentage");
+                    processor->setOutputVolumePct (100.0f);
+                    view.setThemeMode (0);
+                    view.setOverview (true);
+                    processor->setVocalExprMode (0);
+                    // Click ioExprRect in all 3 modern architectures (Argon=0, V-Liver=1, Studio Rack=2)
+                    for (int arch : { 0, 1, 2 })
+                    {
+                        view.setOverviewLayoutMode (arch, true);
+                        const int beforeExpr = processor->getVocalExprMode();
+                        // Probe overviewOutput region for the ioExprRect hit via overviewHelpAt
+                        juce::Point<int> exprPt (-1, -1);
+                        for (int py = 40; py < view.getHeight() - 20 && exprPt.x < 0; py += 6)
+                        {
+                            for (int px = view.getWidth() / 2; px < view.getWidth() - 16; px += 12)
+                            {
+                                const auto h = view.overviewHelpAt ({ px, py });
+                                if (h.contains (juce::String::fromUTF8 ("声量幅")))
+                                {
+                                    exprPt = { px, py };
+                                    break;
+                                }
+                            }
+                        }
+                        check (exprPt.x > 0, "v5.5.0 ioExprRect vocal dynamics pill is reachable in modern Overview");
+                        if (exprPt.x > 0)
+                        {
+                            view.handleOverviewMouseDown (exprPt);
+                            check (processor->getVocalExprMode() == (beforeExpr + 1) % 3,
+                                   "v5.5.0 Clicking ioExprRect cycles vocalExprMode (0 -> 1 -> 2 -> 0)");
+                            view.setThemeMode (3);
+                            check (! containsJapanese (view.overviewHelpAt (exprPt)),
+                                   "v5.5.0 ioExprRect hover help has zero Japanese in Brand English mode");
+                            view.setThemeMode (0);
+                        }
+                    }
+                    view.setOverviewLayoutMode (0, false);
+                    processor->setVocalExprMode (0);
+
+                    // (H) Cubase-safe Update Check JSON parser & Update Notice UI (Overview + Detail + Brand English)
+                    check (VocalGzzioContent::extractNewerReleaseTag (
+                               "{\"tag_name\":\"v5.6.0\",\"draft\":false,\"prerelease\":false}", "5.5.0") == "v5.6.0",
+                           "v5.5.0 extractNewerReleaseTag detects newer stable release v5.6.0 > 5.5.0");
+                    check (VocalGzzioContent::extractNewerReleaseTag (
+                               "{\"tag_name\":\"v5.5.0\",\"draft\":false,\"prerelease\":false}", "5.5.0").isEmpty(),
+                           "v5.5.0 extractNewerReleaseTag returns empty when current version is already latest");
+                    check (VocalGzzioContent::extractNewerReleaseTag (
+                               "{\"tag_name\":\"v5.4.1\",\"draft\":false,\"prerelease\":false}", "5.5.0").isEmpty(),
+                           "v5.5.0 extractNewerReleaseTag ignores older tags");
+                    check (VocalGzzioContent::extractNewerReleaseTag (
+                               "{\"tag_name\":\"v5.9.0\",\"draft\":true,\"prerelease\":false}", "5.5.0").isEmpty()
+                           && VocalGzzioContent::extractNewerReleaseTag (
+                               "{\"tag_name\":\"v5.9.0\",\"draft\":false,\"prerelease\":true}", "5.5.0").isEmpty(),
+                           "v5.5.0 extractNewerReleaseTag ignores draft and prerelease tags");
+
+                    view.setThemeMode (3);
+                    view.setOverview (true);
+                    view.showUpdateNotice ("v5.6.0");
+                    check (view.getLatestUpdateTag() == "v5.6.0",
+                           "v5.5.0 showUpdateNotice stores latestUpdateTag");
+                    check (checkBrandLanguage (view) == 0,
+                           "v5.5.0 Update notice in Overview passes Brand English check");
+                    check (! containsJapanese (view.overviewHelpAt ({ 195, 20 })),
+                           "v5.5.0 Overview update badge hover help passes Brand English check");
+                    view.setOverview (false);
+                    check (checkBrandLanguage (view) == 0,
+                           "v5.5.0 Update notice in Detailed view passes Brand English check");
+                    view.showUpdateNotice ({});
+                    view.setOverview (true);
+                    view.setThemeMode (0);
                 }
             }
         }

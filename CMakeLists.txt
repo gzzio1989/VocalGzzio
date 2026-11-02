@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VocalGzzio VERSION 5.4.1 LANGUAGES C CXX)
+project(VocalGzzio VERSION 5.5.0 LANGUAGES C CXX)
+# 5.5.0: Smart Sleep超軽量エンジン（UIスレッド重複YIN廃止・音声スレッドロックフリーF0共有・最小化/非表示時UI描画0%休止・純ユニゾン声部ゼロFFT化・0.5秒無音スリープ）、ワンクリック『📌配信ミニバー（520×115px・最前面ピン留め対応）』＆『✨こだわり詳細』折りたたみ整理、声⇄伴奏『音ズレ』ミリ秒補正スライダー（±300ms）、裏画面・全角かな無敵グローバルホットキー（Windows Standalone版）、OBS標準VST3・ループバック・外部仮想ケーブル連携ガイド統合を搭載。
 # 5.4.1: クリーンWindows環境向けMSVC静的ランタイム(/MT)統合、初回起動時の自動マイクミュート解除＆1クリック解除バナー、DAW/VST3と単体起動版の設定完全分離、1chモノラル入力→2chステレオ出力VST3バス対応、MP3デコード標準有効化、ARM64安全スキップ＆WDM重複ノード自動整理、アプリ内説明書ボタン、セットリスト32曲統一＆カスタムSEサンプルレート自動追従を搭載。
 # 5.4.0: ボーカル歌唱表現4大エンジン（「〰️語尾ナチュラル・ビブラート＆喉揺らしシマー」「🗣️母音フォーム統一・イコライザー」「⚡歌い出し発声アタック＆リズムポケット・シェイパー」「🌉ミックスボイス・倍音ブリッジ＆胸鳴りアンカー」）および「🎵自作音源カスタムSE 4枠ポン出しパッド（.wav/.mp3/.flac/.ogg/.aiff対応）」を搭載、空間IRメニューを整理。
 # 5.3.0: 新案①「ささやき浮上・上向きコンプレッサー（Upward Micro-Detail Lifter）＆倍音ドルビーAエアー（Dolby-A Trick Harmonic Air）」、新案②「音程追従・オートスイートスポット（Pitch-Tracked Dynamic Body & Formant — ハイトーン自動太らせ・喉締まり緩和＆低音ボワつき自動スッキリ）」、新案④「骨伝導補正・歌い手専用モニターエンハンサー（Singer's Cue Monitor — 配信・録音本線は無傷のまま自分のヘッドホン返しだけ音程芯をくっきり補正）」を搭載。
@@ -191,21 +192,11 @@ target_compile_definitions(VocalGzzio PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0)
 if (WIN32)
     target_compile_definitions(VocalGzzio PUBLIC JUCE_ASIO=1)
-    add_executable(VocalGzzioWdmInstaller tools/VocalGzzioWdmInstaller.cpp)
-    if (MSVC)
-        target_compile_options(VocalGzzioWdmInstaller PRIVATE /utf-8)
-    endif()
-    target_link_libraries(VocalGzzioWdmInstaller PRIVATE setupapi newdev cfgmgr32 shell32 ole32 advapi32 wintrust)
-    if (TARGET VocalGzzio_Standalone)
-        add_custom_command(TARGET VocalGzzio_Standalone POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_FILE:VocalGzzioWdmInstaller>"
-                "$<TARGET_FILE_DIR:VocalGzzio_Standalone>/VocalGzzioWdmInstaller.exe"
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/driver"
-                "$<TARGET_FILE_DIR:VocalGzzio_Standalone>/driver"
-            COMMENT "Bundling VocalGzzioWdmInstaller.exe and WDM driver alongside Standalone")
-    endif()
+    target_link_libraries(VocalGzzio PUBLIC mfplat mfreadwrite mfuuid)
+    # v5.5.0: Windows 11 の最新カーネル保護・署名審査への適合に万全を期すため、
+    # 独自仮想ドライバ（VocalGzzio Driver / VocalGzzioWdmInstaller.exe）の同梱は次期以降のロードマップへ一旦見送り、
+    # 現在は安定実績の高い OBS 標準 VST3 プラグイン直接読込・オーディオIF内蔵ループバック・
+    # 外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）によるゼロ遅延連携をご案内しております。
 endif()
 
 option(VOCALGZZIO_BUILD_TESTS "Build the regression checks with CTest" OFF)

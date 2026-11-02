@@ -94,6 +94,23 @@ public:
 
     float currentDelay() const noexcept { return D; }   // 検査用
 
+    void copyRuntimeStateFrom (const TdPitchShifter& src) noexcept
+    {
+        if (buf.size() == src.buf.size() && ! buf.empty())
+            std::memcpy (buf.data(), src.buf.data(), sizeof (float) * buf.size());
+        mask      = src.mask;
+        w         = src.w;
+        D         = src.D;
+        fadeD     = src.fadeD;
+        fadePos   = src.fadePos;
+        fadeLen   = src.fadeLen;
+        ratioCur  = src.ratioCur;
+        ratioTgt  = src.ratioTgt;
+        period    = src.period;
+        periodTgt = src.periodTgt;
+        inEnv     = src.inEnv;
+    }
+
 private:
     float readAt (float delay) const noexcept
     {

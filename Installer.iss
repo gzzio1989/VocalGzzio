@@ -141,39 +141,15 @@ Source: "docs\style.css"; DestDir: "{app}\{#MyVst3Name}"; Components: vst3; Flag
 Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\VST3\{#MyVst3Name}\*"; \
     DestDir: "{app}\{#MyVst3Name}"; Components: vst3; \
     Flags: recursesubdirs createallsubdirs ignoreversion
-; 単体起動版 ＆ 専用仮想オーディオドライバ (VocalGzzio Driver (WDM))
+; 単体起動版（v5.5.0: Windows 11 の最新カーネル保護・署名審査への適合に万全を期すため、
+; 独自仮想ドライバの同梱・導入実行は次期以降のロードマップへ一旦見送り、現在は安定実績の高い
+; OBS 標準 VST3 プラグイン直接読込・オーディオIF内蔵ループバック・外部仮想ケーブル連携をご案内しております）
 Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\Standalone\{#MyExeName}"; \
     DestDir: "{#MyStandaloneDir}"; Components: standalone; Flags: ignoreversion
-Source: "{#MyBuildDir}\VocalGzzio_artefacts\Release\Standalone\VocalGzzioWdmInstaller.exe"; \
-    DestDir: "{#MyStandaloneDir}"; Components: standalone; Flags: ignoreversion
-#if FileExists("driver\VocalGzzioAudio.inf") && FileExists("driver\VocalGzzioAudio.cat") && FileExists("driver\VocalGzzioAudio.sys")
-Source: "driver\VocalGzzioAudio.inf"; \
-    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
-Source: "driver\VocalGzzioAudio.cat"; \
-    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
-Source: "driver\VocalGzzioAudio.sys"; \
-    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
-#endif
-#if FileExists("driver\syncroom.inf") && FileExists("driver\syncroom.cat") && FileExists("driver\syncroom.sys")
-Source: "driver\syncroom.inf"; \
-    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
-Source: "driver\syncroom.cat"; \
-    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
-Source: "driver\syncroom.sys"; \
-    DestDir: "{#MyStandaloneDir}\driver"; Components: standalone; Flags: ignoreversion
-#endif
 
 [Run]
-Filename: "{#MyStandaloneDir}\VocalGzzioWdmInstaller.exe"; Parameters: "--install --no-elevate"; \
-    Components: standalone; Flags: runhidden waituntilterminated
 Filename: "{#MyStandaloneDir}\{#MyExeName}"; Description: "{cm:LaunchAfterInstall}"; \
     Components: standalone; Flags: nowait postinstall skipifsilent shellexec
-
-#ifndef TrialBuild
-[UninstallRun]
-Filename: "{#MyStandaloneDir}\VocalGzzioWdmInstaller.exe"; Parameters: "--uninstall --no-elevate"; \
-    Components: standalone; Flags: runhidden waituntilterminated; RunOnceId: "UninstallVocalGzzioWdmDriver"
-#endif
 
 [Icons]
 Name: "{commonprograms}\{#MyAppName2}"; Filename: "{#MyStandaloneDir}\{#MyExeName}"; Components: standalone

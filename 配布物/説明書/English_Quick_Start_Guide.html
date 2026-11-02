@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>VocalGzzio v5.4.1 — English Quick Start Guide &amp; UI Cheat Sheet</title>
+  <title>VocalGzzio v5.5.0 — English Quick Start Guide &amp; UI Cheat Sheet</title>
   <style>
     :root {
       --bg: #fdfaf3;
@@ -73,10 +73,10 @@
   </style>
 </head>
 <body>
-  <h1>VocalGzzio v5.4.1 — English Quick Start Guide</h1>
+  <h1>VocalGzzio v5.5.0 — English Quick Start Guide</h1>
   <div class="note">
     <strong>💡 Built-in 100% Full English UI Mode (2 Clicks!):</strong><br>
-    Click <strong><code>文字・見た目</code></strong> (<em>Text &amp; Look</em>, top-right bar) and select <strong><code>ブランド</code></strong> (<em>Brand Mode</em>) to switch all buttons, knobs, 60 presets, and tooltips into <strong>100% English</strong>!<br><br>
+    Click <strong><code>文字・見た目</code></strong> (<em>Text &amp; Look</em>, top-right bar) and select <strong><code>ブランド</code></strong> (<em>Brand Mode</em>) to switch all buttons, knobs, Streaming Mini-Bar, 60 presets, and tooltips into <strong>100% English</strong>!<br><br>
     <strong>Online Visual UI Map &amp; Latest Guides:</strong>
     <a href="https://gzzio1989.github.io/apps/vocalgzzio/en.html">https://gzzio1989.github.io/apps/vocalgzzio/en.html</a><br>
     <strong>BOOTH Store Page (Free Trial &amp; Full Version):</strong>
@@ -86,14 +86,12 @@
   <h2>1. Get Sound in 60 Seconds (Choose A or B)</h2>
   <div class="grid">
     <div class="card">
-      <h3>[A] Standalone App (OBS / VRChat / Discord / Recording — No DAW Needed)</h3>
+      <h3>[A] OBS Studio / Streaming / Standalone App (No DAW Needed)</h3>
       <ol>
-        <li><strong>Recommended:</strong> Run the bundled all-in-one installer at the root of this ZIP folder (<code>VocalGzzio_Setup_v5.4.1.exe</code>, or <code>VocalGzzio_Trial_Setup_v5.4.1.exe</code> for the Free Trial). It installs the Standalone App, VST3, and WHQL-signed WDM Virtual Driver automatically. <em>(If Windows SmartScreen prompts "Windows protected your PC", click <strong>More info</strong> &rarr; <strong>Run anyway</strong>.)</em><br>
-            <em>(For portable/manual launch, open <code>VocalGzzio.exe</code> or <code>VocalGzzio Trial.exe</code> inside <code>単体起動アプリ</code>, where <code>VocalGzzioWdmInstaller.exe</code> is also included.)</em></li>
-        <li>Click <strong>🎤 うた自動</strong> (Auto-Setup: Sing) at the top bar and sing for 5 seconds.</li>
-        <li>In OBS, Discord, or VRChat microphone settings, select:<br>
-            <code>Line (VocalGzzio Driver (WDM))</code></li>
-        <li><em>Using hardware direct monitoring on your audio interface?</em> Turn ON <strong>🎧 自分の耳への返しミュート</strong> (Mute Self-Monitor) so you don't hear a doubled voice while OBS still receives the full processed audio.</li>
+        <li><strong>Recommended:</strong> Run the bundled installer at the root of this ZIP folder (<code>VocalGzzio_Setup_v5.5.0.exe</code>, or <code>VocalGzzio_Trial_Setup_v5.5.0.exe</code> for the Free Trial). It installs the Standalone App, VST3 Plug-in, and offline manuals cleanly. <em>(If Windows SmartScreen prompts "Windows protected your PC", click <strong>More info</strong> &rarr; <strong>Run anyway</strong>.)</em></li>
+        <li><strong>Option 1 — Direct OBS VST3 Filter (Easiest, zero virtual cables):</strong> In OBS Studio, right-click your Mic/Aux &rarr; <strong>Filters</strong> &rarr; <strong>+</strong> &rarr; <strong>VST 2.x/3.x Plug-in</strong> &rarr; select <code>VocalGzzio</code> (or <code>VocalGzzio Trial</code>).</li>
+        <li><strong>Option 2 — Standalone App + Loopback / External Virtual Cable:</strong> Launch <code>VocalGzzio</code> to use the built-in Karaoke BGM Player, 8 SE Pads, <code>📌 Mini-Bar</code>, and Background Global Hotkeys. Route to OBS/Discord/VRChat via your audio interface's built-in loopback or an external virtual cable (<code>VB-CABLE</code> / <code>Yamaha SYNCROOM Driver</code>).</li>
+        <li><em>Note on Virtual Driver Roadmap:</em> To ensure full compatibility with the latest Windows 11 kernel protections and signature verification, bundling of a proprietary virtual driver has been postponed to a future roadmap release in favor of OBS native VST3, hardware loopback, and proven external virtual cables.</li>
       </ol>
     </div>
     <div class="card">
@@ -107,7 +105,7 @@
     </div>
   </div>
 
-  <h2>2. Japanese-to-English UI Button Cheat Sheet</h2>
+  <h2>2. What's New in v5.5.0 &amp; Quick Button Cheat Sheet</h2>
   <table>
     <thead>
       <tr>
@@ -118,9 +116,39 @@
     </thead>
     <tbody>
       <tr>
+        <td><strong>🌐 アプリ音取込▼</strong></td>
+        <td><strong>App-Specific Karaoke Capture</strong></td>
+        <td><strong>New in v5.5.0!</strong> Directly capture Chrome/Edge (YouTube karaoke) or music player audio without virtual drivers or Discord bleed—supports real-time Vocal Remover, Key Shift &plusmn;6, Chord-Follow, and zero local headphone flanging.</td>
+      </tr>
+      <tr>
+        <td><strong>⚡ 自動計測 / ⏱️ 音ズレ補正 (&plusmn;300ms)</strong></td>
+        <td><strong>1-Click Auto Sync &amp; Offset</strong></td>
+        <td><strong>New in v5.5.0!</strong> Hold one headphone cup near the mic and click <code>⚡自動計測</code> to auto-measure round-trip + DSP latency, or fine-tune mic &harr; BGM timing in 1ms steps.</td>
+      </tr>
+      <tr>
+        <td><strong>🎹 伴奏コード追従スマートハモリ</strong></td>
+        <td><strong>Chord-Following Smart Harmony</strong></td>
+        <td><strong>New in v5.5.0!</strong> Tracks live backing chords (<code>[C] [Fm] [E7]</code>) and snaps clashing diatonic harmony notes onto consonant chord tones during borrowed chords and modulations.</td>
+      </tr>
+      <tr>
+        <td><strong>🎬 SNS動画▼ (.mp4)</strong></td>
+        <td><strong>1-Click SNS Visualizer Video Export</strong></td>
+        <td><strong>New in v5.5.0!</strong> Export 16:9 (X/YouTube) or 9:16 vertical (Shorts/TikTok/Reels) -14 LUFS mastered H.264/AAC <code>.mp4</code> videos (plus 50/50 Dry&rarr;Wet comparison) with zero external FFmpeg needed.</td>
+      </tr>
+      <tr>
+        <td><strong>📌 ミニバー</strong> / <strong>↗ 通常画面</strong></td>
+        <td><strong>Streaming Mini-Bar (520&times;115 px)</strong></td>
+        <td><strong>New in v5.5.0!</strong> Collapses the window into a compact <code>520&times;115 px</code> dockable bar with Always-on-Top pin, live IN/OUT meters, Sing &harr; MC, Cough Mute, Chorus Boost, SE trigger, BGM Key &plusmn;, and 30s Save.</td>
+      </tr>
+      <tr>
+        <td><strong>⌨️ 裏ホットキー: ON</strong></td>
+        <td><strong>Background Global Hotkeys (Standalone)</strong></td>
+        <td><strong>New in v5.5.0!</strong> Works while OBS/browser/games or Japanese IME have focus: <code>Ctrl+Shift+M</code> (Cough Mute), Hold <code>F9</code> (Push-to-Mute), <code>Ctrl+Shift+T</code> (Sing &harr; MC), <code>Ctrl+Shift+S</code> (Chorus Boost), <code>Ctrl+Shift+R</code> (Save Last 30s WAV).</td>
+      </tr>
+      <tr>
         <td><strong>🎤 うた自動</strong> / <strong>💬 トーク自動</strong></td>
         <td><strong>Auto-Setup (Sing / Talk)</strong></td>
-        <td><strong>Start here!</strong> Sing or speak for 5 seconds to auto-set optimal EQ, compression, and de-esser for your voice and mic.</td>
+        <td>Sing or speak for 5 seconds to auto-set optimal EQ, compression, and de-esser for your voice and mic.</td>
       </tr>
       <tr>
         <td><strong>🎤 歌枠 ⇄ 💬 雑談MC</strong></td>
@@ -128,72 +156,21 @@
         <td>1-click toggle between lush vocal reverb for songs and crisp, dry voice for chatting between songs.</td>
       </tr>
       <tr>
-        <td><strong>👂 押して原音と比較</strong> / <strong>初期化</strong></td>
-        <td><strong>Hold to Compare (Dry/Wet) / Reset</strong></td>
-        <td>Hold to compare raw unprocessed mic input against processed sound; click <code>初期化</code> to reset.</td>
-      </tr>
-      <tr>
-        <td><strong>保存</strong> / <strong>読込</strong></td>
-        <td><strong>Save / Load Preset</strong></td>
-        <td>Save or load your custom vocal preset (Full Version also auto-restores your exact state on launch).</td>
-      </tr>
-      <tr>
-        <td><strong>01 整える</strong> &rarr; <strong>じどう学習</strong></td>
-        <td><strong>Zone 01: Clean Up &rarr; Auto Noise Learn</strong></td>
-        <td>Stay quiet for a second so it learns your room/PC fan noise, plus Gate (<code>無音時のカット</code>), Low-Cut (<code>低音カット</code>), De-Mud (<code>こもり</code>), and <strong>🏠 部屋鳴り消し</strong> (0ms Room De-Reverb).</td>
-      </tr>
-      <tr>
-        <td><strong>ARGON 3D (倍音 / 声芯 / 空気 / 立体)</strong></td>
-        <td><strong>3D Tone Sphere (Velvet / Focus / Silk / Halo)</strong></td>
-        <td>Drag the central 3D orb or click the 4 style presets (<code>★VELVET</code> / <code>♥ASMR</code> / <code>✦CRYSTAL</code> / <code>◆HALO</code>) to shape warmth, presence, air, and width.</td>
-      </tr>
-      <tr>
-        <td><strong>02 声をつくる</strong></td>
-        <td><strong>Zone 02: Shape Voice, Pitch &amp; Expression</strong></td>
-        <td>Includes Leveler (<code>音量そろえ</code>), De-Esser (<code>サ行おさえ</code>), Brightness (<code>声の明るさ</code>), Warmth (<code>厚み・歪み</code>), <strong>0.08ms Pitch Correction (<code>ピッチ補正</code>)</strong>, and <strong>5-Voice Unison (<code>5人ユニゾン</code>)</strong>.</td>
-      </tr>
-      <tr>
         <td><strong>〰️ 語尾ビブラート / 🗣️ 母音フォーム統一 / ⚡ 歌い出し / 🌉 ミックス</strong></td>
-        <td><strong>v5.4.0 Vocal Expression Engines</strong></td>
-        <td>Adds natural 5.5Hz tail vibrato on long notes (&gt;180ms), balances tight "ee/eh" vowels with chest warmth, shapes the first 35ms attack, and bridges missing harmonics across high register breaks.</td>
+        <td><strong>v5.4 Vocal Expression Engines</strong></td>
+        <td>Adds natural 5.5Hz tail vibrato on long notes (&gt;180ms), balances tight "ee/eh" vowels, shapes the first 35ms attack, and bridges missing harmonics across register breaks (folded cleanly under <code>✨ こだわり詳細</code>).</td>
       </tr>
       <tr>
-        <td><strong>🪶 ささやき浮上 / 💎 倍音ドルビーAエアー / 🎯 音程追従 / 🎧 歌い手モニター補正</strong></td>
-        <td><strong>v5.3.0 Lifter, Air, Sweet Spot &amp; Cue Monitor</strong></td>
-        <td>Lifts quiet whisper details (+4.5dB), adds vowel-only Dolby-A air, tracks pitch ($f_0$) to keep high notes thick, and removes 240Hz skull bone-conduction mud in your headphones only.</td>
-      </tr>
-      <tr>
-        <td><strong>🕳️ 声ポケット掘り / 🎢 伴奏連動ライダー</strong></td>
-        <td><strong>v5.2.0 Spectral Unmasker &amp; BGM Vocal Rider</strong></td>
-        <td>Carves up to -5.0 dB in the backing track's Mid channel at your vocal frequencies only while you sing, and rides your vocal fader (-2.5 to +3.5 dB) in choruses.</td>
-      </tr>
-      <tr>
-        <td><strong>03 空間をつくる</strong></td>
-        <td><strong>Zone 03: Reverb &amp; Space</strong></td>
-        <td>Reverb Amount (<code>残響の量</code>), Length (<code>残響の長さ</code>), Echo (<code>やまびこの量</code>), Stereo Width (<code>左右の広がり</code>), Tempo Fit (<code>テンポフィット</code>), Zero-Lag Mode (<code>低遅延モード</code>), and Custom IR Loader (<code>IR切替・読込</code>).</td>
+        <td><strong>🕳️ 声ポケット掘り / 🏠 部屋鳴り消し / 🎧 歌い手モニター補正</strong></td>
+        <td><strong>Spectral Unmasker, 0ms De-Reverb &amp; Cue Monitor</strong></td>
+        <td>Carves up to -5.0 dB in the backing track's Mid channel while you sing, removes 460Hz bedroom boxiness in 0.0ms, and subtracts 240Hz bone-conduction mud in headphones only.</td>
       </tr>
       <tr>
         <td><strong>🎵 BGM・録音</strong> &rarr; <strong>✨ ボーカル除去</strong></td>
         <td><strong>BGM Player, 1-Click Vocal Remover &amp; 3-Stem WAV Recorder</strong></td>
-        <td>Load any song file, strip center vocals in 1 click, shift key (±6 semitones with automatic pitch-correction sync), and export 3 WAV files at once (<code>-14 LUFS Full Mix</code> + <code>Wet Vocal</code> + <code>Dry Vocal</code>).</td>
-      </tr>
-      <tr>
-        <td><strong>★ サビON!</strong> &amp; <strong>♪拍手 / ✦キラ / ●ドラム / ◆ベル + 自作SE 4枠</strong></td>
-        <td><strong>1-Click/Auto Chorus Boost &amp; 8 Live SE Pads</strong></td>
-        <td>Boosts vocal presence and stereo reverb during choruses, plus 4 built-in sound effects and 4 custom user audio file slots.</td>
-      </tr>
-      <tr>
-        <td><strong>🛠 cluster・通話 音消え一発修復</strong></td>
-        <td><strong>1-Click VR / Voice Chat Audio Fix</strong></td>
-        <td>Fixes Windows communications ducking, sample-rate locks, and missing audio in VRChat, cluster, and Discord.</td>
+        <td>Load any song file, strip center vocals in 1 click, shift key (&plusmn;6 semitones with automatic pitch-correction sync), and export 3 WAV files at once (<code>-14 LUFS Full Mix</code> + <code>Wet Vocal</code> + <code>Dry Vocal</code>).</td>
       </tr>
     </tbody>
   </table>
-
-  <h2>3. Troubleshooting</h2>
-  <ul>
-    <li><strong>Other apps (VRChat / Discord / Browser) lose sound on Windows:</strong> Click <code>🛠 cluster・通話 音消え一発修復</code> or <code>🌐 全アプリ共存・共有モード</code> at the top of the screen.</li>
-    <li><strong>Loud buzzing noise on Yamaha AG03 / AG06 when switching apps:</strong> Set sample rate to <code>48000 Hz</code> and buffer size to <code>192</code> or <code>256 samples</code> in Yamaha Steinberg USB Driver Control Panel, or read our full English guide: <a href="https://gzzio1989.github.io/apps/vocalgzzio/guide-yamaha-ag03-buzz-fix-en.html">Fixing the Yamaha AG03/AG06 Buzz Bug</a>.</li>
-  </ul>
 </body>
 </html>

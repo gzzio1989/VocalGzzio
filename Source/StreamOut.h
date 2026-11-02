@@ -143,7 +143,7 @@ public:
 
     static bool installVocalGzzioWdmDriver()
     {
-       #if JUCE_WINDOWS
+       #if JUCE_WINDOWS && VOCALGZZIO_BUNDLE_CUSTOM_DRIVER
         const auto exeDir = juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory();
         juce::File installer = exeDir.getChildFile ("VocalGzzioWdmInstaller.exe");
         if (! installer.existsAsFile())
@@ -211,6 +211,7 @@ public:
         fillSm = (double) target;
         lastOut[0] = lastOut[1] = 0.0f;
         needCrossfade = false;
+        refilling = false;
         ratioSm = hostSr / juce::jmax (8000.0, devSr);
         for (auto& i : interp) i.reset();
         underruns.store (0);
@@ -285,6 +286,41 @@ public:
         fifo.finishedWrite (sz1 + sz2);
     }
 
+    //== 自動回帰テスト用ヘッドレス駆動API（実オーディオデバイス不要で本体ロジックをそのまま検証） ==
+    void startHeadlessForTesting (double hostSampleRate, double devSampleRate, int devBufSamples)
+    {
+        stop();
+        hostSr = hostSampleRate > 0.0 ? hostSampleRate : 48000.0;
+        devSr  = devSampleRate  > 0.0 ? devSampleRate  : hostSr;
+        lastDevBufSamples = juce::jmax (128, devBufSamples);
+        fifo.reset();
+        ring.clear();
+        target = juce::jlimit (512, ringLen / 4, juce::jmax ((int) (hostSr * 0.035), lastDevBufSamples * 3));
+        {
+            int s1, sz1, s2, sz2;
+            fifo.prepareToWrite (target, s1, sz1, s2, sz2);
+            fifo.finishedWrite (sz1 + sz2);
+        }
+        fillSm = (double) target;
+        lastOut[0] = lastOut[1] = 0.0f;
+        needCrossfade = false;
+        refilling = false;
+        ratioSm = juce::jlimit (0.2, 4.5, hostSr / juce::jmax (8000.0, devSr));
+        for (auto& i : interp) i.reset();
+        underruns.store (0);
+        active.store (true);
+    }
+
+    void pullForTesting (float* outL, float* outR, int numSamples) noexcept
+    {
+        float* outs[2] = { outL, outR };
+        juce::AudioIODeviceCallbackContext ctx {};
+        audioDeviceIOCallbackWithContext (nullptr, 0, outs, 2, numSamples, ctx);
+    }
+
+    int getFifoReadyForTesting() const noexcept  { return fifo.getNumReady(); }
+    int getTargetFillForTesting() const noexcept { return target; }
+
 private:
     void audioDeviceAboutToStart (juce::AudioIODevice* dev) override
     {
@@ -299,6 +335,7 @@ private:
         }
         lastOut[0] = lastOut[1] = 0.0f;
         needCrossfade = false;
+        refilling = false;
         ratioSm = juce::jlimit (0.2, 4.5, hostSr / juce::jmax (8000.0, devSr));
     }
 
@@ -327,6 +364,30 @@ private:
             fill = fifo.getNumReady();
             fillSm = (double) target;
             for (auto& i : interp) i.reset();
+            refilling = false;
+            needCrossfade = true;
+        }
+
+        // アンダーラン発生後のクッション再構築待機:
+        // 半端な在庫のまま即再開すると安全マージンが半分以下に削られたまま綱渡りになり連続ジッタで再発するため、
+        // 直前値を滑らかに減衰させながら目標クッション(target)まで貯め直してクロスフェード復帰する。
+        if (refilling)
+        {
+            if (fill < target)
+            {
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    lastOut[0] = (std::abs (lastOut[0]) > 1.0e-6f) ? (lastOut[0] * 0.965f) : 0.0f;
+                    lastOut[1] = (std::abs (lastOut[1]) > 1.0e-6f) ? (lastOut[1] * 0.965f) : 0.0f;
+                    if (out[0] != nullptr) out[0][i] = lastOut[0];
+                    if (numOut > 1 && out[1] != nullptr) out[1][i] = lastOut[1];
+                }
+                return;
+            }
+            refilling = false;
+            fillSm = (double) fill;
+            ratioSm = juce::jlimit (0.2, 4.5, hostSr / juce::jmax (8000.0, devSr));
+            for (auto& i : interp) i.reset();
             needCrossfade = true;
         }
 
@@ -347,16 +408,16 @@ private:
         {
             underruns.fetch_add (1);
             // 在庫切れ時: いきなり0埋めすると境界でチリチリ・プチノイズが出るため、
-            // 直前サンプルから滑らかに減衰させつつ次回分の安全クッションを回復する
+            // 直前サンプルから滑らかに減衰させつつ refilling モードへ入り target まで安全クッションを完全回復する
             for (int i = 0; i < numSamples; ++i)
             {
-                lastOut[0] *= 0.985f;
-                lastOut[1] *= 0.985f;
+                lastOut[0] = (std::abs (lastOut[0]) > 1.0e-6f) ? (lastOut[0] * 0.965f) : 0.0f;
+                lastOut[1] = (std::abs (lastOut[1]) > 1.0e-6f) ? (lastOut[1] * 0.965f) : 0.0f;
                 if (out[0] != nullptr) out[0][i] = lastOut[0];
                 if (numOut > 1 && out[1] != nullptr) out[1][i] = lastOut[1];
             }
             for (auto& i : interp) i.reset();
-            fillSm = (double) target;
+            refilling = true;
             needCrossfade = true;
             return;
         }
@@ -442,6 +503,7 @@ private:
     int    target = 1680, lastDevBufSamples = 480;
     float  lastOut[2] { 0.0f, 0.0f };
     bool   needCrossfade = false;
+    bool   refilling = false;
     juce::String deviceName_, lastError;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StreamOut)

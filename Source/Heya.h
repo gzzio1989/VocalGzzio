@@ -41,6 +41,8 @@
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
+#include <atomic>
+#include <mutex>
 
 namespace heya
 {
@@ -106,14 +108,6 @@ public:
     void prepare (int fftOrder)
     {
         order = fftOrder; size = 1 << order;
-        cosTab.resize ((size_t) size / 2);
-        sinTab.resize ((size_t) size / 2);
-        for (int i = 0; i < size / 2; ++i)
-        {
-            const double a = -2.0 * 3.14159265358979323846 * i / size;
-            cosTab[(size_t) i] = (float) std::cos (a);
-            sinTab[(size_t) i] = (float) std::sin (a);
-        }
         rev.resize ((size_t) size);
         for (int i = 0; i < size; ++i)
         {
@@ -121,43 +115,144 @@ public:
             for (int b = 0; b < order; ++b) r = (r << 1) | ((i >> b) & 1);
             rev[(size_t) i] = r;
         }
+        size_t totalTw = 0;
+        for (int len = 8; len <= size; len <<= 1) totalTw += (size_t) (len >> 1);
+        stageCos.resize (totalTw);
+        stageSin.resize (totalTw);
+        size_t pos = 0;
+        for (int len = 8; len <= size; len <<= 1)
+        {
+            const int half = len >> 1;
+            const double baseAng = -2.0 * 3.14159265358979323846 / (double) len;
+            for (int j = 0; j < half; ++j)
+            {
+                const double a = baseAng * (double) j;
+                stageCos[pos + (size_t) j] = (float) std::cos (a);
+                stageSin[pos + (size_t) j] = (float) std::sin (a);
+            }
+            pos += (size_t) half;
+        }
     }
 
-    // その場で複素FFT。re/im は size 要素。inverse は共役トリックではなく符号反転表を使わず、
-    // 呼び出し側が im の符号を反転して呼ぶのではなく inverse フラグで回す（読みやすさ優先）。
-    void run (float* re, float* im, bool inverse) const noexcept
+    // その場で複素FFT。ステージ連続配置の回転因子と len=2/4 乗算ゼロ特化段で SIMD ベクトル化を引き出す。
+    void run (float* __restrict re, float* __restrict im, bool inverse) const noexcept
     {
-        for (int i = 0; i < size; ++i)
+        const int n = size;
+        const int* __restrict rv = rev.data();
+        for (int i = 0; i < n; ++i)
         {
-            const int r = rev[(size_t) i];
-            if (r > i) { std::swap (re[i], re[r]); std::swap (im[i], im[r]); }
+            const int r = rv[i];
+            if (r > i)
+            {
+                const float tr = re[i]; re[i] = re[r]; re[r] = tr;
+                const float ti = im[i]; im[i] = im[r]; im[r] = ti;
+            }
         }
-        for (int len = 2; len <= size; len <<= 1)
+        if (n >= 2)
         {
-            const int half = len >> 1, step = size / len;
-            for (int i = 0; i < size; i += len)
-                for (int j = 0; j < half; ++j)
+            for (int i = 0; i < n; i += 2)
+            {
+                const float ar = re[i],     ai = im[i];
+                const float br = re[i + 1], bi = im[i + 1];
+                re[i]     = ar + br; im[i]     = ai + bi;
+                re[i + 1] = ar - br; im[i + 1] = ai - bi;
+            }
+        }
+        if (n >= 4)
+        {
+            if (! inverse)
+            {
+                for (int i = 0; i < n; i += 4)
                 {
-                    const int ti = j * step;
-                    const float wr = cosTab[(size_t) ti];
-                    const float wi = inverse ? -sinTab[(size_t) ti] : sinTab[(size_t) ti];
-                    const int a = i + j, b = a + half;
-                    const float xr = re[b] * wr - im[b] * wi;
-                    const float xi = re[b] * wi + im[b] * wr;
-                    re[b] = re[a] - xr; im[b] = im[a] - xi;
-                    re[a] += xr;        im[a] += xi;
+                    const float ar0 = re[i],     ai0 = im[i];
+                    const float br0 = re[i + 2], bi0 = im[i + 2];
+                    re[i]     = ar0 + br0; im[i]     = ai0 + bi0;
+                    re[i + 2] = ar0 - br0; im[i + 2] = ai0 - bi0;
+
+                    const float ar1 = re[i + 1], ai1 = im[i + 1];
+                    const float br1 = re[i + 3], bi1 = im[i + 3];
+                    re[i + 1] = ar1 + bi1; im[i + 1] = ai1 - br1;
+                    re[i + 3] = ar1 - bi1; im[i + 3] = ai1 + br1;
                 }
+            }
+            else
+            {
+                for (int i = 0; i < n; i += 4)
+                {
+                    const float ar0 = re[i],     ai0 = im[i];
+                    const float br0 = re[i + 2], bi0 = im[i + 2];
+                    re[i]     = ar0 + br0; im[i]     = ai0 + bi0;
+                    re[i + 2] = ar0 - br0; im[i + 2] = ai0 - bi0;
+
+                    const float ar1 = re[i + 1], ai1 = im[i + 1];
+                    const float br1 = re[i + 3], bi1 = im[i + 3];
+                    re[i + 1] = ar1 - bi1; im[i + 1] = ai1 + br1;
+                    re[i + 3] = ar1 + bi1; im[i + 3] = ai1 - br1;
+                }
+            }
         }
-        if (inverse)
+        size_t twPos = 0;
+        if (! inverse)
         {
-            const float g = 1.0f / (float) size;
-            for (int i = 0; i < size; ++i) { re[i] *= g; im[i] *= g; }
+            for (int len = 8; len <= n; len <<= 1)
+            {
+                const int half = len >> 1;
+                const float* __restrict wc = stageCos.data() + twPos;
+                const float* __restrict ws = stageSin.data() + twPos;
+                for (int i = 0; i < n; i += len)
+                {
+                    float* __restrict r0 = re + i;
+                    float* __restrict i0 = im + i;
+                    float* __restrict r1 = r0 + half;
+                    float* __restrict i1 = i0 + half;
+                    for (int j = 0; j < half; ++j)
+                    {
+                        const float wr = wc[j], wi = ws[j];
+                        const float br = r1[j], bi = i1[j];
+                        const float xr = br * wr - bi * wi;
+                        const float xi = br * wi + bi * wr;
+                        const float ar = r0[j], ai = i0[j];
+                        r0[j] = ar + xr; i0[j] = ai + xi;
+                        r1[j] = ar - xr; i1[j] = ai - xi;
+                    }
+                }
+                twPos += (size_t) half;
+            }
+        }
+        else
+        {
+            for (int len = 8; len <= n; len <<= 1)
+            {
+                const int half = len >> 1;
+                const float* __restrict wc = stageCos.data() + twPos;
+                const float* __restrict ws = stageSin.data() + twPos;
+                for (int i = 0; i < n; i += len)
+                {
+                    float* __restrict r0 = re + i;
+                    float* __restrict i0 = im + i;
+                    float* __restrict r1 = r0 + half;
+                    float* __restrict i1 = i0 + half;
+                    for (int j = 0; j < half; ++j)
+                    {
+                        const float wr = wc[j], wi = ws[j];
+                        const float br = r1[j], bi = i1[j];
+                        const float xr = br * wr + bi * wi;
+                        const float xi = bi * wr - br * wi;
+                        const float ar = r0[j], ai = i0[j];
+                        r0[j] = ar + xr; i0[j] = ai + xi;
+                        r1[j] = ar - xr; i1[j] = ai - xi;
+                    }
+                }
+                twPos += (size_t) half;
+            }
+            const float g = 1.0f / (float) n;
+            for (int i = 0; i < n; ++i) { re[i] *= g; im[i] *= g; }
         }
     }
 
     int order = 0, size = 0;
 private:
-    std::vector<float> cosTab, sinTab;
+    std::vector<float> stageCos, stageSin;
     std::vector<int> rev;
 };
 
@@ -212,14 +307,21 @@ struct GeneratedIr
 {
     std::vector<float> L, R;   // 部屋のインパルス応答（直接音は含まない＝ドライはドライのまま）
     int lengthSamples = 0;
+    // 共鳴安全弁FFT用の作業バッファ（事前確保されていれば動的ヒープ確保ゼロで再利用）
+    std::vector<float> capRe, capIm;
+    std::vector<Fft> capFfts;
 };
 
 inline void generateRoomIr (int roomIndex, double sr, GeneratedIr& out)
 {
     const RoomSpec& spec = rooms()[(size_t) roomIndex];
     const int N = std::max (256, (int) std::lround (spec.tailSec * sr));
-    out.L.assign ((size_t) N, 0.0f);
-    out.R.assign ((size_t) N, 0.0f);
+    if ((int) out.L.capacity() < N) out.L.reserve ((size_t) N);
+    if ((int) out.R.capacity() < N) out.R.reserve ((size_t) N);
+    out.L.resize ((size_t) N);
+    out.R.resize ((size_t) N);
+    std::fill (out.L.begin(), out.L.end(), 0.0f);
+    std::fill (out.R.begin(), out.R.end(), 0.0f);
     out.lengthSamples = N;
 
     const float c = 343.0f;                    // 音速 m/s
@@ -341,19 +443,26 @@ inline void generateRoomIr (int roomIndex, double sr, GeneratedIr& out)
 
     // ---- 5) 共鳴の安全弁 -----------------------------------------------------
     //   固い小部屋は本物でも1音だけワンと鳴る。味は残すが、事故になる高さは削る。
-    //   判定は願望でなく |H(f)| の実測（FFT）。
+    //   判定は願望でなく |H(f)| の実測（FFT）。作業領域が事前確保済みなら動的確保ゼロ。
     {
         int ord = 1; while ((1 << ord) < N * 2) ++ord;
         const int NF = 1 << ord;
-        std::vector<float> re ((size_t) NF, 0.0f), im ((size_t) NF, 0.0f);
-        Fft f; f.prepare (ord);
-        for (int n = 0; n < N; ++n) re[(size_t) n] = out.L[(size_t) n];
-        f.run (re.data(), im.data(), false);
+        if ((int) out.capRe.capacity() < NF) out.capRe.reserve ((size_t) NF);
+        if ((int) out.capIm.capacity() < NF) out.capIm.reserve ((size_t) NF);
+        out.capRe.resize ((size_t) NF);
+        out.capIm.resize ((size_t) NF);
+        std::fill (out.capRe.begin(), out.capRe.end(), 0.0f);
+        std::fill (out.capIm.begin(), out.capIm.end(), 0.0f);
+        Fft localFft;
+        Fft& f = (ord >= 1 && ord < (int) out.capFfts.size()) ? out.capFfts[(size_t) ord] : localFft;
+        if (f.order != ord) f.prepare (ord);
+        for (int n = 0; n < N; ++n) out.capRe[(size_t) n] = out.L[(size_t) n];
+        f.run (out.capRe.data(), out.capIm.data(), false);
         double hMax = 0.0;
         const int kLo = (int) (80.0 * NF / sr), kHi = (int) (12000.0 * NF / sr);
         for (int k = std::max (1, kLo); k < std::min (NF / 2, kHi); ++k)
-            hMax = std::max (hMax, std::sqrt ((double) re[(size_t) k] * re[(size_t) k]
-                                            + (double) im[(size_t) k] * im[(size_t) k]));
+            hMax = std::max (hMax, std::sqrt ((double) out.capRe[(size_t) k] * out.capRe[(size_t) k]
+                                            + (double) out.capIm[(size_t) k] * out.capIm[(size_t) k]));
         const double cap = 3.5;   // ≈ +10.9dB
         if (hMax > cap)
         {
@@ -383,17 +492,19 @@ public:
     //   上半分は「書いているが誰も読まない」死んだメモリだった。
     //   257/512 に詰めて、記憶容量をほぼ半分にする。音は1サンプルも変わらない。
     static constexpr int NBINS = NFFT / 2 + 1;   // 257
+    // カスタムIR用トリプルバッファ・スロット（鳩の巣原理により curRoom/pendingRoom と絶対に衝突しない空きスロットを保証）
     static constexpr int kCustomSlotA = kNumRooms;
     static constexpr int kCustomSlotB = kNumRooms + 1;
+    static constexpr int kCustomSlotC = kNumRooms + 2;
 
-    // 全部屋ぶんのスペクトルを prepare で作り置き（または lazyRooms=true で遅延構築）。
-    // 事前確保は prepare で済ませるため、実行時の切替・オンデマンド生成はヒープ確保ゼロ。
+    // 全部屋ぶんのスペクトルを prepare で作り置き（またはプロセス内サンプルレート別キャッシュから即複写）。
+    // 事前確保は prepare で済ませるため、実行時の部屋切替・カスタムIR切替はヒープ確保もストールもゼロ。
     void prepare (double sampleRate, int /*maxBlock*/, bool lazyRooms = false)
     {
         if (std::abs (sampleRate - sr) < 0.5 && ! roomData.empty())
         {
             if (! lazyRooms)
-                for (int r = 0; r < kNumRooms; ++r) ensureRoomBuilt (r);
+                populateBuiltInRoomsFromCache (sr);
             reset();
             return;
         }
@@ -404,15 +515,23 @@ public:
         fft.prepare (FFT_ORDER);
 
         roomData.clear();
-        roomData.resize (kNumRooms + 2);
+        roomData.resize (kNumRooms + 3);
         roomBuilt.fill (false);
         maxParts = std::max (1, ((int) std::lround (3.0 * sr) - B + B - 1) / B);
 
         int maxIrLen = 256;
+        int maxCapNf = 512;
+        if (lazyIr.capFfts.size() < 22)
+            lazyIr.capFfts.resize (22);
         for (int room = 0; room < kNumRooms; ++room)
         {
             const int nRoom = std::max (256, (int) std::lround (rooms()[(size_t) room].tailSec * sr));
             maxIrLen = std::max (maxIrLen, nRoom);
+            int ord = 1; while ((1 << ord) < nRoom * 2) ++ord;
+            maxCapNf = std::max (maxCapNf, 1 << ord);
+            if (ord >= 1 && ord < (int) lazyIr.capFfts.size() && lazyIr.capFfts[(size_t) ord].order != ord)
+                lazyIr.capFfts[(size_t) ord].prepare (ord);
+
             const int npRoom = std::max (1, ( std::max (0, nRoom - B) + B - 1 ) / B);
             maxParts = std::max (maxParts, npRoom);
             RoomData& rd = roomData[(size_t) room];
@@ -422,20 +541,21 @@ public:
             rd.spec.assign ((size_t) npRoom * NBINS * 4, 0.0f);
         }
 
-        // オンデマンド構築用の作業バッファも prepare で一括確保（動的生成時のヒープ確保をゼロにする）
+        // オンデマンド構築用の作業バッファも共鳴安全弁FFT領域ごと prepare で一括確保（動的確保を完全ゼロにする）
         lazyIr.L.assign ((size_t) maxIrLen, 0.0f);
         lazyIr.R.assign ((size_t) maxIrLen, 0.0f);
+        lazyIr.capRe.assign ((size_t) maxCapNf, 0.0f);
+        lazyIr.capIm.assign ((size_t) maxCapNf, 0.0f);
         lazyPartRe.assign ((size_t) NFFT, 0.0f);
         lazyPartIm.assign ((size_t) NFFT, 0.0f);
 
         if (! lazyRooms)
         {
-            for (int room = 0; room < kNumRooms; ++room)
-                ensureRoomBuilt (room);
+            populateBuiltInRoomsFromCache (sr);
         }
 
-        // カスタムIR用ダブルバッファ・スロットも事前確保（実行時の再確保を防ぐ）
-        for (int s = kCustomSlotA; s <= kCustomSlotB; ++s)
+        // カスタムIR用トリプルバッファ・スロットも事前確保（UIからの非同期ロード時の再確保・競合を防ぐ）
+        for (int s = kCustomSlotA; s <= kCustomSlotC; ++s)
         {
             RoomData& crd = roomData[(size_t) s];
             crd.headRevL.assign ((size_t) B, 0.0f);
@@ -459,18 +579,22 @@ public:
         hopL.assign ((size_t) (2 * B), 0.0f);  hopR.assign ((size_t) (2 * B), 0.0f);
         tailL.assign ((size_t) B, 0.0f);       tailR.assign ((size_t) B, 0.0f);
 
-        if (hasCustom && ! savedCustomL.empty())
+        if (hasCustom.load (std::memory_order_acquire) && ! savedCustomL.empty())
         {
-            buildRoomSlot (roomData[(size_t) activeCustomSlot],
-                           savedCustomL.data(), savedCustomR.data(), (int) savedCustomL.size());
-            curRoom = activeCustomSlot;
-            pendingRoom = activeCustomSlot;
+            const int cSlot = activeCustomSlot.load (std::memory_order_acquire);
+            buildRoomSlot (roomData[(size_t) cSlot],
+                           savedCustomL.data(), savedCustomR.data(), (int) savedCustomL.size(),
+                           lazyPartRe, lazyPartIm);
+            curRoom = cSlot;
+            pendingRoom = cSlot;
         }
         else
         {
             curRoom = lastBuiltInRoom;
             pendingRoom = lastBuiltInRoom;
         }
+        audioCurRoom.store (curRoom, std::memory_order_relaxed);
+        audioPendingRoom.store (pendingRoom, std::memory_order_relaxed);
         sizeAmt = 1.0f; sizeDirty = true;
         reset();
     }
@@ -493,20 +617,35 @@ public:
         std::fill (tailR.begin(), tailR.end(), 0.0f);
         histPos = 0; hopPos = 0; fdlPos = 0; spreadPart = 1;
 
+        if (! roomData.empty())
+        {
+            const int target = hasCustom.load (std::memory_order_acquire)
+                             ? activeCustomSlot.load (std::memory_order_acquire)
+                             : lastBuiltInRoom;
+            pendingRoom = target;
+        }
         // ★入れ替え途中だったら、ここで**やりきる**こと。
         curRoom = pendingRoom;
+        audioCurRoom.store (curRoom, std::memory_order_relaxed);
+        audioPendingRoom.store (pendingRoom, std::memory_order_relaxed);
         fadeGain = 1.0f; fadeTarget = 1.0f;
         if (! partGain.empty()) updatePartGains (true);
     }
 
-    /** 指定された部屋(0..5)のIRが未構築なら、その場で1部屋だけ遅延構築する。 */
-    void ensureRoomBuilt (int room)
+    /** 指定された部屋(0..5)のIRが未構築なら、キャッシュ複写または事前確保済みバッファで構築する（動的確保ゼロ）。 */
+    void ensureRoomBuilt (int room) noexcept
     {
         if (roomData.empty() || sr <= 0.0) return;
         const int rClamped = std::min (kNumRooms - 1, std::max (0, room));
         if (roomBuilt[(size_t) rClamped]) return;
+        if (tryCopySingleRoomFromCache (sr, rClamped, roomData[(size_t) rClamped]))
+        {
+            roomBuilt[(size_t) rClamped] = true;
+            return;
+        }
         generateRoomIr (rClamped, sr, lazyIr);
-        buildRoomSlot (roomData[(size_t) rClamped], lazyIr.L.data(), lazyIr.R.data(), lazyIr.lengthSamples);
+        buildRoomSlot (roomData[(size_t) rClamped], lazyIr.L.data(), lazyIr.R.data(), lazyIr.lengthSamples,
+                       lazyPartRe, lazyPartIm);
         roomBuilt[(size_t) rClamped] = true;
     }
 
@@ -520,12 +659,10 @@ public:
     void setRoom (int room) noexcept
     {
         lastBuiltInRoom = std::min (kNumRooms - 1, std::max (0, room));
-        const int target = hasCustom ? activeCustomSlot : lastBuiltInRoom;
-        if (target != curRoom && target != pendingRoom) { pendingRoom = target; fadeTarget = 0.0f; }
-        else if (target == curRoom && pendingRoom != curRoom) { pendingRoom = curRoom; fadeTarget = 1.0f; }
+        syncTargetRoom();
     }
 
-    /** 外部ファイル等のカスタム応答波形を読み込み、10msフェードで安全に切り替える。 */
+    /** 外部ファイル等のカスタム応答波形を読み込み、ロックフリー三面スロット経由で10msフェード切替する。 */
     bool loadCustomIr (const float* irL, const float* irR, int numSamples)
     {
         if (irL == nullptr || numSamples <= 0) return false;
@@ -549,32 +686,43 @@ public:
             savedCustomR[(size_t) n] *= normG;
         }
 
-        if (roomData.size() >= (size_t) (kCustomSlotB + 1))
+        if (roomData.size() >= (size_t) (kCustomSlotC + 1))
         {
-            const int nextSlot = (curRoom == kCustomSlotA || pendingRoom == kCustomSlotA)
-                ? kCustomSlotB : kCustomSlotA;
-            buildRoomSlot (roomData[(size_t) nextSlot], savedCustomL.data(), savedCustomR.data(), N);
-            activeCustomSlot = nextSlot;
-            hasCustom = true;
-            pendingRoom = activeCustomSlot;
-            fadeTarget = 0.0f;
+            // 音声スレッドが現在読んでいる curRoom / pendingRoom のどちらとも衝突しない空きスロットを選ぶ
+            const int inUseCur  = audioCurRoom.load (std::memory_order_acquire);
+            const int inUsePend = audioPendingRoom.load (std::memory_order_acquire);
+            const int prevAct   = activeCustomSlot.load (std::memory_order_relaxed);
+            int nextSlot = kCustomSlotA;
+            bool picked = false;
+            for (int s = kCustomSlotA; s <= kCustomSlotC; ++s)
+            {
+                if (s != inUseCur && s != inUsePend && s != prevAct) { nextSlot = s; picked = true; break; }
+            }
+            if (! picked)
+            {
+                for (int s = kCustomSlotA; s <= kCustomSlotC; ++s)
+                    if (s != inUseCur && s != inUsePend) { nextSlot = s; break; }
+            }
+            std::vector<float> customRe ((size_t) NFFT, 0.0f), customIm ((size_t) NFFT, 0.0f);
+            buildRoomSlot (roomData[(size_t) nextSlot], savedCustomL.data(), savedCustomR.data(), N,
+                           customRe, customIm);
+            activeCustomSlot.store (nextSlot, std::memory_order_release);
+            hasCustom.store (true, std::memory_order_release);
         }
         else
         {
-            hasCustom = true;
+            hasCustom.store (true, std::memory_order_release);
         }
         return true;
     }
 
-    /** カスタム応答を解除し、内蔵の部屋へフェード復帰する。 */
+    /** カスタム応答を解除し、内蔵の部屋へフェード復帰する（UIスレッドからロックフリーで通知）。 */
     void clearCustomIr() noexcept
     {
-        if (! hasCustom) return;
-        hasCustom = false;
-        setRoom (lastBuiltInRoom);
+        hasCustom.store (false, std::memory_order_release);
     }
 
-    bool isCustomIrActive() const noexcept { return hasCustom; }
+    bool isCustomIrActive() const noexcept { return hasCustom.load (std::memory_order_acquire); }
 
     /** 部屋の広さ 0..1（revsize をそのまま渡す）。テールの長さを実時間で変える。 */
     void setSize (float amt01) noexcept
@@ -583,14 +731,21 @@ public:
         if (std::abs (a - sizeAmt) > 0.002f) { sizeAmt = a; sizeDirty = true; }
     }
 
-    int  currentRoom() const noexcept { return hasCustom ? lastBuiltInRoom : std::min (kNumRooms - 1, curRoom); }
+    int  currentRoom() const noexcept
+    {
+        return hasCustom.load (std::memory_order_relaxed)
+             ? lastBuiltInRoom
+             : std::min (kNumRooms - 1, std::max (0, audioCurRoom.load (std::memory_order_relaxed)));
+    }
 
     /** 部屋の減衰カーブ（画面用）。0..1 の縦値を nPoints ぶん詰める。 */
     void getDecayCurve (int room, float* dest, int nPoints) const
     {
         if (dest == nullptr || nPoints <= 0) return;
         const int rClamped = std::min (kNumRooms - 1, std::max (0, room));
-        if (roomData.empty() || (! hasCustom && ! roomBuilt[(size_t) rClamped]))
+        const bool useCust = hasCustom.load (std::memory_order_acquire);
+        const int cSlot = activeCustomSlot.load (std::memory_order_acquire);
+        if (roomData.empty() || (! useCust && ! roomBuilt[(size_t) rClamped]))
         {
             const RoomSpec& sp = rooms()[(size_t) rClamped];
             const float rt = std::max (0.12f, 0.5f * (sp.rt60[2] + sp.rt60[3]) * (0.25f + 0.75f * sizeAmt));
@@ -601,8 +756,8 @@ public:
             }
             return;
         }
-        const int idx = (hasCustom && activeCustomSlot < (int) roomData.size() && roomData[(size_t) activeCustomSlot].numParts > 0)
-            ? activeCustomSlot
+        const int idx = (useCust && cSlot < (int) roomData.size() && roomData[(size_t) cSlot].numParts > 0)
+            ? cSlot
             : rClamped;
         const RoomData& rd = roomData[(size_t) idx];
         if (rd.numParts <= 0)
@@ -620,7 +775,8 @@ public:
             {
                 const float g = std::exp (-perPart * (float) p0);
                 const float* sp = rd.spec.data() + (size_t) p0 * NBINS * 4;
-                for (int k = 0; k < NBINS * 2; k += 8) e += sp[(size_t) k] * sp[(size_t) k];
+                for (int k = 0; k < NBINS; k += 4)
+                    e += sp[(size_t) k] * sp[(size_t) k] + sp[(size_t) (NBINS + k)] * sp[(size_t) (NBINS + k)];
                 e *= (g * g);
             }
             dest[(size_t) i] = std::sqrt (std::max (0.0f, e));
@@ -637,6 +793,7 @@ public:
     void process (float* Lc, float* Rc, int n) noexcept
     {
         if (roomData.empty()) return;
+        syncTargetRoom();
         if (curRoom >= 0 && curRoom < kNumRooms && ! roomBuilt[(size_t) curRoom])
             ensureRoomBuilt (curRoom);
         if (pendingRoom >= 0 && pendingRoom < kNumRooms && ! roomBuilt[(size_t) pendingRoom])
@@ -652,10 +809,10 @@ public:
             histR[(size_t) histPos] = xr; histR[(size_t) (histPos + B)] = xr;
             float yl = 0.0f, yr = 0.0f;
             {
-                const float* hL = rd->headRevL.data();
-                const float* hR = rd->headRevR.data();
-                const float* wL = histL.data() + histPos + 1;   // 古→新 の連続 B サンプル
-                const float* wR = histR.data() + histPos + 1;
+                const float* __restrict hL = rd->headRevL.data();
+                const float* __restrict hR = rd->headRevR.data();
+                const float* __restrict wL = histL.data() + histPos + 1;   // 古→新 の連続 B サンプル
+                const float* __restrict wR = histR.data() + histPos + 1;
                 for (int t = 0; t < B; ++t)
                 {
                     yl += hL[t] * wL[t];
@@ -692,6 +849,7 @@ public:
             if (fadeTarget < 0.5f && fadeGain < 0.003f && hopPos >= B)
             {
                 curRoom = pendingRoom; rd = &roomData[(size_t) curRoom];
+                audioCurRoom.store (curRoom, std::memory_order_relaxed);
                 // ★入力履歴(FDL)は消さない。履歴は部屋に依存しない「過去の声」で、
                 //   新しい部屋のHと畳めば「最初からその部屋で歌っていた」音になる。
                 //   （開発中ここを消していて、残響がホップ単位の階段で積み上がる
@@ -733,11 +891,136 @@ private:
     struct RoomData
     {
         std::vector<float> headRevL, headRevR;   // 各 B（逆順＝前向き内積用）
-        std::vector<float> spec;   // numParts × [L(re,im)×NFFT | R(re,im)×NFFT]
+        std::vector<float> spec;   // numParts × [L(re,im)×NBINS | R(re,im)×NBINS]
         int numParts = 0;
     };
 
-    void buildRoomSlot (RoomData& rd, const float* srcL, const float* srcR, int lengthSamples)
+    struct CachedRoomBank
+    {
+        double sr = 0.0;
+        uint64_t touch = 0;
+        bool ready = false;
+        std::array<RoomData, kNumRooms> rooms;
+    };
+
+    static std::mutex& bankCacheMutex()
+    {
+        static std::mutex m;
+        return m;
+    }
+
+    static std::array<CachedRoomBank, 4>& bankCacheSlots()
+    {
+        static std::array<CachedRoomBank, 4> slots;
+        return slots;
+    }
+
+    static uint64_t& bankCacheSeq()
+    {
+        static uint64_t seq = 0;
+        return seq;
+    }
+
+    static void copyRoomDataNoRealloc (RoomData& dst, const RoomData& src)
+    {
+        if (dst.headRevL.size() < src.headRevL.size()) dst.headRevL.resize (src.headRevL.size());
+        if (dst.headRevR.size() < src.headRevR.size()) dst.headRevR.resize (src.headRevR.size());
+        std::copy (src.headRevL.begin(), src.headRevL.end(), dst.headRevL.begin());
+        std::copy (src.headRevR.begin(), src.headRevR.end(), dst.headRevR.begin());
+        dst.numParts = src.numParts;
+        const size_t needed = (size_t) std::max (1, src.numParts) * NBINS * 4;
+        if (dst.spec.size() < needed) dst.spec.resize (needed);
+        std::copy (src.spec.begin(), src.spec.begin() + (ptrdiff_t) needed, dst.spec.begin());
+    }
+
+    static bool tryCopySingleRoomFromCache (double sampleRate, int roomIdx, RoomData& dst) noexcept
+    {
+        std::lock_guard<std::mutex> lk (bankCacheMutex());
+        auto& slots = bankCacheSlots();
+        for (auto& sl : slots)
+        {
+            if (sl.ready && std::abs (sl.sr - sampleRate) < 0.5)
+            {
+                const auto& src = sl.rooms[(size_t) roomIdx];
+                const size_t needed = (size_t) std::max (1, src.numParts) * NBINS * 4;
+                if (dst.headRevL.size() >= src.headRevL.size()
+                    && dst.headRevR.size() >= src.headRevR.size()
+                    && dst.spec.size() >= needed)
+                {
+                    std::copy (src.headRevL.begin(), src.headRevL.end(), dst.headRevL.begin());
+                    std::copy (src.headRevR.begin(), src.headRevR.end(), dst.headRevR.begin());
+                    dst.numParts = src.numParts;
+                    std::copy (src.spec.begin(), src.spec.begin() + (ptrdiff_t) needed, dst.spec.begin());
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // プロセス内で同一サンプルレートの6部屋スペクトルを1回だけ生成してキャッシュし、
+    // 2回目以降の prepare() や複数インスタンス起動では <1ms のメモリ複写だけで即完了させる。
+    void populateBuiltInRoomsFromCache (double sampleRate)
+    {
+        {
+            std::lock_guard<std::mutex> lk (bankCacheMutex());
+            auto& slots = bankCacheSlots();
+            for (auto& sl : slots)
+            {
+                if (sl.ready && std::abs (sl.sr - sampleRate) < 0.5)
+                {
+                    sl.touch = ++bankCacheSeq();
+                    for (int r = 0; r < kNumRooms; ++r)
+                    {
+                        copyRoomDataNoRealloc (roomData[(size_t) r], sl.rooms[(size_t) r]);
+                        roomBuilt[(size_t) r] = true;
+                    }
+                    return;
+                }
+            }
+        }
+
+        // 未キャッシュ時はここで全6部屋を1回生成してキャッシュへ登録
+        std::array<RoomData, kNumRooms> built;
+        for (int r = 0; r < kNumRooms; ++r)
+        {
+            generateRoomIr (r, sampleRate, lazyIr);
+            buildRoomSlot (built[(size_t) r], lazyIr.L.data(), lazyIr.R.data(), lazyIr.lengthSamples,
+                           lazyPartRe, lazyPartIm);
+            copyRoomDataNoRealloc (roomData[(size_t) r], built[(size_t) r]);
+            roomBuilt[(size_t) r] = true;
+        }
+
+        {
+            std::lock_guard<std::mutex> lk (bankCacheMutex());
+            auto& slots = bankCacheSlots();
+            for (auto& sl : slots)
+                if (sl.ready && std::abs (sl.sr - sampleRate) < 0.5) return;
+            size_t victim = 0;
+            for (size_t i = 0; i < slots.size(); ++i)
+            {
+                if (! slots[i].ready) { victim = i; break; }
+                if (slots[i].touch < slots[victim].touch) victim = i;
+            }
+            slots[victim].sr    = sampleRate;
+            slots[victim].touch = ++bankCacheSeq();
+            slots[victim].rooms = std::move (built);
+            slots[victim].ready = true;
+        }
+    }
+
+    void syncTargetRoom() noexcept
+    {
+        const bool useCust = hasCustom.load (std::memory_order_acquire);
+        const int target = useCust ? activeCustomSlot.load (std::memory_order_acquire) : lastBuiltInRoom;
+        if (target != curRoom && target != pendingRoom) { pendingRoom = target; fadeTarget = 0.0f; }
+        else if (target == curRoom && pendingRoom != curRoom) { pendingRoom = curRoom; fadeTarget = 1.0f; }
+        audioCurRoom.store (curRoom, std::memory_order_relaxed);
+        audioPendingRoom.store (pendingRoom, std::memory_order_relaxed);
+    }
+
+    void buildRoomSlot (RoomData& rd, const float* srcL, const float* srcR, int lengthSamples,
+                        std::vector<float>& pRe, std::vector<float>& pIm)
     {
         if (rd.headRevL.size() < (size_t) B) rd.headRevL.assign ((size_t) B, 0.0f);
         else std::fill (rd.headRevL.begin(), rd.headRevL.begin() + B, 0.0f);
@@ -759,27 +1042,25 @@ private:
         else
             std::fill (rd.spec.begin(), rd.spec.begin() + (ptrdiff_t) needed, 0.0f);
 
-        if (lazyPartRe.size() < (size_t) NFFT) lazyPartRe.assign ((size_t) NFFT, 0.0f);
-        if (lazyPartIm.size() < (size_t) NFFT) lazyPartIm.assign ((size_t) NFFT, 0.0f);
+        if (pRe.size() < (size_t) NFFT) pRe.assign ((size_t) NFFT, 0.0f);
+        if (pIm.size() < (size_t) NFFT) pIm.assign ((size_t) NFFT, 0.0f);
         for (int p = 0; p < rd.numParts; ++p)
         {
             for (int chn = 0; chn < 2; ++chn)
             {
                 const float* src = (chn == 0 ? srcL : srcR);
-                std::fill (lazyPartRe.begin(), lazyPartRe.begin() + NFFT, 0.0f);
-                std::fill (lazyPartIm.begin(), lazyPartIm.begin() + NFFT, 0.0f);
+                std::fill (pRe.begin(), pRe.begin() + NFFT, 0.0f);
+                std::fill (pIm.begin(), pIm.begin() + NFFT, 0.0f);
                 for (int n = 0; n < B; ++n)
                 {
                     const int k = B + p * B + n;
-                    if (k < lengthSamples) lazyPartRe[(size_t) n] = src[k];
+                    if (k < lengthSamples) pRe[(size_t) n] = src[k];
                 }
-                fft.run (lazyPartRe.data(), lazyPartIm.data(), false);
-                float* dst = rd.spec.data() + ((size_t) p * NBINS * 4) + (size_t) chn * NBINS * 2;
-                for (int k2 = 0; k2 < NBINS; ++k2)
-                {
-                    dst[(size_t) (2 * k2)]     = lazyPartRe[(size_t) k2];
-                    dst[(size_t) (2 * k2) + 1] = lazyPartIm[(size_t) k2];
-                }
+                fft.run (pRe.data(), pIm.data(), false);
+                float* __restrict dstRe = rd.spec.data() + ((size_t) p * NBINS * 4) + (size_t) chn * NBINS * 2;
+                float* __restrict dstIm = dstRe + NBINS;
+                std::memcpy (dstRe, pRe.data(), sizeof (float) * (size_t) NBINS);
+                std::memcpy (dstIm, pIm.data(), sizeof (float) * (size_t) NBINS);
             }
         }
     }
@@ -802,30 +1083,29 @@ private:
         sizeDirty = false;
     }
 
-    // 1パーティションぶんの積和（上半分だけ・対称は境界で復元）
+    // 1パーティションぶんの積和（実部/虚部分離連続レイアウト＋__restrict で 4/8要素単位の SIMD ベクトル積和を実行）
     void macPartition (const RoomData& rd, int p) noexcept
     {
         const float g = partGain[(size_t) p];
         if (g < 1e-5f) return;
-        // 次の境界で押す X_{t+1} に対する p 番目 → スロット (fdlPos - p + 1)…
-        // fdlPos は「次に書く場所」。partition p は fdlPos - p を読む
-        // （p=1 が直前に書いたスロット）。
         int slot = fdlPos - p; while (slot < 0) slot += maxParts;
-        const float* xr  = fdlRe.data()  + (size_t) slot * NBINS;
-        const float* xi  = fdlIm.data()  + (size_t) slot * NBINS;
-        const float* xrr = fdlReR.data() + (size_t) slot * NBINS;
-        const float* xir = fdlImR.data() + (size_t) slot * NBINS;
-        const float* hs  = rd.spec.data() + (size_t) p * NBINS * 4;
-        const float* hL  = hs;
-        const float* hR  = hs + (size_t) NBINS * 2;
-        float* aR  = accRe.data();  float* aI  = accIm.data();
-        float* aRR = accReR.data(); float* aIR = accImR.data();
-        for (int k = 0; k <= NFFT / 2; ++k)
+        const float* __restrict xr    = fdlRe.data()  + (size_t) slot * NBINS;
+        const float* __restrict xi    = fdlIm.data()  + (size_t) slot * NBINS;
+        const float* __restrict xrr   = fdlReR.data() + (size_t) slot * NBINS;
+        const float* __restrict xir   = fdlImR.data() + (size_t) slot * NBINS;
+        const float* __restrict hs    = rd.spec.data() + (size_t) p * NBINS * 4;
+        const float* __restrict hReL  = hs;
+        const float* __restrict hImL  = hs + NBINS;
+        const float* __restrict hReR  = hs + NBINS * 2;
+        const float* __restrict hImR  = hs + NBINS * 3;
+        float* __restrict aR  = accRe.data();  float* __restrict aI  = accIm.data();
+        float* __restrict aRR = accReR.data(); float* __restrict aIR = accImR.data();
+        for (int k = 0; k < NBINS; ++k)
         {
-            const float hre = hL[(size_t) (2 * k)], him = hL[(size_t) (2 * k) + 1];
+            const float hre = hReL[k], him = hImL[k];
             aR[k] += g * (xr[k] * hre - xi[k] * him);
             aI[k] += g * (xr[k] * him + xi[k] * hre);
-            const float hreR = hR[(size_t) (2 * k)], himR = hR[(size_t) (2 * k) + 1];
+            const float hreR = hReR[k], himR = hImR[k];
             aRR[k] += g * (xrr[k] * hreR - xir[k] * himR);
             aIR[k] += g * (xrr[k] * himR + xir[k] * hreR);
         }
@@ -853,21 +1133,25 @@ private:
         if (rd.numParts > 0)
         {
             const float g0 = partGain[0];
-            const float* hs = rd.spec.data();
-            const float* hL = hs;
-            const float* hR = hs + (size_t) NBINS * 2;
-            const float* xr  = fdlRe.data()  + (size_t) fdlPos * NBINS;
-            const float* xi  = fdlIm.data()  + (size_t) fdlPos * NBINS;
-            const float* xrr = fdlReR.data() + (size_t) fdlPos * NBINS;
-            const float* xir = fdlImR.data() + (size_t) fdlPos * NBINS;
-            for (int k = 0; k <= NFFT / 2; ++k)
+            const float* __restrict hs   = rd.spec.data();
+            const float* __restrict hReL = hs;
+            const float* __restrict hImL = hs + NBINS;
+            const float* __restrict hReR = hs + NBINS * 2;
+            const float* __restrict hImR = hs + NBINS * 3;
+            const float* __restrict xr   = fdlRe.data()  + (size_t) fdlPos * NBINS;
+            const float* __restrict xi   = fdlIm.data()  + (size_t) fdlPos * NBINS;
+            const float* __restrict xrr  = fdlReR.data() + (size_t) fdlPos * NBINS;
+            const float* __restrict xir  = fdlImR.data() + (size_t) fdlPos * NBINS;
+            float* __restrict aR  = accRe.data();  float* __restrict aI  = accIm.data();
+            float* __restrict aRR = accReR.data(); float* __restrict aIR = accImR.data();
+            for (int k = 0; k < NBINS; ++k)
             {
-                const float hre = hL[(size_t) (2 * k)], him = hL[(size_t) (2 * k) + 1];
-                accRe[(size_t) k] += g0 * (xr[k] * hre - xi[k] * him);
-                accIm[(size_t) k] += g0 * (xr[k] * him + xi[k] * hre);
-                const float hreR = hR[(size_t) (2 * k)], himR = hR[(size_t) (2 * k) + 1];
-                accReR[(size_t) k] += g0 * (xrr[k] * hreR - xir[k] * himR);
-                accImR[(size_t) k] += g0 * (xrr[k] * himR + xir[k] * hreR);
+                const float hre = hReL[k], him = hImL[k];
+                aR[k]  += g0 * (xr[k] * hre - xi[k] * him);
+                aI[k]  += g0 * (xr[k] * him + xi[k] * hre);
+                const float hreR = hReR[k], himR = hImR[k];
+                aRR[k] += g0 * (xrr[k] * hreR - xir[k] * himR);
+                aIR[k] += g0 * (xrr[k] * himR + xir[k] * hreR);
             }
         }
         if (++fdlPos >= maxParts) fdlPos = 0;
@@ -922,8 +1206,10 @@ private:
     int histPos = 0, hopPos = 0, fdlPos = 0, spreadPart = 1;
     int curRoom = 0, pendingRoom = 0;
     int lastBuiltInRoom = 0;
-    int activeCustomSlot = kCustomSlotA;
-    bool hasCustom = false;
+    std::atomic<int>  activeCustomSlot { kCustomSlotA };
+    std::atomic<bool> hasCustom        { false };
+    std::atomic<int>  audioCurRoom     { 0 };
+    std::atomic<int>  audioPendingRoom { 0 };
     float sizeAmt = 1.0f;
     bool  sizeDirty = true;
     float fadeGain = 1.0f, fadeTarget = 1.0f;

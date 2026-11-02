@@ -231,25 +231,15 @@ def main():
     else:
         add(files, vst3, f"{top}/VST3プラグイン/{stem}.vst3")
 
-    # 3-c. 単体起動アプリ ＋ 専用仮想ドライバ導入ツール（手動起動でもドライバ導入可能にする）
+    # 3-c. 単体起動アプリ
+    # v5.5.0: Windows 11 の最新カーネル保護・署名審査への適合に万全を期すため、
+    # 独自仮想ドライバ（VocalGzzioAudio.sys / syncroom.sys / VocalGzzioWdmInstaller.exe）の同梱は
+    # 次期以降のロードマップへ一旦見送り、OBS 標準 VST3 プラグイン直接読込・オーディオIF内蔵ループバック・
+    # 外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）をご案内する構成としています。
     if not standalone:
         die("単体起動版 (.exe) が見つかりません。本番配布ZIPには単体起動版が必須です。")
     add(files, standalone, f"{top}/単体起動アプリ/{stem}.exe")
-
-    wdm_candidates = [
-        standalone.parent / "VocalGzzioWdmInstaller.exe",
-        build / "Release" / "VocalGzzioWdmInstaller.exe",
-        ROOT / "VocalGzzioWdmInstaller.exe",
-    ]
-    wdm_installer = next((p for p in wdm_candidates if p.is_file()), None)
-    if wdm_installer is None:
-        die("VocalGzzioWdmInstaller.exe が見つかりません。仮想ドライバ導入ツールの同梱が必須です。")
-    add(files, wdm_installer, f"{top}/単体起動アプリ/VocalGzzioWdmInstaller.exe")
-
-    drv_dir = ROOT / "driver"
-    for drv_file in resolve_bundled_driver_files(drv_dir):
-        add(files, drv_dir / drv_file, f"{top}/単体起動アプリ/driver/{drv_file}")
-    ok("単体起動アプリ用 VocalGzzioWdmInstaller.exe ＋ driver/ 一式同梱")
+    ok(f"単体起動アプリ同梱: {stem}.exe（独自仮想ドライバ非同梱クリーン構成）")
 
     # 3-d. ライセンス・説明書・はじめにお読みください
     lic = ROOT / "配布物" / "ライセンス"
@@ -296,6 +286,8 @@ def main():
     alias_names = [f"VocalGzzio_v{ver}_Windows_{jp}.zip"]
     if ed == "trial":
         alias_names.append(f"VocalGzzio_v{ver}_Windows_Trial.zip")
+    else:
+        alias_names.append(f"VocalGzzio_v{ver}_Windows_Full.zip")
     for alias in alias_names:
         alias_path = out_dir / alias
         shutil.copy2(out, alias_path)

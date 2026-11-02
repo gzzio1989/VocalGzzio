@@ -83,6 +83,21 @@ class WindowsDriverPackagingTests(unittest.TestCase):
                 ],
             )
 
+    def test_v550_third_party_driver_binaries_removed_and_not_bundled(self):
+        # v5.5.0: 第三者製ドライババイナリ (syncroom.*) がリポジトリから完全撤去されていること
+        for fname in ("syncroom.sys", "syncroom.inf", "syncroom.cat"):
+            self.assertFalse(
+                (ROOT / "driver" / fname).exists(),
+                f"driver/{fname} は v5.5.0 で同梱廃止・リポジトリから削除されている必要があります",
+            )
+        iss_text = (ROOT / "Installer.iss").read_text(encoding="utf-8")
+        for line in iss_text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(";"):
+                continue
+            self.assertNotIn("syncroom.sys", stripped)
+            self.assertNotIn("VocalGzzioWdmInstaller.exe", stripped)
+
 
 if __name__ == "__main__":
     unittest.main()

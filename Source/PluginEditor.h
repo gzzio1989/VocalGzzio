@@ -868,6 +868,8 @@ public:
     static void setUseKawaiiFont  (bool b)                 { s_useKawaii  = b; }
     static void setKnobStyle      (int style)              { s_knobStyle  = style; }
     static int  getKnobStyle      () noexcept              { return s_knobStyle; }
+    static void setKnobInnerArt   (bool b) noexcept        { s_knobInnerArt = b; }
+    static bool getKnobInnerArt   () noexcept              { return s_knobInnerArt; }
     static void setAccessMode     (int m) noexcept         { s_accessMode = juce::jlimit (0, 3, m); }
     static int  getAccessMode     () noexcept              { return s_accessMode; }
     static void bumpJuicePhase    (float d)                { s_juicePhase = std::fmod (s_juicePhase + d, 6283.1853f); }
@@ -1081,6 +1083,13 @@ public:
             outDir = (val >= 0.0 ? 1 : -1);
             outTagJa = juce::String::fromUTF8 (literalMode ? "出力ゲイン調整中" : (val >= 0.0 ? "🔊 音量UP中" : "🔉 音量抑制"));
             outTagEn = "OUT GAIN";
+        }
+        else if (id == "out_vol")
+        {
+            outIntensity = std::abs (val - 100.0) > 0.5 ? juce::jlimit (0.24f, 1.0f, (float) std::abs (val - 100.0) / 75.0f) : 0.0f;
+            outDir = (val >= 100.0 ? 1 : -1);
+            outTagJa = juce::String::fromUTF8 (literalMode ? "最終音量(%)調整中" : (val >= 100.0 ? "🔊 最終音量UP" : "🔉 最終音量DOWN"));
+            outTagEn = "OUT VOL";
         }
         else if (id == "hum")
         {
@@ -1365,7 +1374,7 @@ public:
     void drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                            float pos, float startAngle, float endAngle, juce::Slider& sl) override
     {
-        if (s_knobStyle == 1 && (s_accessMode == 0 || s_accessMode == 2))   // yuru-kawa: draw a juice glass (fill = value)
+        if (s_knobInnerArt && s_knobStyle == 1 && (s_accessMode == 0 || s_accessMode == 2))   // yuru-kawa: draw a juice glass (fill = value)
         {
             drawJuiceKnob (g, juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height),
                            pos, (int) sl.getProperties().getWithDefault ("juice", 0),
@@ -1603,26 +1612,36 @@ public:
                 const float kr = radius - r7 - 2.2f;
                 if (kr >= 5.0f)
                 {
-                    const int dia = juce::jmax (10, juce::roundToInt (kr * 2.0f));
                     g.setColour (juce::Colours::black.withAlpha (0.35f));
                     g.fillEllipse (c.x - kr, c.y - kr + 2.2f, kr * 2.0f, kr * 2.0f);
-                    g.drawImage (getMovementFace (dia),
-                                 juce::Rectangle<float> (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f));
+                    if (s_knobInnerArt)
+                    {
+                        const int dia = juce::jmax (10, juce::roundToInt (kr * 2.0f));
+                        g.drawImage (getMovementFace (dia),
+                                     juce::Rectangle<float> (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f));
 
-                    // 金色の大歯車 (12歯) ＆ ミントの小歯車 (8歯)
-                    g.setColour (juce::Colour (0xffe5c868).withAlpha (0.88f));
-                    g.fillPath (uGearBig, juce::AffineTransform::rotation (angle * 0.8f)
-                                              .scaled (kr * 0.52f, kr * 0.52f)
-                                              .translated (c.x - kr * 0.12f, c.y + kr * 0.10f));
-                    g.setColour (juce::Colour (0xff7be0c0).withAlpha (0.85f));
-                    g.fillPath (uGearSmall, juce::AffineTransform::rotation (-angle * 1.4f)
-                                                .scaled (kr * 0.34f, kr * 0.34f)
-                                                .translated (c.x + kr * 0.28f, c.y - kr * 0.12f));
-                    // ルビー軸受
-                    g.setColour (juce::Colour (0xfff0788c));
-                    g.fillEllipse (c.x - kr * 0.12f - 2.4f, c.y + kr * 0.10f - 2.4f, 4.8f, 4.8f);
+                        // 金色の大歯車 (12歯) ＆ ミントの小歯車 (8歯)
+                        g.setColour (juce::Colour (0xffe5c868).withAlpha (0.88f));
+                        g.fillPath (uGearBig, juce::AffineTransform::rotation (angle * 0.8f)
+                                                  .scaled (kr * 0.52f, kr * 0.52f)
+                                                  .translated (c.x - kr * 0.12f, c.y + kr * 0.10f));
+                        g.setColour (juce::Colour (0xff7be0c0).withAlpha (0.85f));
+                        g.fillPath (uGearSmall, juce::AffineTransform::rotation (-angle * 1.4f)
+                                                    .scaled (kr * 0.34f, kr * 0.34f)
+                                                    .translated (c.x + kr * 0.28f, c.y - kr * 0.12f));
+                        // ルビー軸受
+                        g.setColour (juce::Colour (0xfff0788c));
+                        g.fillEllipse (c.x - kr * 0.12f - 2.4f, c.y + kr * 0.10f - 2.4f, 4.8f, 4.8f);
+                    }
+                    else
+                    {
+                        g.setColour (Palette::panel2);
+                        g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                        g.setColour (Palette::panelLn);
+                        g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 1.4f);
+                    }
                     // 白ポインター針
-                    g.setColour (juce::Colours::white);
+                    g.setColour (Palette::panel.getPerceivedBrightness() > 0.55f && ! s_knobInnerArt ? Palette::ink : juce::Colours::white);
                     g.drawLine (c.x + kr * 0.18f * std::sin (angle), c.y - kr * 0.18f * std::cos (angle),
                                 c.x + kr * 0.86f * std::sin (angle), c.y - kr * 0.86f * std::cos (angle),
                                 juce::jmax (2.4f, kr * 0.08f));
@@ -1678,7 +1697,7 @@ public:
         }
 
         // ★ 主役ノブ(heroKnob)専用: V-Liverクチュール・ティアラハロー
-        if (isHero && radius > 34.0f && (s_knobStyle == 2 || s_useKawaii))
+        if (s_knobInnerArt && isHero && radius > 34.0f && (s_knobStyle == 2 || s_useKawaii))
         {
             const float outerR = radius + 6.5f;
             const juce::Colour goldCol = Palette::metalMid;
@@ -1710,7 +1729,7 @@ public:
             const bool activeTick = isWorking && (tNorm <= pos + 0.005f);
             const bool majorTick  = (tick % (isHero ? 3 : 2) == 0);
             const juce::Colour tickAccent = accent.interpolatedWith (dirTint, tNorm * 0.48f);
-            if (s_knobStyle == 2)   // V-Liver: クチュール宝飾メタル台座＋ジュエル・ドット目盛り
+            if (s_knobInnerArt && s_knobStyle == 2)   // V-Liver: クチュール宝飾メタル台座＋ジュエル・ドット目盛り
             {
                 const float dotR = radius + 6.2f;
                 const float sz = majorTick ? 4.2f : 2.5f;
@@ -1804,6 +1823,44 @@ public:
                 g.drawEllipse (c.x - kr + 0.8f, c.y - kr + 0.8f, (kr - 0.8f) * 2.0f, (kr - 0.8f) * 2.0f, isHero ? 1.8f : 1.3f);
             }
         };
+
+        if (! s_knobInnerArt)
+        {
+            // ★ ノブ内の装飾OFFモード：テーマ配色と外周アークはそのまま活かし、内部の宝石・歯車・ハート・星模様を排したクリーンな無地文字盤＋高視認ポインター針
+            const bool lightCap = Palette::panel.getPerceivedBrightness() > 0.52f;
+            g.setColour (juce::Colours::black.withAlpha (lightCap ? 0.16f : 0.34f));
+            g.fillEllipse (c.x - kr, c.y - kr + 2.4f, kr * 2.0f, kr * 2.0f);
+
+            const auto capTop = lightCap ? Palette::panel.brighter (0.06f) : Palette::panel2.brighter (0.14f);
+            const auto capBot = lightCap ? Palette::panel2.darker (0.08f)  : Palette::bgTop.darker (0.28f);
+            g.setGradientFill (juce::ColourGradient (capTop, c.x - kr * 0.45f, c.y - kr * 0.55f,
+                                                     capBot, c.x + kr * 0.45f, c.y + kr * 0.60f, false));
+            g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+
+            g.setColour (isWorking ? accent.withAlpha (0.85f) : Palette::panelLn.withAlpha (0.85f));
+            g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.8f : 1.4f);
+
+            const float sinA = std::sin (angle), cosA = std::cos (angle);
+            const float pIn  = kr * 0.20f;
+            const float pOut = kr * 0.84f;
+            const auto needleCol = isWorking ? (lightCap ? Palette::accentOn (groupAccent, capTop) : juce::Colours::white)
+                                             : Palette::inkSoft;
+            g.setColour ((lightCap ? Palette::ink : juce::Colours::black).withAlpha (0.28f));
+            g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA + 0.8f,
+                        c.x + pOut * sinA, c.y - pOut * cosA + 0.8f,
+                        juce::jmax (3.2f, kr * 0.105f));
+            g.setColour (needleCol);
+            g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA,
+                        c.x + pOut * sinA, c.y - pOut * cosA,
+                        juce::jmax (2.5f, kr * 0.082f));
+
+            const float hubR = juce::jmax (2.4f, kr * 0.10f);
+            g.setColour (isWorking ? groupAccent : Palette::panelLn);
+            g.fillEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f);
+
+            finishKnobStateOverlay();
+            return;
+        }
 
         if (s_knobStyle == 2)   // ライバー (V-Liver: クチュール・プレストチーク＆香水瓶クリスタルカット＆宝飾メタル・ダイヤル)
         {
@@ -2487,12 +2544,97 @@ public:
         const bool  on  = b.getToggleState();
         const bool  sw  = b.getClickingTogglesState();
         const bool  isHoldTrigger = (b.getComponentID() == "compareOriginal");
+        const auto* tb  = dynamic_cast<const juce::TextButton*> (&b);
+        const bool  isPureSwitch = sw && ! isHoldTrigger
+                                   && (tb == nullptr || tb->getButtonText().trim().isEmpty());
 
         auto col = on ? b.findColour (juce::TextButton::buttonOnColourId) : bg;
         if (on && col.getFloatAlpha() < 0.85f)
             col = col.withAlpha (juce::jmax (0.85f, col.getFloatAlpha()));
         if (down) col = col.brighter (0.14f);
         else if (over) col = col.brighter (0.07f);
+
+        // ★ 文字なしトグルスイッチ（左レールの ModuleCard::sw や ModPanel 等）は、
+        //   「ピルボタンの中に極小ミニスイッチが二重に入る」現象を防ぎ、枠全体をフルサイズの大型スライドスイッチとして描画する
+        if (isPureSwitch)
+        {
+            const float swRad = r.getHeight() * 0.5f;
+            if (s_knobStyle != 5)
+            {
+                g.setColour ((s_useKawaii ? Palette::panelLn : juce::Colours::black).withAlpha (on ? 0.30f : 0.18f));
+                g.fillRoundedRectangle (r.translated (0.0f, down ? 0.5f : 1.6f), swRad);
+            }
+            if (s_knobStyle == 5)
+            {
+                g.setColour (on ? col : Palette::track.darker (0.14f));
+                g.fillRoundedRectangle (r, swRad);
+            }
+            else if (on)
+            {
+                g.setGradientFill (juce::ColourGradient (col.brighter (0.16f), r.getX(), r.getY(),
+                                                         col.darker   (0.18f), r.getX(), r.getBottom(), false));
+                g.fillRoundedRectangle (r, swRad);
+            }
+            else
+            {
+                const auto offTop = s_useKawaii ? Palette::track.darker (0.06f) : Palette::bgTop.darker (0.38f);
+                const auto offBot = s_useKawaii ? Palette::panel2.darker (0.04f) : Palette::panel.darker (0.18f);
+                g.setGradientFill (juce::ColourGradient (offTop, r.getX(), r.getY(),
+                                                         offBot, r.getX(), r.getBottom(), false));
+                g.fillRoundedRectangle (r, swRad);
+            }
+
+            const juce::Colour swBorder = s_useKawaii
+                ? (on ? Palette::metalDark : ((s_knobStyle == 2) ? Palette::metalMid : Palette::panelLn.darker (0.12f)))
+                : (s_knobStyle == 6)
+                ? (on ? Palette::metalHi : Palette::metalMid.withAlpha (over ? 0.90f : 0.68f))
+                : (on ? col.darker (0.36f) : Palette::panelLn.brighter (over ? 0.18f : 0.0f));
+            g.setColour (swBorder);
+            g.drawRoundedRectangle (r, swRad, on ? 1.8f : 1.4f);
+
+            const float pad    = juce::jmax (2.2f, r.getHeight() * 0.115f);
+            const float thumbD = juce::jmax (8.0f, r.getHeight() - pad * 2.0f);
+            const float thumbX = on ? (r.getRight() - pad - thumbD) : (r.getX() + pad);
+            const juce::Rectangle<float> thumb (thumbX, r.getCentreY() - thumbD * 0.5f, thumbD, thumbD);
+
+            if (s_knobStyle != 5)
+            {
+                g.setColour (juce::Colours::black.withAlpha (0.26f));
+                g.fillEllipse (thumb.translated (0.0f, 1.1f));
+            }
+            if (on)
+            {
+                const auto lampCol = (s_useKawaii || col.getPerceivedBrightness() < 0.72f)
+                                   ? juce::Colours::white
+                                   : Palette::readableOn (col);
+                if (s_knobStyle != 5)
+                {
+                    g.setColour (lampCol.withAlpha (0.32f));
+                    g.fillEllipse (thumb.expanded (2.0f));
+                }
+                g.setColour (lampCol);
+                g.fillEllipse (thumb);
+                if (s_knobStyle != 5)
+                {
+                    g.setColour (col.darker (0.22f).withAlpha (0.35f));
+                    g.drawEllipse (thumb.reduced (0.6f), 1.1f);
+                    g.setColour (juce::Colours::white.withAlpha (0.92f));
+                    g.fillEllipse (thumb.getX() + thumbD * 0.22f, thumb.getY() + thumbD * 0.16f,
+                                   thumbD * 0.34f, thumbD * 0.34f);
+                }
+            }
+            else
+            {
+                const auto knobFill = s_useKawaii ? juce::Colours::white.withAlpha (0.95f)
+                                    : (s_knobStyle == 6 ? Palette::mirrorTop.withAlpha (0.92f)
+                                                        : Palette::ink.withAlpha (0.86f));
+                g.setColour (knobFill);
+                g.fillEllipse (thumb);
+                g.setColour ((s_useKawaii ? Palette::panelLn.darker (0.18f) : Palette::bgTop.darker (0.50f)).withAlpha (0.72f));
+                g.drawEllipse (thumb.reduced (0.5f), 1.1f);
+            }
+            return;
+        }
 
         if (s_knobStyle == 5)
         {
@@ -2632,10 +2774,10 @@ public:
             return;
         }
 
-        // ---- ★ Red Dot 精密オプティカル・スライドレール＆ジュエルLEDスイッチ (左端 kLampBox = 20px 内) ----
-        const float slotW = 16.5f;
-        const float slotH = juce::jmin (10.5f, r.getHeight() - 8.0f);
-        const float cx    = r.getX() + 3.5f + kLampBox * 0.5f;
+        // ---- ★ Red Dot 精密オプティカル・スライドレール＆ジュエルLEDスイッチ (左端 kLampBox = 20px 内・文字左端 x+24px に干渉しない最大寸法) ----
+        const float slotW = 18.4f;
+        const float slotH = juce::jlimit (11.6f, 14.2f, r.getHeight() * 0.46f);
+        const float cx    = r.getX() + 2.4f + kLampBox * 0.5f;
         const float cy    = r.getCentreY();
         const juce::Rectangle<float> slot (cx - slotW * 0.5f, cy - slotH * 0.5f, slotW, slotH);
 
@@ -2657,8 +2799,8 @@ public:
         }
 
         // スライドノブ（OFF=左端 [●──] スモークジュエルレンズ、ON=右端 [──●] 高輝度発光ジュエルへ物理スライド！）
-        const float thumbD = slotH - 2.0f;
-        const float thumbX = on ? (slot.getRight() - thumbD - 1.1f) : (slot.getX() + 1.1f);
+        const float thumbD = slotH - 1.8f;
+        const float thumbX = on ? (slot.getRight() - thumbD - 1.0f) : (slot.getX() + 1.0f);
         const juce::Rectangle<float> thumb (thumbX, cy - thumbD * 0.5f, thumbD, thumbD);
         if (on)
         {
@@ -2769,7 +2911,8 @@ private:
     static std::atomic<int>    s_instances;    // v2.3.0: 最後の1つが消えたらフォントを手放す
     static bool s_useKawaii;
     static int  s_knobStyle;                   // 0=standard, 1=juice, 2=liver, 3=studio, 4=neon
-    inline static int s_accessMode = 0;        // 0=標準デザイン, 1=◉くっきり大文字, 2=★かんたん3ステップ, 3=●マット・具体表記
+    inline static int  s_accessMode   = 0;     // 0=標準デザイン, 1=◉くっきり大文字, 2=★かんたん3ステップ, 3=●マット・具体表記
+    inline static bool s_knobInnerArt = true;  // v5.5.0: ノブ内部の装飾デザイン（宝石・歯車・模様）ON/OFF
     static float s_juicePhase;                 // juice bubble/wobble animation phase
 };
 
@@ -5415,6 +5558,13 @@ public:
     int  getOverviewLayoutMode() const noexcept { return overviewLayoutMode; }
     void setLiteMode (bool on);
     bool isLiteMode() const noexcept { return liteMode; }
+    void setKnobInnerArtOn (bool on);
+    bool isKnobInnerArtOn() const noexcept { return knobInnerArtOn; }
+    void setAutoUpdateCheckOn (bool on);
+    bool isAutoUpdateCheckOn() const noexcept { return autoUpdateCheckOn; }
+    void triggerUpdateCheck (bool manualForce = false);
+    const juce::String& getLatestUpdateTag() const noexcept { return latestUpdateTag; }
+    static juce::String extractNewerReleaseTag (const juce::String& jsonBody, const juce::String& currentVer);
     void setFocusedEditing (bool on)
     {
         focusMode = on;
@@ -5485,9 +5635,9 @@ public:
     // 🕰️ 歴代バージョン呼び出し（世代タイムマシン）カタログ — constexpr テーブルのため起動時ヒープ確保 0 バイト
     struct LegacyVersionSpec
     {
-        int         id;             // 0 = v5.0.0 最新, 1..12 = 歴代世代
-        int         era;            // 100..510 (DSP省負荷ゲート＆世代別UIレイアウト判定)
-        const char* verTag;         // "v5.1.0", "v5.0.0", "v1.0.0" 等
+        int         id;             // 0 = v5.5.0 最新, 1..18 = 歴代世代 (v5.4.1 〜 v1.0.0)
+        int         era;            // 100..550 (DSP省負荷ゲート＆世代別UIレイアウト判定)
+        const char* verTag;         // "v5.5.0", "v5.4.1", "v5.0.0", "v1.0.0" 等
         const char* titleJa;
         const char* titleEn;
         const char* descJa;
@@ -5499,10 +5649,12 @@ public:
         int         ovLayout;       // overviewLayoutMode (0..3)
         int         knobStyle;      // GzzioLnF::s_knobStyle
     };
-    static constexpr int kLegacyVersionCount = 14;
+    static constexpr int kLegacyVersionCount = 19;
     static const LegacyVersionSpec& getLegacyVersionSpec (int id) noexcept;
     void applyLegacyVersion (int versionId, bool keepEcoGate = true);
     void openLegacyVersionPopup (juce::Rectangle<int> anchorScreenBounds);
+    void requestMiniBarMode (bool enable);
+    std::shared_ptr<tip::Language> getLanguage() const noexcept { return language; }
 
 private:
     friend class PresetPalettePopup;
@@ -5543,6 +5695,8 @@ private:
     juce::Rectangle<int> streamPillRect;  // 📡 外部出力 (SYNCROOM / VB-CABLE 等) ピル
     juce::Rectangle<int> ioInMonoRect;    // 🎤 計器＆入出力カード内の「入力: モノラル/ステレオ」直結ピル
     juce::Rectangle<int> ioOutMonoRect;   // 🔊 計器＆入出力カード内の「出力: モノラル/ステレオ」直結ピル
+    juce::Rectangle<int> ioExprRect;      // 🎵 計器＆入出力カード内の「声量幅（標準 / 🎤10割ダイレクト / 📻一定キープ）」直結ピル
+    juce::Rectangle<int> overviewUpdateRect; // 🆙 起動時アップデート確認で見つかった新バージョン通知ピル（総合画面トップバー）
     juce::Rectangle<int> talkPillRect;    // 🎤⇄💬 歌枠 ⇄ 雑談MC ワンクリック瞬間ライブ切替ピル
     juce::Rectangle<int> loopPillRect;    // 🔄 5秒録って手放し聴き比べ「試聴ルーパー」ピル
     juce::Rectangle<int> coughPillRect;   // 😷 咳払い・くしゃみ瞬間ミュート（8ms無音フェード・残響鳴り残り防止）ピル
@@ -5602,14 +5756,15 @@ private:
         int w { 0 }, h { 0 };
         int themeMode { -1 }, layoutMode { -1 }, accessMode { -1 };
         int legacyVerId { -1 };
-        bool liteMode { false }, english { false };
+        bool liteMode { false }, english { false }, knobInnerArt { true };
         bool s0 { false }, s1 { false }, s2 { false };
         bool operator== (const OverviewBackdropKey& o) const noexcept
         {
             return w == o.w && h == o.h && themeMode == o.themeMode
                 && layoutMode == o.layoutMode && accessMode == o.accessMode
                 && legacyVerId == o.legacyVerId && liteMode == o.liteMode
-                && english == o.english && s0 == o.s0 && s1 == o.s1 && s2 == o.s2;
+                && english == o.english && knobInnerArt == o.knobInnerArt
+                && s0 == o.s0 && s1 == o.s1 && s2 == o.s2;
         }
     };
     OverviewBackdropKey overviewBackdropKey;
@@ -5799,6 +5954,7 @@ private:
     Knob resK;                                             // v2.4.0 なめらか(動的レゾナンス抑制)
     Knob pickK;                                            // v3.1 ピックおさえ(アコギだけ)
     Knob inGainK;                                          // v2.4.0 マイク音量(入力トリム)
+    Knob outVolK;                                          // v5.5.0 最終音量(0〜250%, 100%=標準等倍・クリーン出力ボリューム)
     Knob rideK;                                            // v2.4.0 音量キープ(自動ゲインライド)
     Knob humK;                                             // v2.6.0 ジー音(電源ハムの自動除去)
     Knob consK;                                            // v2.6.0 ことば(子音エンハンサー)
@@ -5838,6 +5994,8 @@ private:
     juce::TextButton stageButton;                          // v4.8.0 BGM・WAV録音・30秒さかのぼり・声質ターゲット診断
     juce::TextButton streamButton;                         // v2.2.0 配信出力(単体起動版のみ)
     juce::TextButton checkupButton;                        // v2.10.0 点検
+    juce::TextButton miniBarButton;                        // v5.5.0 📌 配信ミニバー切替
+    juce::Point<int> lastHoverMousePos { -99999, -99999 }; // v5.5.0 Smart Sleep: マウス静止時の getComponentUnderMouse 走査スキップ用
     double lastUsageMs = 0.0;                              // v2.10.0 使われ方の集計時刻
     double lastTapMs { 0.0 };
     float  tapBpm { 0.0f };
@@ -5911,6 +6069,9 @@ private:
     // update notice (GitHub Releases check, display only)
     juce::HyperlinkButton updateNotice { juce::String(),
         juce::URL ("https://github.com/gzzio1989/VocalGzzio/releases/latest") };
+    bool knobInnerArtOn { true };
+    bool autoUpdateCheckOn { true };
+    juce::String latestUpdateTag;
     void startUpdateCheck();
 
 public:
@@ -5923,13 +6084,17 @@ private:
 };
 
 //==============================================================================
-class VocalGzzioEditor : public juce::AudioProcessorEditor
+class VocalGzzioEditor : public juce::AudioProcessorEditor,
+                         private juce::Timer
 {
 public:
     explicit VocalGzzioEditor (VocalGzzioProcessor&);
     ~VocalGzzioEditor() override;
 
     void resized() override;
+    void setMiniBarMode (bool enable);
+    bool isMiniBarMode() const noexcept { return miniBarMode; }
+    VocalGzzioContent& getContent() noexcept { return content; }
 
     // ★ここが**唯一**の既定サイズ。中身は必ずこの寸法で組んでから、窓の大きさに
     //  合わせて拡大縮小される（content.setBounds(0,0,baseW,baseH) + Transform）。
@@ -5938,15 +6103,23 @@ public:
     //  狭めていない**（狭めればツマミが小さくなり視認性が下がるため）。
     static constexpr int baseW = 1582;  // v1.8.3: +80 → v3.0-c: +222(とおり道の列)
     static constexpr int baseH = 892;   // v1.8.3: +24 → v3.0-c: +34(カード8枚)
+    static constexpr int miniW = 520;   // v5.5.0 📌 配信ミニバー標準幅
+    static constexpr int miniH = 115;   // v5.5.0 📌 配信ミニバー標準高
 
 private:
     static constexpr float kFontRebase = 1.5f;   // new 100 percent = old 150 percent
 
     void applyScale (float s);
+    void timerCallback() override;
 
     VocalGzzioProcessor& processor;
     GzzioLnF             lnf;
     VocalGzzioContent    content;
+    std::unique_ptr<juce::Component> miniBar;
+    bool                 miniBarMode { false };
+    bool                 miniBarPinnedOnTop { false };
+    float                savedNormalScale { 1.00f };
+    bool                 prevHkM { false }, prevHkT { false }, prevHkS { false }, prevHkR { false }, prevHkF9 { false };
     float                uiScale { 1.00f };   // 1280x790 fits 1080p at 100%
     juce::ApplicationProperties appProps;     // remembers font/zoom across sessions
 

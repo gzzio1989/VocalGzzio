@@ -3,8 +3,11 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 #include <atomic>
+#include <thread>
 #include <vector>
 #include "VoiceShifter.h"
+#include "AppAudioCapture.h"  // v5.5.0 アプリ別カラオケ音声取込 (Process Loopback Capture)
+#include "SnsVideoExporter.h" // v5.5.0 SNS投稿用ビジュアライザ動画 (H.264/AAC MP4) 書き出し
 #include "TdPitchShifter.h"   // v5.1.2 ピッチ補正専用・時間領域ピッチ同期シフタ(約2.9ms)
 #include "PitchDetector.h"
 #include "PitchCorrection.h"
@@ -770,6 +773,83 @@ public:
     void  toggleMixVoiceBridgeOn() noexcept      { setMixVoiceBridgeOn (! getMixVoiceBridgeOn()); }
     float getMixVoiceBridgeMeterDb() const noexcept { return meterMixVoiceBridgeDb.load (std::memory_order_relaxed); }
 
+    //== v5.5.0 Smart Sleep：音声スレッド → UIチューナー間のロックフリー F0 共有（歌・トーク時のUI側YIN重複解析を撤廃） ==
+    float getSharedVocalF0Hz() const noexcept         { return sharedVocalF0Hz.load (std::memory_order_relaxed); }
+    float getSharedVocalF0Confidence() const noexcept { return sharedVocalF0Conf.load (std::memory_order_relaxed); }
+    bool  isSmartSleepActive() const noexcept         { return sharedVocalF0Hz.load (std::memory_order_relaxed) <= 0.0f
+                                                            && sharedVocalF0Conf.load (std::memory_order_relaxed) <= 0.0f; }
+    void  requestVocalTunerF0() noexcept
+    {
+        vocalTunerLeaseSamples.store ((int) (juce::jmax (8000.0, currentSampleRate) * 1.5), std::memory_order_relaxed);
+    }
+
+    //== v5.5.0 柱A：声 ⇄ 伴奏・BGM タイミングずれ補正（-300 ms 〜 +300 ms, 1ms刻み、事前確保リングバッファでRT確保ゼロ） ＆ ⚡自動計測 ==
+    //   +1..+300 ms : 処理後のマイク歌声を遅延させて、遅れて鳴る伴奏・BGMとタイミングを一致させる
+    //   -300..-1 ms : 内蔵BGM伴奏を遅延させて、ボイチェン等を通した歌声とタイミングを一致させる
+    int   getSyncOffsetMs() const noexcept       { return syncOffsetMs.load (std::memory_order_relaxed); }
+    void  setSyncOffsetMs (int ms) noexcept
+    {
+        syncOffsetMs.store (juce::jlimit (-300, 300, ms), std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  startSyncAutoCalibration() noexcept;
+    bool  isSyncCalibrating() const noexcept     { return syncCalibRunning.load (std::memory_order_relaxed); }
+    int   getSyncCalibResultCode() const noexcept { return syncCalibResultCode.load (std::memory_order_acquire); }
+    float getSyncCalibMeasuredRtMs() const noexcept { return syncCalibMeasuredRtMs.load (std::memory_order_relaxed); }
+    juce::String getSyncCalibStatusText (bool english = false) const;
+
+    //== v5.5.0 柱1：🌐 アプリ別カラオケ音声取込（Windows 10/11 Process Loopback — YouTube / JOYSOUND / ブラウザ単体取込） ==
+    bool  startAppAudioCapture (juce::uint32 pid, const juce::String& label, bool english = false);
+    void  stopAppAudioCapture() noexcept         { appAudioCap.stop(); }
+    bool  isAppAudioCapturing() const noexcept   { return appAudioCap.isCapturing(); }
+    juce::uint32 getAppAudioTargetPid() const noexcept { return appAudioCap.getTargetPid(); }
+    juce::String getAppAudioLabel() const        { return appAudioCap.getActiveLabel(); }
+    juce::String getAppAudioLastError() const    { return appAudioCap.getLastError(); }
+    bool  getAppAudioMonitorLocal() const noexcept { return appAudioMonitorLocal.load (std::memory_order_relaxed); }
+    void  setAppAudioMonitorLocal (bool b) noexcept
+    {
+        appAudioMonitorLocal.store (b, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleAppAudioMonitorLocal() noexcept  { setAppAudioMonitorLocal (! getAppAudioMonitorLocal()); }
+    gz::AppAudioCapture& getAppAudioCaptureForTesting() noexcept { return appAudioCap; }
+
+    //== v5.5.0 柱B：ゲーム・OBS裏でも効くグローバルホットキー（日本語IME全角かな影響ゼロ・Standalone用 ON/OFF） ==
+    bool  getGlobalHotkeysOn() const noexcept    { return globalHotkeysOn.load (std::memory_order_relaxed); }
+    void  setGlobalHotkeysOn (bool b) noexcept
+    {
+        globalHotkeysOn.store (b, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleGlobalHotkeysOn() noexcept       { setGlobalHotkeysOn (! getGlobalHotkeysOn()); }
+
+    //== v5.5.0 柱3：🎹 伴奏コード追従スマートハモリ（借用和音 III7 / IVm やラスサビ半音転調のリアルタイム和音吸着） ==
+    bool  getChordFollowHarmOn() const noexcept  { return chordFollowHarmOn.load (std::memory_order_relaxed); }
+    void  setChordFollowHarmOn (bool b) noexcept
+    {
+        chordFollowHarmOn.store (b, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleChordFollowHarmOn() noexcept     { setChordFollowHarmOn (! getChordFollowHarmOn()); }
+    int   getDetectedBgmChordCode() const noexcept { return bgmLiveChordCode.load (std::memory_order_relaxed); }
+    juce::String getDetectedBgmChordName() const;
+
+    //== v5.5.0 柱4：🎬 SNS投稿用ビジュアライザ動画（.mp4 / H.264+AAC / 16:9 & 9:16 / Before➔After比較）1クリック保存 ==
+    bool  getSnsWatermarkOn() const noexcept     { return snsWatermarkOn.load (std::memory_order_relaxed); }
+    void  setSnsWatermarkOn (bool b) noexcept
+    {
+        snsWatermarkOn.store (b, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleSnsWatermarkOn() noexcept        { setSnsWatermarkOn (! getSnsWatermarkOn()); }
+    bool  exportLastTakeSnsVideoAsync (bool vertical9x16,
+                                       bool compareBeforeAfter,
+                                       const gz::SnsVideoExporter::Options& styleTemplate = {});
+    bool  isSnsVideoExporting() const noexcept   { return snsVideoExporting.load (std::memory_order_acquire); }
+    float getSnsVideoExportProgress() const noexcept { return snsVideoExportProgress.load (std::memory_order_relaxed); }
+    juce::String getSnsVideoExportStatus() const { const juce::ScopedLock sl (bgmMetaLock); return snsVideoExportStatus; }
+    juce::File   getLastExportedSnsVideoFile() const { const juce::ScopedLock sl (bgmMetaLock); return lastSnsVideoFile; }
+
     //== v5.1.4 ボイチェン＆ピッチ補正 4段階遅延モード ＆ フォルマント自動追従 ==
     //   0:🚀極限ゼロ感 (補正 ~0.1ms / ボイチェン ~5.3ms)
     //   1:⚡超低遅延   (補正 ~0.1ms / ボイチェン ~10.6ms)
@@ -800,16 +880,33 @@ public:
     }
     void  toggleVcFormantAutoLink() noexcept    { setVcFormantAutoLink (! getVcFormantAutoLink()); }
 
+    //== v5.5.0 声量・抑揚幅モード（0:標準バランス / 1:🎤抑揚10割開放[歌の熱量そのまま] / 2:📻一定音量キープ[配信トーク均一化]） ＆ 直感最終音量(%) ==
+    int   getVocalExprMode() const noexcept     { return vocalExprMode.load (std::memory_order_relaxed); }
+    void  setVocalExprMode (int m) noexcept
+    {
+        vocalExprMode.store (juce::jlimit (0, 2, m), std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  cycleVocalExprMode() noexcept         { setVocalExprMode ((getVocalExprMode() + 1) % 3); }
+
+    float getOutputVolumePct() const noexcept   { return outputVolumePct.load (std::memory_order_relaxed); }
+    void  setOutputVolumePct (float pct) noexcept
+    {
+        outputVolumePct.store (juce::jlimit (0.0f, 250.0f, pct), std::memory_order_relaxed);
+        markStateDirty();
+    }
+
     //== 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ==
-    // id: 0 = v5.1.0 最新版, 1..13 = 歴代メジャー世代（v1.0.0〜v5.0.0）
+    // id: 0 = v5.5.0 最新版, 1..18 = 歴代メジャー＆V5世代（v1.0.0〜v5.4.1 全19世代）
     // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
-    //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0), 500(v5.0.0), 510(v5.1.0)
+    //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0),
+    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0)
     int   getLegacyVersionId() const noexcept  { return legacyVersionId.load (std::memory_order_relaxed); }
     int   getLegacyVersionEra() const noexcept { return legacyVersionEra.load (std::memory_order_relaxed); }
     void  setLegacyVersionState (int id, int era)
     {
-        legacyVersionId.store (juce::jlimit (0, 13, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 540, era), std::memory_order_relaxed);
+        legacyVersionId.store (juce::jlimit (0, 18, id), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 550, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState && isStandalone())
@@ -1058,7 +1155,11 @@ private:
 
     // ---- v1.8.0 voice changer (formant-preserving pitch shift) + 5-voice unison ----
     gz::VoiceShifter vcSh[2];                 // per-channel voice changer
+    bool             vcDualMonoSync = true;   // v5.5.0: L==R のデュアルモノ入力中は ch=0 の STFT 結果をゼロ確保共有し 2ch 重複 FFT を省く
     gz::VoiceShifter unSh[4];                 // 4 extra "members" for the unison
+    gz::MultiVoiceHarmonyShifter multiHarmSh; // v5.5.0 1回共通FFT解析・最大4声ハモリ合成エンジン
+    std::vector<float> multiHarmOut[4];       // v5.5.0 各声部出力バッファ (prepareToPlayで事前確保)
+    bool               multiHarmWasRunning = false;
     std::vector<float> vcMono, vcTmp;         // scratch (sized in prepareToPlay)
     std::vector<float> vcDry[2];              // v2.6.0: 安全弁用の加工前コピー
     float  unDelay[4][4096] = {};             // per-voice ensemble timing delays
@@ -1455,10 +1556,15 @@ private:
     std::atomic<bool>  coughMute          { false };
     float              coughMuteGain      { 1.0f };
     float              coughMuteStep      { 0.002f };
-    std::atomic<bool>  screamGuardOn      { true };
-    float              screamGuardEnv     { 0.0f };
-    std::atomic<float> meterScreamGuardDb { 0.0f };
-    float              floatPadGain       { 1.0f };
+    std::atomic<bool>  screamGuardOn          { true };
+    float              screamGuardEnv         { 0.0f };
+    int                screamGuardHoldSamples { 0 };
+    std::atomic<float> meterScreamGuardDb     { 0.0f };
+    float              floatPadGain           { 1.0f };
+    std::atomic<int>   vocalExprMode          { 0 };
+    std::atomic<float> outputVolumePct        { 100.0f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> makeupSmooth;
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> outVolSmooth;
 
     // ---- v4.8.0 柱①：🎵 カラオケ・BGMプレイヤー内蔵（キー変更・自動BGMダッキング・WDM混音選択） ----
     mutable juce::CriticalSection bgmMetaLock;
@@ -1522,7 +1628,7 @@ private:
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 540 };
+    std::atomic<int>   legacyVersionEra   { 550 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
@@ -1651,6 +1757,59 @@ private:
     float              subChestLp         { 0.0f }, subChestSmoothL { 0.0f }, subChestSmoothR { 0.0f }, subChestHpL { 0.0f }, subChestHpR { 0.0f };
     int                subChestSign       { 1 }, subChestFlip { 1 };
     std::atomic<float> meterMixVoiceBridgeDb { 0.0f };
+
+    // ---- v5.5.0 Smart Sleep ＆ 声⇄伴奏タイミングずれ補正(±300ms) ＆ グローバルホットキー ----
+    gz::PitchDetector  tunerPitchDet;
+    std::atomic<float> sharedVocalF0Hz    { 0.0f };
+    std::atomic<float> sharedVocalF0Conf  { 0.0f };
+    std::atomic<int>   vocalTunerLeaseSamples { 0 };
+    float              unLfoPhase[4]      { 0.0f, 0.25f, 0.50f, 0.75f };
+    float              unFormLp[4]        { 0.0f, 0.0f, 0.0f, 0.0f };
+    bool               unVocoderActive[4] { false, false, false, false };
+    std::atomic<int>   syncOffsetMs       { 0 };
+    int                lastAppliedSyncMs  { 0 };
+    int                syncMaxSamples     { 0 };
+    int                vocalSyncWritePos  { 0 };
+    int                bgmSyncWritePos    { 0 };
+    int                bgmSyncTailSamples { 0 };
+    juce::AudioBuffer<float> vocalSyncDelayBuf, bgmSyncDelayBuf;
+    std::atomic<bool>  globalHotkeysOn    { true };
+
+    // v5.5.0 ⚡ 音ズレ1クリック自動計測（ウッドブロッククリック往復遅延計測・RT確保ゼロ）
+    std::atomic<bool>  syncCalibRunning      { false };
+    std::atomic<int>   syncCalibPos          { 0 };
+    std::atomic<int>   syncCalibResultCode   { 0 }; // 0:未計測/計測中, 1:成功, -1:未検出
+    std::atomic<float> syncCalibMeasuredRtMs { 0.0f };
+    float              syncCalibNoisePeak    { 0.0f };
+    int                syncCalibDetectedAt   { -1 };
+    float              syncCalibDetectedAmp  { 0.0f };
+
+    // v5.5.0 🌐 アプリ別カラオケ音声取込 ＆ StreamOut専用ミックスバッファ（二重聴こえ防止）
+    gz::AppAudioCapture      appAudioCap;
+    std::atomic<bool>        appAudioMonitorLocal { false };
+    juce::AudioBuffer<float> streamMixScratch;
+
+    // v5.5.0 🎹 伴奏コード追従スマートハモリ（36ビン複素リーキーフェーザ・クロマ解析器・RT確保ゼロ）
+    static constexpr int kChordBins = 36; // C3 (MIDI 48) .. B5 (MIDI 83)
+    std::atomic<bool>  chordFollowHarmOn     { true };
+    std::atomic<int>   bgmLiveChordCode      { -1 }; // -1:なし, root*4 + quality(0:Maj,1:min,2:7)
+    int                lastDetectedChordCode { -1 };
+    int                chordDecimPhase       { 0 };
+    float              chordRotCos[kChordBins]   {};
+    float              chordRotSin[kChordBins]   {};
+    float              chordGainNorm[kChordBins] {};
+    float              chordPhasorRe[kChordBins] {};
+    float              chordPhasorIm[kChordBins] {};
+    float              bgmChordChroma[12]        {};
+
+    // v5.5.0 🎬 SNS投稿用ビジュアライザ動画（.mp4）非同期書き出しワーカー
+    std::atomic<bool>  snsWatermarkOn         { true };
+    std::atomic<bool>  snsVideoExporting      { false };
+    std::atomic<bool>  snsVideoCancelFlag     { false };
+    std::atomic<float> snsVideoExportProgress { 0.0f };
+    juce::String       snsVideoExportStatus;
+    juce::File         lastSnsVideoFile;
+    std::thread        snsVideoExportThread;
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

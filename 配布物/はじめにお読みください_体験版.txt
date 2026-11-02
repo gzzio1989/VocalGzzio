@@ -1,22 +1,22 @@
 ================================================================
- VocalGzzio v5.4.1 （無料体験版）
+ VocalGzzio v5.5.0 （無料体験版）
 ================================================================
 
 ■ さいしょに ── 無料体験版（0円）と製品版（2,500円・買い切り）の違い
 
   【共通（無料体験版でも100%試せること）】
-  ・音の処理エンジン、超低遅延モード、全8種類のエフェクト、
-    全19種類のデザインテーマ、4つの表示スタイル（「★かんたん3ステップ」等）は
-    すべて製品版とまったく同じです。
-  ・v5.4.0 / v5.3.0 / v5.2.0 / v5.1.0 / v5.0.0 の新機能（語尾ビブラート／
-    母音フォーム統一EQ／歌い出しグルーヴ／ミックス＆胸鳴り／自作音源カスタムSE 4枠／
-    ささやき浮上＆ドルビーA倍音エアー／音程追従オートスイートスポット／骨伝導モニター補正／
-    伴奏「声ポケット」自動掘り／伴奏追従ボーカルライダー／ゼロ遅延・部屋鳴り除去／
-    息継ぎ＆母音・子音セパレート／実質ゼロ遅延0.08ms知能ピッチ補正／伴奏キー＆BPM自動解析／
-    歌枠セットリスト／サビ自動検知／ペチャ音瞬間除去／4大名機マイクモデリング／
-    伴奏ボーカル除去／-14 LUFSマスタリング録音／4種ライブSEポン出し／
-    🕰️歴代世代タイムマシン＆省負荷ゲート）や、OBS直結用の仮想ドライバ
-    「VocalGzzio Driver (WDM)」もそのままお試しいただけます。
+  ・音の処理エンジン、⚡Smart Sleep超軽量化（CPU/UI負荷40〜70%削減）、
+    全8種類のエフェクト、全19種類のデザインテーマ、4つの表示スタイル、
+    2クリック100%英語UIモードはすべて製品版とまったく同じです。
+  ・v5.5.0〜v5.0.0 の全機能（🌐アプリ別カラオケ音声取込／⚡1クリック音ズレ自動計測±300ms／
+    🎹伴奏コード追従スマートハモリ／🎬SNS動画(.mp4)1クリック保存／📌配信ミニバー 520×115px／
+    ⌨️裏画面＆全角かな無敵グローバルホットキー／✨こだわり詳細折りたたみ／
+    語尾ビブラート／母音フォーム統一EQ／歌い出しグルーヴ／ミックス＆胸鳴り／自作SE 4枠／
+    ささやき浮上＆ドルビーA倍音エアー／音程追従スイートスポット／骨伝導モニター補正／
+    伴奏「声ポケット」自動掘り／ゼロ遅延部屋鳴り除去／0.08ms知能ピッチ補正／
+    伴奏キー＆BPM自動解析／伴奏ボーカル除去／-14 LUFS完パケ3種同時録音／
+    🎤声量幅10割ダイレクト開放＆0〜250%歪みゼロ最終音量／🎨ノブ内デザインON/OFF／
+    🕰️歴代19世代タイムマシン v1.0.0〜v5.5.0）もそのままお試しいただけます。
 
   【無料体験版の3つの制限（製品版で解除される点）】
     1. 60秒ごとに約0.6秒だけ音量がすーっと下がって戻ります
@@ -39,42 +39,38 @@
       BOOTH商品ページ: https://gzzio.booth.pm/items/8764003
 
 
-■ 3分で音が出るまで（使い方に合わせて A または B を選んでください）
+■ 3分で音が出るまで（使い方に合わせて A・B・C から選んでください）
 
   【推奨】まずはこのフォルダ内のインストーラー
-         「VocalGzzio_Trial_Setup_v5.4.1.exe」を実行してください。
-         単体起動アプリ・VST3プラグイン・OBS/通話直結用の専用仮想ドライバ
-         「VocalGzzio Driver (WDM)」がすべて一括で自動導入されます。
+         「VocalGzzio_Trial_Setup_v5.5.0.exe」を実行してください。
+         単体起動アプリ・VST3プラグイン・オフライン取扱説明書が一括導入されます。
          ※ Windowsで青い画面「Windows によって PC が保護されました」が出たときは、
             画面内の「詳細情報」をクリック →「実行」を押すとそのまま進めます。
 
-  【A】歌枠配信・OBS・VC通話・歌ってみた録音で使う方（DAW不要）
-    1. 上記インストーラーで導入した「VocalGzzio Trial」を起動します
-       （※手動で使う場合は「単体起動アプリ」フォルダ内の VocalGzzio Trial.exe を起動します。
-         同フォルダ内の VocalGzzioWdmInstaller.exe でも仮想ドライバを導入できます）。
-    2. 画面上部の「うた自動」または「🎵BGM・録音」内の
-       「🎯5秒AI声質ターゲット診断」を押すと、あなたの声に合わせて自動調整されます。
-    3. OBS や Discord、cluster 等へ声を送る場合は、配信ソフト側のマイク設定で
-       「ライン (VocalGzzio Driver (WDM))」を選ぶだけで直結できます。
-       ※ インターフェース側で自分の声を直接聴いている場合は、画面上の
-          「🎧自分の耳への返しミュート」をONにすると二重聞こえを防げます。
+  【A】OBS Studio で一番かんたんに試す方（仮想ドライバ不要・ゼロ遅延）
+    1. 上記インストーラーを実行したあと、OBS Studio を開きます。
+    2. OBS の「マイク音声」の「フィルタ」→「＋」→「VST 2.x/3.x プラグイン」から
+       「VocalGzzio Trial」を選び、「プラグインインターフェースを開く」を押します。
 
-  【B】DAW（Cubase / Studio One / REAPER 等）でプラグインとして使う方
+  【B】単体起動アプリ（🌐アプリ別カラオケ取込・🎬SNS動画・📌配信ミニバー・裏ホットキー）を試す方
+    1. 導入された「VocalGzzio Trial」（または「単体起動アプリ」内の VocalGzzio Trial.exe）を起動します。
+    2. 画面上部の「うた自動」または「🎵BGM・録音」内の「🎯5秒AI声質ターゲット診断」を押します。
+    3. YouTube カラオケ等と合わせて試す場合は「🎵BGM・録音」→「🌐アプリ音取込▼」からブラウザを選ぶだけで、
+       仮想ケーブル不要でキー変更・ボーカル除去・コード追従ハモリをお試しいただけます。
+    4. OBS や通話ソフトと連携テストをする場合は、オーディオIF内蔵ループバックまたは外部仮想ケーブル
+       （VB-CABLE / Yamaha SYNCROOM Driver 等）をお使いください。
+       ※ Windows 10 / 11 のカーネル保護要件および Microsoft ハードウェア署名審査スケジュールへの適合に
+          万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦先送りし、現在は
+          ドライバ不要の「🌐アプリ別カラオケ音声取込」および OBS 標準 VST3 直挿し・IFループバック・
+          外部仮想ケーブル連携をご案内しております。
+
+  【C】DAW（Cubase / Studio One / REAPER 等）でプラグインとして試す方
     1. インストーラーを実行するか、「VST3プラグイン」フォルダ内の
        VocalGzzio Trial.vst3 を次の場所にコピーします。
            C:\Program Files\Common Files\VST3\
     2. DAWを再起動し、ボーカルトラックに挿して「うた自動」を押してください。
-
-  ※ 体験版は内部で「VocalGzzio Trial」として別管理されるため、
-     あとから製品版を入れても混ざったり壊れたりしません。
-
-
-■ 体験版でしてよいこと
-
-  ・そのままの形で、活動者仲間やお友だちに紹介・配布していただいて構いません。
-  ・音質のテスト、AG03やUSBマイク・OBSとの相性確認、どうぞご自由に。
-  ・体験版で作った音を、作品・配信・販売物として公開することはできません。
-    （くわしくは ライセンス/使用許諾契約書.txt 第4条）
+    ※ 体験版は内部で「VocalGzzio Trial」として別管理されるため、
+       あとから製品版を入れても混ざったり壊れたりしません。
 
 
 ■ おといあわせ・公式サイト
@@ -87,53 +83,32 @@
 
 
 ================================================================
- 🌐 English Quick Start Guide — VocalGzzio v5.4.1 (Free Trial)
+ 🌐 English Quick Start Guide — VocalGzzio v5.5.0 (Free Trial)
 ================================================================
 
 1. How to Get Sound in 60 Seconds
-   ★ RECOMMENDED: Run "VocalGzzio_Trial_Setup_v5.4.1.exe" included right inside
-     this folder! It installs the Standalone App, VST3 Plugin, and WHQL-signed
-     "VocalGzzio Driver (WDM)" for OBS / Discord / VRChat in one step.
-     (Note: If Windows SmartScreen shows "Windows protected your PC", click
-      "More info" -> "Run anyway" to proceed.)
+   ★ RECOMMENDED: Run "VocalGzzio_Trial_Setup_v5.5.0.exe" included in this folder!
+     It installs the Standalone App, VST3 Plug-in, and offline manuals cleanly.
 
-   [A] For OBS / Twitch / YouTube Karaoke Streams / VRChat / Discord (No DAW needed):
-     - Launch "VocalGzzio Trial" installed above (or manually run
-       "VocalGzzio Trial.exe" inside "単体起動アプリ"; you can also install
-       the virtual driver via "VocalGzzioWdmInstaller.exe" in the same folder).
-     - Click "うた自動" (Auto-Setup: Sing) at the top bar and sing for 5 seconds.
-     - In OBS / Discord / VRChat mic settings, select:
-         Line (VocalGzzio Driver (WDM))
-     - If you already monitor your mic directly through your audio interface,
-       turn ON "🎧自分の耳への返しミュート" (Mute Self-Monitor) to prevent double audio.
+   [A] Direct OBS Studio VST3 Filter (Easiest — Zero Virtual Cables Needed):
+     - In OBS Studio, open Mic/Aux -> Filters -> "+" -> VST 2.x/3.x Plug-in
+       and select "VocalGzzio Trial".
 
-   [B] For DAWs (REAPER / Cubase / Studio One / FL Studio / Ableton):
-     - Run "VocalGzzio_Trial_Setup_v5.4.1.exe", or manually copy
-       "VocalGzzio Trial.vst3" into: C:\Program Files\Common Files\VST3\
-       (On macOS, run the .pkg installer for AU / VST3 / Standalone).
+   [B] Standalone App (🌐 App Karaoke Capture, 🎬 SNS Video, 📌 Mini-Bar & Hotkeys):
+     - Launch "VocalGzzio Trial" (or "VocalGzzio Trial.exe" inside "単体起動アプリ").
+     - Use "🌐アプリ音取込▼" inside "🎵BGM・録音" to capture Chrome/YouTube karaoke
+       directly without virtual cables or local headphone flanging!
+     - Route to OBS / Discord / VRChat via your audio interface's built-in
+       loopback or an external virtual cable (VB-CABLE / Yamaha SYNCROOM Driver).
+     - Note: To ensure full compliance with Windows 10/11 kernel security and
+       Microsoft hardware signature certification scheduling, bundling of a
+       proprietary virtual driver has been postponed to a future roadmap release.
 
-2. Built-in 100% English UI Mode & Quick Button Cheat Sheet
-   ★ 2-CLICK FULL ENGLISH UI: Click "文字・見た目" (top-right bar) -> "ブランド" (Brand)
-     to switch all buttons, knobs, 60 presets, and tooltips into 100% English!
-   - うた自動 / トーク自動     : 1-Click 5s AI Auto-Setup (Sing / Talk)
-   - 歌枠/MC                   : 1-Click Toggle (Singing Reverb <-> Dry Talk Mode)
-   - 押して原音と比較          : Hold to Compare Raw Mic (Dry) vs. Processed (Wet)
-   - BGM・録音 -> ボーカル除去 : Load Song + 1-Click Vocal Remover & Key Shift (±6)
-   - 録音 / 直前30秒を保存     : Exports 3 WAVs (-14 LUFS Mix + Wet Vocal + Dry Vocal)
-   - 01 整える                 : Noise Learn (じどう学習), Gate, 0ms Room De-Reverb
-   - 02 声をつくる             : Leveler, De-Esser, 0.08ms Pitch, 5-Voice Unison, v5.4 Expression
-   - 03 空間をつくる           : Reverb Amount/Length, Echo, Width, Zero-Lag Mode
-   - ★サビON! / 拍手・キラ     : 1-Click/Auto Chorus Boost + 8 Sound Effect Pads
-
-3. Free Trial ($0) vs. Full Version (¥2,500 JPY One-Time Purchase)
-   - Same DSP audio engine, 19 themes, and WDM virtual driver as the Full Version.
+2. Built-in 100% English UI Mode & Free Trial vs. Full Version
+   ★ 2-CLICK FULL ENGLISH UI: Click "文字・見た目" -> "ブランド" (Brand) for 100% English!
    - Trial Limit 1: Volume dips briefly for 0.6s once every 60 seconds.
    - Trial Limit 2: Settings reset on app close (Full Version auto-saves everything).
-   - Trial Limit 3: For hardware/voice testing only. Full Version grants full
-     commercial streaming & recording rights (no credit required, up to 3 PCs/Macs).
-
-   Visual English UI Map & Guides:
-     https://gzzio1989.github.io/apps/vocalgzzio/en.html
-     (Also see "説明書/English_Quick_Start_Guide.html" in this folder)
+   - Trial Limit 3: For hardware/voice testing only. Full Version (¥2,500 JPY one-time)
+     grants full commercial streaming & recording rights (up to 3 PCs/Macs).
 
 ================================================================

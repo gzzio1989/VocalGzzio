@@ -1,108 +1,94 @@
 ================================================================
- VocalGzzio v5.4.1 （製品版）
+ VocalGzzio v5.5.0 （製品版）
  お買い上げありがとうございます。
 ================================================================
 
-■ 3分で音が出るまで（使い方に合わせて A または B を選んでください）
+■ 3分で音が出るまで（使い方に合わせて A・B・C から選んでください）
 
   【推奨】まずはこのフォルダ内のインストーラー
-         「VocalGzzio_Setup_v5.4.1.exe」を実行してください。
-         単体起動アプリ・VST3プラグイン・OBS/通話直結用の専用仮想ドライバ
-         「VocalGzzio Driver (WDM)」がすべて一括で自動導入されます。
+         「VocalGzzio_Setup_v5.5.0.exe」を実行してください。
+         単体起動アプリ・VST3プラグイン・オフライン取扱説明書がすべて一括導入されます。
          ※ Windowsで青い画面「Windows によって PC が保護されました」が出たときは、
             画面内の「詳細情報」をクリック →「実行」を押すとそのまま進めます。
 
-  【A】歌枠配信・OBS・VC通話・歌ってみた完パケ録音で使う方（DAW不要）
-    1. 上記インストーラーで導入した「VocalGzzio」を起動します
-       （※手動で使う場合は「単体起動アプリ」フォルダ内の VocalGzzio.exe を起動します。
-         同フォルダ内の VocalGzzioWdmInstaller.exe でも仮想ドライバを導入できます）。
-    2. 画面上部の「うた自動」または「🎵BGM・録音」内の
+  【A】OBS Studio で一番かんたんに歌枠・雑談配信をする方（仮想ドライバ不要・ゼロ遅延）
+    1. 上記インストーラーを実行したあと、OBS Studio を開きます。
+    2. OBS の「マイク音声」の「フィルタ」→「＋」→「VST 2.x/3.x プラグイン」から
+       「VocalGzzio」を選び、「プラグインインターフェースを開く」を押します。
+    3. 画面上部の「うた自動」または「🎵BGM・録音」内の
        「🎯5秒AI声質ターゲット診断」を押すと、あなたの声に合わせて自動調整されます。
-    3. OBS や Discord、cluster / VRChat 等へ声を送る場合は、配信・通話ソフト側の
-       マイク設定で「ライン (VocalGzzio Driver (WDM))」を選ぶだけで直結できます。
+
+  【B】単体起動アプリ（🌐アプリ別カラオケ取込・内蔵BGM・🎬SNS動画・📌ミニバー・裏ホットキー）を使う方
+    1. 導入された「VocalGzzio」（または「単体起動アプリ」内の VocalGzzio.exe）を起動します。
+    2. YouTube カラオケ等の伴奏を直接取り込む場合は「🎵BGM・録音」→「🌐アプリ音取込▼」から
+       お使いのブラウザ（Chrome / Edge 等）を選ぶだけで、仮想ケーブル不要でミックス・キー変更・
+       ボーカル除去・完パケ録音・SNS動画保存が可能です（自分の耳への二重再生も自動防止されます）。
+    3. OBS や Discord、cluster / VRChat 等へ単体起動版の音を丸ごと送る場合は、お手持ちのオーディオIFの
+       内蔵ループバック機能、または無料の定番外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）
+       をお使いください（アプリ内の「配信出力」スイッチが外部仮想ケーブルを自動検出します）。
+       ※ Windows 10 / 11 のカーネル保護要件および Microsoft ハードウェア署名審査スケジュールへの適合に
+          万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦先送りし、現在は
+          ドライバ不要の「🌐アプリ別カラオケ音声取込」および OBS 標準 VST3 直挿し・IFループバック・
+          外部仮想ケーブル連携をご案内しております。
        ※ インターフェース側で自分の声を直接聴いている場合は、画面上の
           「🎧自分の耳への返しミュート」をONにすると二重聞こえを防げます。
 
-  【B】DAW（Cubase / Studio One / FL Studio / REAPER 等）で使う方
+  【C】DAW（Cubase / Studio One / FL Studio / REAPER 等）で使う方
     1. インストーラーを実行するか、「VST3プラグイン」フォルダ内の
        VocalGzzio.vst3 をまるごと次の場所に貼り付けてください。
            C:\Program Files\Common Files\VST3\
     2. DAWをいったん終了して再起動し、ボーカルトラックに挿してください。
 
 
-■ v5.4.0 / v5.3.0 / v5.2.0 / v5.1.0 / v5.0.0 の主な新機能・便利機能
+■ v5.5.0 / v5.4 / v5.3 / v5.2 の主な新機能・便利機能
 
-  ・〰️ 語尾ビブラート・🗣️ 母音フォーム統一・⚡ 歌い出しグルーヴ・🌉 ミックス＆胸鳴り（v5.4.0）：
-    180ms以上のロングトーン語尾に自然な5.5Hzの揺らぎを添え、「い・え」で細くなる母音を太く揃え、
-    出だし35msの発声アタックと換声点の倍音抜けをゼロ遅延で自動サポートします。
-  ・🎵 自作音源カスタムSE 4枠ポン出しパッド（v5.4.0）：
-    既存の4種内蔵SE（拍手・キラ・ドラム・ベル）に加え、自分で用意した音声ファイル
-    （.wav / .mp3 / .flac / .ogg / .aiff）を4枠までセットして1クリックでポン出し再生できます。
-  ・🪶 ささやき浮上・上向きコンプレッサー ＆ 💎 倍音ドルビーAエアー（v5.3.0）：
-    大きな声のピークを潰さずにウィスパーや語尾の余韻だけを最大+4.5dBすくい上げ、
-    母音が鳴っている瞬間だけ4帯域の倍音エアーを付加してサ行が刺さらない輝きを作ります。
-  ・🎯 音程追従・オートスイートスポット（v5.3.0）：
-    歌っている音程（f0）を追跡し、高音では260Hzの胸の響きを足しつつ3.2kHzの痛みを抑え、
-    低音では220Hzのこもりを引いて2.8kHzの言葉の輪郭を自動で際立たせます。
-  ・🎧 骨伝導補正・歌い手専用モニターエンハンサー（v5.3.0）：
-    OBS配信や録音の音は一切変えずに、自分のヘッドホンへの返しから骨伝導ダブり（240Hz）を
-    引き算し、ピッチが最も取りやすい倍音帯域を際立たせて力まず歌える返しを作ります。
-  ・🕳️ 伴奏「声ポケット」自動掘り ＆ 🎢 伴奏連動ボーカルライダー（v5.2.0）：
-    歌っている瞬間だけ伴奏のMidから声とぶつかる4帯域だけをピンポイントで掘り下げ、
-    伴奏の盛り上がりに合わせて歌声フェーダーを自動で乗りこなします。
-  ・🏠 ゼロ遅延・部屋鳴り除去 ＆ 🌬️ 息継ぎ整え・母音/子音セパレート（v5.2.0）：
-    防音室のない部屋の反響（風呂場感・箱鳴り）をゼロ遅延で引き算し、大きな息継ぎや
-    サ行の刺さりを自動でクッション保護します。
-  ・🎯 実質ゼロ遅延（0.08ms）知能ピッチ補正 ＆ 超軽量UI描画エンジン：
-    歌い出しのラグを無くし、不規則な声の揺れは瞬時に止めつつビブラートは自然に残し、
-    語尾のフラット垂れや高音引き上げ時の声の細りも自動で支えます（24時間配信でも劣化ゼロ）。
-  ・🎼 伴奏キー（長調/短調24調）＆BPM 1秒自動解析 ＆ 📋 歌枠セットリスト機能：
-    BGMを読み込むだけで曲のキーとBPMを自動検出し、曲ごとの設定を最大32曲まで記憶できます。
-  ・🎙️ ゼロ遅延・4大名機マイクモデリング ＆ 💧 ペチャ音・リップノイズ瞬間除去：
-    手持ちのマイクを「✨800G真空管／👑U87王道／📻SM7B配信／💎ASMR極艶」の質感へ変換し、
-    気になる口元のペチャ音・舌打ちノイズもゼロ遅延でピンポイント除去します。
-  ・✨ 伴奏ボーカル除去（原曲1クリック・カラオケ化）：
-    「🎵BGM・録音」に手持ちの原曲を読み込んで「✨ボーカル除去」をONにすると、
-    その場でカラオケ伴奏化＆キー変更（±6半音・歌声ピッチ補正も自動連動）できます。
-  ・💿 -14 LUFS 自動音圧マスタリング ＆ 完パケ3ファイル同時書き出し：
-    WAV録音や「⏪直前30秒を保存」で、「①完成音(Wet)」「②素の声(Dry)」に加えて
-    伴奏＋歌を-14 LUFSに整えた「③完パケMIX(-14LUFS).wav」を同時保存します。
-  ・🔥 サビ1クリック華やか演出・🤖 サビ自動検知 ＆ 👏 4種ライブSEポン出しパッド：
-    画面右下の「★サビ盛（常時ON / 🤖サビ自動検知 / OFF）」と4つのSEボタン（拍手・キラ・ドラム・ベル）で
-    ワンオペ歌枠や雑談配信をその場で盛り上げられます。
-  ・🌌 全19テーマ ＆「★かんたん3ステップ」など4つの表示スタイル切替：
-    好きなテーマデザイン（星空・海・朝焼け・LIVER等）をそのまま反映しながら、
-    「STEP 1 ▶ STEP 2 ▶ STEP 3」のガイド付きで迷わず操作できます。
-  ・🕰️ 歴代バージョン呼び出し・世代タイムマシン（v1.0.0〜v5.4.1）：
-    ヘッダーのバージョンバッジや「文字・見た目」から初代 v1.0.0〜最新世代まで
-    オンデマンド呼び出し可能（未搭載DSPを休止し最大-80%の省負荷動作）。
+  ・🌐 ドライバ不要『アプリ別カラオケ音声取込』（Windows 10/11 単体起動版・v5.5.0 新搭載）：
+    仮想ケーブル不要で Chrome / Edge（YouTubeカラオケ等）や音楽プレイヤーの音だけを直接取り込み、
+    リアルタイムでボーカル除去・キー変更（±6）・声ポケット掘削・完パケ録音へミックスできます
+    （Discord通話声の混入や、自分のヘッドホンでの二重再生フランジングも自動防止）。
+  ・⚡ 声⇄伴奏「音ズレ」1クリック自動計測 ＆ ミリ秒補正（-300ms 〜 +300ms）（v5.5.0 新搭載）：
+    「⚡自動計測」を押してヘッドホン片耳をマイクに近づけるだけで往復遅延＋DSP遅延を実測し、
+    声と伴奏がピタッと揃う補正値へ自動設定！1ms単位の手動微調整にも対応しています。
+  ・🎹 伴奏コード追従スマートハモリ（v5.5.0 新搭載）：
+    流れている伴奏の和音（[C] [Fm] [E7] 等）をリアルタイム解析し、J-POP定番の借用和音（III7・IVm）や
+    ラスサビ転調の瞬間も、濁るハモリ音をその場のコード構成音へ賢くスナップします。
+  ・🎬 SNS投稿用ビジュアライザ動画（.mp4）1クリック保存（Windows・v5.5.0 新搭載）：
+    外部FFmpeg不要で、録音直後（または直前30秒保存バッファ）から X/YouTube 横動画（16:9）や
+    Shorts/TikTok 縦動画（9:16）、さらに前半Dry➔後半Wetの聴き比べ動画（-14 LUFS）を即書き出し！
+  ・⚡ Smart Sleep 超軽量エンジン ＆ 単一FFTマルチボイス・ハーモナイザ（v5.5.0 新搭載）：
+    複数ハモリ声部の共通1回FFT解析、音声スレッドとのロックフリーF0共有、最小化・背面非表示時の
+    UI/GPU負荷0%休止、純ユニゾン声部のゼロFFT化により、音質劣化ゼロで負荷を 40〜70% 削減しました。
+  ・📌 ワンクリック『配信ミニバー』（520×115px・最前面ピン留め可）＆ ✨ こだわり詳細整理（v5.5.0 新搭載）：
+    ヘッダーの「📌ミニバー」を押すだけでOBSや歌詞画面の隅に常駐できるコンパクトバーへ変身。
+    入出力メーター・歌枠⇄雑談MC・咳ミュート・サビ盛・8種SEポン出し・伴奏キー±・30秒保存を凝縮。
+  ・⌨️ 裏画面・全角かな無敵グローバルホットキー（Windows単体起動版・v5.5.0 新搭載）：
+    OBS・ブラウザ・ゲーム操作中や日本語IME（全角かな）入力中でも誤爆せず即反応します：
+      Ctrl+Shift+M（咳ミュート切替） / F9長押し（押している間だけPush咳ミュート）
+      Ctrl+Shift+T（歌枠⇄雑談MC切替） / Ctrl+Shift+S（サビ盛切替） / Ctrl+Shift+R（直前30秒保存）
+  ・🎤 声量幅3モード（🎤10割ダイレクト開放）・歪みゼロ最終音量（0〜250%）・ノブ内装飾ON/OFF・
+    🕰️ 歴代全19世代（v1.0.0〜v5.5.0）完全復元・🆙 DAW終了を妨げない起動時アップデート通知（v5.5.0 新搭載）
+  ・〰️ 語尾ビブラート・🗣️ 母音フォーム統一・⚡ 歌い出しグルーヴ・🌉 ミックス＆胸鳴り・🎵 自作SE 4枠（v5.4）
+  ・🪶 ささやき浮上・💎 倍音ドルビーAエアー・🎯 音程追従スイート・🎧 骨伝導モニター補正（v5.3）
+  ・🕳️ 伴奏「声ポケット」自動掘り・🏠 ゼロ遅延部屋鳴り除去・🎯 0.08ms知能ピッチ補正（v5.1〜v5.2）
+  ・✨ 原曲1クリック伴奏ボーカル除去 ＆ 💿 -14 LUFS 完パケ3ファイル同時書き出し（v5.0）
 
 
 ■ 入っているもの
 
-  VST3プラグイン/     … DAWに挿して使う本体
-  単体起動アプリ/     … DAWなしで使うアプリ（OBS・歌枠・通話・単体録音用）
-  説明書/             … 詳しいつかいかた・対応インターフェース一覧
-  ライセンス/         … 使用許諾契約書と、第三者ソフトの権利表示
+  VocalGzzio_Setup_v5.5.0.exe … オールインワン公式インストーラー（推奨）
+  VST3プラグイン/             … DAW・OBSに挿して使う本体（手動配置用）
+  単体起動アプリ/             … DAWなしで使うアプリ（歌枠・カラオケ練習・単体録音・SNS動画保存用）
+  説明書/                     … 詳しいつかいかた・OBS連携ガイド・対応インターフェース一覧
+  ライセンス/                 … 使用許諾契約書と、第三者ソフトの権利表示
 
 
 ■ 使ってよい範囲（くわしくは ライセンス/使用許諾契約書.txt）
 
   ・お客様ご本人の機器 3台までに導入できます（Windows版・Mac版とも利用可）。
   ・有効期限はありません。買い切りです（今後のアップデートも無償）。
-  ・作った音は自由に使えます。YouTube等の収益化配信・スパチャ歌枠・案件配信・
+  ・作った音・動画は自由に使えます。YouTube等の収益化配信・スパチャ歌枠・案件配信・
     歌ってみた動画投稿・商用作品販売すべてOK、報告もクレジット表記も不要です。
   ・ソフト本体を第三者へ配布・転売するのはご遠慮ください。
-
-
-■ 音が出ない・他アプリの音が消えるとき
-
-  ・cluster / VRChat / 通話ソフトやブラウザの音が消えるとき
-      → 画面上部の「🛠cluster・通話 音消え一発修復」または
-        「🌐全アプリ共存・共有モード」を1クリックしてください。
-  ・DAWのプラグイン一覧に出てこないとき
-      → 貼り付け先が C:\Program Files\Common Files\VST3\ か確認し、
-        DAW側の「プラグインを再スキャン」を実行してください。
 
 
 ■ おといあわせ・公式サイト
@@ -115,54 +101,46 @@
 
 
 ================================================================
- 🌐 English Quick Start Guide — VocalGzzio v5.4.1 (Full Version)
+ 🌐 English Quick Start Guide — VocalGzzio v5.5.0 (Full Version)
  Thank you for purchasing VocalGzzio!
 ================================================================
 
 1. How to Get Sound in 60 Seconds
-   ★ RECOMMENDED: Run "VocalGzzio_Setup_v5.4.1.exe" included right inside
-     this folder! It installs the Standalone App, VST3 Plugin, and WHQL-signed
-     "VocalGzzio Driver (WDM)" for OBS / Discord / VRChat in one step.
-     (Note: If Windows SmartScreen shows "Windows protected your PC", click
-      "More info" -> "Run anyway" to proceed.)
+   ★ RECOMMENDED: Run "VocalGzzio_Setup_v5.5.0.exe" included in this folder!
+     It installs the Standalone App, VST3 Plug-in, and offline manuals cleanly.
+     (If Windows SmartScreen shows "Windows protected your PC", click
+      "More info" -> "Run anyway".)
 
-   [A] For OBS / Twitch / YouTube Karaoke Streams / VRChat / Discord (No DAW needed):
-     - Launch "VocalGzzio" installed above (or manually run "VocalGzzio.exe"
-       inside "単体起動アプリ"; you can also install the virtual driver via
-       "VocalGzzioWdmInstaller.exe" in the same folder).
-     - Click "うた自動" (Auto-Setup: Sing) at the top bar and sing for 5 seconds.
-     - In OBS / Discord / VRChat mic settings, select:
-         Line (VocalGzzio Driver (WDM))
-     - If you already monitor your mic directly through your audio interface,
-       turn ON "🎧自分の耳への返しミュート" (Mute Self-Monitor) to prevent double audio.
+   [A] Direct OBS Studio VST3 Filter (Easiest — Zero Virtual Cables Needed):
+     - In OBS Studio, open Mic/Aux -> Filters -> "+" -> VST 2.x/3.x Plug-in
+       and select "VocalGzzio".
 
-   [B] For DAWs (REAPER / Cubase / Studio One / FL Studio / Ableton):
-     - Run "VocalGzzio_Setup_v5.4.1.exe", or manually copy "VocalGzzio.vst3"
-       into: C:\Program Files\Common Files\VST3\
-       (On macOS, run the .pkg installer for AU / VST3 / Standalone).
+   [B] Standalone App (🌐 App Karaoke Capture, 🎬 SNS Video, 📌 Mini-Bar & Hotkeys):
+     - Launch "VocalGzzio" (or "VocalGzzio.exe" inside "単体起動アプリ").
+     - Use "🌐アプリ音取込▼" inside "🎵BGM・録音" to capture Chrome/YouTube karaoke
+       directly without virtual cables or local headphone flanging!
+     - Route to OBS / Discord / VRChat via your audio interface's built-in
+       loopback or an external virtual cable (VB-CABLE / Yamaha SYNCROOM Driver).
+     - Note: To ensure full compliance with Windows 10/11 kernel security and
+       Microsoft hardware signature certification scheduling, bundling of a
+       proprietary virtual driver has been postponed to a future roadmap release.
 
-2. Built-in 100% English UI Mode & Quick Button Cheat Sheet
+   [C] DAWs (REAPER / Cubase / Studio One / FL Studio / Ableton):
+     - Run "VocalGzzio_Setup_v5.5.0.exe", or copy "VocalGzzio.vst3" into:
+       C:\Program Files\Common Files\VST3\
+
+2. Built-in 100% English UI Mode & New v5.5.0 Highlights
    ★ 2-CLICK FULL ENGLISH UI: Click "文字・見た目" (top-right bar) -> "ブランド" (Brand)
-     to switch all buttons, knobs, 60 presets, and tooltips into 100% English!
-   - うた自動 / トーク自動     : 1-Click 5s AI Auto-Setup (Sing / Talk)
-   - 歌枠/MC                   : 1-Click Toggle (Singing Reverb <-> Dry Talk Mode)
-   - 押して原音と比較          : Hold to Compare Raw Mic (Dry) vs. Processed (Wet)
-   - 保存 / 読込               : Save / Load Presets (Auto-restores on every launch)
-   - BGM・録音 -> ボーカル除去 : Load Song + 1-Click Vocal Remover & Key Shift (±6)
-   - 録音 / 直前30秒を保存     : Exports 3 WAVs (-14 LUFS Mix + Wet Vocal + Dry Vocal)
-   - 01 整える                 : Noise Learn (じどう学習), Gate, 0ms Room De-Reverb
-   - 02 声をつくる             : Leveler, De-Esser, 0.08ms Pitch, 5-Voice Unison, v5.4 Expression
-   - 03 空間をつくる           : Reverb Amount/Length, Echo, Width, Zero-Lag Mode
-   - ★サビON! / 拍手・キラ     : 1-Click/Auto Chorus Boost + 8 Sound Effect Pads
+     to switch all buttons, knobs, Mini-Bar, 60 presets, and tooltips into 100% English!
+   - 🌐 アプリ音取込▼      : Driverless App-Specific Karaoke Audio Capture
+   - ⚡ 自動計測 (±300ms)   : 1-Click Auto Sync Calibration & 1ms Offset Slider
+   - 🎹 コード追従ハモリ    : Live Accompaniment Chord-Following Smart Harmony
+   - 🎬 SNS動画▼ (.mp4)    : 1-Click 16:9 / 9:16 & Dry->Wet Visualizer Video Export
+   - 📌 ミニバー (Mini-Bar) : Compact 520x115 px overlay with Always-on-Top pin
+   - ⌨️ 裏ホットキー        : Ctrl+Shift+M / Hold F9 (Cough Mute), Ctrl+Shift+T/S/R
 
 3. License & Commercial Use
    - Install on up to 3 computers owned by you (both Windows & macOS included).
-   - One-time purchase with free lifetime updates.
-   - 100% free for commercial use: monetized streams, SuperChats, cover videos,
-     and music sales. No credit attribution or reporting required.
-
-   Visual English UI Map & Guides:
-     https://gzzio1989.github.io/apps/vocalgzzio/en.html
-     (Also see "説明書/English_Quick_Start_Guide.html" in this folder)
+   - One-time purchase with free lifetime updates & 100% commercial streaming/recording rights.
 
 ================================================================

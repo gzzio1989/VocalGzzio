@@ -3,86 +3,80 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VocalGzzio 5.4.1 説明書・対応インターフェース一覧</title>
+<title>VocalGzzio 5.5.0 説明書・OBS配信連携ガイド・対応インターフェース一覧</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><nav><strong>VocalGzzio 5.4.1</strong><a href="index.html">紹介</a><a href="updates-5.4.1.md">更新情報</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a><a href="en.html">🌐 English</a></nav></header>
+<header><nav><strong>VocalGzzio 5.5.0</strong><a href="index.html">紹介</a><a href="updates-5.5.0.md">更新情報</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a><a href="en.html">🌐 English</a></nav></header>
 <main>
-<aside class="note" aria-label="配布状況"><strong>VocalGzzio 5.4.1（Vocal Expression &amp; Custom SE Studio Edition）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
-<h1>どんな機材でも、<br>歌枠から歌ってみた完パケまで1画面で。</h1>
-<p class="lead">総合画面で「仕上がり」や「🎯5秒AI声質診断」を選び、必要なところだけ調整します。語尾ナチュラルビブラート・母音フォーム統一EQ・歌い出しグルーヴ・ミックス＆胸鳴り・自作音源カスタムSE 4枠・ささやき浮上＆ドルビーA倍音エアー・音程追従オートスイートスポット・骨伝導モニター補正・伴奏「声ポケット」自動掘り・ゼロ遅延部屋鳴り除去・原曲1クリック伴奏ボーカル除去・-14 LUFS自動音圧マスタリング＆完パケ同時書き出し・4種ライブSEポン出し・サビ1クリック演出・5大風景テーマ・4種の表示スタイル切替・cluster/通話との完全共存まで1画面で完結します。</p>
-<nav aria-label="目次"><a href="#start">はじめる</a><a href="#v5">v5.4 新機能</a><a href="#trial-vs-prod">体験版と製品版の違い・Q&amp;A</a><a href="#theme">風景テーマ・4種の表示スタイル</a><a href="#stage">伴奏・30秒録音・AI診断</a><a href="#interfaces">対応インターフェース・音消え対策</a><a href="#argon">声の質感</a><a href="#level">音量・絶叫/咳ガード</a><a href="#noise">ノイズ</a><a href="#pitch">音程</a><a href="#space">残響・IR</a><a href="#install">導入</a></nav>
+<aside class="note" aria-label="配布状況"><strong>VocalGzzio 5.5.0（Smart Sleep Ultra-Light &amp; Live Streamer Cockpit Edition）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も追加料金なしで両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
+<h1>どんな機材でも、どんな裏画面配信でも。<br>歌枠から歌ってみた完パケまで超軽量1画面で。</h1>
+<p class="lead">総合画面で「仕上がり」や「🎯5秒AI声質診断」を選び、必要なところだけ調整します。CPU/UI負荷を40〜70%削減した「⚡Smart Sleep超軽量エンジン」、OBSや歌詞の隅に常駐できる「📌配信ミニバー（520×115px）」、カラオケ配信の音ズレを1ms単位で揃える「⏱️声⇄伴奏 音ズレ補正（±300ms）」、全角かな入力中でも誤爆しない「⌨️裏画面グローバルホットキー」、語尾ナチュラルビブラート・母音フォーム統一EQ・歌い出しグルーヴ・ミックス＆胸鳴り・自作音源カスタムSE 4枠・ささやき浮上＆ドルビーA倍音エアー・音程追従オートスイートスポット・骨伝導モニター補正・伴奏「声ポケット」自動掘り・ゼロ遅延部屋鳴り除去・原曲1クリック伴奏ボーカル除去・-14 LUFS自動音圧マスタリング＆完パケ同時書き出し・cluster/通話との完全共存まで完結します。</p>
+<nav aria-label="目次"><a href="#start">はじめる</a><a href="#obs-routing">OBS・配信連携ガイド</a><a href="#v55">v5.5 新機能</a><a href="#trial-vs-prod">体験版と製品版の違い・Q&amp;A</a><a href="#theme">風景テーマ・4種の表示スタイル</a><a href="#stage">伴奏・音ズレ補正・ホットキー</a><a href="#interfaces">対応インターフェース・音消え対策</a><a href="#argon">声の質感</a><a href="#level">音量・絶叫/咳ガード</a><a href="#noise">ノイズ</a><a href="#pitch">音程</a><a href="#space">残響・IR</a><a href="#install">導入</a></nav>
 
 <h2 id="start">はじめの調整</h2>
 <ol>
-<li>単体起動では上部の「⚙音声機器と入出力の設定」またはワンクリックボタン（「🌐全アプリ共存・共有モード」「🛠cluster・通話 音消え一発修復」）でマイクと出力を選びます。プラグインでは録音ソフトの音声トラックへ挿します。</li>
+<li>単体起動では上部の「⚙音声機器と入出力の設定」またはワンクリックボタン（「🌐全アプリ共存・共有モード」「🛠cluster・通話 音消え一発修復」）でマイクと出力を選びます。OBS Studio や DAW のプラグインとして使う場合は音声トラック／フィルタへ直接挿します。</li>
 <li>入力チャンネルは既定の「<strong>Auto Mono IN1-4</strong>」にしておくと、入力1（左ch）・入力2（Scarlett Solo等の右ch）・入力3〜4（Rubix44等の4ch機）のどこにマイクを挿しても自動で声のチャンネルを追尾して両耳中央（L+R）へ揃えます（MOTU M2/M4等のIN 3-4ステレオループバックは自動で除外します）。</li>
 <li>「仕上がり」から目的に近いものを選ぶか、「🎵BGM・録音」内の「🎯5秒AI声質ターゲット診断」を使って自動調律します。</li>
-<li>「押して原音と比較」や「🔄5秒試聴ルーパー」で、処理前後の声を客観的に聴き比べます。</li>
+<li>「押して原音と比較」や「🔄5秒試聴ルーパー」で処理前後の声を聴き比べ、配信本番中はヘッダーの「<strong>📌ミニバー</strong>」を押してコンパクト常駐バーへ切り替えられます。</li>
 </ol>
 
-<h2 id="v5">v5.4.1 / v5.4.0 / v5.3.0 / v5.2.0 / v5.1.0 / v5.0.0 新機能：クリーンPC＆DAW安定化・歌唱表現4エンジン・自作SE 4枠・声ポケット掘り</h2>
+<h2 id="obs-routing">🔗 OBS Studio・ブラウザカラオケ・通話アプリ（Discord / VRChat / cluster）連携ガイド</h2>
+<p>Windows 10 / 11 のカーネル保護要件および Microsoft ハードウェア署名審査スケジュールへの適合に万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦先送りし、v5.5.0 ではドライバ不要で YouTube カラオケ等を取り込める <strong>🌐 アプリ別カラオケ音声取込</strong> を新搭載したほか、安定実績の高い <strong>OBS 標準 VST3 プラグイン直接読込</strong>・<strong>オーディオIF内蔵ループバック</strong>・<strong>外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）</strong> によるゼロ遅延連携をご案内しております。</p>
 <ul>
-<li><strong>🖥️ クリーンPC単体動作・初回マイク自動開通・DAW 1ch→2ch＆設定完全分離（Clean-PC &amp; Studio Stability — v5.4.1新搭載）：</strong>追加のVC++ランタイムDLLが未導入の新品Windows PCでもエラーなく即起動し、初回起動時の排他ASIOラッパー音消えを自動回避。さらにDAW（モノラル入力→ステレオ出力 <code>1ch→2ch</code> 正式対応）のプロジェクト保存データと単体起動版の設定を完全分離し、5時間超の長時間WASAPI共有配信でもクロックドリフトや音量ミキサー重複が起きません。</li>
-<li><strong>〰️ 語尾ナチュラル・ビブラート ＆ 喉揺らしシマー（Natural Tail Vibrato — v5.4.0新搭載）：</strong>「🎵BGM・録音」内の「〰️語尾ビブラート」をONにすると、同じ音程が180ms以上伸びたロングトーンの語尾だけを自動検知し、自然な5.5Hzのピッチ揺れと声道共鳴シマーを滑らかにフェードインさせます。</li>
-<li><strong>🗣️ 母音フォーム統一・イコライザー（Vowel-Homogenizing Formant EQ — v5.4.0新搭載）：</strong>「🗣️母音フォーム統一」をONにすると、「い・え」で喉が締まって2.25kHzが鋭くなる瞬間だけを自動検知し、刺さりを抑えつつ480Hzのチェスト感を補って「あ・い・う・え・お」の太さを均一に揃えます。</li>
-<li><strong>⚡ 歌い出し発声アタック ＆ リズムポケット・シェイパー（Vocal Onset &amp; Groove — v5.4.0新搭載）：</strong>「⚡歌い出しグルーヴ」をONにすると、フレーズの最初の35msの発声立ち上がりを捉え、弱い出だしは声芯（1.2〜3.5kHz）を押し出してリズムを前に出し、強すぎる破裂アタックは滑らかに丸めます。</li>
-<li><strong>🌉 ミックスボイス・倍音ブリッジ ＆ 胸鳴りアンカー（Mix-Voice Bridge — v5.4.0新搭載）：</strong>「🌉ミックス＆胸鳴り」をONにすると、高音で裏声へ切り替わる換声点での倍音抜けを検知して第2・第3倍音と1オクターブ下の微細なチェスト響きを補い、地声と裏声の境目を滑らかに繋ぎます。</li>
-<li><strong>🎵 自作音源カスタムSE 4枠ポン出しパッド（Custom User SE 4 Slots — v5.4.0新搭載）：</strong>総合画面フッター右のSEデッキ下段（<code>➕音源1〜4</code>）および「🎵BGM・録音」パネルに、自分で用意した音声ファイル（<code>.wav / .mp3 / .flac / .ogg / .aiff</code>、最大30秒）を4枠までセットして1クリックでポン出し再生できます。</li>
-<li><strong>🪶 ささやき浮上・上向きコンプレッサー ＆ 💎 倍音ドルビーAエアー（Upward Air Lifter — v5.3.0新搭載）：</strong>「🎵BGM・録音」内の「🪶ささやき＆倍音エアー」をONにすると、大きい声のピークは一切潰さずに小さい声（ウィスパー・語尾の余韻）だけを下から最大+4.5dBすくい上げ、さらに有声母音（あ・い・う・え・お）の瞬間だけ4帯域（800Hz〜/3kHz〜/6kHz〜/9kHz〜）の倍音エアーを付加します。サ行が刺さらない商業音源の輝きが得られます。</li>
-<li><strong>🎯 音程追従・オートスイートスポット（Pitch-Tracked Sweet Spot — v5.3.0新搭載）：</strong>「🎯音程追従スイート」をONにすると、歌っている音程（f0）をゼロ遅延で追跡し、高音（E4以上）では細くなりやすい声に260Hzの胸の響き（最大+3.2dB）を足しつつ3.2kHzの張り上げ痛みを抑え、低音（G3以下）では220Hzのこもりを引いて2.8kHzの言葉の輪郭を自動で際立たせます。</li>
-<li><strong>🎧 骨伝導補正・歌い手専用モニターエンハンサー（Singer's Cue Monitor — v5.3.0新搭載）：</strong>「🎧歌い手モニター補正」をONにすると、OBS配信やWAV録音の音は1ミリも変えずに、自分のヘッドホンへの返しから頭蓋骨の骨伝導とダブる240Hz（-3.0dB）を引き算し、ピッチが最も取りやすい倍音帯域（1.8〜3.8kHz）と12msの耳元ルーム感を付加して、力まず正確に歌えるモニター環境を作ります。</li>
-<li><strong>🕳️ 伴奏「声ポケット」自動掘り（Spectral Unmasker — v5.2.0）：</strong>「🎵BGM・録音」内の「🕳️声ポケット掘り」をONにすると、歌っている瞬間だけ声の主要4帯域（380Hz / 1.0kHz / 2.4kHz / 4.2kHz）とぶつかる伴奏の真ん中（Mid成分）だけを最大-5.0dBピンポイントで掘り下げます。伴奏のステレオ感や重低音・高域の煌めきを一切損なわずに歌声だけがくっきり前に出ます。</li>
-<li><strong>🎢 伴奏連動・知能ボーカルライダー（BGM-Linked Vocal Rider — v5.2.0新搭載）：</strong>「🎢伴奏追従ライド」をONにすると、内蔵BGMの音量包絡と歌声の音量包絡をリアルタイム比較し、静かなAメロでは声を自然に馴染ませ、激しいサビではコンプで潰さずに歌声フェーダーを最大+3.5dB自動で持ち上げます。</li>
-<li><strong>🏠 ゼロ遅延・部屋鳴り（反響・風呂場感）除去（Zero-Lag Room De-Reverb — v5.2.0新搭載）：</strong>「🏠部屋鳴り消し」をONにすると、追加遅延0.0msのまま、部屋の壁の跳ね返り（風呂場感・460Hz付近の箱鳴り）だけを引き算し、防音室で録ったようなデッドでクリアな声に整えます。</li>
-<li><strong>🌬️ 息継ぎ（ブレス）自動整え ＆ 母音/子音セパレート（Smart Breath &amp; Velvet Split — v5.2.0新搭載）：</strong>「🌬️息＆サ行保護」をONにすると、コンプ前の大きな息継ぎ音を最大-6.5dB自然に抑え、さらに母音と無声子音（サ行・ツ行）を自動分離して6.8kHzの刺さりだけを最大-4.2dBクッション保護します。</li>
-<li><strong>🎼 伴奏キー（24調）＆BPM 1秒自動解析 ＆ 📋 歌枠セットリスト（v5.1.0）：</strong>伴奏を読み込んだ瞬間にキーとBPMを自動解析し、曲ごとの設定をセトリに一括記憶できます。</li>
-<li><strong>🎙️ ゼロ遅延・4大名機マイクモデリング ＆ 💧 ペチャ音瞬間除去（v5.1.0）：</strong>手持ちのマイクを追加遅延0.0msで「✨800G真空管／👑U87王道／📻SM7B配信／💎ASMR極艶」の質感に変え、口元のクリック音を瞬間除去します。</li>
-<li><strong>✨ 伴奏ボーカル除去（原曲1クリック・カラオケ化）：</strong>「🎵BGM・録音」パネル内の「✨ボーカル除去」をONにするだけで、読み込んだ原曲の低音ベース（160Hz以下）と高域ステレオ空気感（8.5kHz以上）を保ったまま、中央のメインボーカル帯域だけをリアルタイムで引き算して即座にカラオケ伴奏化します。</li>
-<li><strong>💿 -14 LUFS 自動音圧マスタリング ＆ 完パケFullMix同時書き出し：</strong>WAV録音や「⏪直前30秒さかのぼり保存」の際、YouTube・ニコニコ動画・配信標準の <strong>-14.0 LUFS（ピーク -1.0 dBTP リミッター付）</strong>へ自動で音圧を揃えて書き出します。さらにBGM再生中は「①完成ボーカル(Wet)」「②素の声(Dry)」に加えて「<strong>③完パケMIX(-14LUFS).wav（声＋伴奏の完成音源）</strong>」の3ファイルを同時書き出しします。</li>
-<li><strong>🔥 サビ1クリック華やか演出 ＆ 🤖 サビ自動検知（Auto-Chorus Director）：</strong>総合画面フッター右の「<strong>★サビ盛</strong>」ピル（または「🤖サビ自動検知」）で、サビに入った瞬間に声の存在感・高域エアー・ステレオ幅・残響が一斉に華やかに開きます。</li>
-<li><strong>👏 歌枠・VC盛り上げ 4種ライブSEポン出しパッド：</strong>総合画面フッター右の4連パッド（「<strong>♪拍手</strong>」「<strong>✦キラ</strong>」「<strong>◉ドラム</strong>」「<strong>♦ベル</strong>」）または「🎵BGM・録音」パネルから、外部サンプラー不要で自分のヘッドホンと配信出力（VocalGzzio Driver (WDM)）の両方へクリアな効果音を即座にポン出しできます。</li>
+<li><strong>方法①【一番かんたん・仮想ドライバ不要】OBS Studio に VST3 プラグインとして直接読み込む：</strong>インストーラーで自動配置される <code>VocalGzzio.vst3</code>（<code>C:\Program Files\Common Files\VST3\</code>）を、OBS の「マイク音声」➔「フィルタ」➔「＋」➔「VST 2.x/3.x プラグイン」から選択するだけで、外部ソフト不要・ゼロ遅延で配信へ直結できます。</li>
+<li><strong>方法②【単体起動版＋内蔵BGM/SEも丸ごと配信・通話へ送る】外部仮想ケーブル連携：</strong>無料の定番仮想ケーブル（<code>VB-CABLE</code> や <code>Yamaha SYNCROOM</code> 同梱ドライバ等）がPCに入っていれば、単体起動版（<code>VocalGzzio.exe</code>）の「配信出力」スイッチが自動検出してブリッジ送出します。OBS・Discord・VRChat・cluster 側のマイクに <code>CABLE Output</code> / <code>SYNCROOM</code> 等を選んでください。自分の耳への返しが二重になる場合は「🎧自分の耳への返しミュート」をONにします。</li>
+<li><strong>方法③【オーディオIF内蔵ループバック連携】：</strong>YAMAHA AG03/AG06、Steinberg UR22C/IXO、MOTU M2/M4 等の本体ループバック機能で単体起動版の出力をそのまま配信に乗せられます（発振を0.35秒で検知するハウリング緊急遮断ガード内蔵）。</li>
+</ul>
+
+<h2 id="v55">v5.5.0 / v5.4 / v5.3 / v5.2 新機能：アプリ別カラオケ取込・コード追従ハモリ・SNS動画保存・Smart Sleep超軽量ミニバー</h2>
+<ul>
+<li><strong>🌐 ドライバ不要『アプリ別カラオケ音声取込』（Windows 10/11 単体起動版 — v5.5.0新搭載）：</strong>「🎵BGM・録音」内の「<strong>🌐アプリ音取込▼</strong>」から、Chrome / Edge（YouTubeカラオケ等）や音楽プレイヤーなど指定したアプリ1つだけの音声を仮想ドライバ不要で直接取り込めます（Discord通話音や自身のマイク出力は混ざりません）。取り込んだ音にもリアルタイムで「✨ボーカル除去」「キー変更（±6半音）」「伴奏コード追従ハモリ」「🕳️声ポケット自動掘り」を適用でき、既定では自分のヘッドホン側で二重再生（フランジング）を起こさず完パケ録音・配信出力へミックスします。</li>
+<li><strong>⚡ 声⇄伴奏「音ズレ」1クリック自動計測 ＆ ミリ秒補正（<code>-300 ms</code> 〜 <code>+300 ms</code> — v5.5.0新搭載）：</strong>「<strong>⚡自動計測</strong>」ボタンを押してヘッドホン片耳をマイクに近づけるだけで、ウッドブロック音から往復音響遅延＋DSP遅延を実測し、最適な補正値（ms）へ自動設定します。手動スライダー（プラス側でマイク出力遅延、マイナス側で伴奏出力遅延、<code>0ms</code>リセット付）での1ms微調整も可能です。</li>
+<li><strong>🎹 伴奏コード追従スマートハモリ（v5.5.0新搭載）：</strong>「声を変える（ハモリ）」内の「<strong>🎹伴奏コード追従スマートハモリ</strong>」をONにすると、伴奏のリアルタイム和音（<code>[C] [Fm] [E7]</code> 等）を36ビン複素フェーザで解析。J-POP定番の借用和音（<code>III7</code>・<code>IVm</code> 等）やラスサビ転調でも、不協和になるハモリ音をその瞬間のコード構成音へ自動スナップします。</li>
+<li><strong>🎬 SNS投稿用ビジュアライザ動画（.mp4）1クリック保存（Windows — v5.5.0新搭載）：</strong>録音停止直後（または直前30秒さかのぼりバッファ）から、「<strong>🎬SNS動画▼</strong>」を押すだけで外部FFmpeg不要で H.264 + AAC 192kbps（<code>-14 LUFS</code> マスタリング済）の <code>.mp4</code> 動画を書き出せます。X / YouTube 横動画（<code>16:9 / 1280×720</code>）、Shorts / TikTok / Reels 縦動画（<code>9:16 / 720×1280</code>）、および前半50%が素の声（Dry）➔後半50%が完成声（Wet）に切り替わる <strong>Before➔After 比較動画モード</strong>・透かしロゴON/OFFに対応しています。</li>
+<li><strong>⚡ Smart Sleep 超軽量エンジン ＆ 単一FFTマルチボイス・ハーモナイザ（CPU / UI負荷 40〜70%削減 — v5.5.0新搭載）：</strong>最大4声部のハモリSTFT・フォルマント包絡解析を1回に統合する新ハーモナイザに加え、音声⇄UI間のロックフリー $f_0$ 共有（UI側30Hz YIN重複解析の廃止）、最小化・裏画面時やミニバー時のメイン UI/GPU 再描画 0% 休止、純ユニゾン声部のゼロFFT化、0.5秒無音スリープを実装しました。</li>
+<li><strong>📌 ワンクリック『配信ミニバー』モード（520×115 px・最前面ピン留め可 — v5.5.0新搭載）：</strong>総合画面ヘッダー（および「🎵BGM・録音」上部）の「<strong>📌ミニバー</strong>」を押すと、OBS・歌詞画面・コメント欄・ゲームの隅に置ける <code>520×115 px</code> のコンパクトバーへ変身します。入出力レベルメーター、<code>🎤歌枠⇄💬雑談MC</code>、<code>😷咳ミュート</code>、<code>★サビ盛</code>、<code>👏SEポン出し</code>（右クリックで全8枠選択）、<code>伴奏キー±</code>、<code>⏪30秒保存</code>、<code>📌最前面固定</code>、<code>↗通常画面</code> を凝縮しています。</li>
+<li><strong>⌨️ 裏画面・全角かな無敵グローバルホットキー（Windows Standalone版 — v5.5.0新搭載）：</strong>OBS やブラウザ・ゲーム操作中や日本語 IME（全角かな入力中）でも誤爆せず即反応します。<code>Ctrl+Shift+M</code>（咳ミュート切替）、<code>F9長押し</code>（押している間だけ咳ミュート）、<code>Ctrl+Shift+T</code>（歌枠⇄雑談MC切替）、<code>Ctrl+Shift+S</code>（サビ盛切替）、<code>Ctrl+Shift+R</code>（直前30秒WAV保存）に対応し、「<code>⌨️裏ホットキー:ON/OFF</code>」でいつでも切替可能です（DAWプラグイン版ではホストショートカット保護のため自動無効化）。</li>
+<li><strong>✨ こだわり詳細の折りたたみ整理（v5.5.0新搭載）：</strong>「🎵BGM・録音」内の細かな専門スイッチ群＋自作SE登録列を「<code>✨こだわり詳細</code>」トグルへスッキリ収納し、ONになっている機能数をバッジで一目で確認・展開できます。</li>
+<li><strong>🎤 声量幅3モード（10割ダイレクト開放） ＆ 初心者向け『最終音量（0%〜250%）』＋歪みゼロ最終段ゲイン（v5.5.0新搭載）：</strong>総合画面の出力セクションで「<code>🎵声量幅:標準バランス ⇄ 🎤声量幅:10割ダイレクト! ⇄ 📻声量幅:一定キープ</code>」を1クリック切替でき、10割の声量で歌った熱量が頭打ちせずそのまま伸びます。さらにすべての倍音飽和回路の後段で純粋に線形増幅・減衰する「<code>最終音量（0%〜250%・100%=標準等倍）</code>」ノブと「<code>小さい／◎適正ゾーン／注意</code>」メーターガイドにより、音量を大きく上げても歪まず直感的に調整できます。</li>
+<li><strong>🎨 ノブ内装飾デザインの ON/OFF 切替 ＆ 🆙 Cubase 等の DAW 終了を妨げない『起動時1回アップデート確認』（v5.5.0新搭載）：</strong>上部の「文字・見た目」パネルに「<code>🎨ノブ内デザイン:ON/OFF</code>」（装飾イラスト入りノブ⇄シンプルノブ切替）と、別プロセス非同期通信で DAW の終了を1ミリ秒もブロックしない「<code>🆙起動時の更新確認:ON/OFF</code>（＋今すぐ確認）」を搭載しました。</li>
+<li><strong>〰️ 語尾ビブラート・🗣️ 母音フォーム統一・⚡ 歌い出しグルーヴ・🌉 ミックス＆胸鳴り・🎵 自作SE 4枠（v5.4.0）：</strong>180ms以上のロングトーン語尾に自然な5.5Hzの揺らぎを添え、「い・え」の喉締まりを深い声芯へ揃え、出だし35msの発声アタックと換声点の倍音抜けをゼロ遅延で補助。さらに手持ち音源（<code>.wav/.mp3/.flac/.ogg/.aiff</code>）を4枠登録してポン出しできます。</li>
+<li><strong>🪶 ささやき浮上・💎 倍音ドルビーAエアー・🎯 音程追従スイート・🎧 骨伝導モニター補正（v5.3.0）：</strong>小さい声だけを下から最大+4.5dBすくい上げて母音時のみ倍音エアーを付加し、音程（$f_0$）に応じて高音の太さと低音の輪郭を自動調整。さらに配信音は変えずにヘッドホン返しから骨伝導こもり（240Hz）を引き算します。</li>
+<li><strong>🕳️ 伴奏「声ポケット」自動掘り・🎢 伴奏追従ライダー・🏠 部屋鳴り除去・🌬️ 息＆サ行保護（v5.2.0）：</strong>歌っている瞬間だけ伴奏のMidから声の主要4帯域を最大-5.0dB掘り下げ、部屋の箱鳴り（460Hz）を0.0msで除去し、大きな息継ぎとサ行の刺さりを自動保護します。</li>
+<li><strong>✨ 原曲1クリック伴奏ボーカル除去 ＆ 💿 -14 LUFS 完パケ3種同時WAV保存（v5.0〜v5.1）：</strong>手持ち原曲のセンターボーカル除去とキー変更（±6半音・ピッチ補正キー自動同期）、セットリスト32曲記憶、そして「①完成ボーカル(Wet)」「②素の声(Dry)」「③完パケMIX(-14LUFS)」の3ファイル同時書き出しに対応しています。</li>
 </ul>
 
 <h2 id="trial-vs-prod">無料体験版（0円）と製品版（2,500円・買い切り）の違い ＆ よくある質問（Q&amp;A）</h2>
-<p>無料体験版でも、音質・超低遅延エンジン・全エフェクト・v5.2.0の新機能（声ポケット自動掘り／伴奏追従ライダー／部屋鳴り除去／息＆サ行保護／0.08msピッチ補正／伴奏ボーカル除去／-14 LUFS録音／サビ演出／4種ライブSE）・OBS直結仮想ドライバ（VocalGzzio Driver (WDM)）・全19テーマ＆4表示スタイルまで、機能や音質は一切削っていません。</p>
+<p>無料体験版でも、Smart Sleep超軽量エンジン・配信ミニバー・±300ms音ズレ補正・裏画面ホットキー・全エフェクト・歌唱表現4エンジン・声ポケット自動掘り・0.08msピッチ補正・伴奏ボーカル除去・-14 LUFS録音・全19テーマ＆4表示スタイル・2クリック英語UIまで、機能や音質は一切削っていません。</p>
 <table>
 <thead><tr><th>機能・項目</th><th>無料体験版（0円）</th><th>製品版（2,500円・税込買い切り）</th></tr></thead>
 <tbody>
-<tr><td>音声エンジン・全19テーマ・4種の表示スタイル・v5.2.0全機能</td><td>○ すべて製品版と同じ</td><td><strong>◎ すべて制限なし</strong></td></tr>
+<tr><td>音声エンジン・全19テーマ・4種の表示スタイル・v5.5.0全機能</td><td>○ すべて製品版と同じ</td><td><strong>◎ すべて制限なし</strong></td></tr>
 <tr><td>連続使用時の試聴制限</td><td>60秒ごとに約0.6秒だけ音量が低下</td><td><strong>◎ 音量低下なし（何時間の歌枠配信・録音でも途切れず使用可能）</strong></td></tr>
 <tr><td>設定・ノイズ学習・お気に入りテーマの自動保存＆読込（A/B比較）</td><td>×（終了すると初期状態へリセット）</td><td><strong>◎ 完全対応（毎回起動0秒でいつもの声で歌える）</strong></td></tr>
 <tr><td>商用利用・収益化配信・動画投稿・OS対応</td><td>機材相性・音質確認用（公開・配信利用不可）</td><td><strong>◎ 収益化配信・スパチャ歌枠・案件・歌ってみた投稿・同人販売すべて自由（報告・クレジット不要）／Win＆Mac同梱（PC3台まで・無償アップデート対象）</strong></td></tr>
 </tbody>
 </table>
 <ul>
-<li><strong>Q. DAWを持っていなくてもOBSだけで歌枠配信できますか？：</strong>はい、同梱の「単体起動アプリ（VocalGzzio.exe）」と専用仮想ドライバ「ライン (VocalGzzio Driver (WDM))」だけでOBSへ直結できます。</li>
-<li><strong>Q. 自分の耳への返しが二重に聞こえるときは？：</strong>オーディオインターフェース（AG03等）本体のダイレクトモニターをお使いの場合は、画面上の「🎧自分の耳への返しミュート」をONにすると、OBSへはエフェクト後の声を送り続けながら自分の耳への二重返しだけを消せます。</li>
+<li><strong>Q. DAWを持っていなくてもOBSだけで歌枠配信できますか？：</strong>はい！OBS のマイクフィルタから <code>VocalGzzio.vst3</code> を直接読み込むか、単体起動アプリ（<code>VocalGzzio.exe</code>）とオーディオIF内蔵ループバック／外部仮想ケーブル（<code>VB-CABLE</code> / <code>SYNCROOM</code> 等）を組み合わせるだけでDAW不要で歌枠配信できます。</li>
+<li><strong>Q. 自分の耳への返しが二重に聞こえるときは？：</strong>オーディオインターフェース（AG03等）本体のダイレクトモニターをお使いの場合は、画面上の「🎧自分の耳への返しミュート」をONにすると、外部配信出力へはエフェクト後の声を送り続けながら自分の耳への二重返しだけを消せます。</li>
 </ul>
 
 <h2 id="theme">星空・海・黄昏 5大風景コレクション ＆ 4つの表示・操作スタイル切替</h2>
 <ul>
-<li><strong>🌌「星空・海・黄昏」5大風景コレクション：</strong>総合画面中央の「01銀河」「02碧海」「03朝焼」「04晩秋」「05蒼劇」ピル、または上部の「文字・見た目」から5つの風景・季節テーマをワンタッチで切り替えられます。歌声の倍音と共鳴する水鏡リフレクションや水紋・流星・蛍火を描画します（「⚡軽量」ON時は自動休止）。</li>
-<li><strong>♥LIVER（クチュール5色）・☕ゆるふわ・🎛STUDIO・◎従来：</strong>上部の配置ボタンから「✦天球水鏡」「♥LIVER（01ロゼ・02氷紫・03黒姫・04翡翠・05白桃）」「🎛STUDIO」「◎従来」を1クリックで切り替えられます。</li>
-<li><strong>4つの「画面の見やすさ・操作スタイル切替」：</strong>総合画面の右中段バー、または上部の「文字・見た目」ポップアップからいつでも切り替えられます。
-  <ul>
-    <li><strong>標準デザイン：</strong>通常のテーマ配色・アニメーション・全コントロールを表示します。</li>
-    <li><strong>◉ くっきり大文字：</strong>背景透けゼロの漆黒×純白（WCAG AAA 12:1以上）、極太5px針、8分割大目盛り、特大太字、形状記号（<code>▼</code>削る・抑える / <code>▲</code>足す・揃える / <code>○</code>待機中）で小さな文字や目盛りを読みやすくします。</li>
-    <li><strong>★ かんたん3ステップ：</strong>選んだテーマのデザイン・世界観（星空・海・LIVER等）をそのまま反映しながら、迷いやすい詳細スイッチを整理し、「<code>STEP 1 雑音を消す ▶ STEP 2 声を揃える ▶ STEP 3 残響を足す</code>」の順路ガイドと主役ツマミの「<code>★まずここ</code>」バッジで迷わず操作できます。</li>
-    <li><strong>● マット・具体表記：</strong>発光・反射・グラデーション・点滅をすべて抑えたマット配色と水平グリッド整列、比喩を排した具体的な機能名表記（<code>背景ノイズ除去</code>・<code>歯擦音(サ行)抑制</code>・<code>中高域(明瞭度)</code>等）に切り替えます。</li>
-  </ul>
-</li>
-<li><strong>文字サイズ（80%〜150%）・画面サイズ（85%〜125%）自動フィット：</strong>どの文字サイズ・画面倍率を選んでも、ラベルや数値カプセル、コンボボックスの文字が枠線と重なったり省略記号（<code>...</code>）で切れたりしない自動採寸設計です。</li>
-<li><strong>🕰️ 歴代バージョン呼び出し・世代タイムマシン（v1.0.0〜v5.0.0 全13世代）＆ 省負荷ゲート：</strong>ヘッダーのバージョンバッジ（<code>🕰v5.0.0▼</code>）または「文字・見た目」内の「🕰歴代バージョン呼び出し」から、初代 <code>v1.0.0</code>（クリーム・フラット2列）や <code>v1.7.0</code>（ゆるふわ2列）、<code>v2.4.0</code>（かんたん1列）、<code>v4.3.3</code>（3ステップ総合画面）など全13世代をいつでも呼び出せます。起動時に全世代を一括読み込みしない<strong>オンデマンド遅延読み込み設計（常駐メモリ0MB）</strong>と、呼び出した世代に未搭載の後発DSPを完全休止する<strong>世代別省負荷ゲート（最大-80%のCPU負荷削減）</strong>を備えています。</li>
+<li><strong>🌌「星空・海・黄昏」5大風景コレクション：</strong>総合画面中央の「01銀河」「02碧海」「03朝焼」「04晩秋」「05蒼劇」ピル、または上部の「文字・見た目」から5つの風景・季節テーマをワンタッチで切り替えられます（「⚡軽量」ON時や最小化時は描画負荷0%で自動休止）。</li>
+<li><strong>♥LIVER（クチュール5色）・☕ゆるふわ・🎛STUDIO・◎従来：</strong>上部の配置ボタンから「✦天球水鏡」「♥LIVER（01ロゼ・02氷紫・03黒姫・04翡翠・05白桃）」「🎛STUDIO」「◎従来」を1クリックで切り替えられます。また「文字・見た目」➔「ブランド」で全画面100%英語UIへ切り替えられます。</li>
+<li><strong>4つの「画面の見やすさ・操作スタイル切替」：</strong>標準デザイン／◉くっきり大文字／★かんたん3ステップ／●マット・具体表記をいつでも切り替えられます。</li>
+<li><strong>🕰️ 歴代バージョン呼び出し・世代タイムマシン（v1.0.0〜v5.5.0 全19世代）＆ 省負荷ゲート：</strong>初代 <code>v1.0.0</code> から <code>v5.0.0〜v5.4.1</code>・最新 <code>v5.5.0</code> まで全19世代をオンデマンド遅延読み込み（常駐メモリ0MB）で呼び出せ、旧世代選択時は後発DSPを完全スリープさせて省負荷動作します。</li>
 </ul>
 
-<h2 id="stage">カラオケ伴奏・30秒さかのぼり録音・5秒AI声質診断</h2>
+<h2 id="stage">カラオケ伴奏・音ズレ補正・30秒さかのぼり録音・裏画面ホットキー</h2>
 <ul>
-<li><strong>🎵内蔵カラオケ・BGMプレイヤー ＆ キー変更（±6半音）：</strong>上部の「🎵BGM・録音」から手持ちの伴奏音源（<code>.wav / .mp3 / .flac / .ogg / .aiff</code>）や内蔵J-POPカノン進行伴奏を再生できます。伴奏キー（-6〜+6半音）を変更すると、ボーカル側のピッチ補正・ハモリのキーも自動同期します。歌唱中は「声優先オートダッキング」で伴奏が自動で少し下がります。</li>
-<li><strong>🔴1クリックWAV録音 ＆ ⏪直前30秒さかのぼり保存：</strong>通常の24bit WAV録音に加え、録音していなかった時でも「⏪直前30秒を保存」を押すだけで直前30秒間の歌声を救出できます。常に「完成音（Wet）」と「無加工の素の声（Dry）」の2ファイルが同時保存されます。</li>
-<li><strong>🎯5秒AI声質ターゲット診断：</strong>5秒間歌うだけで声の重心・明るさ・倍音バランスを計測し、選んだ理想スタイル（✨透明感ウィスパー／🎤王道アイドル／🔥パワフルロック／🌙深みイケボ／🎧耳元ASMR）に合わせて2D声質オーブとEQを自動調律します。</li>
-<li><strong>🛡絶叫セーフティガード ＆ 😷咳払い8ms瞬間ミュート：</strong>突発的な大声を0.2msアタックで-0.3dBFS以内に抑える絶叫ガードと、ポップノイズ皆無（8msクロスフェード）で即座に無音化する咳ミュートを搭載しています。</li>
+<li><strong>🎵内蔵カラオケ・BGMプレイヤー ＆ キー変更（±6半音）＆ 音ズレ補正（±300ms）：</strong>手持ちの伴奏音源（<code>.wav / .mp3 / .flac / .ogg / .aiff</code>）や内蔵J-POP伴奏を再生し、キー変更時はピッチ補正・ハモリも自動同期。さらに <code>-300 ms 〜 +300 ms</code> の音ズレ補正スライダーでOBS配信や外部カラオケとのタイミング差を1ms単位で揃えられます。</li>
+<li><strong>🔴1クリックWAV録音 ＆ ⏪直前30秒さかのぼり保存：</strong>通常の24bit WAV録音に加え、録音していなかった時でも「⏪直前30秒を保存」（または裏ホットキー <code>Ctrl+Shift+R</code>）を押すだけで直前30秒間の歌声を救出できます。</li>
+<li><strong>🛡絶叫セーフティガード ＆ 😷咳払い8ms瞬間ミュート：</strong>突発的な大声を0.2msアタックで-0.3dBFS以内に抑える絶叫ガードと、ポップノイズ皆無（8msクロスフェード）で即座に無音化する咳ミュート（裏ホットキー <code>Ctrl+Shift+M</code> または <code>F9</code> 長押し対応）を搭載しています。</li>
 </ul>
 
 <h2 id="interfaces">対応オーディオインターフェース一覧 ＆ cluster・通話の音消え対策</h2>
@@ -90,8 +84,8 @@
 <ul>
 <li><strong>🛠cluster・通話 音消え一発修復：</strong>Windowsの「通信時の80%音量低下（ダッキング）」を自動無効化し、入出力サンプルレートを48kHzへ統一してオーディオパイプラインを即座に再起動します。</li>
 <li><strong>🌐全アプリ共存・共有モード（USBマイク/VR/排他ASIO用）：</strong>ASIO4ALLや排他ASIOドライバが他のアプリ（cluster / VRChat / Discord / ゲーム / ブラウザ）の音を止めてしまう場合や、USBマイク・Meta Quest 3等をお使いの場合にクリックすると、全アプリと音が共存できる低遅延共有モード（WASAPI）へ1クリックで切り替わります。</li>
-<li><strong>🎧自分の耳への返しミュート：</strong>配信先・通話先（「ライン (VocalGzzio Driver (WDM))」）へはエフェクト後の声を送り続けながら、自分のヘッドホンへの返しだけを消して二重聞こえやハウリングを防ぎます。</li>
-<li><strong>本体LOOPBACK切り忘れ・ハウリング緊急遮断ガード：</strong>YAMAHA AG03/AG06やSteinberg UR22C、Roland Rubix等の本体LOOPBACKがONのままモニターを返して発振しそうになった場合、0.35秒で自動検知して耳への返しだけを安全ミュートします（配信出力は止まりません）。</li>
+<li><strong>🎧自分の耳への返しミュート：</strong>外部仮想ケーブル等の配信出力へはエフェクト後の声を送り続けながら、自分のヘッドホンへの返しだけを消して二重聞こえやハウリングを防ぎます。</li>
+<li><strong>本体LOOPBACK切り忘れ・ハウリング緊急遮断ガード：</strong>YAMAHA AG03/AG06やSteinberg UR22C、Roland Rubix等の本体LOOPBACKがONのままモニターを返して発振しそうになった場合、0.35秒で自動検知して耳への返しだけを安全ミュートします。</li>
 <li><strong>32-bit Float 自動ヘッドルーム正規化：</strong>ZOOM UAC-232/432やSteinberg URX22C等で0dBFS（<code>|x|&gt;1.0</code>）を超える32bit Float入力が入っても、先頭で歪みなく自動減衰して音割れを防ぎます。</li>
 </ul>
 
@@ -99,9 +93,9 @@
 <thead><tr><th>カテゴリ</th><th>主な対応メーカー・機種</th><th>推奨設定・ポイント</th></tr></thead>
 <tbody>
 <tr><td>定番DTM・音楽制作機</td><td>Steinberg UR12 / UR22C / UR44C / IXO12 / IXO22、Focusrite Scarlett Solo / 2i2 / 4i4 / 18i8 (Gen1〜4) / Vocaster、MOTU M2 / M4 / M6 / UltraLite-mk5、SSL 2 / 2+ MKII / 12、Universal Audio Volt 1 / 2 / 4 / 176 / 276 / 476 / Apollo、Roland Rubix22 / 24 / 44、Audient iD4 / iD14 / iD24 / EVO 4 / 8、PreSonus Studio / Revelator / Quantum ES、Arturia MiniFuse 1 / 2 / 4、NI Komplete Audio、TASCAM US-HR、M-Audio、Behringer UMC、Mackie Onyx / ProFX</td><td>純正マルチクライアントASIO、またはcluster併用時は「🌐全アプリ共存・共有モード」。Scarlett SoloのIN2マイクやRubix44のIN1〜4も「Auto Mono IN1-4」で自動追尾します。</td></tr>
-<tr><td>歌枠・ゲーム配信ミキサー</td><td>YAMAHA AG03 / AG03MK2 / AG06 / AG06MK2 / AG08 / ZG01 / ZG02、Roland BRIDGE CAST / X / ONE / VT-4 / E-4 / GO:MIXER、audio-technica AT-UMX3、RODE RODECaster Pro II / Duo / Streamer X、Elgato Wave XLR / Wave:3、TC Helicon GoXLR、TASCAM MiNiSTUDIO / Mixcast 4、Mackie M-Caster / DLZ、ZOOM PodTrak、FIFINE SC3、Maono AME2 / G1 NEO、Razer Audio Mixer</td><td>AT-UMX3やFIFINE/Maono等は「🌐全アプリ共存・共有モード」で最小遅延動作。AG03/AG06等は本体リバーブを切ってVocalGzzioの空間IRを使うとクリアな歌枠になります。</td></tr>
+<tr><td>歌枠・ゲーム配信ミキサー</td><td>YAMAHA AG03 / AG03MK2 / AG06 / AG06MK2 / AG08 / ZG01 / ZG02、Roland BRIDGE CAST / X / ONE / VT-4 / E-4 / GO:MIXER、audio-technica AT-UMX3、RODE RODECaster Pro II / Duo / Streamer X、Elgato Wave XLR / Wave:3、TC Helicon GoXLR、TASCAM MiNiSTUDIO / Mixcast 4、Mackie M-Caster / DLZ、ZOOM PodTrak、FIFINE SC3、Maono AME2 / G1 NEO、Razer Audio Mixer</td><td>OBS VST3直接読込または本体ループバック／外部仮想ケーブル連携に最適。AG03/AG06等は本体リバーブを切ってVocalGzzioの空間IRを使うとクリアな歌枠になります。</td></tr>
 <tr><td>32-bit Float ＆ ハイエンド機</td><td>ZOOM UAC-232 / UAC-432 / F3 / F6 / MicTrak / essential、Steinberg URX22C / URX44C、TASCAM Portacapture / FR-AV2、Lewitt CONNECT 2 / 6、RME Babyface Pro FS / Fireface UCX II / UFX、Apogee Duet 3 / Symphony / Boom、Antelope Zen Go / Quadro、Neumann MT 48、Topping E2x2 / E4x4、Blackstar Polar 2 / 4、IK AXE I/O / iRig、Cranborne、iConnectivity AUDIO4c</td><td>32bit Floatの0dBFS超え入力は自動正規化。192kHz動作時も内部高速リサンプラにより48kHz配信バスへ音飛びなく同時送出します。</td></tr>
-<tr><td>USBマイク・ゲーミングDAC・VR機器</td><td>AT2020USB-X / XP / AT2040USB、Shure MV7 / MV7+ / MV6 / MVX2U、Blue Yeti / Yeti X / GX、HyperX QuadCast / S / 2 / SoloCast、Razer Seiren V3、RODE NT-USB+ / PodMic USB、FIFINE K688 / AM8、Maono PD200X / PD400X、Sound Blaster GC7 / X5 / X4 / G6、SteelSeries GameDAC / Sonar、Astro MixAmp、Sony INZONE、Meta Quest 3 / 3S / 2 / Pro、Valve Index (SteamVR)、Virtual Desktop、HTC VIVE、PICO 4</td><td>「🌐全アプリ共存・共有モード」＋「🎧返しミュート」をONにし、cluster / VRChat / Discord側のマイクに「ライン (VocalGzzio Driver (WDM))」を選ぶだけで快適に共存できます。</td></tr>
+<tr><td>USBマイク・ゲーミングDAC・VR機器</td><td>AT2020USB-X / XP / AT2040USB、Shure MV7 / MV7+ / MV6 / MVX2U、Blue Yeti / Yeti X / GX、HyperX QuadCast / S / 2 / SoloCast、Razer Seiren V3、RODE NT-USB+ / PodMic USB、FIFINE K688 / AM8、Maono PD200X / PD400X、Sound Blaster GC7 / X5 / X4 / G6、SteelSeries GameDAC / Sonar、Astro MixAmp、Sony INZONE、Meta Quest 3 / 3S / 2 / Pro、Valve Index (SteamVR)、Virtual Desktop、HTC VIVE、PICO 4</td><td>OBS配信はOBSのマイクフィルタに <code>VocalGzzio.vst3</code> を直接追加するだけで完結。通話ソフト連携時は「🌐全アプリ共存・共有モード」＋外部仮想ケーブル（<code>VB-CABLE</code> / <code>SYNCROOM</code> 等）で共存できます。</td></tr>
 </tbody>
 </table>
 
@@ -117,20 +111,20 @@
 </table>
 
 <h2 id="level">音量そろえ・絶叫セーフティガード・咳ミュート</h2>
-<p>声を出している間に計器盤の音量補助ボタンを押すと、その時点の出力ピークから出力音量を補正します。突発的な叫び声やマイク衝突音は「🛡絶叫ガード」が0.2msで抑え込み、咳払いは「😷咳ミュート」でクリックノイズなく遮断できます。</p>
+<p>声を出している間に計器盤の音量補助ボタンを押すと、その時点の出力ピークから出力音量を補正します。突発的な叫び声やマイク衝突音は「🛡絶叫ガード」が0.2msで抑え込み、咳払いは「😷咳ミュート」（または裏ホットキー <code>Ctrl+Shift+M</code> / <code>F9</code> 長押し）でクリックノイズなく遮断できます。</p>
 
 <h2 id="noise">ノイズを減らす</h2>
 <p>声や楽器を出さずに「ノイズを測る」を押し、除去量を20〜40％から少しずつ上げて聴き比べます。声を誤って学習した場合は「学習を消す」でリセットできます。</p>
 
 <h2 id="pitch">音程補正・5人ハモリと楽器のチューナー</h2>
-<p>曲のキーと音階を合わせ、補正量と速さを調整します（内蔵カラオケ伴奏のキー変更とも自動連動します）。音程処理を使うと48kHzで約42.6ミリ秒の追加遅延が生じます。低遅延モードでは音程系を停止し追加遅延0.0ミリ秒で動作します。</p>
+<p>曲のキーと音階を合わせ、補正量と速さを調整します（内蔵カラオケ伴奏のキー変更とも自動連動します）。ピッチ補正単独では約0.08ms〜2.9msの時間領域エンジンが働き、ボイス変換併用時は選択した遅延モードに応じた窓長で動作します。またギター／ベース多弦チューナーを開いている間のみ長窓YIN解析が動き、通常のうたモードでは音声スレッドとロックフリーF0共有するためUI負荷ゼロで常時ピッチ表示されます。</p>
 
 <h2 id="space">リバーブと空間IR（カスタムIR読込対応）</h2>
 <p>6種類の空間IR（おふろ・カラオケ箱・録音スタジオ・ライブハウス・コンサートホール・プレート）に加え、「📂IR読込」からお手持ちの <code>.wav</code> / <code>.aiff</code> IRファイルを読み込めます。「声優先ダッキング」を入れると歌っている最中だけ残響が自動で少し下がり、歌詞がくっきり聞こえます。</p>
 
 <h2 id="install">インストールと更新</h2>
-<p>録音ソフトと単体起動アプリを終了してから、配布物のインストーラーを実行します。WindowsではVST3・単体起動アプリ・専用仮想ドライバ「VocalGzzio Driver (WDM)」が導入されます（元の既定スピーカー・マイクは自動で保護・復元されます）。Macは同梱の「ここから始める.html」に沿って .pkg を実行します。</p>
+<p>録音ソフト・OBS・単体起動アプリを終了してから、配布物のインストーラー（<code>VocalGzzio_Setup_v5.5.0.exe</code> / 体験版は <code>VocalGzzio_Trial_Setup_v5.5.0.exe</code>）を実行します。WindowsではVST3プラグインと単体起動アプリ・オフライン取扱説明書が一括導入されます（Windows 11 の最新カーネル保護・署名審査への適合に万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦見送っております）。Macは同梱の「ここから始める.html」に沿って .pkg を実行します。</p>
 </main>
-<footer>VocalGzzio 5.4.1 · <a href="index.html">製品紹介</a> · <a href="en.html">English Guide</a> · <a href="https://gzzio.booth.pm/items/8764003">商品・問い合わせ先</a></footer>
+<footer>VocalGzzio 5.5.0 · <a href="index.html">製品紹介</a> · <a href="en.html">English Guide</a> · <a href="https://gzzio.booth.pm/items/8764003">商品・問い合わせ先</a></footer>
 </body>
 </html>
