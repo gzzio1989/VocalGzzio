@@ -1380,6 +1380,39 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         vocalCharLastPreset = -1;
         vocalCharLastSr     = 0.0;
         meterVocalCharDb.store (0.0f, std::memory_order_relaxed);
+
+        // 次世代進化⑤：📏 AI 自動マイク距離・近接効果バランサー用フィルタ事前確保（RTヒープ確保ゼロ）
+        micDistLoDet.prepare (mono);
+        micDistMidDet.prepare (mono);
+        micDistBodyL.prepare (mono);
+        micDistBodyR.prepare (mono);
+        micDistPresL.prepare (mono);
+        micDistPresR.prepare (mono);
+        micDistLoDet.coefficients  = Coefficients::makeBandPass   (safeSr, juce::jmin (155.0f,  maxF), 0.95f);
+        micDistMidDet.coefficients = Coefficients::makeHighPass   (safeSr, juce::jmin (480.0f,  maxF), 0.707f);
+        micDistBodyL.coefficients  = Coefficients::makeLowShelf   (safeSr, juce::jmin (185.0f,  maxF), 0.75f, 1.0f);
+        micDistBodyR.coefficients  = Coefficients::makeLowShelf   (safeSr, juce::jmin (185.0f,  maxF), 0.75f, 1.0f);
+        micDistPresL.coefficients  = Coefficients::makePeakFilter (safeSr, juce::jmin (3150.0f, maxF), 1.10f, 1.0f);
+        micDistPresR.coefficients  = Coefficients::makePeakFilter (safeSr, juce::jmin (3150.0f, maxF), 1.10f, 1.0f);
+        micDistLoDet.reset(); micDistMidDet.reset();
+        micDistBodyL.reset(); micDistBodyR.reset();
+        micDistPresL.reset(); micDistPresR.reset();
+        micDistLoEnv = micDistMidEnv = micDistVocEnv = 0.0f;
+        micDistLowDb = micDistPresDb = micDistGainDb = 0.0f;
+        micDistAppliedLowDb = micDistAppliedPresDb = -99.0f;
+        meterMicDistStabDb.store (0.0f, std::memory_order_relaxed);
+
+        // 次世代進化⑥：👯 ゼロ遅延「壁ドン・シンフォニック・ダブラー」用リングバッファ事前確保（RTヒープ確保ゼロ）
+        symDoublerRing.assign ((size_t) ((int) (0.045 * safeSr) + 64), 0.0f);
+        symDoublerWrite = 0;
+        symDoublerPhase = 0.0f;
+        symDoublerLpL = symDoublerLpR = symDoublerHpL = symDoublerHpR = 0.0f;
+        meterSymphonicDoublerDb.store (0.0f, std::memory_order_relaxed);
+
+        // 次世代進化⑦：👏 歌い終わり検知「オート拍手・アンコール演出ディレクター」状態リセット
+        applauseSungSec     = 0.0f;
+        applauseQuietSec    = 0.0f;
+        applauseCooldownSec = 0.0f;
     }
     {
         const double seSr = juce::jmax (8000.0, sampleRate);
@@ -1396,6 +1429,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
             liveSeBufs[3].setSize (2, len3, false, true, true);
             liveSeBuilt = { false, false, false, false };
         }
+        if (autoApplauseOn.load (std::memory_order_relaxed))
+            ensureLiveSeBuilt (0);
         refreshSampleRateDependentMedia (sampleRate);
     }
 
@@ -2647,6 +2682,104 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         else if (meterVocalCharDb.load (std::memory_order_relaxed) > 0.0f)
         {
             meterVocalCharDb.store (0.0f, std::memory_order_relaxed);
+        }
+    }
+
+    // ---- 次世代進化⑤：📏 AI 自動マイク距離・近接効果バランサー (AI Mic Distance & Proximity Stabilizer) ----
+    // マイクに近づきすぎた時の低域近接効果（155Hz帯のボワつき）を最大 -4.8dB 自動カットし、
+    // 逆に画面やコメントを見てマイクから離れた時の声の細りには 185Hz 胸鳴り(+3.6dB) ＋ 3.15kHz 存在感(+2.6dB) ＋ 距離ゲインを自動補填する。
+    {
+        const bool distSw = (eraNow >= 550) && micDistStabilizerOn.load (std::memory_order_relaxed)
+                         && ! cmp && ! selfTestRunning.load (std::memory_order_relaxed);
+        if (distSw)
+        {
+            const double safeSr = juce::jmax (16000.0, currentSampleRate);
+            const float  maxF   = (float) (safeSr * 0.44);
+            const float  envA   = 1.0f - std::exp (-1.0f / (0.015f * (float) safeSr));
+            const auto*  rL     = buffer.getReadPointer (0);
+            const auto*  rR     = numCh > 1 ? buffer.getReadPointer (1) : nullptr;
+            for (int n = 0; n < numSamples; ++n)
+            {
+                const float m   = (rR != nullptr) ? 0.5f * (rL[n] + rR[n]) : rL[n];
+                const float eLo = std::abs (micDistLoDet.processSample  (m));
+                const float eMi = std::abs (micDistMidDet.processSample (m));
+                const float eVo = std::abs (m);
+                micDistLoEnv  += envA * (eLo - micDistLoEnv);
+                micDistMidEnv += envA * (eMi - micDistMidEnv);
+                micDistVocEnv += envA * (eVo - micDistVocEnv);
+            }
+
+            const float vocDb     = juce::Decibels::gainToDecibels (micDistVocEnv, -80.0f);
+            const float vGate     = juce::jlimit (0.0f, 1.0f, (vocDb + 50.0f) / 14.0f);
+            float wantLowDb       = 0.0f;
+            float wantPresDb      = 0.0f;
+            float wantDistGainDb  = 0.0f;
+
+            if (vGate > 0.02f && (micDistLoEnv + micDistMidEnv) > 1.0e-5f)
+            {
+                const float proxRatio = micDistLoEnv / (micDistMidEnv + 1.0e-5f);
+                if (proxRatio > 1.25f)
+                {
+                    // マイク超至近距離（近接効果過多）：185Hz以下のボワつきを最大 -4.8 dB 引き締め、音量飽和を最大 -2.0 dB 抑制
+                    const float closeAmt = juce::jlimit (0.0f, 1.0f, (proxRatio - 1.25f) / 1.45f) * vGate;
+                    wantLowDb      = -4.8f * closeAmt;
+                    wantPresDb     =  0.8f * closeAmt;
+                    wantDistGainDb = -2.0f * closeAmt * juce::jlimit (0.0f, 1.0f, (vocDb + 20.0f) / 12.0f);
+                }
+                else if (proxRatio < 0.85f)
+                {
+                    // マイクから離れた時：185Hzの胸鳴りを最大 +3.6 dB、3.15kHzの抜けを最大 +2.6 dB、距離減衰ゲインを最大 +3.2 dB 復元
+                    const float farAmt = juce::jlimit (0.0f, 1.0f, (0.85f - proxRatio) / 0.55f) * vGate;
+                    wantLowDb      = +3.6f * farAmt;
+                    wantPresDb     = +2.6f * farAmt;
+                    wantDistGainDb = +3.2f * farAmt * juce::jlimit (0.0f, 1.0f, (-18.0f - vocDb) / 18.0f);
+                }
+            }
+
+            const float slew = 1.0f - std::exp (-(float) numSamples / (0.022f * (float) safeSr));
+            micDistLowDb  += slew * (wantLowDb      - micDistLowDb);
+            micDistPresDb += slew * (wantPresDb     - micDistPresDb);
+            micDistGainDb += slew * (wantDistGainDb - micDistGainDb);
+
+            if (std::abs (micDistLowDb - micDistAppliedLowDb) > 0.08f)
+            {
+                micDistAppliedLowDb = micDistLowDb;
+                const auto cLo = ACoefs::makeLowShelf (safeSr, juce::jmin (185.0f, maxF), 0.75f,
+                                     juce::Decibels::decibelsToGain (micDistAppliedLowDb));
+                *micDistBodyL.coefficients = cLo;
+                *micDistBodyR.coefficients = cLo;
+            }
+            if (std::abs (micDistPresDb - micDistAppliedPresDb) > 0.08f)
+            {
+                micDistAppliedPresDb = micDistPresDb;
+                const auto cPr = ACoefs::makePeakFilter (safeSr, juce::jmin (3150.0f, maxF), 1.10f,
+                                     juce::Decibels::decibelsToGain (micDistAppliedPresDb));
+                *micDistPresL.coefficients = cPr;
+                *micDistPresR.coefficients = cPr;
+            }
+
+            const float linG = juce::Decibels::decibelsToGain (micDistGainDb);
+            auto* L = buffer.getWritePointer (0);
+            auto* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+            for (int n = 0; n < numSamples; ++n)
+            {
+                L[n] = micDistPresL.processSample (micDistBodyL.processSample (L[n])) * linG;
+                if (R != nullptr)
+                    R[n] = micDistPresR.processSample (micDistBodyR.processSample (R[n])) * linG;
+            }
+            const float actDb = juce::jmax (std::abs (micDistLowDb),
+                                            juce::jmax (std::abs (micDistPresDb), std::abs (micDistGainDb)));
+            meterMicDistStabDb.store (juce::jmax (0.6f * vGate, actDb), std::memory_order_relaxed);
+        }
+        else if (micDistAppliedLowDb != -99.0f || meterMicDistStabDb.load (std::memory_order_relaxed) > 0.0f)
+        {
+            micDistLoEnv = micDistMidEnv = micDistVocEnv = 0.0f;
+            micDistLowDb = micDistPresDb = micDistGainDb = 0.0f;
+            micDistAppliedLowDb = micDistAppliedPresDb = -99.0f;
+            micDistLoDet.reset(); micDistMidDet.reset();
+            micDistBodyL.reset(); micDistBodyR.reset();
+            micDistPresL.reset(); micDistPresR.reset();
+            meterMicDistStabDb.store (0.0f, std::memory_order_relaxed);
         }
     }
 
@@ -5546,6 +5679,92 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     if (spaceRun) mods.restore (gz::ModuleChain::Hirogari, buffer);
     // ===== モジュール8「ひろがり」ここまで =====
 
+    // ---- 次世代進化⑥：👯 ゼロ遅延「壁ドン・シンフォニック・ダブラー」 (Zero-Lag Symphonic Stereo Doubler) ----
+    // センター主旋律(Mid)の位相を100%無傷で守り抜いたまま、左右非対称ハース遅延（左 8.8ms / 右 14.2ms）と
+    // 直交マイクロピッチ変調（0.85Hz, ±6セント）＋ 220Hz〜7.2kHz バンド制限による分厚い壁のようなステレオ・ダブルを並列付加する。
+    {
+        const bool symOn = (eraNow >= 550) && symphonicDoublerOn.load (std::memory_order_relaxed)
+                        && ! talkMcSpace && ! compareBypass.load (std::memory_order_relaxed)
+                        && ! selfTestRunning.load (std::memory_order_relaxed)
+                        && (int) symDoublerRing.size() > 128;
+        if (symOn && numCh >= 1)
+        {
+            const bool  monoOpt  = outputMonoMode.load (std::memory_order_relaxed);
+            const float srSafe   = (float) juce::jmax (16000.0, currentSampleRate);
+            const int   ringSz   = (int) symDoublerRing.size();
+            const float dBaseL   = 0.0088f * srSafe; // 左 8.8 ms
+            const float dBaseR   = 0.0142f * srSafe; // 右 14.2 ms
+            const float modSpan  = 0.00095f * srSafe; // ±0.95 ms (約±6セントの滑らかな直交デチューン)
+            const float phaseInc = juce::MathConstants<float>::twoPi * 0.85f / srSafe;
+            const float hpCoef   = 1.0f - std::exp (-juce::MathConstants<float>::twoPi * 220.0f  / srSafe);
+            const float lpCoef   = 1.0f - std::exp (-juce::MathConstants<float>::twoPi * 7200.0f / srSafe);
+            const float symGain  = 0.38f * (1.0f + 0.32f * chorusBoostEnv + 0.20f * liftNow);
+
+            auto* L = buffer.getWritePointer (0);
+            auto* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+            float maxSymPeak = 0.0f;
+
+            for (int n = 0; n < numSamples; ++n)
+            {
+                const float xL  = L[n];
+                const float xR  = (R != nullptr) ? R[n] : xL;
+                const float mid = 0.5f * (xL + xR);
+                symDoublerRing[(size_t) symDoublerWrite] = mid;
+
+                symDoublerPhase += phaseInc;
+                if (symDoublerPhase >= juce::MathConstants<float>::twoPi)
+                    symDoublerPhase -= juce::MathConstants<float>::twoPi;
+
+                auto readRing = [&] (float delaySamples) noexcept -> float
+                {
+                    float rp = (float) symDoublerWrite - juce::jlimit (2.0f, (float) (ringSz - 4), delaySamples);
+                    while (rp < 0.0f) rp += (float) ringSz;
+                    const int   i0 = ((int) rp) % ringSz;
+                    const int   i1 = (i0 + 1) % ringSz;
+                    const float fr = rp - std::floor (rp);
+                    return symDoublerRing[(size_t) i0] * (1.0f - fr) + symDoublerRing[(size_t) i1] * fr;
+                };
+
+                const float rawTapL = readRing (dBaseL + modSpan * std::sin (symDoublerPhase));
+                const float rawTapR = readRing (dBaseR + modSpan * std::cos (symDoublerPhase));
+
+                symDoublerHpL += hpCoef * (rawTapL - symDoublerHpL);
+                symDoublerHpR += hpCoef * (rawTapR - symDoublerHpR);
+                symDoublerLpL += lpCoef * ((rawTapL - symDoublerHpL) - symDoublerLpL);
+                symDoublerLpR += lpCoef * ((rawTapR - symDoublerHpR) - symDoublerLpR);
+
+                const float wL = symDoublerLpL * symGain;
+                const float wR = symDoublerLpR * symGain;
+                maxSymPeak = juce::jmax (maxSymPeak, juce::jmax (std::abs (wL), std::abs (wR)));
+
+                if (monoOpt || R == nullptr)
+                {
+                    // モノラル出力時は逆相打ち消しを起こさない同相ダブルとして付加
+                    const float monoAdd = 0.45f * (wL + wR);
+                    L[n] = xL + monoAdd;
+                    if (R != nullptr) R[n] = xR + monoAdd;
+                }
+                else
+                {
+                    // 左右の非対称ハース＆直交デチューン差分(Side)のみを逆相付加することで、
+                    // モノラル加算時(Mid = 0.5*(L+R))の主旋律位相を100.0%無傷に保つ
+                    const float sideTap = 0.85f * (wL - wR);
+                    L[n] = xL + sideTap;
+                    R[n] = xR - sideTap;
+                }
+
+                if (++symDoublerWrite >= ringSz)
+                    symDoublerWrite = 0;
+            }
+            const float actDb = juce::jlimit (0.0f, 9.0f, (maxSymPeak > 1.0e-4f) ? (2.4f + maxSymPeak * 12.0f) : 1.2f);
+            meterSymphonicDoublerDb.store (actDb, std::memory_order_relaxed);
+        }
+        else if (meterSymphonicDoublerDb.load (std::memory_order_relaxed) > 0.0f)
+        {
+            meterSymphonicDoublerDb.store (0.0f, std::memory_order_relaxed);
+        }
+    }
+
     // v3.0-c 分岐3: ON のときだけ、キャラ声をここで掛ける（ひろがりの**あと**）。
     //  測る所は上で済ませてあるので、ここは音を変える所だけ。
     //  既定(false)ではこの行は何もしない ＝ いままでと1サンプルも変わらない。
@@ -5742,6 +5961,93 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         meterBgmUnmaskDb.store (0.0f, std::memory_order_relaxed);
     }
 
+    // ---- 次世代進化⑧：🏆 リアルタイム「歌唱スコア＆声質カルテ診断レポート」ロックフリー O(1) 集計 ----
+    if (eraNow >= 550 && ! selfTestRunning.load (std::memory_order_relaxed) && ! compareBypass.load (std::memory_order_relaxed))
+    {
+        const float blockSec = (float) numSamples / (float) juce::jmax (8000.0, currentSampleRate);
+        const float f0Hz     = juce::jmax (atDetectedHz.load (std::memory_order_relaxed),
+                                           sharedVocalF0Hz.load (std::memory_order_relaxed));
+        const float vocPk    = buffer.getMagnitude (0, 0, numSamples);
+        const float vocDb    = juce::Decibels::gainToDecibels (vocPk, -80.0f);
+
+        if (vocDb > -45.0f && ! liveTalkMode.load (std::memory_order_relaxed))
+        {
+            const float curSec = karteVoicedSec.load (std::memory_order_relaxed) + blockSec;
+            karteVoicedSec.store (curSec, std::memory_order_relaxed);
+
+            // 1) 音程正確度 (Pitch Accuracy %): ピッチ補正偏差または最近傍半音からのセント誤差を評価
+            float pitchScoreNow = 92.5f;
+            if (f0Hz >= 65.0f && f0Hz <= 1100.0f)
+            {
+                const float refA = apvts.getRawParameterValue ("refpitch")->load();
+                const float midi = 69.0f + 12.0f * std::log2 (f0Hz / juce::jmax (400.0f, refA));
+                const float centErr = std::abs (midi - std::round (midi)) * 100.0f;
+                const float corrSemi = std::abs (atCurrentCorrection.load (std::memory_order_relaxed));
+                const float effCents = (corrSemi > 0.001f) ? juce::jmin (centErr, corrSemi * 45.0f) : centErr;
+                pitchScoreNow = juce::jlimit (68.0f, 99.6f, 100.0f - effCents * 0.48f);
+
+                // 2) ロングトーン安定度＆ビブラート美しさ (Stability %)
+                if (karteLastF0Hz > 65.0f)
+                {
+                    const float deltaSemi = std::abs (12.0f * std::log2 (f0Hz / karteLastF0Hz));
+                    const float steadyScore = (deltaSemi < 0.35f)
+                        ? juce::jlimit (78.0f, 99.5f, 98.5f - deltaSemi * 36.0f + meterTailVibratoDb.load (std::memory_order_relaxed) * 1.2f)
+                        : karteStabilityPct.load (std::memory_order_relaxed);
+                    const float curStab = karteStabilityPct.load (std::memory_order_relaxed);
+                    karteStabilityPct.store (curStab + 0.04f * (steadyScore - curStab), std::memory_order_relaxed);
+                }
+                karteLastF0Hz = f0Hz;
+            }
+            const float curPitch = kartePitchAccPct.load (std::memory_order_relaxed);
+            kartePitchAccPct.store (curPitch + 0.05f * (pitchScoreNow - curPitch), std::memory_order_relaxed);
+
+            // 3) 表現力・抑揚ダイナミクス (Expressiveness %)
+            kartePeakDb  = (vocDb > kartePeakDb)  ? (kartePeakDb  + 0.15f * (vocDb - kartePeakDb))  : (kartePeakDb  + 0.005f * (vocDb - kartePeakDb));
+            karteFloorDb = (vocDb < karteFloorDb) ? (karteFloorDb + 0.10f * (vocDb - karteFloorDb)) : (karteFloorDb + 0.005f * (vocDb - karteFloorDb));
+            const float dynSpan = juce::jlimit (3.0f, 24.0f, kartePeakDb - karteFloorDb);
+            const float exprTarget = juce::jlimit (74.0f, 99.5f, 74.0f + dynSpan * 1.15f + (chorusBoostEnv * 3.5f));
+            const float curExpr = karteExprPct.load (std::memory_order_relaxed);
+            karteExprPct.store (curExpr + 0.05f * (exprTarget - curExpr), std::memory_order_relaxed);
+
+            // 4) 倍音艶・声の通り (Tone Brilliance %)
+            const float glossTarget = juce::jlimit (78.0f, 99.6f,
+                84.0f + (meterArgonFocus.load (std::memory_order_relaxed)
+                       + meterArgonSilk.load  (std::memory_order_relaxed)
+                       + meterArgonVelvet.load (std::memory_order_relaxed)) * 5.2f);
+            const float curGloss = karteToneGlossPct.load (std::memory_order_relaxed);
+            karteToneGlossPct.store (curGloss + 0.05f * (glossTarget - curGloss), std::memory_order_relaxed);
+        }
+
+        // 次世代進化⑦：👏 歌い終わり検知「オート拍手・アンコール演出ディレクター」
+        if (autoApplauseOn.load (std::memory_order_relaxed))
+        {
+            if (applauseCooldownSec > 0.0f)
+                applauseCooldownSec = juce::jmax (0.0f, applauseCooldownSec - blockSec);
+
+            if (vocDb > -38.0f && ! liveTalkMode.load (std::memory_order_relaxed))
+            {
+                applauseSungSec  = juce::jmin (120.0f, applauseSungSec + blockSec);
+                applauseQuietSec = 0.0f;
+            }
+            else if (applauseSungSec >= 5.0f && ! bgmPlaying.load (std::memory_order_relaxed))
+            {
+                applauseQuietSec += blockSec;
+                if (applauseQuietSec >= 1.6f && applauseCooldownSec <= 0.0f)
+                {
+                    applauseSungSec     = 0.0f;
+                    applauseQuietSec    = 0.0f;
+                    applauseCooldownSec = 6.0f;
+                    liveSeReadPos.store (0, std::memory_order_relaxed);
+                    activeLiveSe.store (0, std::memory_order_release);
+                }
+            }
+        }
+        else
+        {
+            applauseSungSec = applauseQuietSec = 0.0f;
+        }
+    }
+
     // ---- v4.8.0 柱① ＆ v5.5.0 柱1/柱3 ＆ 次世代進化①：🎵 カラオケ・BGMプレイヤー ＆ 🌐 アプリ別音声取込 ＆ 🎧 裏ガイドボーカル分離 ----
     bool bgmMixedNow       = false;
     bool bgmFromAppCapNow  = false;
@@ -5773,7 +6079,20 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     if (idx >= bgmLen)
                     {
                         if (loop) { idx %= bgmLen; rpos = (double) idx; }
-                        else { bgmPlaying.store (false, std::memory_order_relaxed); rpos = 0.0; idx = -1; }
+                        else
+                        {
+                            bgmPlaying.store (false, std::memory_order_relaxed);
+                            rpos = 0.0;
+                            idx  = -1;
+                            if (eraNow >= 550 && autoApplauseOn.load (std::memory_order_relaxed))
+                            {
+                                liveSeReadPos.store (0, std::memory_order_relaxed);
+                                activeLiveSe.store (0, std::memory_order_release);
+                                applauseSungSec     = 0.0f;
+                                applauseQuietSec    = 0.0f;
+                                applauseCooldownSec = 6.0f;
+                            }
+                        }
                     }
                     if (idx >= 0 && idx < bgmLen)
                     {
@@ -7311,6 +7630,9 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         s51->setAttribute ("bgmGuideMonitor", bgmGuideMonitorOn.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("bgmGuideLevel",   (double) bgmGuideMonitorLevel.load (std::memory_order_relaxed));
         s51->setAttribute ("vocalCharPreset", vocalCharPreset.load (std::memory_order_relaxed));
+        s51->setAttribute ("micDistStab",     micDistStabilizerOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("symDoubler",      symphonicDoublerOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("autoApplause",    autoApplauseOn.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("vocalExprMode",   vocalExprMode.load (std::memory_order_relaxed));
         s51->setAttribute ("outVolPct",       (double) outputVolumePct.load (std::memory_order_relaxed));
         s51->setAttribute ("setlistCur",   currentSetlistIdx.load (std::memory_order_relaxed));
@@ -7339,6 +7661,8 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
             el->setAttribute ("mic",    item.micModel);
             el->setAttribute ("revType", item.revType);
             el->setAttribute ("revMix", (double) item.revMix);
+            el->setAttribute ("vcp",    item.vocalCharPreset);
+            el->setAttribute ("guide",  item.guideMonitor ? 1 : 0);
         }
     }
     return root;
@@ -7563,6 +7887,11 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
                 bgmGuideMonitorOn.store    (s51->getIntAttribute ("bgmGuideMonitor", 0) != 0, std::memory_order_relaxed);
                 bgmGuideMonitorLevel.store (juce::jlimit (0.0f, 1.5f, (float) s51->getDoubleAttribute ("bgmGuideLevel", 0.65)), std::memory_order_relaxed);
                 vocalCharPreset.store      (juce::jlimit (0, 4, s51->getIntAttribute ("vocalCharPreset", 0)), std::memory_order_relaxed);
+                micDistStabilizerOn.store  (s51->getIntAttribute ("micDistStab", 0) != 0, std::memory_order_relaxed);
+                symphonicDoublerOn.store   (s51->getIntAttribute ("symDoubler",  0) != 0, std::memory_order_relaxed);
+                autoApplauseOn.store       (s51->getIntAttribute ("autoApplause", 0) != 0, std::memory_order_relaxed);
+                if (autoApplauseOn.load (std::memory_order_relaxed))
+                    ensureLiveSeBuilt (0);
                 vocalExprMode.store        (juce::jlimit (0, 2, s51->getIntAttribute ("vocalExprMode", 0)), std::memory_order_relaxed);
                 outputVolumePct.store      (juce::jlimit (0.0f, 250.0f, (float) s51->getDoubleAttribute ("outVolPct", 100.0)), std::memory_order_relaxed);
                 currentSetlistIdx.store (s51->getIntAttribute ("setlistCur", -1), std::memory_order_relaxed);
@@ -7596,6 +7925,8 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
                         item.micModel    = juce::jlimit (0, 4, el->getIntAttribute ("mic", 0));
                         item.revType     = el->getIntAttribute ("revType", 7);
                         item.revMix      = (float) el->getDoubleAttribute ("revMix", 22.0);
+                        item.vocalCharPreset = juce::jlimit (0, 4, el->getIntAttribute ("vcp", 0));
+                        item.guideMonitor    = el->getIntAttribute ("guide", 0) != 0;
                         setlistItems.push_back (std::move (item));
                     }
                 }
@@ -8582,6 +8913,8 @@ int VocalGzzioProcessor::addCurrentSongToSetlist()
     item.micModel    = micModelMode.load (std::memory_order_relaxed);
     item.revType     = (int) apvts.getRawParameterValue ("rev_type")->load();
     item.revMix      = apvts.getRawParameterValue ("revmix")->load();
+    item.vocalCharPreset = vocalCharPreset.load (std::memory_order_relaxed);
+    item.guideMonitor    = bgmGuideMonitorOn.load (std::memory_order_relaxed);
 
     int newIdx = 0;
     {
@@ -8653,6 +8986,8 @@ bool VocalGzzioProcessor::loadSetlistSong (int index, bool autoPlay)
     setP ("rev_type",     (float) item.revType);
     setP ("revmix",       item.revMix);
     micModelMode.store (juce::jlimit (0, 4, item.micModel), std::memory_order_relaxed);
+    vocalCharPreset.store (juce::jlimit (0, 4, item.vocalCharPreset), std::memory_order_relaxed);
+    bgmGuideMonitorOn.store (item.guideMonitor, std::memory_order_relaxed);
     bgmPlaying.store (autoPlay, std::memory_order_release);
     updateObsNowPlayingOverlayFile();
     markStateDirty();
@@ -9981,6 +10316,161 @@ bool VocalGzzioProcessor::updateObsNowPlayingOverlayFile() const
     if (nextTitle.isNotEmpty())
         html << "    <div class=\"next\">NEXT ▸ " << escHtml (nextTitle) << "</div>\n";
     html << "  </div>\n</body>\n</html>\n";
+
+    return outFile.replaceWithText (html, false, false, "\n");
+}
+
+void VocalGzzioProcessor::resetVocalKarte() noexcept
+{
+    kartePitchAccPct.store  (91.5f, std::memory_order_relaxed);
+    karteStabilityPct.store (89.0f, std::memory_order_relaxed);
+    karteExprPct.store      (88.0f, std::memory_order_relaxed);
+    karteToneGlossPct.store (92.0f, std::memory_order_relaxed);
+    karteVoicedSec.store    (0.0f,  std::memory_order_relaxed);
+    karteLastF0Hz = 0.0f;
+    kartePeakDb   = -32.0f;
+    karteFloorDb  = -22.0f;
+}
+
+float VocalGzzioProcessor::getVocalKarteTotalScore() const noexcept
+{
+    const float p = juce::jlimit (60.0f, 100.0f, getVocalKartePitchAccuracyPct());
+    const float s = juce::jlimit (60.0f, 100.0f, getVocalKarteStabilityPct());
+    const float e = juce::jlimit (60.0f, 100.0f, getVocalKarteExpressivenessPct());
+    const float g = juce::jlimit (60.0f, 100.0f, getVocalKarteToneGlossPct());
+    return juce::jlimit (65.0f, 100.0f, 0.34f * p + 0.24f * s + 0.22f * e + 0.20f * g);
+}
+
+juce::String VocalGzzioProcessor::getVocalKarteRank() const
+{
+    const float sc = getVocalKarteTotalScore();
+    if (sc >= 95.0f) return juce::String::fromUTF8 ("👑 SSS (神歌唱)");
+    if (sc >= 91.5f) return juce::String::fromUTF8 ("💎 SS (プロ級)");
+    if (sc >= 87.5f) return juce::String::fromUTF8 ("✨ S (極上)");
+    if (sc >= 82.0f) return juce::String::fromUTF8 ("🎵 A (好調)");
+    return juce::String::fromUTF8 ("🌱 B (成長中)");
+}
+
+juce::String VocalGzzioProcessor::getVocalKarteSummaryText (bool english) const
+{
+    const float total = getVocalKarteTotalScore();
+    const float pitch = getVocalKartePitchAccuracyPct();
+    const float stab  = getVocalKarteStabilityPct();
+    const float expr  = getVocalKarteExpressivenessPct();
+    const float gloss = getVocalKarteToneGlossPct();
+
+    if (english)
+    {
+        return "🏆 Vocal Karte Score: " + juce::String (total, 1) + " pts\n"
+             + "  • Pitch Accuracy: " + juce::String (pitch, 1) + "%\n"
+             + "  • Note Stability: " + juce::String (stab, 1)  + "%\n"
+             + "  • Expressiveness: " + juce::String (expr, 1)  + "%\n"
+             + "  • Tone Brilliance: " + juce::String (gloss, 1) + "%";
+    }
+
+    juce::String advice;
+    if (pitch <= stab && pitch <= expr)
+        advice = juce::String::fromUTF8 ("💡 AIコーチ助言: 「🎹コードハモリ」や「🎧裏ガイド」をONにすると、さらに音程の芯がピタッと吸い付きます！");
+    else if (stab <= expr)
+        advice = juce::String::fromUTF8 ("💡 AIコーチ助言: 「〰️語尾ビブラート」や「📏距離ロック」をONにすると、ロングトーンの安定感が一段と輝きます！");
+    else
+        advice = juce::String::fromUTF8 ("💡 AIコーチ助言: 「👯立体ダブラー」や「🤖サビ自動」を合わせると、サビの広がりと熱量がさらに際立ちます！");
+
+    return juce::String::fromUTF8 ("🏆 総合歌唱スコア: ") + juce::String (total, 1) + juce::String::fromUTF8 (" 点  【") + getVocalKarteRank() + juce::String::fromUTF8 ("】\n")
+         + juce::String::fromUTF8 ("  🎯 音程正確度: ") + juce::String (pitch, 1) + "%   "
+         + juce::String::fromUTF8 ("〰️ ロングトーン安定度: ") + juce::String (stab, 1) + "%\n"
+         + juce::String::fromUTF8 ("  🔥 抑揚・表現力: ") + juce::String (expr, 1) + "%   "
+         + juce::String::fromUTF8 ("💎 倍音・声の艶抜け: ") + juce::String (gloss, 1) + "%\n\n"
+         + advice;
+}
+
+juce::File VocalGzzioProcessor::getVocalKarteHtmlFile() const
+{
+    return getRecordingsDirectory().getChildFile ("VocalGzzio_Vocal_Karte.html");
+}
+
+bool VocalGzzioProcessor::exportVocalKarteHtmlFile (bool english) const
+{
+    const auto outFile = getVocalKarteHtmlFile();
+    outFile.getParentDirectory().createDirectory();
+
+    const float total = getVocalKarteTotalScore();
+    const float pitch = getVocalKartePitchAccuracyPct();
+    const float stab  = getVocalKarteStabilityPct();
+    const float expr  = getVocalKarteExpressivenessPct();
+    const float gloss = getVocalKarteToneGlossPct();
+    const auto  rank  = getVocalKarteRank();
+    const auto  prof  = getAutoVoiceProfileSummary (english);
+
+    juce::String songTitle;
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        const int curIdx = currentSetlistIdx.load (std::memory_order_relaxed);
+        if (curIdx >= 0 && curIdx < (int) setlistItems.size())
+            songTitle = setlistItems[(size_t) curIdx].title;
+        if (songTitle.isEmpty())
+            songTitle = bgmTitle;
+    }
+    if (songTitle.trim().isEmpty())
+        songTitle = appAudioCap.isCapturing() ? appAudioCap.getActiveLabel() : juce::String::fromUTF8 ("VocalGzzio 歌唱セッション");
+
+    auto escHtml = [] (const juce::String& s) -> juce::String
+    {
+        return s.replace ("&", "&amp;")
+                .replace ("<", "&lt;")
+                .replace (">", "&gt;")
+                .replace ("\"", "&quot;");
+    };
+
+    juce::String html;
+    html << "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n"
+         << "<title>VocalGzzio 歌唱スコア＆声質カルテ診断レポート</title>\n"
+         << "<style>\n"
+         << "  * { box-sizing: border-box; margin: 0; padding: 0; }\n"
+         << "  body { background: #080d1a; color: #f8fafc; font-family: 'Segoe UI', 'Yu Gothic UI', 'Meiryo', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 24px; }\n"
+         << "  .karte {\n"
+         << "    width: 100%; max-width: 680px; border-radius: 24px; padding: 32px;\n"
+         << "    background: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(23, 37, 84, 0.90));\n"
+         << "    border: 2px solid rgba(56, 189, 248, 0.55);\n"
+         << "    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(56, 189, 248, 0.22);\n"
+         << "  }\n"
+         << "  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.25); padding-bottom: 16px; margin-bottom: 22px; }\n"
+         << "  .brand { font-size: 14px; font-weight: 800; color: #38bdf8; letter-spacing: 0.08em; }\n"
+         << "  .song { font-size: 22px; font-weight: 800; color: #ffffff; margin-top: 4px; }\n"
+         << "  .hero { display: flex; align-items: center; justify-content: space-between; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(251, 191, 36, 0.45); border-radius: 18px; padding: 20px 26px; margin-bottom: 24px; }\n"
+         << "  .score-num { font-size: 54px; font-weight: 900; color: #fde047; line-height: 1; text-shadow: 0 0 20px rgba(250, 204, 21, 0.4); }\n"
+         << "  .score-unit { font-size: 18px; font-weight: 700; color: #cbd5e1; margin-left: 6px; }\n"
+         << "  .rank-pill { font-size: 22px; font-weight: 800; color: #fef08a; background: rgba(234, 179, 8, 0.2); border: 1.5px solid #facc15; padding: 8px 18px; border-radius: 999px; }\n"
+         << "  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; }\n"
+         << "  .metric { background: rgba(30, 41, 59, 0.65); border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 14px; padding: 14px 18px; }\n"
+         << "  .m-top { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; color: #e2e8f0; margin-bottom: 8px; }\n"
+         << "  .bar-bg { height: 10px; background: rgba(15, 23, 42, 0.9); border-radius: 999px; overflow: hidden; }\n"
+         << "  .bar-fg { height: 100%; background: linear-gradient(90deg, #38bdf8, #818cf8, #f472b6); border-radius: 999px; }\n"
+         << "  .footer { font-size: 13px; color: #94a3b8; line-height: 1.6; background: rgba(15, 23, 42, 0.6); padding: 14px 18px; border-radius: 12px; border-left: 4px solid #38bdf8; }\n"
+         << "</style>\n</head>\n<body>\n"
+         << "  <div class=\"karte\">\n"
+         << "    <div class=\"header\">\n"
+         << "      <div>\n"
+         << "        <div class=\"brand\">VOCALGZZIO v5.5.0 AI VOCAL KARTE</div>\n"
+         << "        <div class=\"song\">🎵 " << escHtml (songTitle) << "</div>\n"
+         << "      </div>\n"
+         << "      <div class=\"rank-pill\">" << escHtml (rank) << "</div>\n"
+         << "    </div>\n"
+         << "    <div class=\"hero\">\n"
+         << "      <div>\n"
+         << "        <div style=\"font-size:13px;color:#94a3b8;font-weight:700;\">TOTAL SINGING SCORE / 総合歌唱スコア</div>\n"
+         << "        <div style=\"font-size:13px;color:#7dd3fc;margin-top:4px;\">" << escHtml (prof) << "</div>\n"
+         << "      </div>\n"
+         << "      <div><span class=\"score-num\">" << juce::String (total, 1) << "</span><span class=\"score-unit\">点</span></div>\n"
+         << "    </div>\n"
+         << "    <div class=\"grid\">\n"
+         << "      <div class=\"metric\"><div class=\"m-top\"><span>🎯 音程正確度</span><span>" << juce::String (pitch, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) pitch) << "%\"></div></div></div>\n"
+         << "      <div class=\"metric\"><div class=\"m-top\"><span>〰️ ロングトーン安定度</span><span>" << juce::String (stab, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) stab) << "%\"></div></div></div>\n"
+         << "      <div class=\"metric\"><div class=\"m-top\"><span>🔥 抑揚・表現力</span><span>" << juce::String (expr, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) expr) << "%\"></div></div></div>\n"
+         << "      <div class=\"metric\"><div class=\"m-top\"><span>💎 倍音・声の艶抜け</span><span>" << juce::String (gloss, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) gloss) << "%\"></div></div></div>\n"
+         << "    </div>\n"
+         << "    <div class=\"footer\">" << escHtml (getVocalKarteSummaryText (false)).replace ("\n", "<br>") << "</div>\n"
+         << "  </div>\n</body>\n</html>\n";
 
     return outFile.replaceWithText (html, false, false, "\n");
 }

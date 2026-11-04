@@ -634,6 +634,198 @@ int main()
                "OBS Now Playing オーバーレイ自動生成: HTML生成成功 (%d bytes)", (int) content.getNumBytesAsUTF8());
     }
 
+    // ------------------------------------------------------------------
+    // 11. 次世代進化⑤：📏 AI 自動マイク距離・近接効果バランサー (micDistStabilizerOn)
+    // ------------------------------------------------------------------
+    {
+        auto runMicDistTest = [&] (bool stabOn, bool nearBoomy, float& outMeterDb) -> std::pair<double, double>
+        {
+            auto proc = std::make_unique<VocalGzzioProcessor>();
+            proc->prepareToPlay (sr, 256);
+            for (int m = 0; m < gz::ModuleChain::Count; ++m)
+                setParam (*proc, gz::ModuleChain::paramId (m), 0.0f);
+            setParam (*proc, "argon_velvet", 0.0f);
+            setParam (*proc, "argon_focus",  0.0f);
+            setParam (*proc, "argon_silk",   0.0f);
+            setParam (*proc, "argon_halo",   0.0f);
+            proc->setMicDistStabilizerOn (stabOn);
+
+            std::vector<float> sig;
+            sig.reserve (35 * 256);
+            juce::AudioBuffer<float> buf (2, 256);
+            juce::MidiBuffer midi;
+            double pLo = 0.0, pHi = 0.0;
+            for (int b = 0; b < 60; ++b)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const float loAmp = nearBoomy ? 0.36f : 0.012f;
+                    const float hiAmp = nearBoomy ? 0.06f : 0.032f;
+                    const float s = loAmp * (float) std::sin (pLo) + hiAmp * (float) std::sin (pHi);
+                    pLo += juce::MathConstants<double>::twoPi * 155.0  / sr;
+                    pHi += juce::MathConstants<double>::twoPi * 3150.0 / sr;
+                    buf.setSample (0, i, s);
+                    buf.setSample (1, i, s);
+                }
+                proc->processBlock (buf, midi);
+                if (b >= 25)
+                {
+                    const float* r = buf.getReadPointer (0);
+                    for (int i = 0; i < 256; ++i)
+                        sig.push_back (r[i]);
+                }
+            }
+            outMeterDb = proc->getMicDistStabilizerMeterDb();
+            proc->releaseResources();
+            return {
+                measureFreqMag (sig.data(), (int) sig.size(), 155.0,  sr),
+                measureFreqMag (sig.data(), (int) sig.size(), 3150.0, sr)
+            };
+        };
+
+        float mOff = 0.0f, mNear = 0.0f, mFar = 0.0f;
+        const auto [loNearOff, hiNearOff] = runMicDistTest (false, true,  mOff);
+        const auto [loNearOn,  hiNearOn]  = runMicDistTest (true,  true,  mNear);
+        const auto [loFarOff,  hiFarOff]  = runMicDistTest (false, false, mOff);
+        const auto [loFarOn,   hiFarOn]   = runMicDistTest (true,  false, mFar);
+
+        CHECK (loNearOn < loNearOff * 0.85 && hiFarOn > hiFarOff * 1.18 && mNear > 0.5f && mFar > 0.5f,
+               "AIマイク距離・近接効果バランサー: 近接155Hz抑制(%.4f->%.4f, meter=%.1fdB), 遠距離3.15kHz救済(%.4f->%.4f, meter=%.1fdB)",
+               loNearOff, loNearOn, mNear, hiFarOff, hiFarOn, mFar);
+    }
+
+    // ------------------------------------------------------------------
+    // 12. 次世代進化⑥：👯 ゼロ遅延「壁ドン・シンフォニック・ダブラー」 (symphonicDoublerOn)
+    // ------------------------------------------------------------------
+    {
+        auto runDoublerTest = [&] (bool doublerOn, float& outMeterDb, double& outMidMag, double& outSideRms)
+        {
+            auto proc = std::make_unique<VocalGzzioProcessor>();
+            proc->prepareToPlay (sr, 256);
+            for (int m = 0; m < gz::ModuleChain::Count; ++m)
+                setParam (*proc, gz::ModuleChain::paramId (m), 0.0f);
+            setParam (*proc, "argon_velvet", 0.0f);
+            setParam (*proc, "argon_focus",  0.0f);
+            setParam (*proc, "argon_silk",   0.0f);
+            setParam (*proc, "argon_halo",   0.0f);
+            proc->setSymphonicDoublerOn (doublerOn);
+
+            std::vector<float> midSig;
+            midSig.reserve (40 * 256);
+            double sideSqSum = 0.0;
+            int sideCount = 0;
+            juce::AudioBuffer<float> buf (2, 256);
+            juce::MidiBuffer midi;
+            double ph = 0.0;
+            for (int b = 0; b < 60; ++b)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const float s = 0.22f * (float) (std::sin (ph) + 0.4 * std::sin (ph * 2.0));
+                    ph += juce::MathConstants<double>::twoPi * 330.0 / sr;
+                    buf.setSample (0, i, s);
+                    buf.setSample (1, i, s);
+                }
+                proc->processBlock (buf, midi);
+                if (b >= 20)
+                {
+                    const float* rL = buf.getReadPointer (0);
+                    const float* rR = buf.getReadPointer (1);
+                    for (int i = 0; i < 256; ++i)
+                    {
+                        midSig.push_back (0.5f * (rL[i] + rR[i]));
+                        const double side = 0.5 * ((double) rL[i] - (double) rR[i]);
+                        sideSqSum += side * side;
+                        ++sideCount;
+                    }
+                }
+            }
+            outMeterDb = proc->getSymphonicDoublerMeterDb();
+            proc->releaseResources();
+            outMidMag  = measureFreqMag (midSig.data(), (int) midSig.size(), 330.0, sr);
+            outSideRms = sideCount > 0 ? std::sqrt (sideSqSum / (double) sideCount) : 0.0;
+        };
+
+        float symMeterOff = 0.0f, symMeterOn = 0.0f;
+        double midOff = 0.0, sideOff = 0.0, midOn = 0.0, sideOn = 0.0;
+        runDoublerTest (false, symMeterOff, midOff, sideOff);
+        runDoublerTest (true,  symMeterOn,  midOn,  sideOn);
+
+        CHECK (sideOff < 1e-5 && sideOn > 0.015 && std::abs (midOn - midOff) / juce::jmax (1e-6, midOff) < 0.03 && symMeterOn > 0.5f,
+               "壁ドン・シンフォニック・ダブラー: Side広がり(%.5f->%.4f), モノラルMid純度維持(%.4f vs %.4f), meter=%.1fdB",
+               sideOff, sideOn, midOff, midOn, symMeterOn);
+    }
+
+    // ------------------------------------------------------------------
+    // 13. 次世代進化⑦ ＆ ⑧：👏 歌い終わりオート拍手 (autoApplauseOn) ＆ 🏆 リアルタイム歌唱スコア・カルテ (.html)
+    // ------------------------------------------------------------------
+    {
+        auto testDir = gz::dataDirectory();
+        testDir.createDirectory();
+        auto shortBgm = testDir.getChildFile ("short_outro_test.wav");
+        {
+            const int bgmSamples = 4800; // 0.10秒の短いBGM
+            juce::AudioBuffer<float> bBuf (2, bgmSamples);
+            for (int i = 0; i < bgmSamples; ++i)
+            {
+                const float s = 0.15f * (float) std::sin (juce::MathConstants<double>::twoPi * 440.0 * (double) i / sr);
+                bBuf.setSample (0, i, s);
+                bBuf.setSample (1, i, s);
+            }
+            shortBgm.deleteFile();
+            juce::WavAudioFormat wavFmt;
+            if (auto out = shortBgm.createOutputStream())
+            {
+                if (auto w = std::unique_ptr<juce::AudioFormatWriter> (wavFmt.createWriterFor (out.get(), sr, 2, 16, {}, 0)))
+                {
+                    out.release();
+                    w->writeFromAudioSampleBuffer (bBuf, 0, bgmSamples);
+                }
+            }
+        }
+
+        auto proc = std::make_unique<VocalGzzioProcessor>();
+        proc->prepareToPlay (sr, 256);
+        proc->resetVocalKarte();
+        proc->setAutoApplauseOn (true);
+        proc->loadBgmFile (shortBgm);
+        proc->setBgmLooping (false);
+        proc->setBgmPlaying (true);
+
+        juce::AudioBuffer<float> buf (2, 256);
+        juce::MidiBuffer midi;
+        double ph = 0.0;
+        for (int b = 0; b < 320; ++b) // ~1.7秒間 A4(440Hz)の安定した歌声を供給
+        {
+            for (int i = 0; i < 256; ++i)
+            {
+                const float s = 0.20f * (float) (std::sin (ph) + 0.35 * std::sin (ph * 2.0) + 0.15 * std::sin (ph * 3.0));
+                ph += juce::MathConstants<double>::twoPi * 440.0 / sr;
+                buf.setSample (0, i, s);
+                buf.setSample (1, i, s);
+            }
+            proc->processBlock (buf, midi);
+        }
+
+        const int activeSeAfterBgmEnd = proc->getActiveLiveSe();
+        const float voicedSec = proc->getVocalKarteVoicedSeconds();
+        const float totalScore = proc->getVocalKarteTotalScore();
+        const juce::String rank = proc->getVocalKarteRank();
+        const bool okKarteHtml = proc->exportVocalKarteHtmlFile (false);
+        const auto karteFile = proc->getVocalKarteHtmlFile();
+        const juce::String karteHtml = karteFile.existsAsFile() ? karteFile.loadFileAsString() : juce::String();
+        karteFile.deleteFile();
+        shortBgm.deleteFile();
+        proc->releaseResources();
+
+        CHECK (activeSeAfterBgmEnd == 0,
+               "オート拍手・アンコール演出ディレクター: BGM完奏時に自動で拍手歓声SE (slot 0) が発動 (activeSe=%d)",
+               activeSeAfterBgmEnd);
+        CHECK (voicedSec >= 1.2f && totalScore >= 70.0f && okKarteHtml && karteHtml.contains ("VocalGzzio") && karteHtml.contains ("SCORE"),
+               "リアルタイム歌唱スコア＆声質カルテ診断: 発声=%.2fs, 総合スコア=%.1f点(Rank %s), HTML出力=%d bytes",
+               voicedSec, totalScore, rank.toRawUTF8(), (int) karteHtml.getNumBytesAsUTF8());
+    }
+
     std::printf ("=== dsp_v550_features 完了: FAIL=%d ===\n", gFail);
     return gFail == 0 ? 0 : 1;
 }

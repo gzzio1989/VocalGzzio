@@ -6119,7 +6119,7 @@ private:
     bool                 miniBarMode { false };
     bool                 miniBarPinnedOnTop { false };
     float                savedNormalScale { 1.00f };
-    bool                 prevHkM { false }, prevHkT { false }, prevHkS { false }, prevHkR { false }, prevHkF9 { false };
+    bool                 prevHkM { false }, prevHkT { false }, prevHkS { false }, prevHkR { false }, prevHkV { false }, prevHkF9 { false };
     float                uiScale { 1.00f };   // 1280x790 fits 1080p at 100%
     juce::ApplicationProperties appProps;     // remembers font/zoom across sessions
 

@@ -633,6 +633,8 @@ public:
         int          micModel    = 0;
         int          revType     = 7;
         float        revMix      = 22.0f;
+        int          vocalCharPreset = 0;
+        bool         guideMonitor    = false;
     };
     int         getSetlistCount() const noexcept;
     int         getCurrentSetlistIndex() const noexcept { return currentSetlistIdx.load (std::memory_order_relaxed); }
@@ -893,6 +895,51 @@ public:
     //== 次世代進化④：📺 OBS ブラウザソース用「Now Playing 曲名・キー・セトリ表示オーバーレイ」HTML自動出力 ==
     juce::File getObsOverlayHtmlFile() const;
     bool       updateObsNowPlayingOverlayFile() const;
+
+    //== 次世代進化⑤：📏 AI 自動マイク距離・近接効果バランサー（マイクに近づきすぎたボワつき削り＆離れた時の胸鳴り・抜け自動復元） ==
+    bool  getMicDistStabilizerOn() const noexcept      { return micDistStabilizerOn.load (std::memory_order_relaxed); }
+    void  setMicDistStabilizerOn (bool b) noexcept
+    {
+        micDistStabilizerOn.store (b, std::memory_order_relaxed);
+        if (! b) meterMicDistStabDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleMicDistStabilizerOn() noexcept         { setMicDistStabilizerOn (! getMicDistStabilizerOn()); }
+    float getMicDistStabilizerMeterDb() const noexcept { return meterMicDistStabDb.load (std::memory_order_relaxed); }
+
+    //== 次世代進化⑥：👯 ゼロ遅延「壁ドン・シンフォニック・ダブラー」（センター位相100%純粋維持＋左右非対称マイクロピッチ広角ステレオ） ==
+    bool  getSymphonicDoublerOn() const noexcept       { return symphonicDoublerOn.load (std::memory_order_relaxed); }
+    void  setSymphonicDoublerOn (bool b) noexcept
+    {
+        symphonicDoublerOn.store (b, std::memory_order_relaxed);
+        if (! b) meterSymphonicDoublerDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleSymphonicDoublerOn() noexcept          { setSymphonicDoublerOn (! getSymphonicDoublerOn()); }
+    float getSymphonicDoublerMeterDb() const noexcept  { return meterSymphonicDoublerDb.load (std::memory_order_relaxed); }
+
+    //== 次世代進化⑦：👏 歌い終わり検知「オート拍手・アンコール演出ディレクター」（曲終了・アウトロ歌唱後に自動で拍手歓声SEを送出） ==
+    bool  getAutoApplauseOn() const noexcept           { return autoApplauseOn.load (std::memory_order_relaxed); }
+    void  setAutoApplauseOn (bool b) noexcept
+    {
+        if (b) ensureLiveSeBuilt (0);
+        autoApplauseOn.store (b, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleAutoApplauseOn() noexcept              { setAutoApplauseOn (! getAutoApplauseOn()); }
+
+    //== 次世代進化⑧：🏆 リアルタイム「歌唱スコア＆声質カルテ診断レポート (.html / ダイアログ)」自動集計 ==
+    void         resetVocalKarte() noexcept;
+    float        getVocalKartePitchAccuracyPct() const noexcept  { return kartePitchAccPct.load (std::memory_order_relaxed); }
+    float        getVocalKarteStabilityPct() const noexcept      { return karteStabilityPct.load (std::memory_order_relaxed); }
+    float        getVocalKarteExpressivenessPct() const noexcept { return karteExprPct.load (std::memory_order_relaxed); }
+    float        getVocalKarteToneGlossPct() const noexcept      { return karteToneGlossPct.load (std::memory_order_relaxed); }
+    float        getVocalKarteVoicedSeconds() const noexcept     { return karteVoicedSec.load (std::memory_order_relaxed); }
+    float        getVocalKarteTotalScore() const noexcept;
+    juce::String getVocalKarteRank() const;
+    juce::String getVocalKarteSummaryText (bool english = false) const;
+    juce::File   getVocalKarteHtmlFile() const;
+    bool         exportVocalKarteHtmlFile (bool english = false) const;
 
     //== v5.1.4 ボイチェン＆ピッチ補正 4段階遅延モード ＆ フォルマント自動追従 ==
     //   0:🚀極限ゼロ感 (補正 ~0.1ms / ボイチェン ~5.3ms)
@@ -1876,6 +1923,40 @@ private:
     double                        vocalCharLastSr     { 0.0 };
     juce::dsp::IIR::Filter<float> vocalCharBands[3][2];
     std::atomic<float>            meterVocalCharDb    { 0.0f };
+
+    // 次世代進化⑤：📏 AI 自動マイク距離・近接効果バランサー
+    std::atomic<bool>             micDistStabilizerOn    { false };
+    juce::dsp::IIR::Filter<float> micDistLoDet, micDistMidDet;
+    juce::dsp::IIR::Filter<float> micDistBodyL, micDistBodyR, micDistPresL, micDistPresR;
+    float                         micDistLoEnv           { 0.0f }, micDistMidEnv { 0.0f }, micDistVocEnv { 0.0f };
+    float                         micDistLowDb           { 0.0f }, micDistPresDb { 0.0f }, micDistGainDb { 0.0f };
+    float                         micDistAppliedLowDb    { -99.0f }, micDistAppliedPresDb { -99.0f };
+    std::atomic<float>            meterMicDistStabDb     { 0.0f };
+
+    // 次世代進化⑥：👯 ゼロ遅延「壁ドン・シンフォニック・ダブラー」
+    std::atomic<bool>             symphonicDoublerOn      { false };
+    std::vector<float>            symDoublerRing;
+    int                           symDoublerWrite         { 0 };
+    float                         symDoublerPhase         { 0.0f };
+    float                         symDoublerLpL           { 0.0f }, symDoublerLpR { 0.0f };
+    float                         symDoublerHpL           { 0.0f }, symDoublerHpR { 0.0f };
+    std::atomic<float>            meterSymphonicDoublerDb { 0.0f };
+
+    // 次世代進化⑦：👏 歌い終わり検知「オート拍手・アンコール演出ディレクター」
+    std::atomic<bool>             autoApplauseOn          { false };
+    float                         applauseSungSec         { 0.0f };
+    float                         applauseQuietSec        { 0.0f };
+    float                         applauseCooldownSec     { 0.0f };
+
+    // 次世代進化⑧：🏆 リアルタイム「歌唱スコア＆声質カルテ診断レポート」集計状態（ロックフリー O(1)）
+    std::atomic<float>            kartePitchAccPct        { 91.5f };
+    std::atomic<float>            karteStabilityPct       { 89.0f };
+    std::atomic<float>            karteExprPct            { 88.0f };
+    std::atomic<float>            karteToneGlossPct       { 92.0f };
+    std::atomic<float>            karteVoicedSec          { 0.0f };
+    float                         karteLastF0Hz           { 0.0f };
+    float                         kartePeakDb             { -32.0f };
+    float                         karteFloorDb            { -22.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

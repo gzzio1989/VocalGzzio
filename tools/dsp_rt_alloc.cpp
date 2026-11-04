@@ -120,6 +120,11 @@ int main()
         setP (p, "dly_on", 1); setP (p, "delay", 20); setP (p, "doubler", 20); setP (p, "width", 20);
         setP (p, "at_on", 1); setP (p, "at_amount", 80); setP (p, "orn_amt", 70);
         setP (p, "jn_on", 1); setP (p, "jn_mix", 55); setP (p, "vc_on", 1); setP (p, "vc_pitch", 3);
+        p.setVocalCharPreset (2);
+        p.setMicDistStabilizerOn (true);
+        p.setSymphonicDoublerOn (true);
+        p.setAutoApplauseOn (true);
+        p.setBgmGuideMonitorOn (true);
         p.prepareToPlay (48000.0, 128);
         runCounting (p, src, 50);
         const long n = runCounting (p, src, 1000);
