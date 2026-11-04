@@ -842,6 +842,16 @@ public:
         markStateDirty();
     }
     void  toggleSnsWatermarkOn() noexcept        { setSnsWatermarkOn (! getSnsWatermarkOn()); }
+    bool  getSnsAvatarOn() const noexcept        { return snsAvatarOn.load (std::memory_order_relaxed); }
+    void  setSnsAvatarOn (bool b) noexcept
+    {
+        snsAvatarOn.store (b, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleSnsAvatarOn() noexcept           { setSnsAvatarOn (! getSnsAvatarOn()); }
+    bool  loadSnsAvatarImage (const juce::File& file, bool openMouthSprite = false);
+    void  clearSnsAvatarImages();
+    bool  hasCustomSnsAvatar() const noexcept    { const juce::ScopedLock sl (bgmMetaLock); return snsAvatarClosedImg.isValid(); }
     bool  exportLastTakeSnsVideoAsync (bool vertical9x16,
                                        bool compareBeforeAfter,
                                        const gz::SnsVideoExporter::Options& styleTemplate = {});
@@ -849,6 +859,40 @@ public:
     float getSnsVideoExportProgress() const noexcept { return snsVideoExportProgress.load (std::memory_order_relaxed); }
     juce::String getSnsVideoExportStatus() const { const juce::ScopedLock sl (bgmMetaLock); return snsVideoExportStatus; }
     juce::File   getLastExportedSnsVideoFile() const { const juce::ScopedLock sl (bgmMetaLock); return lastSnsVideoFile; }
+
+    //== 次世代進化①：🎧 裏ガイドボーカル分離（配信・録音では原曲ボーカルを消したまま、自分のイヤホンにだけ原曲ガイドを返す） ==
+    bool  getBgmGuideMonitorOn() const noexcept  { return bgmGuideMonitorOn.load (std::memory_order_relaxed); }
+    void  setBgmGuideMonitorOn (bool b) noexcept
+    {
+        bgmGuideMonitorOn.store (b, std::memory_order_relaxed);
+        if (! b) meterBgmGuideDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleBgmGuideMonitorOn() noexcept     { setBgmGuideMonitorOn (! getBgmGuideMonitorOn()); }
+    float getBgmGuideMonitorLevel() const noexcept { return bgmGuideMonitorLevel.load (std::memory_order_relaxed); }
+    void  setBgmGuideMonitorLevel (float lv01) noexcept
+    {
+        bgmGuideMonitorLevel.store (juce::jlimit (0.0f, 1.0f, lv01), std::memory_order_relaxed);
+        markStateDirty();
+    }
+    float getBgmGuideMonitorMeterDb() const noexcept { return meterBgmGuideDb.load (std::memory_order_relaxed); }
+
+    //== 次世代進化②：🎭 ゼロ遅延・1人デュエット「声キャラ瞬間モーフィング」（0:OFF / 1:💎クール低音 / 2:🌸スイート高音 / 3:🌙ウィスパー吐息 / 4:🔥パワフルロック） ==
+    static constexpr int kNumVocalCharPresets = 5;
+    int   getVocalCharPreset() const noexcept    { return vocalCharPreset.load (std::memory_order_relaxed); }
+    void  setVocalCharPreset (int p) noexcept
+    {
+        vocalCharPreset.store (juce::jlimit (0, kNumVocalCharPresets - 1, p), std::memory_order_relaxed);
+        if (p == 0) meterVocalCharDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  cycleVocalCharPreset() noexcept        { setVocalCharPreset ((getVocalCharPreset() + 1) % kNumVocalCharPresets); }
+    float getVocalCharMeterDb() const noexcept   { return meterVocalCharDb.load (std::memory_order_relaxed); }
+    static const char* getVocalCharPresetName (int p, bool english = false) noexcept;
+
+    //== 次世代進化④：📺 OBS ブラウザソース用「Now Playing 曲名・キー・セトリ表示オーバーレイ」HTML自動出力 ==
+    juce::File getObsOverlayHtmlFile() const;
+    bool       updateObsNowPlayingOverlayFile() const;
 
     //== v5.1.4 ボイチェン＆ピッチ補正 4段階遅延モード ＆ フォルマント自動追従 ==
     //   0:🚀極限ゼロ感 (補正 ~0.1ms / ボイチェン ~5.3ms)
@@ -1804,12 +1848,34 @@ private:
 
     // v5.5.0 🎬 SNS投稿用ビジュアライザ動画（.mp4）非同期書き出しワーカー
     std::atomic<bool>  snsWatermarkOn         { true };
+    std::atomic<bool>  snsAvatarOn            { true };
+    juce::Image        snsAvatarClosedImg;
+    juce::Image        snsAvatarOpenImg;
+    juce::String       snsAvatarClosedPath;
+    juce::String       snsAvatarOpenPath;
     std::atomic<bool>  snsVideoExporting      { false };
     std::atomic<bool>  snsVideoCancelFlag     { false };
     std::atomic<float> snsVideoExportProgress { 0.0f };
     juce::String       snsVideoExportStatus;
     juce::File         lastSnsVideoFile;
     std::thread        snsVideoExportThread;
+
+    // 次世代進化①：🎧 裏ガイドボーカル分離（配信・録音では原曲ボーカルを消したまま、自分のイヤホンにだけ原曲ガイドを返す）
+    std::atomic<bool>        bgmGuideMonitorOn    { false };
+    std::atomic<float>       bgmGuideMonitorLevel { 0.34f };
+    std::atomic<float>       meterBgmGuideDb      { 0.0f };
+    juce::AudioBuffer<float> bgmGuideScratch;
+    juce::AudioBuffer<float> bgmGuideDelayBuf;
+    int                      bgmGuideSyncWritePos { 0 };
+    float                    bgmGuideLp160L       { 0.0f }, bgmGuideLp160R  { 0.0f };
+    float                    bgmGuideLp8500L      { 0.0f }, bgmGuideLp8500R { 0.0f };
+
+    // 次世代進化②：🎭 ゼロ遅延・1人デュエット「声キャラ瞬間モーフィング」（3段フォルマント＆倍音キャラクターフィルタ）
+    std::atomic<int>              vocalCharPreset     { 0 };
+    int                           vocalCharLastPreset { -1 };
+    double                        vocalCharLastSr     { 0.0 };
+    juce::dsp::IIR::Filter<float> vocalCharBands[3][2];
+    std::atomic<float>            meterVocalCharDb    { 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

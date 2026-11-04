@@ -486,6 +486,154 @@ int main()
                riseDirect10, riseBalanced, riseSteady);
     }
 
+    // ------------------------------------------------------------------
+    // 8. 次世代進化①：🎧 歌い手専用「裏ガイドボーカル分離」 (bgmGuideMonitorOn)
+    //    - 配信/録音側からは中央ボーカル(1000Hz Mid)を除去しつつ、ヘッドホン出力(buf)にだけ裏ガイドボーカルを返す
+    // ------------------------------------------------------------------
+    {
+        auto testDir = gz::dataDirectory();
+        testDir.createDirectory();
+        auto guideBgmFile = testDir.getChildFile ("guide_vocal_sep_test.wav");
+        {
+            const int bgmSamples = 24000;
+            juce::AudioBuffer<float> testBgm (2, bgmSamples);
+            for (int i = 0; i < bgmSamples; ++i)
+            {
+                const double t = (double) i / sr;
+                const float centerVoc = 0.40f * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * t);
+                const float sideInst  = 0.30f * (float) std::sin (juce::MathConstants<double>::twoPi * 320.0 * t);
+                testBgm.setSample (0, i, centerVoc + sideInst);
+                testBgm.setSample (1, i, centerVoc - sideInst);
+            }
+            guideBgmFile.deleteFile();
+            juce::WavAudioFormat wavFmt;
+            if (auto out = guideBgmFile.createOutputStream())
+            {
+                if (auto w = std::unique_ptr<juce::AudioFormatWriter> (wavFmt.createWriterFor (out.get(), sr, 2, 16, {}, 0)))
+                {
+                    out.release();
+                    w->writeFromAudioSampleBuffer (testBgm, 0, bgmSamples);
+                }
+            }
+        }
+
+        auto measureHeadphoneGuide = [&] (bool guideOn, float& outGuideMeterDb) -> double
+        {
+            auto proc = std::make_unique<VocalGzzioProcessor>();
+            proc->prepareToPlay (sr, 256);
+            proc->loadBgmFile (guideBgmFile);
+            proc->setBgmGainDb (0.0f);
+            proc->setBgmVocalCancel (true); // 配信・録音側はボーカル除去ON
+            proc->setBgmToStream (true);
+            proc->setBgmGuideMonitorLevel (1.0f);
+            proc->setBgmGuideMonitorOn (guideOn);
+            proc->setBgmPlaying (true);
+
+            std::vector<float> hpOut;
+            hpOut.reserve (40 * 256);
+            juce::AudioBuffer<float> buf (2, 256);
+            juce::MidiBuffer midi;
+            for (int b = 0; b < 60; ++b)
+            {
+                buf.clear();
+                proc->processBlock (buf, midi);
+                if (b >= 20)
+                {
+                    const float* rL = buf.getReadPointer (0);
+                    for (int i = 0; i < 256; ++i)
+                        hpOut.push_back (rL[i]);
+                }
+            }
+            outGuideMeterDb = proc->getBgmGuideMonitorMeterDb();
+            proc->releaseResources();
+            return measureFreqMag (hpOut.data(), (int) hpOut.size(), 1000.0, sr);
+        };
+
+        float meterOff = -60.0f, meterOn = -60.0f;
+        const double magGuideOff = measureHeadphoneGuide (false, meterOff);
+        const double magGuideOn  = measureHeadphoneGuide (true,  meterOn);
+        guideBgmFile.deleteFile();
+
+        CHECK (magGuideOff < 0.020 && magGuideOn > 0.085 && magGuideOn > magGuideOff * 5.0 && meterOn > -20.0f,
+               "裏ガイドボーカル分離: ボーカル除去のみ1kHz=%.4f (配信/録音側) vs 裏ガイドON時ヘッドホン1kHz=%.4f (meter=%.1f dB)",
+               magGuideOff, magGuideOn, meterOn);
+    }
+
+    // ------------------------------------------------------------------
+    // 9. 次世代進化②：🎭 ゼロ遅延・1人デュエット「声キャラ瞬間モーフィング」 (vocalCharPreset)
+    // ------------------------------------------------------------------
+    {
+        auto measureCharRatio = [&] (int preset, int& outLatencySamples) -> double
+        {
+            auto proc = std::make_unique<VocalGzzioProcessor>();
+            proc->prepareToPlay (sr, 256);
+            for (int m = 0; m < gz::ModuleChain::Count; ++m)
+                setParam (*proc, gz::ModuleChain::paramId (m), 0.0f);
+            setParam (*proc, "argon_velvet", 0.0f);
+            setParam (*proc, "argon_focus",  0.0f);
+            setParam (*proc, "argon_silk",   0.0f);
+            setParam (*proc, "argon_halo",   0.0f);
+            proc->setVocalCharPreset (preset);
+
+            std::vector<float> sig;
+            sig.reserve (30 * 256);
+            juce::AudioBuffer<float> buf (2, 256);
+            juce::MidiBuffer midi;
+            double p1 = 0.0, p2 = 0.0;
+            for (int b = 0; b < 50; ++b)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const float s = 0.15f * (float) (std::sin (p1) + std::sin (p2));
+                    p1 += juce::MathConstants<double>::twoPi * 210.0  / sr;
+                    p2 += juce::MathConstants<double>::twoPi * 2700.0 / sr;
+                    buf.setSample (0, i, s);
+                    buf.setSample (1, i, s);
+                }
+                proc->processBlock (buf, midi);
+                if (b >= 20)
+                {
+                    const float* r = buf.getReadPointer (0);
+                    for (int i = 0; i < 256; ++i)
+                        sig.push_back (r[i]);
+                }
+            }
+            outLatencySamples = proc->getLatencySamples();
+            proc->releaseResources();
+            const double lowMag  = measureFreqMag (sig.data(), (int) sig.size(), 210.0,  sr);
+            const double highMag = measureFreqMag (sig.data(), (int) sig.size(), 2700.0, sr);
+            return (lowMag > 1e-6) ? (highMag / lowMag) : 0.0;
+        };
+
+        int lat0 = 0, latCool = 0, latSweet = 0;
+        const double ratioOff   = measureCharRatio (0, lat0);
+        const double ratioCool  = measureCharRatio (1, latCool);  // 💎 クール低音 (210Hz増強・2.6kHz減衰)
+        const double ratioSweet = measureCharRatio (2, latSweet); // 🌸 スイート高音 (210Hz減衰・2.7kHz増強)
+
+        CHECK (latCool == lat0 && latSweet == lat0 && ratioSweet > ratioOff * 1.8 && ratioCool < ratioOff * 0.65,
+               "ゼロ遅延・声キャラ瞬間モーフィング: 追加遅延0サンプル (lat=%d), 高低比 OFF=%.2f / Cool=%.2f / Sweet=%.2f",
+               latCool - lat0, ratioOff, ratioCool, ratioSweet);
+    }
+
+    // ------------------------------------------------------------------
+    // 10. 次世代進化④：📺 OBSブラウザソース用「Now Playing オーバーレイ (.html)」自動生成検査
+    // ------------------------------------------------------------------
+    {
+        auto proc = std::make_unique<VocalGzzioProcessor>();
+        proc->prepareToPlay (sr, 256);
+        proc->loadBuiltinDemoBgm();
+        proc->setVocalCharPreset (2); // 🌸 スイート高音
+        proc->addCurrentSongToSetlist();
+        const bool okHtml = proc->updateObsNowPlayingOverlayFile();
+        const auto htmlFile = proc->getObsOverlayHtmlFile();
+        const juce::String content = htmlFile.existsAsFile() ? htmlFile.loadFileAsString() : juce::String();
+        htmlFile.deleteFile();
+        proc->releaseResources();
+
+        CHECK (okHtml && content.contains ("VocalGzzio OBS Now Playing Overlay") && content.contains ("BPM"),
+               "OBS Now Playing オーバーレイ自動生成: HTML生成成功 (%d bytes)", (int) content.getNumBytesAsUTF8());
+    }
+
     std::printf ("=== dsp_v550_features 完了: FAIL=%d ===\n", gFail);
     return gFail == 0 ? 0 : 1;
 }

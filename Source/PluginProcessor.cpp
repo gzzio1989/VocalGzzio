@@ -1366,6 +1366,20 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         subChestLp = subChestSmoothL = subChestSmoothR = subChestHpL = subChestHpR = 0.0f;
         subChestSign = subChestFlip = 1;
         meterMixVoiceBridgeDb.store (0.0f, std::memory_order_relaxed);
+
+        // 次世代進化②：🎭 ゼロ遅延・1人デュエット「声キャラ瞬間モーフィング」用 3段フィルタ事前確保（RTヒープ確保ゼロ）
+        for (int b = 0; b < 3; ++b)
+        {
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                vocalCharBands[b][ch].prepare (mono);
+                vocalCharBands[b][ch].coefficients = Coefficients::makePeakFilter (safeSr, juce::jmin (1000.0f, maxF), 1.0f, 1.0f);
+                vocalCharBands[b][ch].reset();
+            }
+        }
+        vocalCharLastPreset = -1;
+        vocalCharLastSr     = 0.0;
+        meterVocalCharDb.store (0.0f, std::memory_order_relaxed);
     }
     {
         const double seSr = juce::jmax (8000.0, sampleRate);
@@ -1436,6 +1450,13 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     syncCalibPos.store (0, std::memory_order_relaxed);
     streamMixScratch.setSize (2, juce::jmax (samplesPerBlock, 16), false, false, true);
     streamMixScratch.clear();
+    bgmGuideScratch.setSize (1, juce::jmax (samplesPerBlock, 16), false, false, true);
+    bgmGuideScratch.clear();
+    bgmGuideDelayBuf.setSize (1, syncMaxSamples, false, false, true);
+    bgmGuideDelayBuf.clear();
+    bgmGuideSyncWritePos = 0;
+    bgmGuideLp160L = bgmGuideLp160R = bgmGuideLp8500L = bgmGuideLp8500R = 0.0f;
+    meterBgmGuideDb.store (0.0f, std::memory_order_relaxed);
 
     // v5.5.0 伴奏コード追従スマートハモリ用 36ビン複素リーキーフェーザ係数事前計算（C3..B5, 4分の1間引き更新・RT確保ゼロ）
     {
@@ -1973,6 +1994,49 @@ void VocalGzzioProcessor::updateParameters()
                 micModAir[ch].reset();
                 micModDc[ch] = 0.0f;
             }
+        }
+    }
+
+    // ---- 次世代進化②：🎭 ゼロ遅延・1人デュエット「声キャラ瞬間モーフィング」（0=OFF, 1=💎クール低音, 2=🌸スイート高音, 3=🌙ウィスパー吐息, 4=🔥パワフルロック） ----
+    {
+        const int vcp = (eraNow >= 550) ? vocalCharPreset.load (std::memory_order_relaxed) : 0;
+        if (vcp > 0 && (vcp != vocalCharLastPreset || std::abs (sr - vocalCharLastSr) > 1.0))
+        {
+            vocalCharLastPreset = vcp;
+            vocalCharLastSr     = sr;
+            const double safeSr = juce::jmax (16000.0, sr);
+            const float maxF    = (float) (safeSr * 0.44);
+            struct CharProfile { float f1Hz, f1Q, f1Db, f2Hz, f2Q, f2Db, f3Hz, f3Q, f3Db, isShelf3; };
+            static const CharProfile kCharProfiles[4] = {
+                // 1: 💎 クール低音 (イケボ／少年低音フォルマント — 胸鳴り230Hz強化＋第2フォルマント下方シフト)
+                {  230.0f, 1.05f, +3.8f, 1380.0f, 1.25f, +2.8f, 2550.0f, 1.35f, -3.5f, 0.0f },
+                // 2: 🌸 スイート高音 (カワボ／アイドル艶フォルマント — 低域240Hz軽やか化＋第1/第2フォルマント上方シフト)
+                {  240.0f, 1.05f, -3.6f,  740.0f, 1.20f, +2.2f, 2750.0f, 1.25f, +3.8f, 0.0f },
+                // 3: 🌙 ウィスパー吐息 (バラード／ASMR吐息強調 — 1.15kHz芯を柔らげ＋3.9kHz/8.2kHzシルキーブレス開放)
+                { 1150.0f, 1.20f, -2.8f, 3900.0f, 1.10f, +2.8f, 8200.0f, 0.707f, +4.2f, 1.0f },
+                // 4: 🔥 パワフルロック (アニソン／ロック芯 — 190Hzボワつき整理＋1.75kHz/3.35kHzエッジ＆倍音ドライブ)
+                {  190.0f, 1.10f, -2.5f, 1750.0f, 1.25f, +3.5f, 3350.0f, 1.15f, +3.0f, 0.0f }
+            };
+            const auto& cp = kCharProfiles[juce::jlimit (0, 3, vcp - 1)];
+            const auto c0 = ACoefs::makePeakFilter (safeSr, juce::jmin (cp.f1Hz, maxF), cp.f1Q, toGain (cp.f1Db));
+            const auto c1 = ACoefs::makePeakFilter (safeSr, juce::jmin (cp.f2Hz, maxF), cp.f2Q, toGain (cp.f2Db));
+            const auto c2 = (cp.isShelf3 > 0.5f)
+                                ? ACoefs::makeHighShelf  (safeSr, juce::jmin (cp.f3Hz, maxF), cp.f3Q, toGain (cp.f3Db))
+                                : ACoefs::makePeakFilter (safeSr, juce::jmin (cp.f3Hz, maxF), cp.f3Q, toGain (cp.f3Db));
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                *vocalCharBands[0][ch].coefficients = c0;
+                *vocalCharBands[1][ch].coefficients = c1;
+                *vocalCharBands[2][ch].coefficients = c2;
+            }
+        }
+        else if (vcp == 0 && vocalCharLastPreset != 0)
+        {
+            vocalCharLastPreset = 0;
+            for (int b = 0; b < 3; ++b)
+                for (int ch = 0; ch < 2; ++ch)
+                    vocalCharBands[b][ch].reset();
+            meterVocalCharDb.store (0.0f, std::memory_order_relaxed);
         }
     }
 }
@@ -2547,6 +2611,42 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 }
                 micModDc[ch] = dc;
             }
+        }
+    }
+
+    // ---- 次世代進化②：🎭 ゼロ遅延・1人デュエット「声キャラ瞬間モーフィング」 (0=OFF, 1=クール低音, 2=スイート高音, 3=ウィスパー吐息, 4=パワフルロック) ----
+    {
+        const int vcp = (eraNow >= 550 && ! cmp && ! selfTestRunning.load (std::memory_order_relaxed))
+                            ? vocalCharPreset.load (std::memory_order_relaxed) : 0;
+        if (vcp > 0 && vocalCharLastPreset == vcp)
+        {
+            const int chCount = juce::jmin (numCh, 2);
+            float pkIn = 0.0f, pkOut = 0.0f;
+            for (int ch = 0; ch < chCount; ++ch)
+            {
+                float* p = buffer.getWritePointer (ch);
+                auto& b0 = vocalCharBands[0][ch];
+                auto& b1 = vocalCharBands[1][ch];
+                auto& b2 = vocalCharBands[2][ch];
+                for (int n = 0; n < numSamples; ++n)
+                {
+                    const float inS = p[n];
+                    pkIn = juce::jmax (pkIn, std::abs (inS));
+                    float x = b2.processSample (b1.processSample (b0.processSample (inS)));
+                    if (vcp == 4) // 🔥 パワフルロック: 奇数次ソフト倍音ドライブで太い芯を付与
+                        x = std::tanh (1.22f * x) * 0.82f;
+                    pkOut = juce::jmax (pkOut, std::abs (x));
+                    p[n] = x;
+                }
+            }
+            const float diffDb = (pkIn > 1.0e-4f)
+                                 ? std::abs (juce::Decibels::gainToDecibels (pkOut / pkIn, -24.0f))
+                                 : 0.0f;
+            meterVocalCharDb.store (juce::jmax (1.2f, diffDb), std::memory_order_relaxed);
+        }
+        else if (meterVocalCharDb.load (std::memory_order_relaxed) > 0.0f)
+        {
+            meterVocalCharDb.store (0.0f, std::memory_order_relaxed);
         }
     }
 
@@ -5642,9 +5742,10 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         meterBgmUnmaskDb.store (0.0f, std::memory_order_relaxed);
     }
 
-    // ---- v4.8.0 柱① ＆ v5.5.0 柱1/柱3：🎵 カラオケ・BGMプレイヤー ＆ 🌐 アプリ別音声取込 ＆ 🎹 伴奏コード追従クロマ解析 ----
-    bool bgmMixedNow      = false;
-    bool bgmFromAppCapNow = false;
+    // ---- v4.8.0 柱① ＆ v5.5.0 柱1/柱3 ＆ 次世代進化①：🎵 カラオケ・BGMプレイヤー ＆ 🌐 アプリ別音声取込 ＆ 🎧 裏ガイドボーカル分離 ----
+    bool bgmMixedNow       = false;
+    bool bgmFromAppCapNow  = false;
+    bool bgmGuideActiveNow = false;
     const bool bgmSendToStream = bgmToStream.load (std::memory_order_relaxed);
     if (! selfTestRunning.load (std::memory_order_relaxed)
         && ! syncCalibRunning.load (std::memory_order_relaxed)
@@ -5711,7 +5812,13 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             const float* vocR = numCh > 1 ? buffer.getReadPointer (1) : vocL;
             const int ringSz = (int) bgmPitchRingL.size();
             const float grainW = (float) juce::jlimit (256, juce::jmax (512, ringSz / 3), (int) (0.036 * currentSampleRate));
-            const bool vocalCancel = bgmVocalCancel.load (std::memory_order_relaxed);
+            const bool guideMonNow = (eraNow >= 550) && bgmGuideMonitorOn.load (std::memory_order_relaxed)
+                                     && (bgmGuideScratch.getNumSamples() >= numSamples);
+            const float guideLvl   = juce::jlimit (0.0f, 1.5f, bgmGuideMonitorLevel.load (std::memory_order_relaxed));
+            float* guideBuf        = guideMonNow ? bgmGuideScratch.getWritePointer (0) : nullptr;
+            float  guidePeak       = 0.0f;
+            // 裏ガイドボーカルON時は、配信・録音へ送る伴奏(sL/sR)から自動で中央ボーカルを88%除去してカラオケ化する
+            const bool vocalCancel = bgmVocalCancel.load (std::memory_order_relaxed) || guideMonNow;
             const float vcA160  = 1.0f - std::exp (-juce::MathConstants<float>::twoPi * 160.0f  / (float) juce::jmax (8000.0, currentSampleRate));
             const float vcA8500 = 1.0f - std::exp (-juce::MathConstants<float>::twoPi * 8500.0f / (float) juce::jmax (18000.0, currentSampleRate));
             const bool trackChordNow = (eraNow >= 550);
@@ -5721,23 +5828,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 float sL = dstL[n];
                 float sR = dstR[n];
 
-                // v5.0.0 柱①：伴奏ボーカル除去（1クリック原曲カラオケ化 — Mid/Side Spectral Center Canceller）
-                // 160Hz以下のベース・キックと8.5kHz以上のステレオ空気感はそのまま保ち、
-                // 160Hz〜8.5kHzの中央定位ボーカル(Mid)だけを88%減衰させて原曲を1クリックでカラオケ伴奏化する。
-                if (vocalCancel)
-                {
-                    bgmVcLp160L  += vcA160  * (sL - bgmVcLp160L);
-                    bgmVcLp160R  += vcA160  * (sR - bgmVcLp160R);
-                    bgmVcLp8500L += vcA8500 * (sL - bgmVcLp8500L);
-                    bgmVcLp8500R += vcA8500 * (sR - bgmVcLp8500R);
-                    const float midBandL = bgmVcLp8500L - bgmVcLp160L;
-                    const float midBandR = bgmVcLp8500R - bgmVcLp160R;
-                    const float centerVocal = 0.5f * (midBandL + midBandR);
-                    sL -= centerVocal * 0.88f;
-                    sR -= centerVocal * 0.88f;
-                }
-
                 // キー変更（±6半音・テンポ維持デュアルグレイン・ピッチシフター）
+                // ※ボーカル除去・裏ガイド抽出の前にキー変更を行うことで、自分の耳へ返る裏ガイドボーカルも自動でキー変更に追従する
                 if (semi != 0 && ringSz > 512)
                 {
                     bgmPitchRingL[(size_t) bgmPitchRingW] = sL;
@@ -5762,6 +5854,25 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     bgmPitchRingW = (bgmPitchRingW + 1) % ringSz;
                     bgmPitchPhase += std::abs (1.0f - pitchRatio) / grainW;
                     while (bgmPitchPhase >= 1.0f) bgmPitchPhase -= 1.0f;
+                }
+
+                // v5.0.0 柱① ＆ 次世代進化①：伴奏ボーカル除去 ＋ 裏ガイドボーカル分離抽出（Mid/Side Spectral Center Canceller）
+                // 160Hz以下のベース・キックと8.5kHz以上のステレオ空気感はそのまま保ち、
+                // 160Hz〜8.5kHzの中央定位ボーカル(Mid)だけを88%減衰させて配信・録音用伴奏をカラオケ化しつつ、
+                // 引き算したボーカル成分を歌い手のヘッドホン専用「裏ガイドボーカル」として分離保持する。
+                float extractedGuide = 0.0f;
+                if (vocalCancel)
+                {
+                    bgmVcLp160L  += vcA160  * (sL - bgmVcLp160L);
+                    bgmVcLp160R  += vcA160  * (sR - bgmVcLp160R);
+                    bgmVcLp8500L += vcA8500 * (sL - bgmVcLp8500L);
+                    bgmVcLp8500R += vcA8500 * (sR - bgmVcLp8500R);
+                    const float midBandL = bgmVcLp8500L - bgmVcLp160L;
+                    const float midBandR = bgmVcLp8500R - bgmVcLp160R;
+                    const float centerVocal = 0.5f * (midBandL + midBandR);
+                    extractedGuide = centerVocal * 0.88f;
+                    sL -= extractedGuide;
+                    sR -= extractedGuide;
                 }
 
                 // v5.5.0 柱3：キーシフト後・声ポケット掘削前の伴奏和音信号から 4分の1間引きで 36ビン・クロマを低負荷更新
@@ -5798,9 +5909,24 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 const float g = bgmLinGain * bgmDuckGain;
                 dstL[n] = sL * g;
                 dstR[n] = sR * g;
+                if (guideBuf != nullptr)
+                {
+                    const float gv = extractedGuide * bgmLinGain * guideLvl;
+                    guideBuf[n] = gv;
+                    guidePeak = juce::jmax (guidePeak, std::abs (gv));
+                }
             }
             meterBgmDuckDb.store (juce::jmax (0.0f, -juce::Decibels::gainToDecibels (bgmDuckGain, -24.0f)),
                                   std::memory_order_relaxed);
+            if (guideMonNow)
+            {
+                bgmGuideActiveNow = true;
+                meterBgmGuideDb.store (juce::Decibels::gainToDecibels (guidePeak, -60.0f), std::memory_order_relaxed);
+            }
+            else
+            {
+                meterBgmGuideDb.store (-60.0f, std::memory_order_relaxed);
+            }
             bgmMixedNow = true;
 
             // 1ブロックに1回だけ 12音クロマ包絡と現在コード名バッジ（C / Fm / E7 等）を更新（RT確保・ロック一切なし）
@@ -5988,6 +6114,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             if (syncMs >= 0 && lastAppliedSyncMs < 0)
             {
                 bgmSyncDelayBuf.clear();
+                bgmGuideDelayBuf.clear();
                 bgmSyncWritePos    = 0;
                 bgmSyncTailSamples = 0;
             }
@@ -6037,15 +6164,21 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 float* bR = bgmBlockScratch.getWritePointer (1);
                 float* ringL = bgmSyncDelayBuf.getWritePointer (0);
                 float* ringR = bgmSyncDelayBuf.getWritePointer (1);
+                float* gBuf  = (bgmGuideActiveNow && bgmGuideScratch.getNumSamples() >= numSamples
+                                && bgmGuideDelayBuf.getNumSamples() >= syncMaxSamples)
+                               ? bgmGuideScratch.getWritePointer (0) : nullptr;
+                float* gRing = gBuf ? bgmGuideDelayBuf.getWritePointer (0) : nullptr;
                 int wp = bgmSyncWritePos;
                 for (int n = 0; n < numSamples; ++n)
                 {
                     ringL[wp] = bL[n];
                     ringR[wp] = bR[n];
+                    if (gBuf && gRing) gRing[wp] = gBuf[n];
                     int rp = wp - dSamples;
                     if (rp < 0) rp += syncMaxSamples;
                     bL[n] = ringL[rp];
                     bR[n] = ringR[rp];
+                    if (gBuf && gRing) gBuf[n] = gRing[rp];
                     if (++wp >= syncMaxSamples) wp = 0;
                 }
                 bgmSyncWritePos = wp;
@@ -6268,6 +6401,25 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             const float* R = numCh > 1 ? buffer.getReadPointer (1) : L;
             streamOut.push (L, R, numSamples);
         }
+    }
+
+    // ---- 次世代進化①：🎧 歌い手専用「裏ガイドボーカル分離」モニター合成 ----
+    // 配信出力(StreamOut)およびWAV録音(retroBgmBuf/wavRecBgmBuf)へのキャプチャが全て完了した直後に配置することで、
+    // 配信・録音側にはボーカル除去済みの純カラオケ伴奏だけを送りつつ、
+    // 歌い手のヘッドホン出力(buffer)にだけ抽出・キー変更済みの原曲ガイドボーカルを合成する。
+    if (bgmGuideActiveNow
+        && bgmGuideScratch.getNumSamples() >= numSamples
+        && ! monitorMute.load (std::memory_order_relaxed)
+        && ! compareBypass.load (std::memory_order_relaxed)
+        && ! selfTestRunning.load (std::memory_order_relaxed))
+    {
+        buffer.addFrom (0, 0, bgmGuideScratch, 0, 0, numSamples);
+        if (numCh > 1)
+            buffer.addFrom (1, 0, bgmGuideScratch, 0, 0, numSamples);
+    }
+    else if (! bgmGuideActiveNow && meterBgmGuideDb.load (std::memory_order_relaxed) > -59.5f)
+    {
+        meterBgmGuideDb.store (-60.0f, std::memory_order_relaxed);
     }
 
     // ---- v5.3.0 新案④：🎧 骨伝導補正・歌い手専用モニターエンハンサー (Singer's Cue Monitor) ----
@@ -7155,10 +7307,18 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         s51->setAttribute ("chordFollowHarm", chordFollowHarmOn.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("appMonitorLocal", appAudioMonitorLocal.load (std::memory_order_relaxed) ? 1 : 0);
         s51->setAttribute ("snsWatermark",    snsWatermarkOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("snsAvatarOn",     snsAvatarOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("bgmGuideMonitor", bgmGuideMonitorOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("bgmGuideLevel",   (double) bgmGuideMonitorLevel.load (std::memory_order_relaxed));
+        s51->setAttribute ("vocalCharPreset", vocalCharPreset.load (std::memory_order_relaxed));
         s51->setAttribute ("vocalExprMode",   vocalExprMode.load (std::memory_order_relaxed));
         s51->setAttribute ("outVolPct",       (double) outputVolumePct.load (std::memory_order_relaxed));
         s51->setAttribute ("setlistCur",   currentSetlistIdx.load (std::memory_order_relaxed));
         const juce::ScopedLock sl (bgmMetaLock);
+        if (snsAvatarClosedPath.isNotEmpty())
+            s51->setAttribute ("snsAvatarClosed", snsAvatarClosedPath);
+        if (snsAvatarOpenPath.isNotEmpty())
+            s51->setAttribute ("snsAvatarOpen",   snsAvatarOpenPath);
         for (int s = 0; s < kNumCustomSe; ++s)
             s51->setAttribute ("customSe" + juce::String (s), customSePaths[(size_t) s]);
         for (const auto& item : setlistItems)
@@ -7399,9 +7559,21 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
                 chordFollowHarmOn.store    (s51->getIntAttribute ("chordFollowHarm", 1) != 0, std::memory_order_relaxed);
                 appAudioMonitorLocal.store (s51->getIntAttribute ("appMonitorLocal", 0) != 0, std::memory_order_relaxed);
                 snsWatermarkOn.store       (s51->getIntAttribute ("snsWatermark",    1) != 0, std::memory_order_relaxed);
+                snsAvatarOn.store          (s51->getIntAttribute ("snsAvatarOn",     1) != 0, std::memory_order_relaxed);
+                bgmGuideMonitorOn.store    (s51->getIntAttribute ("bgmGuideMonitor", 0) != 0, std::memory_order_relaxed);
+                bgmGuideMonitorLevel.store (juce::jlimit (0.0f, 1.5f, (float) s51->getDoubleAttribute ("bgmGuideLevel", 0.65)), std::memory_order_relaxed);
+                vocalCharPreset.store      (juce::jlimit (0, 4, s51->getIntAttribute ("vocalCharPreset", 0)), std::memory_order_relaxed);
                 vocalExprMode.store        (juce::jlimit (0, 2, s51->getIntAttribute ("vocalExprMode", 0)), std::memory_order_relaxed);
                 outputVolumePct.store      (juce::jlimit (0.0f, 250.0f, (float) s51->getDoubleAttribute ("outVolPct", 100.0)), std::memory_order_relaxed);
                 currentSetlistIdx.store (s51->getIntAttribute ("setlistCur", -1), std::memory_order_relaxed);
+                {
+                    const auto avClosed = s51->getStringAttribute ("snsAvatarClosed");
+                    const auto avOpen   = s51->getStringAttribute ("snsAvatarOpen");
+                    if (avClosed.isNotEmpty() && juce::File (avClosed).existsAsFile())
+                        loadSnsAvatarImage (juce::File (avClosed), false);
+                    if (avOpen.isNotEmpty() && juce::File (avOpen).existsAsFile())
+                        loadSnsAvatarImage (juce::File (avOpen), true);
+                }
                 {
                     const juce::ScopedLock sl (bgmMetaLock);
                     setlistItems.clear();
@@ -8438,6 +8610,7 @@ int VocalGzzioProcessor::addCurrentSongToSetlist()
         }
     }
     currentSetlistIdx.store (newIdx, std::memory_order_relaxed);
+    updateObsNowPlayingOverlayFile();
     markStateDirty();
     return newIdx;
 }
@@ -8481,6 +8654,7 @@ bool VocalGzzioProcessor::loadSetlistSong (int index, bool autoPlay)
     setP ("revmix",       item.revMix);
     micModelMode.store (juce::jlimit (0, 4, item.micModel), std::memory_order_relaxed);
     bgmPlaying.store (autoPlay, std::memory_order_release);
+    updateObsNowPlayingOverlayFile();
     markStateDirty();
     return true;
 }
@@ -8979,6 +9153,12 @@ bool VocalGzzioProcessor::exportLastTakeSnsVideoAsync (bool vertical9x16,
     opt.fps                = 30;
     opt.compareBeforeAfter = compareBeforeAfter;
     opt.showWatermark      = snsWatermarkOn.load (std::memory_order_relaxed);
+    opt.showAvatar         = snsAvatarOn.load (std::memory_order_relaxed);
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        opt.avatarClosedImg = snsAvatarClosedImg;
+        opt.avatarOpenImg   = snsAvatarOpenImg;
+    }
     if (opt.titleText.trim().isEmpty())
     {
         const auto appLbl = appAudioCap.isCapturing() ? appAudioCap.getActiveLabel() : getBgmTitle();
@@ -9644,6 +9824,167 @@ double gz::StreamOut::rescueWindowsDefaultSpeakerAndGetSampleRate (juce::String*
 {
     return inspectAndHealWindowsAudioForInterface ({}, outRealSpeaker, outRealMic, nullptr);
 }
+
+const char* VocalGzzioProcessor::getVocalCharPresetName (int preset, bool english) noexcept
+{
+    static const char* const kJa[5] = {
+        "🎭 声キャラ: OFF (素の声色)",
+        "💎 クール低音 (イケボ・深み)",
+        "🌸 スイート高音 (カワボ・透明感)",
+        "🌙 ウィスパー吐息 (ASMR・息艶)",
+        "🔥 パワフルロック (熱い芯・倍音)"
+    };
+    static const char* const kEn[5] = {
+        "🎭 Voice Char: OFF (Natural)",
+        "💎 Cool Deep (Low Formant)",
+        "🌸 Sweet High (Bright Formant)",
+        "🌙 Whisper Air (ASMR Breath)",
+        "🔥 Powerful Rock (Harmonic Drive)"
+    };
+    const int idx = juce::jlimit (0, 4, preset);
+    return english ? kEn[idx] : kJa[idx];
+}
+
+bool VocalGzzioProcessor::loadSnsAvatarImage (const juce::File& file, bool isOpenMouth)
+{
+    if (! file.existsAsFile())
+        return false;
+    auto img = juce::ImageFileFormat::loadFrom (file);
+    if (! img.isValid())
+        return false;
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        if (isOpenMouth)
+        {
+            snsAvatarOpenImg  = img;
+            snsAvatarOpenPath = file.getFullPathName();
+        }
+        else
+        {
+            snsAvatarClosedImg  = img;
+            snsAvatarClosedPath = file.getFullPathName();
+        }
+    }
+    snsAvatarOn.store (true, std::memory_order_relaxed);
+    if (! restoringState)
+        markStateDirty();
+    return true;
+}
+
+void VocalGzzioProcessor::clearSnsAvatarImages()
+{
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        snsAvatarClosedImg  = {};
+        snsAvatarOpenImg    = {};
+        snsAvatarClosedPath.clear();
+        snsAvatarOpenPath.clear();
+    }
+    if (! restoringState)
+        markStateDirty();
+}
+
+juce::File VocalGzzioProcessor::getObsOverlayHtmlFile() const
+{
+    return getRecordingsDirectory().getChildFile ("VocalGzzio_OBS_Overlay.html");
+}
+
+bool VocalGzzioProcessor::updateObsNowPlayingOverlayFile() const
+{
+    const auto outFile = getObsOverlayHtmlFile();
+    outFile.getParentDirectory().createDirectory();
+
+    static const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    const int detKey   = juce::jlimit (0, 11, bgmDetectedKey.load (std::memory_order_relaxed));
+    const bool detMin  = bgmDetectedMinor.load (std::memory_order_relaxed);
+    const int detBpm   = juce::jlimit (60, 240, bgmDetectedBpm.load (std::memory_order_relaxed));
+    const int semi     = juce::jlimit (-6, 6, bgmPitchSemi.load (std::memory_order_relaxed));
+    const int effKey   = (detKey + semi + 120) % 12;
+    const int curIdx   = currentSetlistIdx.load (std::memory_order_relaxed);
+    const int vcp      = vocalCharPreset.load (std::memory_order_relaxed);
+
+    juce::String songTitle;
+    juce::String nextTitle;
+    int totalSongs = 0;
+    {
+        const juce::ScopedLock sl (bgmMetaLock);
+        totalSongs = (int) setlistItems.size();
+        if (curIdx >= 0 && curIdx < totalSongs)
+        {
+            songTitle = setlistItems[(size_t) curIdx].title;
+            if (curIdx + 1 < totalSongs)
+                nextTitle = setlistItems[(size_t) (curIdx + 1)].title;
+        }
+        if (songTitle.isEmpty())
+            songTitle = bgmTitle;
+    }
+    if (songTitle.trim().isEmpty())
+        songTitle = appAudioCap.isCapturing() ? appAudioCap.getActiveLabel() : juce::String::fromUTF8 ("VocalGzzio 歌枠ライブ");
+
+    auto escHtml = [] (const juce::String& s) -> juce::String
+    {
+        return s.replace ("&", "&amp;")
+                .replace ("<", "&lt;")
+                .replace (">", "&gt;")
+                .replace ("\"", "&quot;");
+    };
+
+    const juce::String semiStr = (semi > 0 ? ("+" + juce::String (semi)) : (semi < 0 ? juce::String (semi) : "±0"));
+    const juce::String keyBadge = juce::String (kKeyNames[effKey]) + (detMin ? "m" : " Maj")
+                                + " (Key " + semiStr + ")";
+    const juce::String bpmBadge = juce::String (detBpm) + " BPM";
+    const juce::String setBadge = (curIdx >= 0 && totalSongs > 0)
+                                ? (juce::String::fromUTF8 ("セトリ ") + juce::String (curIdx + 1) + "/" + juce::String (totalSongs))
+                                : juce::String::fromUTF8 ("NOW SINGING");
+    const juce::String charBadge = (vcp > 0) ? juce::String::fromUTF8 (getVocalCharPresetName (vcp, false)) : juce::String();
+
+    juce::String html;
+    html << "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n"
+         << "<meta http-equiv=\"refresh\" content=\"3\">\n"
+         << "<title>VocalGzzio OBS Now Playing Overlay</title>\n"
+         << "<style>\n"
+         << "  * { box-sizing: border-box; margin: 0; padding: 0; }\n"
+         << "  body { background: transparent; font-family: 'Segoe UI', 'Yu Gothic UI', 'Meiryo', sans-serif; overflow: hidden; padding: 16px; }\n"
+         << "  .card {\n"
+         << "    display: inline-flex; flex-direction: column; gap: 8px;\n"
+         << "    min-width: 420px; max-width: 760px;\n"
+         << "    padding: 16px 24px;\n"
+         << "    border-radius: 18px;\n"
+         << "    background: linear-gradient(135deg, rgba(13, 18, 30, 0.88), rgba(22, 32, 54, 0.84));\n"
+         << "    border: 1.5px solid rgba(56, 189, 248, 0.55);\n"
+         << "    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 18px rgba(56, 189, 248, 0.22);\n"
+         << "    color: #f8fafc;\n"
+         << "  }\n"
+         << "  .top-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }\n"
+         << "  .pill {\n"
+         << "    font-size: 13px; font-weight: 700; padding: 3px 11px; border-radius: 999px;\n"
+         << "    background: rgba(56, 189, 248, 0.20); border: 1px solid rgba(56, 189, 248, 0.65); color: #7dd3fc;\n"
+         << "  }\n"
+         << "  .pill.gold { background: rgba(251, 191, 36, 0.18); border-color: rgba(251, 191, 36, 0.65); color: #fde68a; }\n"
+         << "  .pill.pink { background: rgba(244, 114, 182, 0.18); border-color: rgba(244, 114, 182, 0.65); color: #fbcfe8; }\n"
+         << "  .title {\n"
+         << "    font-size: 28px; font-weight: 800; letter-spacing: 0.02em; color: #ffffff;\n"
+         << "    text-shadow: 0 2px 10px rgba(56, 189, 248, 0.35);\n"
+         << "    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n"
+         << "  }\n"
+         << "  .next { font-size: 13px; color: #94a3b8; font-weight: 600; }\n"
+         << "</style>\n</head>\n<body>\n"
+         << "  <div class=\"card\">\n"
+         << "    <div class=\"top-row\">\n"
+         << "      <span class=\"pill\">🎤 " << escHtml (setBadge) << "</span>\n"
+         << "      <span class=\"pill gold\">🎼 " << escHtml (keyBadge) << "</span>\n"
+         << "      <span class=\"pill\">🥁 " << escHtml (bpmBadge) << "</span>\n";
+    if (charBadge.isNotEmpty())
+        html << "      <span class=\"pill pink\">" << escHtml (charBadge) << "</span>\n";
+    html << "    </div>\n"
+         << "    <div class=\"title\">🎵 " << escHtml (songTitle) << "</div>\n";
+    if (nextTitle.isNotEmpty())
+        html << "    <div class=\"next\">NEXT ▸ " << escHtml (nextTitle) << "</div>\n";
+    html << "  </div>\n</body>\n</html>\n";
+
+    return outFile.replaceWithText (html, false, false, "\n");
+}
+
 
 
 

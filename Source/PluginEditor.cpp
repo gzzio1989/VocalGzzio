@@ -3155,6 +3155,44 @@ public:
         };
         addAndMakeVisible (vocalCancelBtn);
 
+        bgmGuideBtn.setClickingTogglesState (true);
+        bgmGuideBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
+        bgmGuideBtn.setToggleState (processor.getBgmGuideMonitorOn(), juce::dontSendNotification);
+        bgmGuideBtn.setTooltip (language->T (
+            "【次世代進化①：裏ガイドボーカル分離】配信出力(OBS)やWAV録音にはボーカルを消した純カラオケ伴奏だけを送りつつ、あなたのヘッドホン返しモニターにだけ抽出・キー変更済みの原曲ガイドボーカルを流します（Shift+クリックでガイド音量変更）。",
+            "Secret Guide Vocal Monitor: Cancels the original vocal from Stream/WAV recordings while routing the extracted, key-shifted guide vocal exclusively to your headphones (Shift+Click to adjust level)."));
+        bgmGuideBtn.onClick = [this]
+        {
+            if (juce::ModifierKeys::currentModifiers.isShiftDown() || juce::ModifierKeys::currentModifiers.isPopupMenu())
+            {
+                bgmGuideBtn.setToggleState (processor.getBgmGuideMonitorOn(), juce::dontSendNotification);
+                juce::PopupMenu m;
+                m.addSectionHeader (language->T ("🎧 裏ガイドボーカル（自分の耳だけ原曲ガイド再生）", "🎧 Secret Guide Vocal Monitor Level"));
+                const int curPct = juce::roundToInt (processor.getBgmGuideMonitorLevel() * 100.0f);
+                m.addItem (1, language->T ("🎧 裏ガイドボーカル ON / OFF 切替", "🎧 Toggle Guide Vocal Monitor"), true, processor.getBgmGuideMonitorOn());
+                m.addSeparator();
+                m.addItem (40,  language->T ("🔉 ガイド音量: 40% (控えめ)", "🔉 Guide Level: 40% (Subtle)"), true, std::abs (curPct - 40) <= 8);
+                m.addItem (65,  language->T ("🎧 ガイド音量: 65% (標準おすすめ)", "🎧 Guide Level: 65% (Recommended)"), true, std::abs (curPct - 65) <= 8);
+                m.addItem (95,  language->T ("🔊 ガイド音量: 95% (はっきり)", "🔊 Guide Level: 95% (Clear)"), true, std::abs (curPct - 95) <= 8);
+                m.addItem (125, language->T ("📢 ガイド音量: 125% (大きめ)", "📢 Guide Level: 125% (Loud)"), true, curPct >= 110);
+                juce::Component::SafePointer<StageStudioPanel> safe (this);
+                m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&bgmGuideBtn),
+                                 [safe] (int res)
+                                 {
+                                     if (safe == nullptr || res <= 0) return;
+                                     if (res == 1) safe->processor.toggleBgmGuideMonitorOn();
+                                     else { safe->processor.setBgmGuideMonitorLevel ((float) res * 0.01f); safe->processor.setBgmGuideMonitorOn (true); }
+                                     safe->refresh();
+                                     safe->owner.repaint();
+                                 });
+                return;
+            }
+            processor.setBgmGuideMonitorOn (bgmGuideBtn.getToggleState());
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (bgmGuideBtn);
+
         syncKeyBtn.setClickingTogglesState (true);
         syncKeyBtn.setButtonText (language->T ("🔗 キー自動連動", "🔗 Sync Key"));
         syncKeyBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
@@ -3419,6 +3457,38 @@ public:
             owner.repaint();
         };
         addAndMakeVisible (singerCueBtn);
+
+        vocalCharBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+        vocalCharBtn.setTooltip (language->T (
+            "【次世代進化②：ゼロ遅延・声キャラ瞬間モーフィング】追加遅延0.0msのまま3段フォルマント＆倍音キャラクター（OFF / 💎クール低音 / 🌸スイート高音 / 🌙ウィスパー吐息 / 🔥パワフルロック）を瞬時に切り替え、1人2役デュエットや曲ごとの声色変身を可能にします。",
+            "Zero-Latency Voice Character Morphing (0.0 ms latency): Instantly morphs 3-stage formant & harmonic character (OFF / Cool Deep / Sweet High / Whisper Air / Powerful Rock) for solo duets."));
+        vocalCharBtn.onClick = [this]
+        {
+            if (juce::ModifierKeys::currentModifiers.isShiftDown() || juce::ModifierKeys::currentModifiers.isPopupMenu())
+            {
+                juce::PopupMenu m;
+                m.addSectionHeader (language->T ("🎭 ゼロ遅延・声キャラ瞬間モーフィング (0.0ms)", "🎭 Zero-Latency Voice Character Morph"));
+                const int cur = processor.getVocalCharPreset();
+                for (int i = 0; i < 5; ++i)
+                    m.addItem (10 + i, juce::String::fromUTF8 (VocalGzzioProcessor::getVocalCharPresetName (i, language->english)), true, cur == i);
+                juce::Component::SafePointer<StageStudioPanel> safe (this);
+                m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&vocalCharBtn),
+                                 [safe] (int res)
+                                 {
+                                     if (safe == nullptr || res < 10 || res >= 15) return;
+                                     safe->processor.setVocalCharPreset (res - 10);
+                                     safe->processor.updateObsNowPlayingOverlayFile();
+                                     safe->refresh();
+                                     safe->owner.repaint();
+                                 });
+                return;
+            }
+            processor.cycleVocalCharPreset();
+            processor.updateObsNowPlayingOverlayFile();
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (vocalCharBtn);
 
         // ---- v5.4.0 新構想4本柱：〰️ 語尾・ロングトーン自然ビブラート生成 ／ 🗣️ 母音フォーム自動統一EQ ／ ⚡ 歌い出し発声アタック＆グルーヴ整形 ／ 🌉 ミックスボイス倍音ブリッジ＆胸鳴りサブアンカー ----
         tailVibratoBtn.setClickingTogglesState (true);
@@ -3948,12 +4018,13 @@ public:
 
             inner.removeFromTop (5);
             auto rKey = inner.removeFromTop (28);
-            keyDownBtn    .setBounds (rKey.removeFromLeft (68));  rKey.removeFromLeft (4);
-            keyZeroBtn    .setBounds (rKey.removeFromLeft (72));  rKey.removeFromLeft (4);
-            keyUpBtn      .setBounds (rKey.removeFromLeft (68));  rKey.removeFromLeft (5);
-            vocalCancelBtn.setBounds (rKey.removeFromLeft (158)); rKey.removeFromLeft (5);
-            autoKeyBpmBtn .setBounds (rKey.removeFromLeft (144)); rKey.removeFromLeft (5);
-            syncKeyBtn    .setBounds (rKey.removeFromLeft (112)); rKey.removeFromLeft (5);
+            keyDownBtn    .setBounds (rKey.removeFromLeft (60));  rKey.removeFromLeft (3);
+            keyZeroBtn    .setBounds (rKey.removeFromLeft (62));  rKey.removeFromLeft (3);
+            keyUpBtn      .setBounds (rKey.removeFromLeft (60));  rKey.removeFromLeft (4);
+            vocalCancelBtn.setBounds (rKey.removeFromLeft (124)); rKey.removeFromLeft (4);
+            bgmGuideBtn   .setBounds (rKey.removeFromLeft (120)); rKey.removeFromLeft (4);
+            autoKeyBpmBtn .setBounds (rKey.removeFromLeft (122)); rKey.removeFromLeft (4);
+            syncKeyBtn    .setBounds (rKey.removeFromLeft (98));  rKey.removeFromLeft (4);
             bgmRouteBtn   .setBounds (rKey);
 
             inner.removeFromTop (5);
@@ -4042,9 +4113,10 @@ public:
             {
                 inner.removeFromTop (4);
                 auto rV53 = inner.removeFromTop (30);
-                upwardAirBtn     .setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (6);
-                pitchSweetSpotBtn.setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (6);
-                singerCueBtn     .setBounds (rV53.removeFromLeft (214)); rV53.removeFromLeft (4);
+                upwardAirBtn     .setBounds (rV53.removeFromLeft (162)); rV53.removeFromLeft (5);
+                pitchSweetSpotBtn.setBounds (rV53.removeFromLeft (162)); rV53.removeFromLeft (5);
+                singerCueBtn     .setBounds (rV53.removeFromLeft (162)); rV53.removeFromLeft (5);
+                vocalCharBtn     .setBounds (rV53.removeFromLeft (172)); rV53.removeFromLeft (4);
                 v53MeterRect = rV53;
                 inner.removeFromTop (4);
                 auto rV54 = inner.removeFromTop (30);
@@ -4225,6 +4297,9 @@ private:
         }
 
         m.addSeparator();
+        m.addItem (1006, language->T ("📺 OBSブラウザソース用『Now Playing 曲名・キー表示オーバーレイ (.html)』を出力＆表示",
+                                      "📺 Export & Reveal OBS Browser Source 'Now Playing Overlay (.html)'"));
+        m.addSeparator();
         m.addItem (1004, language->T ("🗑 現在選択中の曲をセトリから削除", "🗑 Remove Current Song from Setlist"), curIdx >= 0 && curIdx < cnt);
         m.addItem (1005, language->T ("🧹 セットリストをすべて消去", "🧹 Clear Entire Setlist"), cnt > 0);
 
@@ -4258,6 +4333,11 @@ private:
                              else if (res == 1005)
                              {
                                  p.clearSetlist();
+                             }
+                             else if (res == 1006)
+                             {
+                                 if (p.updateObsNowPlayingOverlayFile())
+                                     p.getObsOverlayHtmlFile().revealToUser();
                              }
                              else if (res >= 2000 && res < 2000 + p.getSetlistCount())
                              {
@@ -4421,6 +4501,17 @@ private:
         m.addItem (5, language->T ("🏷️ 右下に「✦ VocalGzzio」透かしロゴを表示する",
                                    "🏷️ Show '✦ VocalGzzio' Corner Watermark"),
                    true, processor.getSnsWatermarkOn());
+        m.addItem (7, language->T ("🎤 歌声連動『PNGTuber 立ち絵・口パク＆歌唱バウンス』を表示する",
+                                   "🎤 Show Voice-Reactive PNGTuber Lip-Sync & Bounce Avatar"),
+                   true, processor.getSnsAvatarOn());
+        m.addItem (8, language->T ("🖼️ 自作の立ち絵PNG画像を設定する (口閉じ画像)... ",
+                                   "🖼️ Load Custom PNGTuber Image (Closed Mouth)..."));
+        m.addItem (9, language->T ("😮 自作の口パク差分PNG画像を設定する (口開け画像)... ",
+                                   "😮 Load Custom PNGTuber Image (Open Mouth)..."));
+        if (processor.hasCustomSnsAvatar())
+            m.addItem (10, language->T ("🔄 立ち絵を標準シンガーアバターに戻す",
+                                        "🔄 Reset to Built-in Singer Avatar"));
+        m.addSeparator();
         const auto lastMp4 = processor.getLastExportedSnsVideoFile();
         m.addItem (6, language->T ("📂 直近に書き出したMP4動画を表示", "📂 Reveal Latest Exported MP4 File"),
                    lastMp4.existsAsFile());
@@ -4448,6 +4539,30 @@ private:
                                  if (f.existsAsFile())
                                      f.revealToUser();
                              }
+                             else if (res == 7)
+                             {
+                                 p.toggleSnsAvatarOn();
+                             }
+                             else if (res == 8 || res == 9)
+                             {
+                                 const bool isOpenMouth = (res == 9);
+                                 safe->chooser = std::make_unique<juce::FileChooser> (
+                                     isOpenMouth ? safe->language->T ("口開け（発声中）の立ち絵画像を選択 (.png / .jpg)", "Select Open-Mouth Avatar Image (.png / .jpg)")
+                                                 : safe->language->T ("口閉じ（基本）の立ち絵画像を選択 (.png / .jpg)", "Select Closed-Mouth Avatar Image (.png / .jpg)"),
+                                     juce::File(), "*.png;*.jpg;*.jpeg");
+                                 const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+                                 safe->chooser->launchAsync (flags, [safe, isOpenMouth] (const juce::FileChooser& fc)
+                                 {
+                                     if (safe == nullptr) return;
+                                     const auto f = fc.getResult();
+                                     if (f.existsAsFile())
+                                         safe->processor.loadSnsAvatarImage (f, isOpenMouth);
+                                 });
+                             }
+                             else if (res == 10)
+                             {
+                                 p.clearSnsAvatarImages();
+                             }
                              safe->refresh();
                          });
     }
@@ -4455,7 +4570,8 @@ private:
     void applyDetailVisibility()
     {
         for (auto* c : { (juce::Component*) &bgmUnmaskBtn, (juce::Component*) &bgmRiderBtn,
-                         (juce::Component*) &upwardAirBtn, (juce::Component*) &pitchSweetSpotBtn, (juce::Component*) &singerCueBtn,
+                         (juce::Component*) &upwardAirBtn, (juce::Component*) &pitchSweetSpotBtn,
+                         (juce::Component*) &singerCueBtn, (juce::Component*) &vocalCharBtn,
                          (juce::Component*) &tailVibratoBtn, (juce::Component*) &vowelAlignBtn,
                          (juce::Component*) &onsetGrooveBtn, (juce::Component*) &mixBridgeBtn,
                          (juce::Component*) &autoChorusBtn, (juce::Component*) &customSeMenuBtn,
@@ -4543,8 +4659,14 @@ private:
         const bool vocCancel = processor.getBgmVocalCancel();
         vocalCancelBtn.setToggleState (vocCancel, juce::dontSendNotification);
         vocalCancelBtn.setButtonText (vocCancel
-            ? language->T ("✨ ボーカル除去 ON", "✨ Vocal Cancel ON")
-            : language->T ("✨ 原曲ボーカル除去", "✨ Vocal Cancel"));
+            ? language->T ("✨ ボーカル消:ON", "✨ VocalCut:ON")
+            : language->T ("✨ 原曲ボーカル消", "✨ Vocal Cancel"));
+
+        const bool guideMon = processor.getBgmGuideMonitorOn();
+        bgmGuideBtn.setToggleState (guideMon, juce::dontSendNotification);
+        bgmGuideBtn.setButtonText (guideMon
+            ? language->T ("🎧 裏ガイド:ON", "🎧 GuideVoc:ON")
+            : language->T ("🎧 裏ガイド分離", "🎧 Guide Vocal"));
 
         const bool toStream = processor.getBgmToStream();
         bgmRouteBtn.setToggleState (toStream, juce::dontSendNotification);
@@ -4624,6 +4746,25 @@ private:
         singerCueBtn.setButtonText (cueOn
             ? language->T ("🎧 骨伝導モニター ON", "🎧 Singer's Cue ON")
             : language->T ("🎧 骨伝導モニター補正", "🎧 Singer's Cue Monitor"));
+
+        const int vcp = processor.getVocalCharPreset();
+        static const char* const kVcpShortJa[5] = {
+            "🎭 声キャラ: OFF",
+            "💎 クール低音 ON",
+            "🌸 スイート高音 ON",
+            "🌙 ウィスパー吐息 ON",
+            "🔥 パワフルロック ON"
+        };
+        static const char* const kVcpShortEn[5] = {
+            "🎭 VoiceChar: OFF",
+            "💎 Cool Deep ON",
+            "🌸 Sweet High ON",
+            "🌙 Whisper Air ON",
+            "🔥 Power Rock ON"
+        };
+        vocalCharBtn.setToggleState (vcp > 0, juce::dontSendNotification);
+        vocalCharBtn.setButtonText (language->T (kVcpShortJa[juce::jlimit (0, 4, vcp)],
+                                                 kVcpShortEn[juce::jlimit (0, 4, vcp)]));
 
         const bool vibOn = processor.getTailVibratoOn();
         tailVibratoBtn.setToggleState (vibOn, juce::dontSendNotification);
@@ -4737,7 +4878,7 @@ private:
         globalHotkeyBtn.setEnabled (processor.isStandalone());
 
         int foldedActiveCount = 0;
-        for (bool on : { unmaskOn, riderOn, upAirOn, sweetOn, cueOn, vibOn, vowOn, onsOn, mixBrOn, autoCh, lipOn, derevOn, breathOn })
+        for (bool on : { unmaskOn, riderOn, upAirOn, sweetOn, cueOn, vcp > 0, vibOn, vowOn, onsOn, mixBrOn, autoCh, lipOn, derevOn, breathOn })
             if (on) ++foldedActiveCount;
         detailFoldBtn.setToggleState (detailExpanded, juce::dontSendNotification);
         if (detailExpanded)
@@ -4770,13 +4911,13 @@ private:
     juce::Rectangle<int> wavStatusRect, diagBarsRect, diagStatusRect, v53MeterRect, v54MeterRect, guardMeterRect;
     juce::TextButton detailFoldBtn, miniBarLaunchBtn;
     juce::TextButton loadBgmBtn, appAudioBtn, demoBgmBtn, playBgmBtn, rewBgmBtn, loopBgmBtn, addSetlistBtn, setlistMenuBtn;
-    juce::TextButton keyDownBtn, keyZeroBtn, keyUpBtn, vocalCancelBtn, autoKeyBpmBtn, syncKeyBtn, bgmRouteBtn;
+    juce::TextButton keyDownBtn, keyZeroBtn, keyUpBtn, vocalCancelBtn, bgmGuideBtn, autoKeyBpmBtn, syncKeyBtn, bgmRouteBtn;
     juce::TextButton bgmUnmaskBtn, bgmRiderBtn, syncZeroBtn, syncCalibBtn;
     juce::Slider bgmVolSlider, bgmDuckSlider, syncOffsetSlider;
     juce::TextButton wavRecBtn, retroSaveBtn, snsVideoBtn, autoMasterBtn, globalHotkeyBtn, hotkeyInfoBtn, openRecDirBtn;
     std::array<juce::TextButton, 5> diagBtns;
     std::array<juce::TextButton, 5> micModBtns;
-    juce::TextButton upwardAirBtn, pitchSweetSpotBtn, singerCueBtn;
+    juce::TextButton upwardAirBtn, pitchSweetSpotBtn, singerCueBtn, vocalCharBtn;
     juce::TextButton tailVibratoBtn, vowelAlignBtn, onsetGrooveBtn, mixBridgeBtn;
     juce::TextButton chorusBoostBtn, autoChorusBtn;
     std::array<juce::TextButton, 4> seBtns;

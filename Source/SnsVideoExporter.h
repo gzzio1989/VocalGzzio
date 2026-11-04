@@ -50,11 +50,15 @@ public:
 
         bool compareBeforeAfter = false; // true: 前半50% Dry(素の声) ➔ 後半50% Wet(-14 LUFS完パケ)
         bool showWatermark      = true;  // 右下の「VocalGzzio」透かしロゴ表示（任意ON/OFF）
+        bool showAvatar         = true;  // PNGTuber 立ち絵口パク＆歌唱バウンス演出（任意ON/OFF）
         bool english            = false;
 
         juce::String titleText        { "VocalGzzio Take" };
         juce::String subTitleText     { "-14 LUFS Auto-Mastered" };
         juce::String metaBadgeText    {};
+
+        juce::Image avatarClosedImg;     // 任意の立ち絵PNG（口閉じ／通常）
+        juce::Image avatarOpenImg;       // 任意の立ち絵PNG（口開き・未指定時は閉口画像をバウンス描画）
 
         float orbX = 0.50f;
         float orbY = 0.50f;
@@ -735,6 +739,73 @@ private:
             const float flashR = pulseR * (1.15f + (1.0f - switchFlash) * 1.35f);
             g.setColour (opt.green.interpolatedWith (juce::Colours::white, 0.5f).withAlpha (switchFlash * 0.75f));
             g.drawEllipse (orbCx - flashR, orbCy - flashR, flashR * 2.0f, flashR * 2.0f, 4.5f * switchFlash);
+        }
+
+        // 4b. PNGTuber 立ち絵口パク＆歌唱バウンス演出（カスタムPNG または 内蔵アバター）
+        if (opt.showAvatar)
+        {
+            const float mouthOpen = juce::jlimit (0.0f, 1.0f, (feat.rms - 0.06f) * 2.35f);
+            const float bounceY   = -std::abs (std::sin ((float) tSec * 6.2f)) * (12.0f * mouthOpen)
+                                    + std::sin ((float) tSec * 2.1f) * 2.5f;
+            const float avSize    = minDim * (portrait ? 0.22f : 0.25f);
+            const float avCx      = portrait ? (w * 0.78f) : (w * 0.81f);
+            const float avCy      = (portrait ? (h * 0.45f) : (h * 0.46f)) + bounceY;
+            const juce::Rectangle<float> avBox (avCx - avSize * 0.5f, avCy - avSize * 0.5f, avSize, avSize);
+
+            // 声量連動の足元ステージリング
+            g.setColour (coreCol.withAlpha (0.28f + 0.42f * mouthOpen));
+            g.fillEllipse (avCx - avSize * 0.44f, avCy + avSize * 0.38f, avSize * 0.88f, avSize * 0.16f);
+
+            const bool useOpenSprite = (mouthOpen > 0.22f && opt.avatarOpenImg.isValid());
+            const juce::Image& sprite = useOpenSprite ? opt.avatarOpenImg
+                                      : (opt.avatarClosedImg.isValid() ? opt.avatarClosedImg : opt.avatarOpenImg);
+            if (sprite.isValid())
+            {
+                const float breathScale = 1.0f + 0.045f * mouthOpen;
+                const auto drawBox = avBox.withSizeKeepingCentre (avSize * breathScale, avSize * breathScale);
+                g.setOpacity (0.98f);
+                g.drawImage (sprite, drawBox, juce::RectanglePlacement::centred | juce::RectanglePlacement::onlyReduceInSize);
+                g.setOpacity (1.0f);
+            }
+            else
+            {
+                // 内蔵シンガーアバター（ヘッドホン＋口パクアニメーション）
+                const float headR = avSize * 0.34f;
+                g.setColour (opt.accent.interpolatedWith (opt.salmon, 0.5f));
+                g.drawEllipse (avCx - headR * 1.15f, avCy - headR * 1.05f, headR * 2.3f, headR * 2.1f, 4.0f);
+                g.fillRoundedRectangle (avCx - headR * 1.30f, avCy - headR * 0.30f, headR * 0.28f, headR * 0.65f, 6.0f);
+                g.fillRoundedRectangle (avCx + headR * 1.02f, avCy - headR * 0.30f, headR * 0.28f, headR * 0.65f, 6.0f);
+
+                g.setColour (juce::Colour (0xfffff0f5));
+                g.fillEllipse (avCx - headR, avCy - headR, headR * 2.0f, headR * 2.0f);
+                g.setColour (coreCol.withAlpha (0.85f));
+                g.drawEllipse (avCx - headR, avCy - headR, headR * 2.0f, headR * 2.0f, 2.2f);
+
+                // 目（歌唱盛り上がり時はスマイル弧、通常時は丸目）
+                g.setColour (juce::Colour (0xff1a1428));
+                const float eyeOffX = headR * 0.36f;
+                const float eyeY    = avCy - headR * 0.14f;
+                g.fillEllipse (avCx - eyeOffX - 4.0f, eyeY - 4.5f, 8.0f, 9.0f);
+                g.fillEllipse (avCx + eyeOffX - 4.0f, eyeY - 4.5f, 8.0f, 9.0f);
+
+                // 口パク（mouthOpen に比例して開く楕円口）
+                const float mw = headR * (0.26f + 0.24f * mouthOpen);
+                const float mh = juce::jmax (2.5f, headR * (0.08f + 0.42f * mouthOpen));
+                g.setColour (opt.salmon.darker (0.1f));
+                g.fillEllipse (avCx - mw * 0.5f, avCy + headR * 0.22f - mh * 0.3f, mw, mh);
+            }
+
+            // 歌唱中に浮かぶ音符エフェクト
+            if (mouthOpen > 0.18f)
+            {
+                const float noteDrift = std::fmod ((float) tSec * 1.6f, 1.0f);
+                const float nx = avCx + avSize * 0.36f + std::sin ((float) tSec * 4.0f) * 6.0f;
+                const float ny = avCy - avSize * (0.28f + 0.25f * noteDrift);
+                g.setColour (opt.salmon.interpolatedWith (opt.ice, noteDrift).withAlpha ((1.0f - noteDrift) * mouthOpen));
+                g.setFont (juce::FontOptions (juce::jlimit (16.0f, 28.0f, avSize * 0.18f), juce::Font::bold));
+                g.drawText (juce::String::fromUTF8 ("♪"), juce::Rectangle<float> (nx - 16.0f, ny - 16.0f, 32.0f, 32.0f),
+                            juce::Justification::centred, false);
+            }
         }
 
         // 5. 左右対称 36×2 スペクトルリボン
