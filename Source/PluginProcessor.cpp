@@ -1417,11 +1417,12 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         applauseCooldownSec = 0.0f;
     }
     {
+        nextGenMasteringOrchestrator.prepare (sampleRate);
         const double seSr = juce::jmax (8000.0, sampleRate);
-        const int len0 = (int) std::lround (2.2 * seSr); // 0: 拍手歓声 (Applause)
-        const int len1 = (int) std::lround (1.8 * seSr); // 1: キラキラ (Starlight Chime)
-        const int len2 = (int) std::lround (2.1 * seSr); // 2: ドラムロール→ジャン! (Drumroll & Ta-Da)
-        const int len3 = (int) std::lround (1.6 * seSr); // 3: チャイム (Broadcast Bell)
+        const int len0 = (int) std::lround (gzzio::studio_se::StudioLiveSoundEffectsEngine::getRecommendedDurationSeconds (0) * seSr); // 0: ♪拍手 (Studio Hall Applause & Formant Cheers)
+        const int len1 = (int) std::lround (gzzio::studio_se::StudioLiveSoundEffectsEngine::getRecommendedDurationSeconds (1) * seSr); // 1: ✦キラ (Mustel Celesta + Harp + 36-Bar Mark Tree + Glass Harmonica)
+        const int len2 = (int) std::lround (gzzio::studio_se::StudioLiveSoundEffectsEngine::getRecommendedDurationSeconds (2) * seSr); // 2: ●ドラム (Multi-Bounce Snare Press Roll + Timpani -> Crash & Gran Cassa Finale)
+        const int len3 = (int) std::lround (gzzio::studio_se::StudioLiveSoundEffectsEngine::getRecommendedDurationSeconds (3) * seSr); // 3: ◆ベル (Musser Vibraphone + Tubular Bell + 5-Partial Carillon)
         if (liveSeBufs[0].getNumSamples() != len0)
         {
             // 起動時はバッファ枠だけ事前確保（ヒープ再確保ゼロ）し、波形合成はボタン押下時に1個ずつ遅延生成する
@@ -1633,6 +1634,15 @@ void VocalGzzioProcessor::ensureLiveSeBuilt (int index)
     auto* R = liveSeBufs[index].getWritePointer (1);
     juce::FloatVectorOperations::clear (L, nSamples);
     juce::FloatVectorOperations::clear (R, nSamples);
+
+    // v5.5.0: プロ放送局・劇場クオリティの多層物理モデリング＆フォーリー合成エンジン（-6.8 dBFS マスタリング正規化）
+    //   （※ 世代タイムマシンで旧世代が明示選択されている場合のみ、下の互換シンセへフォールバック）
+    if (! (getLegacyEcoGate() && getLegacyVersionEra() < 550))
+    {
+        gzzio::studio_se::StudioLiveSoundEffectsEngine::renderStudioSeBuffer (index, L, R, nSamples, seSr);
+        liveSeBuilt[(size_t) index] = true;
+        return;
+    }
 
     const float twoPi = juce::MathConstants<float>::twoPi;
     auto softAtk = [] (float dt, float atkSec) noexcept -> float

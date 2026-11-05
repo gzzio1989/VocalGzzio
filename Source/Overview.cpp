@@ -3,6 +3,8 @@
 #include "Tooltips.h"
 #include "HorologyTactileUi.h"
 #include "HorologyInteractiveDeck.h"
+#include "HorologyCelestialVisualizerSuite.h"
+#include "HorologyGrandComplicationHud.h"
 
 namespace
 {
@@ -6272,6 +6274,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 {
                     const auto sf = sr.toFloat();
                     const bool sOn = (activeSe == s);
+                    if (sOn && ! liteMode)
+                    {
+                        gzzio::horology_celestial::LiveSePadHorologyVisualizer::drawSePadEmblem (
+                            g, sf.withWidth (juce::jmin (sf.getHeight(), 22.0f)).reduced (2.0f), s, true, 0.85f);
+                    }
                     g.setColour (sOn ? Palette::yellow.withAlpha (0.34f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f));
                     g.fillRoundedRectangle (sf, rad);
                     g.setColour (sOn ? Palette::yellow : Palette::panelLn.withAlpha (0.70f));

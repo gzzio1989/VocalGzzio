@@ -42,6 +42,7 @@ static constexpr int kRevTypeCount = kHeyaFirst + heya::kNumRooms;   // 13
 #include "DynamicFormantAndRegisterEngine.h"// v5.5.0 パッサージョ声区ブリッジ・1040Hz 鼻腔反共振ノッチ・HNR 声門閉鎖ポリッシャー
 #include "PsychoacousticClarityEngine.h"// v5.5.0 チェビシェフT2/T3欠落基音再生・STI子音立ち上がり明瞭度・ハース前方定位ステージ
 #include "MasteringLoudnessAndDelivery.h"// v5.5.0 配信規格別ラウドネス最適化・ロッシーコーデック歪みガード・24bit F重みディザ
+#include "NextGenMasteringOrchestrator.h"// v5.5.0 4大スタジオライブSE物理合成＆次世代マスタリング・声道物理・複雑時計統合オーケストレータ
 
 //==============================================================================
 // v2.10.0 #77/#78 音源モード — 同じツマミが「見る場所」を持ち替える
@@ -2069,6 +2070,7 @@ private:
     vg::register_science::DynamicFormantAndRegisterSuite registerScienceSuite;
     vg::psychoacoustics::PsychoacousticClaritySuite psychoClaritySuite;
     vg::mastering_delivery::MasteringLoudnessAndDeliverySuite masteringDeliverySuite;
+    gzzio::nextgen_orchestrator::NextGenMasteringOrchestrator nextGenMasteringOrchestrator;
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };
