@@ -987,6 +987,39 @@ public:
         markStateDirty();
     }
 
+    //== 次世代進化⑨：💎 ワールドクラス・マスタリングプリズム ＆ パラレルリアバス音圧エンジン ==
+    //   0:AUTO (Studio Prism 自動連動)
+    //   1:INFLATOR DENSITY (4次多項式ハーモニック・インフレーター — ピーク不変のまま中低レベル声密度を+3.8dB増幅)
+    //   2:REAR-BUS AUTHORITY (Andrew Scheps流パラレル1176リアバス — 子音アタック100%無傷のまま胸声の芯を並列圧縮付加)
+    //   3:MASTERING PRISM MAX (4次インフレーター＋パラレルリアバス＋動的スペクトル刺さり解消 Soothe)
+    static constexpr int kNumMasteringPrismModes = 4;
+    int   getMasteringPrismMode() const noexcept { return masteringPrismMode.load (std::memory_order_relaxed); }
+    void  setMasteringPrismMode (int m) noexcept
+    {
+        masteringPrismMode.store (juce::jlimit (0, kNumMasteringPrismModes - 1, m), std::memory_order_relaxed);
+        if (m == 0)
+        {
+            meterMasteringDensityDb.store (0.0f, std::memory_order_relaxed);
+            meterRearBusDb.store (0.0f, std::memory_order_relaxed);
+        }
+        markStateDirty();
+    }
+    void  cycleMasteringPrismMode() noexcept     { setMasteringPrismMode ((getMasteringPrismMode() + 1) % kNumMasteringPrismModes); }
+    float getMasteringDensityDb() const noexcept { return meterMasteringDensityDb.load (std::memory_order_relaxed); }
+    float getRearBusAuthorityDb() const noexcept { return meterRearBusDb.load (std::memory_order_relaxed); }
+    float getTruePeakReductionDb() const noexcept { return meterTruePeakRedDb.load (std::memory_order_relaxed); }
+    float getVocalCrestFactorDb() const noexcept { return meterVocalCrestDb.load (std::memory_order_relaxed); }
+    static const char* getMasteringPrismModeName (int m, bool english = false) noexcept
+    {
+        switch (juce::jlimit (0, 3, m))
+        {
+            case 1:  return english ? "Inflator Density"   : "Inflator 濃密倍音";
+            case 2:  return english ? "Rear-Bus Authority" : "Rear-Bus 芯圧";
+            case 3:  return english ? "Prism MAX Master"   : "Prism 極致マスタリング";
+            default: return english ? "Auto Prism"         : "Auto プリズム連動";
+        }
+    }
+
     //== 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ==
     // id: 0 = v5.5.0 最新版, 1..18 = 歴代メジャー＆V5世代（v1.0.0〜v5.4.1 全19世代）
     // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
@@ -1957,6 +1990,25 @@ private:
     float                         karteLastF0Hz           { 0.0f };
     float                         kartePeakDb             { -32.0f };
     float                         karteFloorDb            { -22.0f };
+
+    // 次世代進化⑨：💎 ワールドクラス・マスタリングプリズム ＆ 4x Hermite Inter-Sample True-Peak 防御 ＆ ブロック長安全弁
+    int                           preparedBlockSize       { 0 };
+    juce::MidiBuffer              emptyMidiScratch;
+    std::atomic<int>              masteringPrismMode      { 0 };
+    std::atomic<float>            meterMasteringDensityDb { 0.0f };
+    std::atomic<float>            meterRearBusDb          { 0.0f };
+    std::atomic<float>            meterTruePeakRedDb      { 0.0f };
+    std::atomic<float>            meterVocalCrestDb       { 12.0f };
+    float                         prismRearHpL            { 0.0f }, prismRearHpR { 0.0f };
+    float                         prismRearLpL            { 0.0f }, prismRearLpR { 0.0f };
+    float                         prismRearEnv            { 0.0f };
+    float                         prismRearPrevU[2]       { 0.0f, 0.0f };
+    float                         prismSootheLp1L         { 0.0f }, prismSootheLp1R { 0.0f };
+    float                         prismSootheLp2L         { 0.0f }, prismSootheLp2R { 0.0f };
+    float                         prismHarshEnv           { 0.0f }, prismBroadEnv   { 0.0f };
+    float                         tpHistL[2]              { 0.0f, 0.0f };
+    float                         tpHistR[2]              { 0.0f, 0.0f };
+    float                         crestPeakEnv            { 0.0f }, crestRmsSqEnv   { 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

@@ -1432,7 +1432,7 @@ void EQGraph::paint (juce::Graphics& g)
             const auto txt = language->T (compactW ? it.shortUtf8 : it.utf8,
                                           compactW ? englishShortLegend[legendIndex] : englishLegend[legendIndex]);
             ++legendIndex;
-            const float tw = (float) g.getCurrentFont().getStringWidth (txt) + 4.0f;
+            const float tw = (float) GzzioLnF::stringWidth (g.getCurrentFont(), txt) + 4.0f;
             g.setColour (Palette::ink.withAlpha (0.92f));
             g.drawText (txt, juce::Rectangle<float> (lx + 14.0f, ly, tw, 18.0f),
                         juce::Justification::centredLeft);
@@ -4301,9 +4301,9 @@ private:
                 + language->T ("] にセットする音源ファイルを選択 (.wav / .mp3 / .flac / .ogg / .aiff)",
                                "] (.wav / .mp3 / .flac / .ogg / .aiff)"),
             juce::File(), "*.wav;*.mp3;*.flac;*.ogg;*.aif;*.aiff");
-        const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        const int chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
         juce::Component::SafePointer<StageStudioPanel> safe (this);
-        chooser->launchAsync (flags, [safe, slotIndex] (const juce::FileChooser& fc)
+        chooser->launchAsync (chooserFlags, [safe, slotIndex] (const juce::FileChooser& fc)
         {
             if (safe == nullptr) return;
             const auto f = fc.getResult();
@@ -4464,9 +4464,9 @@ private:
             language->T ("伴奏・BGM音声ファイルを選択 (.wav / .mp3 / .flac / .ogg / .aiff)",
                          "Select Backing Track Audio File (.wav / .mp3 / .flac / .ogg / .aiff)"),
             juce::File(), "*.wav;*.mp3;*.flac;*.ogg;*.aif;*.aiff");
-        const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        const int chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
         juce::Component::SafePointer<StageStudioPanel> safe (this);
-        chooser->launchAsync (flags, [safe] (const juce::FileChooser& fc)
+        chooser->launchAsync (chooserFlags, [safe] (const juce::FileChooser& fc)
         {
             if (safe == nullptr) return;
             const auto f = fc.getResult();
@@ -10416,7 +10416,7 @@ void VocalGzzioContent::resized()
 
         if (heroBig)
         {
-            const int bw = 340, bh = 56;
+            const int bw = 340, heroBtnH = 56;
             const int cx = (W - kSessBlockW) / 2;
             const int autoW = 168;
             int songX = cx - bw / 2;
@@ -10433,7 +10433,7 @@ void VocalGzzioContent::resized()
             }
             const int rightStop = (srcModeBox.isVisible() ? srcModeLabelArea.getX() : latBadgeArea.getX()) - 12;
             if (songX + bw > rightStop) songX = juce::jmax (autoX + autoW + 12, rightStop - bw);
-            songSetupButton.setBounds (songX, heroArea.getY() + (heroArea.getHeight() - bh) / 2, bw, bh);
+            songSetupButton.setBounds (songX, heroArea.getY() + (heroArea.getHeight() - heroBtnH) / 2, bw, heroBtnH);
             autoSetupButton.setBounds (autoX, heroArea.getY() + (heroArea.getHeight() - 44) / 2,
                                        autoW, 44);
             songSetupButton.getProperties().set ("fontH", 20.0);
@@ -10441,13 +10441,13 @@ void VocalGzzioContent::resized()
         }
         else
         {
-            const int bw = 128, bh = 36;
-            auto hb = heroArea.reduced (10, (heroArea.getHeight() - bh) / 2);
+            const int bw = 128, heroBtnH = 36;
+            auto hb = heroArea.reduced (10, (heroArea.getHeight() - heroBtnH) / 2);
             if (overviewReturn.isVisible())
                 hb.removeFromLeft (128);                   // overviewReturn button slot
-            autoSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (bh));
+            autoSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (heroBtnH));
             hb.removeFromLeft (8);
-            songSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (bh));
+            songSetupButton.setBounds (hb.removeFromLeft (bw).withHeight (heroBtnH));
             songSetupButton.getProperties().remove ("fontH");
             autoSetupButton.getProperties().remove ("fontH");
         }
@@ -10639,10 +10639,9 @@ void VocalGzzioContent::resized()
         //  説明の箱にツマミが乗り、次はスイッチ帯が乗った）。
         //  下限で止めた物どうしは、止めた瞬間に互いを知らないので必ずぶつかる。
         //  なので残りを1本の変数で持ち回して、**引けるぶんしか引かない**。
-        const int gapY    = sc2 (8);
+        const int focusGapY = sc2 (8);
         const int bottom  = H - 10;
         const int knobTop = fy;
-        const int keepMin = sc2 (96) + exH;                    // ツマミ帯＋スイッチ帯の下限
         int rest = juce::jmax (sc2 (200), bottom - knobTop);   // ここから配る
 
         const int compareH = sc2 (44);       // 押す物。縮めない
@@ -10656,10 +10655,10 @@ void VocalGzzioContent::resized()
         //   実際それで、スイッチ帯のある5つの箱から「しあげ」が消えていた
         //   （ui_focus が 8つの箱ぜんぶを見て見つけた。目で見て気づける物ではない）。
         int knobH = minKnob, tipH = 0;
-        int fixed = compareH + gapY;                     // ツマミ→次
+        int fixed = compareH + focusGapY;                // ツマミ→次
         if (nothing) fixed = 0;                          // くらべるも出さない
-        if (! nothing && rest >= minKnob + fixed + minTip + gapY)
-        { tipH = minTip; fixed += gapY; }                // 説明→くらべる のぶん
+        if (! nothing && rest >= minKnob + fixed + minTip + focusGapY)
+        { tipH = minTip; fixed += focusGapY; }           // 説明→くらべる のぶん
 
         int surplus = rest - (knobH + tipH + fixed);
         if (surplus < 0)
@@ -10667,7 +10666,7 @@ void VocalGzzioContent::resized()
             //  足りないときに削る順: 説明 → ツマミ。
             int cut = -surplus;
             const int c1 = juce::jmin (cut, tipH);
-            if (c1 > 0 && c1 == tipH) fixed -= gapY;
+            if (c1 > 0 && c1 == tipH) fixed -= focusGapY;
             tipH -= c1; cut -= c1;
             knobH = juce::jmax (sc2 (60) + exH, knobH - cut);
             surplus = 0;
@@ -10678,8 +10677,8 @@ void VocalGzzioContent::resized()
         knobH += juce::jmax (0, surplus);
 
         //  上から順に置くだけ。引けるぶんしか引いていないので、重ならない。
-        int py = knobTop + knobH + gapY;
-        if (tipH > 0) { focusTipArea = { cx, py, cw, tipH }; py += tipH + gapY; }
+        int py = knobTop + knobH + focusGapY;
+        if (tipH > 0) { focusTipArea = { cx, py, cw, tipH }; py += tipH + focusGapY; }
         else            focusTipArea = {};
         focusCompare.setBounds (cx, py, cw, compareH);
         focusFinishArea = {};
@@ -10698,7 +10697,7 @@ void VocalGzzioContent::resized()
         //   横に並べたほうがずっと読める。
         const int knobBand = knobH - exH;
         const int rows2 = (n > 7 && knobBand >= sc2 (300)) ? 2 : 1;
-        const int rowH  = knobBand / rows2;
+        const int focusRowH = knobBand / rows2;
         //  ★横幅も絞る。1〜3本しか無い箱に 1400px を等分させると、グラスだけ
         //   バカでかくなって「ここが主役」に見える（サ行おさえ は1本しかない）。
         const int perCell = sc2 (196);
@@ -10707,7 +10706,7 @@ void VocalGzzioContent::resized()
             const int from = (r * n) / rows2, to = ((r + 1) * n) / rows2;
             std::vector<Knob*> line (shownK.begin() + from, shownK.begin() + to);
             const int lw = juce::jmin (cw, (int) line.size() * perCell);
-            placeRowVec ({ cx + (cw - lw) / 2, knobTop + r * rowH, lw, rowH }, line);
+            placeRowVec ({ cx + (cw - lw) / 2, knobTop + r * focusRowH, lw, focusRowH }, line);
         }
         //  スイッチ帯
         if (! ex.empty())
@@ -10886,9 +10885,9 @@ void VocalGzzioContent::resized()
         fx.removeFromBottom (20);                      // description strip (painted)
         analysisArea = fx.removeFromBottom (104);      // v1.9.0: taller band = Auto-Tune + Key
         fx.removeFromBottom (4);
-        const int rowH = fx.getHeight() / 3;
-        fxRow1 = fx.removeFromTop (rowH);
-        fxRow2 = fx.removeFromTop (rowH);
+        const int fxBandH = fx.getHeight() / 3;
+        fxRow1 = fx.removeFromTop (fxBandH);
+        fxRow2 = fx.removeFromTop (fxBandH);
         fxRow3 = fx;
 
         auto r1 = fxRow1; r1.removeFromTop (20); r1.reduce (8, 2);

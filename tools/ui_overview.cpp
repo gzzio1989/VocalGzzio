@@ -1204,6 +1204,14 @@ int main()
                 juce::Graphics pg (popSnap);
                 view.paintEntireComponent (pg, true);
             }
+            if (view.getNumChildComponents() > 0)
+            {
+                if (auto* topChild = view.getChildComponent (view.getNumChildComponents() - 1))
+                {
+                    topChild->setVisible (false);
+                    view.removeChildComponent (topChild);
+                }
+            }
 
             // Verify v5.2.0 Pillar A (Spectral Unmasker & BGM-Linked Vocal Rider) and Pillar B (Zero-Lag Room De-Reverb & Smart Breath / Velvet Split)
             {
@@ -1705,6 +1713,107 @@ int main()
                     view.showUpdateNotice ({});
                     view.setOverview (true);
                     view.setThemeMode (0);
+
+                    // (I) World-Class Mastering Prism pill (prismPillRect), Sweet-Spot Double-Click Recall, and Midnight Lantern Bokeh UI Snapshot
+                    processor->setMasteringPrismMode (0);
+                    juce::Point<int> prismPt (-1, -1);
+                    for (int py = 120; py < 220 && prismPt.x < 0; py += 4)
+                    {
+                        for (int px = 300; px < view.getWidth() - 300; px += 10)
+                        {
+                            if (view.overviewHelpAt ({ px, py }).contains ("Mastering Prism"))
+                            {
+                                prismPt = { px, py };
+                                break;
+                            }
+                        }
+                    }
+                    check (prismPt.x > 0, "v5.5.0 prismPillRect Mastering Prism pill is reachable in Overview Monitor header");
+                    if (prismPt.x > 0)
+                    {
+                        view.handleOverviewMouseDown (prismPt);
+                        check (processor->getMasteringPrismMode() == 1, "v5.5.0 Clicking prismPillRect cycles Mastering Prism 0 -> 1 (Inflator)");
+                        view.handleOverviewMouseDown (prismPt);
+                        check (processor->getMasteringPrismMode() == 2, "v5.5.0 Clicking prismPillRect cycles Mastering Prism 1 -> 2 (Rear-Bus)");
+                        view.handleOverviewMouseDown (prismPt);
+                        check (processor->getMasteringPrismMode() == 3, "v5.5.0 Clicking prismPillRect cycles Mastering Prism 2 -> 3 (Prism MAX)");
+                        view.setThemeMode (3);
+                        check (! containsJapanese (view.overviewHelpAt (prismPt)),
+                               "v5.5.0 prismPillRect hover help has zero Japanese in Brand English mode");
+                        view.setThemeMode (0);
+                        view.handleOverviewMouseDown (prismPt);
+                        check (processor->getMasteringPrismMode() == 0, "v5.5.0 Clicking prismPillRect cycles Mastering Prism 3 -> 0 (AUTO)");
+                    }
+
+                    // Render Midnight Lantern Bokeh + Mastering Prism MAX showcase screenshot
+                    view.applyLegacyVersion (0, false);
+                    for (auto* c : view.getChildren())
+                        if (c->getWidth() > 900)
+                            c->setVisible (false);
+                    processor->setMasteringPrismMode (3);
+                    setParameter ("mod_neiro",    1.0f);
+                    setParameter ("argon_velvet", 55.0f);
+                    setParameter ("argon_focus",  50.0f);
+                    setParameter ("argon_silk",   45.0f);
+                    setParameter ("argon_halo",   40.0f);
+                    {
+                        juce::AudioBuffer<float> showcaseBuf (2, 256);
+                        juce::MidiBuffer showcaseMidi;
+                        for (int b = 0; b < 12; ++b)
+                        {
+                            for (int i = 0; i < 256; ++i)
+                            {
+                                const float t = (float) (b * 256 + i) / 48000.0f;
+                                const float v = 0.24f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * t)
+                                              + 0.12f * std::sin (2.0f * juce::MathConstants<float>::pi * 440.0f * t)
+                                              + 0.06f * std::sin (2.0f * juce::MathConstants<float>::pi * 1320.0f * t);
+                                showcaseBuf.setSample (0, i, v);
+                                showcaseBuf.setSample (1, i, v);
+                            }
+                            processor->processBlock (showcaseBuf, showcaseMidi);
+                        }
+                    }
+                    look.setFontScale (1.5f);
+                    view.setFontScale (1.5f);
+                    view.setThemeMode (0);
+                    view.setOverview (true);
+                    view.setVisible (true);
+                    view.setSize (VocalGzzioEditor::baseW, VocalGzzioEditor::baseH);
+                    view.resized();
+                    view.syncArgonOrbFromParams();
+                    {
+                        auto& desktop = juce::Desktop::getInstance();
+                        const juce::Point<float> originPt (2.0f, 2.0f);
+                        juce::MouseEvent upEv (desktop.getMainMouseSource(),
+                                               originPt,
+                                               juce::ModifierKeys(),
+                                               0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                               &view, &view,
+                                               juce::Time::getCurrentTime(),
+                                               originPt,
+                                               juce::Time::getCurrentTime(),
+                                               1, false);
+                        view.mouseUp (upEv);
+                        view.mouseExit (upEv);
+                    }
+                    {
+                        juce::Image bokehImg = view.createComponentSnapshot (view.getLocalBounds());
+                        juce::PNGImageFormat pngFmt;
+                        for (const char* pathStr : {
+                            "C:/Users/silve/.gemini/antigravity/brain/8f2542b1-d681-42f3-92c9-1e836ae605e5/v550_midnight_lantern_bokeh_ui.png",
+                            "C:/Users/silve/.gemini/antigravity/brain/8f2542b1-d681-42f3-92c9-1e836ae605e5/promo_v550/03_Midnight_Lantern_Bokeh_UI_v5.5.0.png",
+                            "C:/Work/vg_src/docs/overview-v5.5.0.png",
+                            "C:/Work/vg_src/promo_v550/03_Midnight_Lantern_Bokeh_UI_v5.5.0.png"
+                        })
+                        {
+                            const juce::File outSnap (pathStr);
+                            outSnap.getParentDirectory().createDirectory();
+                            outSnap.deleteFile();
+                            if (auto os = std::unique_ptr<juce::FileOutputStream> (outSnap.createOutputStream()))
+                                pngFmt.writeImageToStream (bokehImg, *os);
+                        }
+                    }
+                    processor->setMasteringPrismMode (0);
                 }
             }
         }

@@ -372,28 +372,28 @@ namespace Palette
             track    = juce::Colour (0xff2c3944);
             badge    = juce::Colour (0xfff4f7f9);
         }
-        else if (mode == 14)  // 🌌 01 星降る天の川銀河と蛍火の夜 (Galactic Milky Way & Firefly Night)
+        else if (mode == 14)  // 🌌 01 宵闇の星座と祝祭ボケ光 (Twilight Lantern Bokeh & Midnight Canopy)
         {
-            bgTop    = juce::Colour (0xff05081d);   // 深宇宙のコズミック・ミッドナイト
-            bgBot    = juce::Colour (0xff101c42);   // 湖畔の森陰と星霧の藍色
-            panel    = juce::Colour (0xff0b1332);   // 天の川を透かすアストラル・サファイアガラス
-            panel2   = juce::Colour (0xff162352);   // 星雲のネビュラ・インディゴ内面
-            panelLn  = juce::Colour (0xff7282e0);   // 天の川アメジスト＆スターライト枠
-            ink      = juce::Colour (0xfffffaed);   // 温かな星あかりのアイボリー文字
-            inkSoft  = juce::Colour (0xffc2d4f8);   // 星雲のミルキーブルー副文字
-            yellow   = juce::Colour (0xfffde047);   // 黄金の蛍火＆一等星アンバー（主アクセント）
-            yellowDk = juce::Colour (0xffd97706);
-            green    = juce::Colour (0xff2dd4bf);   // バイオルミネセンス・星霧ティール（01区画＆ON）
-            salmon   = juce::Colour (0xfff472b6);   // ばら星雲のロゼット・マゼンタピンク（03区画）
-            blue     = juce::Colour (0xffa855f7);   // アンドロメダ銀河のネビュラ・バイオレット（02区画）
-            ice      = juce::Colour (0xff38bdf8);   // ベガ＆流星のスターライト・シアン
-            track    = juce::Colour (0xff1f2f68);
-            badge    = juce::Colour (0xfffffaed);
-            metalHi   = juce::Colour (0xfffef08a);  // 天球儀のスターライト・シャンパンゴールド金具
-            metalMid  = juce::Colour (0xfff59e0b);
-            metalDark = juce::Colour (0xff78350f);
-            mirrorTop = juce::Colour (0xff3b2d88);  // 銀河ネビュラ天球ドーム
-            mirrorBot = juce::Colour (0xff06091e);
+            bgTop    = juce::Colour (0xff070c1e);   // 深い宵闇のミッドナイト・インディゴ夜空
+            bgBot    = juce::Colour (0xff040711);   // 森陰のキャノピー・シャドウ
+            panel    = juce::Colour (0xff0b1226);   // 夜空を透かすミッドナイト・サファイアガラス
+            panel2   = juce::Colour (0xff121c38);   // 玉ボケの光が溶け込むトワイライト・インディゴ内面
+            panelLn  = juce::Colour (0xff2d406b);   // 宵闇と灯火を繋ぐインディゴ・アンバー枠
+            ink      = juce::Colour (0xfffdf6e8);   // 灯火に照らされたシャンパン・アイボリー文字
+            inkSoft  = juce::Colour (0xffb8c4dc);   // 星霧のシルバーブルー副文字
+            yellow   = juce::Colour (0xfff6b856);   // 祝祭のランタン・アンバーゴールド（主アクセント）
+            yellowDk = juce::Colour (0xffcc8628);
+            green    = juce::Colour (0xff48c4aa);   // 宵闇に浮かぶバイオルミネセンス・ティール（01区画＆ON）
+            salmon   = juce::Colour (0xffe67890);   // 夕暮れの余韻・トワイライトローズ・コーラルボケ（03区画）
+            blue     = juce::Colour (0xff4aaee0);   // 澄んだ夜空のセルリアン・シアンボケ（02区画）
+            ice      = juce::Colour (0xff7ad4f4);   // 煌めくスカイ・シアンハイライト
+            track    = juce::Colour (0xff192648);
+            badge    = juce::Colour (0xfffdf6e8);
+            metalHi   = juce::Colour (0xffffebb8);  // 温かいシャンパン・ボケコア金具
+            metalMid  = juce::Colour (0xffdf9c46);
+            metalDark = juce::Colour (0xff6e4218);
+            mirrorTop = juce::Colour (0xff1b2f62);  // ミッドナイト・ボケプリズム鏡面
+            mirrorBot = juce::Colour (0xff060a18);
         }
         else if (mode == 15)  // 🌊 02 瑞々しい碧海と水紋・アクアラグーン (Lush Aqua Sea & Caustic Ripples)
         {
@@ -525,21 +525,27 @@ namespace Palette
         }
         else
         {
-            bgTop    = juce::Colour (0xff111719);
-            bgBot    = juce::Colour (0xff090d0f);
-            panel    = juce::Colour (0xff171e21);
-            panel2   = juce::Colour (0xff20292d);
-            panelLn  = juce::Colour (0xff344247);
-            ink      = juce::Colour (0xfff0f3ee);
-            inkSoft  = juce::Colour (0xffa3b1b3);
-            yellow   = juce::Colour (0xffd4f87b);
-            yellowDk = juce::Colour (0xffb5d45f);
-            green    = juce::Colour (0xff85dcc4);
-            salmon   = juce::Colour (0xffff8b99);
-            blue     = juce::Colour (0xffb6aff8);
-            ice      = juce::Colour (0xffd4f87b);
-            track    = juce::Colour (0xff303c40);
-            badge    = juce::Colour (0xfffdfcf7);
+            // 既定テーマ (mode == 0): 宵闇のミッドナイト・インディゴと温かなアンバー・ローズ・セルリアン玉ボケ配色
+            bgTop    = juce::Colour (0xff070c1e);   // 深いミッドナイト・インディゴ夜空
+            bgBot    = juce::Colour (0xff040711);   // 森陰のディープ・キャノピーシャドウ
+            panel    = juce::Colour (0xff0b1226);   // 宵闇を透かすミッドナイト・サファイアガラス
+            panel2   = juce::Colour (0xff121c38);   // 柔らかな玉ボケ光を宿すトワイライト・インディゴ面
+            panelLn  = juce::Colour (0xff2b3d68);   // 繊細なインディゴ・シャンパン枠
+            ink      = juce::Colour (0xfffdf6e8);   // 灯火のウォーム・シャンパンアイボリー文字
+            inkSoft  = juce::Colour (0xffb8c4dc);   // 穏やかなスターライト・シルバーブルー副文字
+            yellow   = juce::Colour (0xfff6b856);   // 祝祭のランタン・アンバーゴールド（主アクセント）
+            yellowDk = juce::Colour (0xffcc8628);
+            green    = juce::Colour (0xff48c4aa);   // バイオルミネセンス・ティールエメラルド（01 クリーン）
+            salmon   = juce::Colour (0xffe67890);   // トワイライト・ローズコーラル玉ボケ（03 空間）
+            blue     = juce::Colour (0xff4aaee0);   // 澄んだ夜空のセルリアン・シアン玉ボケ（02 声キャラ）
+            ice      = juce::Colour (0xff7ad4f4);   // スカイ・シアンボケの煌めき
+            track    = juce::Colour (0xff192648);
+            badge    = juce::Colour (0xfffdf6e8);
+            metalHi   = juce::Colour (0xffffebb8);
+            metalMid  = juce::Colour (0xffdf9c46);
+            metalDark = juce::Colour (0xff6e4218);
+            mirrorTop = juce::Colour (0xff1b2f62);
+            mirrorBot = juce::Colour (0xff060a18);
         }
     }
 
@@ -888,7 +894,7 @@ public:
     {
         FontProbe::note (height);
         if (s_useKawaii && s_kawaiiFace != nullptr && (s_accessMode == 0 || s_accessMode == 2))
-            return juce::Font (s_kawaiiFace).withHeight (height);  // rounded font (single weight)
+            return juce::Font (juce::FontOptions (s_kawaiiFace).withHeight (height));  // rounded font (single weight)
 
         juce::FontOptions o;
        #if JUCE_WINDOWS
@@ -3565,9 +3571,9 @@ public:
             q.vy += (ay - q.vy) * dt * 1.6f;
             q.x += q.vx * dt;  q.y += q.vy * dt;
             q.rot += q.vr * dt * (1.0f + std::abs (q.vx) * 0.02f);
-            if (q.y > area.getBottom() + 24) { q.y = area.getY() - 20; q.x = area.getX() + hash01 ((int)(q.x*13)) * W; q.vy = 0; }
-            if (q.x < area.getX() - 30)  q.x += W + 60;
-            if (q.x > area.getRight() + 30) q.x -= W + 60;
+            if (q.y > (float) area.getBottom() + 24.0f) { q.y = (float) area.getY() - 20.0f; q.x = (float) area.getX() + hash01 ((int)(q.x*13)) * W; q.vy = 0.0f; }
+            if (q.x < (float) area.getX() - 30.0f)  q.x += W + 60.0f;
+            if (q.x > (float) area.getRight() + 30.0f) q.x -= W + 60.0f;
         }
     }
     void drawParts (juce::Graphics& g, float a)
@@ -3674,9 +3680,9 @@ public:
         // 雲 (空を流れる)
         for (int c = 0; c < 2; ++c)
         {
-            const float w = 150 + 60 * c;
-            const float cx = std::fmod (animT * (7 + 4 * c) + c * 480.0f, r.getWidth() + w * 2) - w;
-            const float cy = r.getY() + 30 + 40 * c;
+            const float w = (float) (150 + 60 * c);
+            const float cx = std::fmod (animT * (float) (7 + 4 * c) + (float) c * 480.0f, r.getWidth() + w * 2.0f) - w;
+            const float cy = r.getY() + (float) (30 + 40 * c);
             g.setColour (juce::Colours::white.withAlpha (0.9f));
             g.fillEllipse (cx, cy, w * 0.55f, 34);
             g.fillEllipse (cx + w * 0.26f, cy - 16, w * 0.55f, 42);
@@ -5532,6 +5538,7 @@ public:
     void mouseUp   (const juce::MouseEvent&) override;
     void mouseMove (const juce::MouseEvent&) override;   // cross hover (mode name)
     void mouseExit (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
     void setFontScale (float s);
     std::function<void (float)> onScaleChange;   // window zoom ratio (geometry)
@@ -5547,9 +5554,11 @@ public:
         applyModeVisibility();
         setThemeMode (theme);   // apply AFTER the LnF is attached (correct order)
     
+        JUCE_BEGIN_IGNORE_WARNINGS_MSVC (4996)
         if (std::getenv ("GZ_JN") != nullptr)              // test hook: 5人ユニゾン強制ON
             if (auto* jp = processor.apvts.getParameter ("jn_on"))
                 jp->setValueNotifyingHost (1.0f);
+        JUCE_END_IGNORE_WARNINGS_MSVC
     }
     bool  isAdvanced() const { return advancedMode; }
     void setOverview (bool on);
@@ -5711,6 +5720,7 @@ private:
     juce::Rectangle<int> irOverviewRect;  // 🌊 IR残響 音響減衰カーブ表示＆外部IR(.wav/.aiff)ローダーカプセル
     juce::Rectangle<int> argonPadRect;
     juce::Rectangle<int> argonResetRect;  // ↺ タブレット・タッチ向け 2Dオーブ＆4軸バー 1タップ0%リセットピル
+    juce::Rectangle<int> prismPillRect;   // 💎 ワールドクラス・マスタリングプリズム (Auto / Inflator / Rear-Bus / Prism MAX) 1クリック切替ピル
     std::array<juce::Rectangle<int>, 4> argonBarRects;
     std::array<juce::Rectangle<int>, 4> argonTargetRects;
     juce::Rectangle<int> levelBadgeRect;

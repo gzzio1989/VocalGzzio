@@ -826,6 +826,85 @@ int main()
                voicedSec, totalScore, rank.toRawUTF8(), (int) karteHtml.getNumBytesAsUTF8());
     }
 
+    // ------------------------------------------------------------------
+    // 14. 次世代進化⑨：◆ ワールドクラス・マスタリングプリズム (Paul Frindle式 Inflator 倍音密度 ＆ Andrew Scheps式 Rear-Bus 芯圧 ＆ 4x Hermite ISP True-Peak 保護 ＆ ホスト巨大バッファ防御)
+    // ------------------------------------------------------------------
+    {
+        auto runPrismMeasure = [&] (int prismMode, float& outRmsDb, float& outPeakLin, float& outDensDb, float& outRearDb)
+        {
+            auto proc = std::make_unique<VocalGzzioProcessor>();
+            proc->prepareToPlay (sr, 128); // 小さいバッファ指定で初期化
+            for (int m = 0; m < gz::ModuleChain::Count; ++m)
+                setParam (*proc, gz::ModuleChain::paramId (m), 0.0f);
+            setParam (*proc, "mod_neiro",    1.0f); // 音色・マスタリングプリズム段を稼働
+            setParam (*proc, "argon_velvet", 0.0f);
+            setParam (*proc, "argon_focus",  0.0f);
+            setParam (*proc, "argon_silk",   0.0f);
+            setParam (*proc, "argon_halo",   0.0f);
+            proc->setOutputVolumePct (100.0f);
+            proc->setMasteringPrismMode (prismMode);
+
+            // (a) 0サンプルブロックおよび prepareToPlay の80倍サイズ (10240サンプル) ブロックに対するゼロアロケーション自動分割ガード検証
+            {
+                juce::AudioBuffer<float> zeroBuf (2, 0);
+                juce::MidiBuffer midi0;
+                proc->processBlock (zeroBuf, midi0);
+
+                juce::AudioBuffer<float> hugeBuf (2, 10240);
+                hugeBuf.clear();
+                proc->processBlock (hugeBuf, midi0);
+            }
+
+            juce::AudioBuffer<float> buf (2, 256);
+            juce::MidiBuffer midi;
+            double ph = 0.0;
+            double sqSum = 0.0;
+            int cnt = 0;
+            float maxPeak = 0.0f;
+            for (int b = 0; b < 70; ++b)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const float env = 0.28f + 0.14f * (float) std::sin (juce::MathConstants<double>::twoPi * 3.0 * (double) (b * 256 + i) / sr);
+                    const float s = env * (float) (0.75 * std::sin (ph) + 0.25 * std::sin (ph * 2.0));
+                    ph += juce::MathConstants<double>::twoPi * 310.0 / sr;
+                    buf.setSample (0, i, s);
+                    buf.setSample (1, i, s);
+                }
+                proc->processBlock (buf, midi);
+                if (b >= 30)
+                {
+                    const float* rL = buf.getReadPointer (0);
+                    for (int i = 0; i < 256; ++i)
+                    {
+                        const float v = rL[i];
+                        sqSum += (double) v * (double) v;
+                        maxPeak = juce::jmax (maxPeak, std::abs (v));
+                        ++cnt;
+                    }
+                }
+            }
+            outRmsDb   = juce::Decibels::gainToDecibels (cnt > 0 ? (float) std::sqrt (sqSum / (double) cnt) : 1e-6f, -96.0f);
+            outPeakLin = maxPeak;
+            outDensDb  = proc->getMasteringDensityDb();
+            outRearDb  = proc->getRearBusAuthorityDb();
+            proc->releaseResources();
+        };
+
+        float rmsAuto = 0.0f, pkAuto = 0.0f, densAuto = 0.0f, rearAuto = 0.0f;
+        float rmsInf  = 0.0f, pkInf  = 0.0f, densInf  = 0.0f, rearInf  = 0.0f;
+        float rmsRear = 0.0f, pkRear = 0.0f, densRear = 0.0f, rearRear = 0.0f;
+        float rmsMax  = 0.0f, pkMax  = 0.0f, densMax  = 0.0f, rearMax  = 0.0f;
+        runPrismMeasure (0, rmsAuto, pkAuto, densAuto, rearAuto);
+        runPrismMeasure (1, rmsInf,  pkInf,  densInf,  rearInf);
+        runPrismMeasure (2, rmsRear, pkRear, densRear, rearRear);
+        runPrismMeasure (3, rmsMax,  pkMax,  densMax,  rearMax);
+
+        CHECK (rmsInf > rmsAuto + 0.5f && rmsRear > rmsAuto + 0.4f && rmsMax > rmsInf && pkMax <= 1.0001f && densMax >= 0.8f && rearMax >= 0.8f,
+               "ワールドクラス・マスタリングプリズム & 4x ISP True-Peak: RMS AUTO=%.2fdB / Inflator=%.2fdB / RearBus=%.2fdB / MAX=%.2fdB (peak=%.4f, dens=+%.1fdB, rear=+%.1fdB)",
+               rmsAuto, rmsInf, rmsRear, rmsMax, pkMax, densMax, rearMax);
+    }
+
     std::printf ("=== dsp_v550_features 完了: FAIL=%d ===\n", gFail);
     return gFail == 0 ? 0 : 1;
 }
