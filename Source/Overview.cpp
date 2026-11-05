@@ -1,6 +1,8 @@
 #include "PluginEditor.h"
 #include "PresetDefs.h"
 #include "Tooltips.h"
+#include "HorologyTactileUi.h"
+#include "HorologyInteractiveDeck.h"
 
 namespace
 {
@@ -3151,6 +3153,16 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setGradientFill (juce::ColourGradient (accent.interpolatedWith (Palette::yellow, 0.40f).withAlpha (0.82f), rf.getCentreX(), rf.getBottom() - 2.4f,
                                                          juce::Colours::transparentWhite, rf.getCentreX() + botBarW * 0.5f, rf.getBottom() - 2.4f, false));
                 g.fillRoundedRectangle (rf.getCentreX(), rf.getBottom() - 2.8f, botBarW * 0.5f, 2.0f, 1.0f);
+
+                // スイス高級時計トゥールビヨン脱進機・マイクロケージ紋章（ヘッダー右奥の控えめな工芸アクセント）
+                const float tourbPhase = (float) (juce::Time::getMillisecondCounter() % 12000) * 0.000523598f + rf.getX() * 0.01f;
+                vg::horology_deck::TourbillonBalanceWheelVisualizer::drawTourbillonCage (
+                    g,
+                    { rf.getRight() - 24.0f, rf.getY() + 22.5f },
+                    10.5f,
+                    tourbPhase,
+                    0.88f,
+                    0.75f);
             }
 
             // 見出し左端の3Dランタン・ジュエルエンブレム

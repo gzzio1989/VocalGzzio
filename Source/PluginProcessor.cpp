@@ -1508,6 +1508,25 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     meterTruePeakRedDb.store (0.0f, std::memory_order_relaxed);
     meterVocalCrestDb.store (12.0f, std::memory_order_relaxed);
 
+    // 次世代進化⑩：Zavalishin TPT/ADAA マスタリング科学・Zwicker 16帯域バーク解析・純正律＆スタジオ音響スイート事前準備（ヒープ確保ゼロ）
+    {
+        const double sciSr = juce::jmax (16000.0, sampleRate);
+        masteringProEngine.prepare (sciSr);
+        vocalScienceLab.prepare (sciSr, safeBlock);
+        grammyChainRack.prepare (sciSr);
+        spatialMasteringConsole.prepare (sciSr);
+        articulationPolishSuite.prepare (sciSr);
+        broadcastStreamGuard.prepare (sciSr);
+        pitchHarmonyScience.prepare (sciSr);
+        studioAcousticRoom.prepare (sciSr);
+        performanceCoachSuite.prepare (sciSr);
+        harmonicTapeSuite.prepare (sciSr);
+        intelligentMixGlue.prepare (sciSr);
+        registerScienceSuite.prepare (sciSr);
+        psychoClaritySuite.prepare (sciSr);
+        masteringDeliverySuite.prepare (sciSr);
+    }
+
     // v5.5.0 伴奏コード追従スマートハモリ用 36ビン複素リーキーフェーザ係数事前計算（C3..B5, 4分の1間引き更新・RT確保ゼロ）
     {
         const double srDec = juce::jmax (2000.0, sampleRate * 0.25);
@@ -5295,6 +5314,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 if (prismMode == 1)      { inflatorMix = 0.72f; rearBusMix = 0.14f; sootheDepth = 0.35f; }
                 else if (prismMode == 2) { inflatorMix = 0.32f; rearBusMix = 0.52f; sootheDepth = 0.40f; }
                 else if (prismMode == 3) { inflatorMix = 0.82f; rearBusMix = 0.48f; sootheDepth = 0.75f; }
+                else if (prismMode >= 4) { inflatorMix = 0.65f; rearBusMix = 0.38f; sootheDepth = 0.65f; }
                 else
                 {
                     // Auto Prism: Argon Velvet / Focus に連動（テスト等で全て0のときは完全バイパス 0.0）
@@ -5436,6 +5456,36 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     meterMasteringDensityDb.store ( prevDen + 0.25f * (densityLiftDb - prevDen), std::memory_order_relaxed);
                     const float prevRear = meterRearBusDb.load (std::memory_order_relaxed);
                     meterRearBusDb.store (prevRear + 0.25f * (maxRearBoostDb - prevRear), std::memory_order_relaxed);
+
+                    // Prism Mode 4 (Grammy Pro Console & Vocal Science Full Chain):
+                    // Zavalishin TPT / ADAA 2次 / Pultec EQP-1A / H3000 / Studer 30IPS / SSL Bus Glue / 4相FIR True-Peak
+                    if (prismMode >= 4)
+                    {
+                        auto* wL = buffer.getWritePointer (0);
+                        auto* wR = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+                        const float detF0 = atDetectedHz.load (std::memory_order_relaxed);
+                        const bool isVoicedNow = (detF0 >= 65.0f && detF0 <= 1100.0f);
+
+                        masteringProEngine.setMacroMorphXY (0.78f, 0.74f);
+                        grammyChainRack.setChainMacroParameters (0.52f, 0.48f, 0.42f, 0.38f);
+                        spatialMasteringConsole.setConsoleParameters (0.48f, 0.42f, 0.45f, -0.3f);
+                        articulationPolishSuite.setPolishParameters (0.45f, 0.50f, 0.40f, 0.35f);
+
+                        masteringProEngine.processStereoBlock (wL, wR, numSamples);
+                        grammyChainRack.processStereoBlock (wL, wR, numSamples);
+                        if (wR != nullptr)
+                        {
+                            for (int i = 0; i < numSamples; ++i)
+                            {
+                                harmonicTapeSuite.processSamplePair (wL[i], wR[i], 0.32f, 0.45f, 0.35f, 0.22f);
+                                intelligentMixGlue.processSamplePair (wL[i], wR[i], 0.45f, 0.40f, 0.38f);
+                                registerScienceSuite.processSamplePair (wL[i], wR[i], detF0, isVoicedNow, 0.50f, 0.45f, 0.40f);
+                                psychoClaritySuite.processSamplePair (wL[i], wR[i], 0.35f, 0.45f, 0.25f);
+                                masteringDeliverySuite.processSamplePair (wL[i], wR[i], 0.25f, 0.50f, false);
+                            }
+                        }
+                        spatialMasteringConsole.processStereoBlock (wL, wR, numSamples);
+                    }
                 }
                 else
                 {

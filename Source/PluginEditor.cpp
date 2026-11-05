@@ -1,4 +1,6 @@
 #include "PluginEditor.h"
+#include "HorologyTactileUi.h"
+#include "HorologyInteractiveDeck.h"
 #include <cstring>
 #include "PresetDefs.h"
 #include "BinaryData.h"
@@ -9427,13 +9429,16 @@ void VocalGzzioContent::paint (juce::Graphics& g)
                                                  Palette::bgBot, 0, (float) getHeight(), false));
         g.fillRect (getLocalBounds());
 
-        // 標準画面には静かな面の奥行きだけを加える。
+        // 標準画面には静かな面の奥行きと宵祭ランタン光学ボケを加える。
         if (themeMode == 0 && (accessMode == 0 || accessMode == 2))
         {
             g.setGradientFill (juce::ColourGradient (Palette::green.withAlpha (0.06f),
                 0.0f, (float) getHeight(), juce::Colours::transparentBlack,
                 (float) getWidth() * 0.75f, 0.0f, false));
             g.fillRect (getLocalBounds());
+            vg::horology_ui::HorologyGuillocheRenderer::drawAtmosphericLanternBokeh (
+                g, getLocalBounds().toFloat(),
+                juce::jlimit (0.15f, 1.0f, processor.getMasteringDensityDb() * 0.10f + 0.35f), 1);
         }
     }
 

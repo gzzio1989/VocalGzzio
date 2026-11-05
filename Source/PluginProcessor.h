@@ -28,6 +28,20 @@ static constexpr int kRevTypeCount = kHeyaFirst + heya::kNumRooms;   // 13
 #include "ModuleChain.h"   // v3.0   モジュールのON/OFF(OFF=完全素通し・10ms渡し)
 #include "Ornament.h"      // v2.7.0 こぶし(しゃくり・こぶし保護)
 #include "ArgonEngine.h"   // v4.4.0 Argon Velvet Engine (母音感応2次倍音・シルクエア・バイノーラルHalo)
+#include "MasteringProEngine.h"     // v5.5.0 Zavalishin TPT/ZDF・ADAA 2次・Hilbert包絡・Serban並列バス・ISO 226
+#include "VocalScienceLab.h"        // v5.5.0 Sundberg シンガーズフォルマント・Zwicker 16帯域バーク解析・無事故ガーディアン
+#include "GrammyVocalChainRack.h"   // v5.5.0 Pultec EQP-1A/MEQ-5・H3000 マイクロピッチ・微分トランジェント
+#include "SpatialMasteringConsole.h"// v5.5.0 エリプティック低域位相整合・動的M/Sスカルプター・4相FIRトゥルーピーク
+#include "VocalArticulationPolish.h"// v5.5.0 日本語モーラ母音F1/F2自動均一化・ベルベットブレス・近接効果スタビライザー
+#include "BroadcastStreamGuard.h"   // v5.5.0 適応格子ハウリング自動ノッチ・打鍵クリックブランカー・骨伝導バイノーラルキュー
+#include "PitchAndHarmonyScience.h" // v5.5.0 純正律ダイナミックマイクロチューニング・輪状甲状筋ビブラート・ビタビF0精錬
+#include "StudioAcousticRoomEngine.h"// v5.5.0 6帯域DRRゼロ遅延デリバーブ・U47/C800G/7B名機カプセル・8x8直交アダマールFDN
+#include "VocalistPerformanceCoach.h"// v5.5.0 21ビンセント精度ヒストグラム・生体ビブラート周期・F1/F2母音空間・スタジオ採点
+#include "HarmonicExciterAndTapeDeck.h"// v5.5.0 Jiles-Atherton 磁気ヒステリシス・30IPS ヘッドバンプ・Aphex 位相倍音・サブチェスト
+#include "IntelligentMixGlueEngine.h"// v5.5.0 SSL 4000G バスグルー・Weiss DS1式相対レベルディエッサー・グラミー基準スペクトル整合
+#include "DynamicFormantAndRegisterEngine.h"// v5.5.0 パッサージョ声区ブリッジ・1040Hz 鼻腔反共振ノッチ・HNR 声門閉鎖ポリッシャー
+#include "PsychoacousticClarityEngine.h"// v5.5.0 チェビシェフT2/T3欠落基音再生・STI子音立ち上がり明瞭度・ハース前方定位ステージ
+#include "MasteringLoudnessAndDelivery.h"// v5.5.0 配信規格別ラウドネス最適化・ロッシーコーデック歪みガード・24bit F重みディザ
 
 //==============================================================================
 // v2.10.0 #77/#78 音源モード — 同じツマミが「見る場所」を持ち替える
@@ -1251,6 +1265,36 @@ public:
     //  -1 = 何も止めていない。compareBypass と同じくパラメータではないので、
     //  保存もオートメーションも汚さない。離し忘れは画面側が必ず -1 に戻す。
     std::atomic<int>  compareOne { -1 };
+
+    // ---- v5.5.0 プロマスタリング＆音響科学テレメトリ・シグネチャ公開API ----
+    gzzio::science::BarkMaskingAnalyzer::BarkTelemetry getBarkMaskingTelemetry() const noexcept
+    {
+        return vocalScienceLab.getBarkTelemetry();
+    }
+    gzzio::mastering::MasteringProEngine::TelemetrySnapshot getMasteringProTelemetry() const noexcept
+    {
+        return masteringProEngine.getTelemetry();
+    }
+    gzzio::mastering::BobKatzKSystemAnalyzer::KSystemMetrics getBobKatzKSystemMetrics() const noexcept
+    {
+        return grammyChainRack.getKSystemMetrics();
+    }
+    gzzio::science::AudioStabilityGuardian::StabilityDiagnostics getAudioStabilityDiagnostics() const noexcept
+    {
+        return vocalScienceLab.getStabilityDiagnostics();
+    }
+    void setProMasteringSignature (int signatureIdx) noexcept
+    {
+        masteringProEngine.setSignatureIndex (signatureIdx);
+    }
+    int getProMasteringSignature() const noexcept
+    {
+        return masteringProEngine.getSignatureIndex();
+    }
+    void setProMasteringMacroXY (float normX01, float normY01) noexcept
+    {
+        masteringProEngine.setMacroMorphXY (normX01, normY01);
+    }
 private:
 
     // ---- v2.8.0: Mixツマミ用「遅らせた原音」 ----
@@ -2009,6 +2053,22 @@ private:
     float                         tpHistL[2]              { 0.0f, 0.0f };
     float                         tpHistR[2]              { 0.0f, 0.0f };
     float                         crestPeakEnv            { 0.0f }, crestRmsSqEnv   { 0.0f };
+
+    // 次世代進化⑩：🔬 Zavalishin TPT/ADAA プロマスタリング・Zwicker 16帯域バーク解析・無事故ガーディアン統合スイート
+    gzzio::mastering::MasteringProEngine            masteringProEngine;
+    gzzio::science::VocalScienceLabSuite            vocalScienceLab;
+    gzzio::grammy_rack::GrammyVocalChainRack        grammyChainRack;
+    gzzio::spatial_mastering::SpatialMasteringConsole spatialMasteringConsole;
+    gzzio::articulation::VocalArticulationPolishSuite articulationPolishSuite;
+    gzzio::stream_guard::BroadcastStreamGuardSuite  broadcastStreamGuard;
+    vg::pitch_science::PitchAndHarmonyScienceSuite  pitchHarmonyScience;
+    vg::studio_acoustics::StudioAcousticRoomSuite   studioAcousticRoom;
+    vg::performance_coach::VocalistPerformanceCoachSuite performanceCoachSuite;
+    vg::tape_and_harmonics::HarmonicExciterAndTapeSuite harmonicTapeSuite;
+    vg::mix_glue::IntelligentMixGlueSuite           intelligentMixGlue;
+    vg::register_science::DynamicFormantAndRegisterSuite registerScienceSuite;
+    vg::psychoacoustics::PsychoacousticClaritySuite psychoClaritySuite;
+    vg::mastering_delivery::MasteringLoudnessAndDeliverySuite masteringDeliverySuite;
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };
