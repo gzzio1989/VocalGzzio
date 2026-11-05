@@ -3130,8 +3130,8 @@ public:
         appAudioBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         appAudioBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
         appAudioBtn.setTooltip (language->T (
-            "仮想ドライバ不要でWindows上の特定アプリ（ブラウザ / YouTube / カラオケアプリ等）の音声のみを直接取り込み、ボーカル除去・キー変更(±6半音)・コード追従ハモリ・ダッキング・録音へ統合します（Discord通話や自分の声の回り込みなし）。",
-            "No virtual driver needed. Captures audio directly from a single running app (Chrome/YouTube/Edge/Karaoke) without Discord or VocalGzzio feedback, routing it through Vocal Cancel, Key Shift, Chord-Follow Harmony, Ducking, and Recording."));
+            "Windows上の特定アプリ（ブラウザ / YouTube / カラオケアプリ等）の音声のみを直接取り込み、ボーカル除去・キー変更(±6半音)・コード追従ハモリ・ダッキング・録音へ統合します（Discord通話や自分の声の回り込みなし）。",
+            "Captures audio directly from a single running app (Chrome/YouTube/Edge/Karaoke) without Discord or VocalGzzio feedback, routing it through Vocal Cancel, Key Shift, Chord-Follow Harmony, Ducking, and Recording."));
         appAudioBtn.onClick = [this] { openAppAudioPopup(); };
         addAndMakeVisible (appAudioBtn);
 
