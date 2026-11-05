@@ -23,16 +23,16 @@
 </ol>
 
 <h2 id="obs-routing">🔗 OBS Studio・ブラウザカラオケ・通話アプリ（Discord / VRChat / cluster）連携ガイド</h2>
-<p>Windows 10 / 11 のカーネル保護要件および Microsoft ハードウェア署名審査スケジュールへの適合に万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦先送りし、v5.5.0 ではドライバ不要で YouTube カラオケ等を取り込める <strong>🌐 アプリ別カラオケ音声取込</strong> を新搭載したほか、安定実績の高い <strong>OBS 標準 VST3 プラグイン直接読込</strong>・<strong>オーディオIF内蔵ループバック</strong>・<strong>外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）</strong> によるゼロ遅延連携をご案内しております。</p>
+<p>Windows 10 / 11 のカーネル保護要件および Microsoft ハードウェア署名審査スケジュールへの適合に万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦先送りし、v5.5.0 では YouTube カラオケ等を取り込める <strong>🌐 アプリ別カラオケ音声取込</strong> を新搭載したほか、安定実績の高い <strong>OBS 標準 VST3 プラグイン直接読込</strong>・<strong>オーディオIF内蔵ループバック</strong>・<strong>外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）</strong> によるゼロ遅延連携をご案内しております。</p>
 <ul>
-<li><strong>方法①【一番かんたん・仮想ドライバ不要】OBS Studio に VST3 プラグインとして直接読み込む：</strong>インストーラーで自動配置される <code>VocalGzzio.vst3</code>（<code>C:\Program Files\Common Files\VST3\</code>）を、OBS の「マイク音声」➔「フィルタ」➔「＋」➔「VST 2.x/3.x プラグイン」から選択するだけで、外部ソフト不要・ゼロ遅延で配信へ直結できます。</li>
+<li><strong>方法①【一番かんたん・仮想アプリ指定で】OBS Studio に VST3 プラグインとして直接読み込む：</strong>インストーラーで自動配置される <code>VocalGzzio.vst3</code>（<code>C:\Program Files\Common Files\VST3\</code>）を、OBS の「マイク音声」➔「フィルタ」➔「＋」➔「VST 2.x/3.x プラグイン」から選択するだけで、外部ソフト不要・ゼロ遅延で配信へ直結できます。</li>
 <li><strong>方法②【単体起動版＋内蔵BGM/SEも丸ごと配信・通話へ送る】外部仮想ケーブル連携：</strong>無料の定番仮想ケーブル（<code>VB-CABLE</code> や <code>Yamaha SYNCROOM</code> 同梱ドライバ等）がPCに入っていれば、単体起動版（<code>VocalGzzio.exe</code>）の「配信出力」スイッチが自動検出してブリッジ送出します。OBS・Discord・VRChat・cluster 側のマイクに <code>CABLE Output</code> / <code>SYNCROOM</code> 等を選んでください。自分の耳への返しが二重になる場合は「🎧自分の耳への返しミュート」をONにします。</li>
 <li><strong>方法③【オーディオIF内蔵ループバック連携】：</strong>YAMAHA AG03/AG06、Steinberg UR22C/IXO、MOTU M2/M4 等の本体ループバック機能で単体起動版の出力をそのまま配信に乗せられます（発振を0.35秒で検知するハウリング緊急遮断ガード内蔵）。</li>
 </ul>
 
 <h2 id="v55">v5.5.0 / v5.4 / v5.3 / v5.2 新機能：アプリ別カラオケ取込・コード追従ハモリ・SNS動画保存・Smart Sleep超軽量ミニバー</h2>
 <ul>
-<li><strong>🌐 ドライバ不要『アプリ別カラオケ音声取込』（Windows 10/11 単体起動版 — v5.5.0新搭載）：</strong>「🎵BGM・録音」内の「<strong>🌐アプリ音取込▼</strong>」から、Chrome / Edge（YouTubeカラオケ等）や音楽プレイヤーなど指定したアプリ1つだけの音声を仮想ドライバ不要で直接取り込めます（Discord通話音や自身のマイク出力は混ざりません）。取り込んだ音にもリアルタイムで「✨ボーカル除去」「キー変更（±6半音）」「伴奏コード追従ハモリ」「🕳️声ポケット自動掘り」を適用でき、既定では自分のヘッドホン側で二重再生（フランジング）を起こさず完パケ録音・配信出力へミックスします。</li>
+<li><strong>🌐 アプリ指定で『アプリ別カラオケ音声取込』（Windows 10/11 単体起動版 — v5.5.0新搭載）：</strong>「🎵BGM・録音」内の「<strong>🌐アプリ音取込▼</strong>」から、Chrome / Edge（YouTubeカラオケ等）や音楽プレイヤーなど指定したアプリ1つだけの音声を仮想直接取り込めます（Discord通話音や自身のマイク出力は混ざりません）。取り込んだ音にもリアルタイムで「✨ボーカル除去」「キー変更（±6半音）」「伴奏コード追従ハモリ」「🕳️声ポケット自動掘り」を適用でき、既定では自分のヘッドホン側で二重再生（フランジング）を起こさず完パケ録音・配信出力へミックスします。</li>
 <li><strong>⚡ 声⇄伴奏「音ズレ」1クリック自動計測 ＆ ミリ秒補正（<code>-300 ms</code> 〜 <code>+300 ms</code> — v5.5.0新搭載）：</strong>「<strong>⚡自動計測</strong>」ボタンを押してヘッドホン片耳をマイクに近づけるだけで、ウッドブロック音から往復音響遅延＋DSP遅延を実測し、最適な補正値（ms）へ自動設定します。手動スライダー（プラス側でマイク出力遅延、マイナス側で伴奏出力遅延、<code>0ms</code>リセット付）での1ms微調整も可能です。</li>
 <li><strong>🎹 伴奏コード追従スマートハモリ（v5.5.0新搭載）：</strong>「声を変える（ハモリ）」内の「<strong>🎹伴奏コード追従スマートハモリ</strong>」をONにすると、伴奏のリアルタイム和音（<code>[C] [Fm] [E7]</code> 等）を36ビン複素フェーザで解析。J-POP定番の借用和音（<code>III7</code>・<code>IVm</code> 等）やラスサビ転調でも、不協和になるハモリ音をその瞬間のコード構成音へ自動スナップします。</li>
 <li><strong>🎬 SNS投稿用ビジュアライザ動画（.mp4）1クリック保存（Windows — v5.5.0新搭載）：</strong>録音停止直後（または直前30秒さかのぼりバッファ）から、「<strong>🎬SNS動画▼</strong>」を押すだけで外部FFmpeg不要で H.264 + AAC 192kbps（<code>-14 LUFS</code> マスタリング済）の <code>.mp4</code> 動画を書き出せます。X / YouTube 横動画（<code>16:9 / 1280×720</code>）、Shorts / TikTok / Reels 縦動画（<code>9:16 / 720×1280</code>）、および前半50%が素の声（Dry）➔後半50%が完成声（Wet）に切り替わる <strong>Before➔After 比較動画モード</strong>・透かしロゴON/OFFに対応しています。</li>
