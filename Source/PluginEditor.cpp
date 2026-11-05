@@ -2508,10 +2508,10 @@ public:
         addAndMakeVisible (status);
 
         hint.setText (language->T (
-            "💡 OBS配信は「フィルタ ➔ VSTプラグイン直接読込」または機器ループバックが追加ソフト不要・音ズレゼロで最もおすすめです！\n"
-            "※ Discord・VRChat・cluster等へ単体起動版から送る場合は外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）を選択してください（詳細は右上の「📖 OBS・配信連携ガイド」）。",
+            "OBS配信は「フィルタ -> VSTプラグイン直接読込」または機器ループバックが追加ソフト不要・遅延ゼロで推奨されます。\n"
+            "※ Discord・VRChat・cluster等へ単体起動版から送る場合は外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）を選択してください（詳細は右上の「配信ガイド」）。",
             "For OBS streaming, loading VocalGzzio directly as an OBS Mic VST3 Filter (or using hardware loopback) gives zero drift with no extra software.\n"
-            "For Discord, VRChat, or cluster from Standalone, select VB-CABLE or Yamaha SYNCROOM Driver above (click 'OBS & Stream Guide' for details)."),
+            "For Discord, VRChat, or cluster from Standalone, select VB-CABLE or Yamaha SYNCROOM Driver above (click 'Stream Guide' for details)."),
             juce::dontSendNotification);
         hint.setColour (juce::Label::textColourId, Palette::inkSoft);
         addAndMakeVisible (hint);
@@ -2620,10 +2620,10 @@ private:
         auto& so = processor.getStreamOut();
         juce::String t;
         if (processor.isStandaloneVirtualLoopBlocked())
-            t = language->T ("⚠️ 本体入出力にVocalGzzio Driverが選択中のため発振防止で配信送出を一時停止中",
-                             "⚠️ Stream Out paused to prevent loop (VocalGzzio Driver selected as main I/O)");
+            t = language->T ("本体入出力にVocalGzzio Driverが選択中のため発振防止で配信送出を一時停止中",
+                             "Stream Out paused to prevent loop (VocalGzzio Driver selected as main I/O)");
         else if (processor.getFeedbackGuardTripped())
-            t = language->T ("🛡️ ループバック発振を自動遮断 (返しミュートON・配信継続中)", "🛡️ Feedback Loop Guard Active (Self-Monitor Muted)");
+            t = language->T ("ループバック発振を自動遮断 (返しミュートON・配信継続中)", "Feedback Loop Guard Active (Self-Monitor Muted)");
         else if (lastFixMsg.isNotEmpty())
             t = lastFixMsg;
         else if (so.isRunning())
@@ -2639,8 +2639,8 @@ private:
         const bool mm = processor.getMonitorMute();
         monMuteBtn.setToggleState (mm, juce::dontSendNotification);
         monMuteBtn.setButtonText (mm
-            ? language->T ("🔇 自分の耳への返し: ミュート中", "🔇 Self Monitor: MUTED")
-            : language->T ("🎧 自分の耳への返し: ON (通話時クリックで消音)", "🎧 Self Monitor: ON"));
+            ? language->T ("モニター返し: ミュート中", "Self Monitor: MUTED")
+            : language->T ("モニター返し: ON (クリックで消音)", "Self Monitor: ON"));
 
         const int rMode = juce::jlimit (0, 6, processor.getInputRouteMode());
         const int autoCh = processor.getAutoCenterChannel();
@@ -2648,31 +2648,31 @@ private:
         switch (rMode)
         {
             case 0:
-                inLabelJa = juce::String::fromUTF8 ("🎤 入力: 自動モノラル [現在 IN") + juce::String (autoCh + 1) + "]";
+                inLabelJa = juce::String::fromUTF8 ("入力: 自動モノラル [現在 IN") + juce::String (autoCh + 1) + "]";
                 inLabelEn = "Mic In: Auto Mono [IN" + juce::String (autoCh + 1) + "]";
                 break;
             case 1:
-                inLabelJa = juce::String::fromUTF8 ("🎤 入力: IN1(左) 固定モノラル");
+                inLabelJa = juce::String::fromUTF8 ("入力: IN1(左) 固定モノラル");
                 inLabelEn = "Mic In: Input 1 Mono";
                 break;
             case 2:
-                inLabelJa = juce::String::fromUTF8 ("🎤 入力: IN2(右/Solo) 固定モノラル");
+                inLabelJa = juce::String::fromUTF8 ("入力: IN2(右/Solo) 固定モノラル");
                 inLabelEn = "Mic In: Input 2 Mono";
                 break;
             case 5:
-                inLabelJa = juce::String::fromUTF8 ("🎤 入力: IN3(Rubix44等) 固定モノラル");
+                inLabelJa = juce::String::fromUTF8 ("入力: IN3(Rubix44等) 固定モノラル");
                 inLabelEn = "Mic In: Input 3 Mono";
                 break;
             case 6:
-                inLabelJa = juce::String::fromUTF8 ("🎤 入力: IN4(Rubix44等) 固定モノラル");
+                inLabelJa = juce::String::fromUTF8 ("入力: IN4(Rubix44等) 固定モノラル");
                 inLabelEn = "Mic In: Input 4 Mono";
                 break;
             case 3:
-                inLabelJa = juce::String::fromUTF8 ("🎤 入力: 全マイク合成モノラル (IN1-4)");
+                inLabelJa = juce::String::fromUTF8 ("入力: 全マイク合成モノラル (IN1-4)");
                 inLabelEn = "Mic In: All Mic Sum Mono";
                 break;
             default:
-                inLabelJa = juce::String::fromUTF8 ("🎤 入力: ステレオ 1+2 分離");
+                inLabelJa = juce::String::fromUTF8 ("入力: ステレオ 1+2 分離");
                 inLabelEn = "Mic In: Stereo 1+2";
                 break;
         }
@@ -2681,8 +2681,8 @@ private:
         const bool outM = processor.getOutputMonoMode();
         mainOutMonoBtn.setToggleState (outM, juce::dontSendNotification);
         mainOutMonoBtn.setButtonText (outM
-            ? language->T ("🔊 本体出力: モノラル (ON)", "Main Out: Mono (ON)")
-            : language->T ("🔊 本体出力: ステレオ (クリックでモノ化)", "Main Out: Stereo (Click for Mono)"));
+            ? language->T ("本体出力: モノラル (ON)", "Main Out: Mono (ON)")
+            : language->T ("本体出力: ステレオ (クリックでモノ化)", "Main Out: Stereo (Click for Mono)"));
     }
 
     GzzioLnF ownLnf;                        // 子より後に破棄されるよう先頭に置く
@@ -2708,8 +2708,8 @@ public:
         ownLnf.refreshPaletteColours();
         setLookAndFeel (&ownLnf);
 
-        titleLabel.setText (language->T ("🎯 全インターフェース対応：入出力ルーティング ＆ cluster・通話設定",
-                                         "Universal Audio Interface I/O Routing & cluster/Call Setup"),
+        titleLabel.setText (language->T ("オーディオI/O 入出力ルーティング ＆ 通話・配信設定",
+                                         "Audio Interface I/O Routing & Call/Stream Setup"),
                             juce::dontSendNotification);
         titleLabel.setColour (juce::Label::textColourId, Palette::ink);
         addAndMakeVisible (titleLabel);
@@ -2722,8 +2722,8 @@ public:
 
         outStereoBtn.setClickingTogglesState (true);
         outStereoBtn.setRadioGroupId (4602);
-        outStereoBtn.setButtonText (language->T ("🔊 出力: ステレオ（通常の立体音響・広がりあり）",
-                                                 "Output: Stereo (Normal 3D spatial stereo)"));
+        outStereoBtn.setButtonText (language->T ("出力: ステレオ（通常の立体音響・広がりあり）",
+                                                 "Output: Stereo (Normal spatial stereo)"));
         outStereoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
         outStereoBtn.onClick = [this]
         {
@@ -2737,7 +2737,7 @@ public:
 
         outMonoBtn.setClickingTogglesState (true);
         outMonoBtn.setRadioGroupId (4602);
-        outMonoBtn.setButtonText (language->T ("🔊 出力: モノラル（左右同一 L=R ／ 通話・cluster・VRChat最適）",
+        outMonoBtn.setButtonText (language->T ("出力: モノラル（左右同一 L=R ／ 通話・cluster・VRChat最適）",
                                                "Output: Mono (Identical L=R / Best for mono apps)"));
         outMonoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
         outMonoBtn.onClick = [this]
@@ -2752,9 +2752,9 @@ public:
 
         if (processor.isStandalone())
         {
-            clusterFixBtn.setButtonText (language->T ("🛠 cluster・通話 音消え一発修復 (48kHz同期＋スピーカー復元＋配信ON)",
-                                                      "🛠 Fix cluster/Call Audio Loss (Sync Clock + Restore Speaker)"));
-            clusterFixBtn.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.28f));
+            clusterFixBtn.setButtonText (language->T ("cluster・通話 音消え修復 (48kHz同期＋スピーカー復元＋配信ON)",
+                                                      "Fix cluster/Call Audio Loss (Sync Clock + Restore Speaker)"));
+            clusterFixBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
             clusterFixBtn.onClick = [this]
             {
                 fixStatusText = syncStandaloneAudioForCluster (processor, true, false);
@@ -2762,9 +2762,9 @@ public:
             };
             addAndMakeVisible (clusterFixBtn);
 
-            sharedModeBtn.setButtonText (language->T ("🌐 全アプリ共存・安全共有モード (WASAPI共有・USBマイク/VR機器/ASIO4ALL用)",
-                                                      "🌐 Safe Shared Mode (WASAPI Shared for USB Mics / VR / ASIO4ALL)"));
-            sharedModeBtn.setColour (juce::TextButton::buttonColourId, Palette::blue.withAlpha (0.25f));
+            sharedModeBtn.setButtonText (language->T ("安全共有モードへ切替 (WASAPI共有・USBマイク/VR機器用)",
+                                                      "Switch to Safe Shared Mode (WASAPI Shared for USB Mics / VR)"));
+            sharedModeBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
             sharedModeBtn.onClick = [this]
             {
                 fixStatusText = syncStandaloneAudioForCluster (processor, true, true);
@@ -2791,13 +2791,13 @@ public:
 
         static const int kRouteValues[7] = { 0, 1, 2, 5, 6, 3, 4 };
         const char* ja[7] = {
-            "🎤 自動モノラル（IN 1〜IN 4 のうち声が入っているマイク端子を自動追従して両耳中央 L+R へ）",
-            "🎤 IN 1 固定 (左 / Mic 1: 標準XLR端子)",
-            "🎤 IN 2 固定 (右 / Mic 2: Solo第4世代・2ch目)",
-            "🎤 IN 3 固定 (3ch目: Rubix44・UR44C・4i4・M4)",
-            "🎤 IN 4 固定 (4ch目: Rubix44・UR44C・4i4・M4)",
-            "🎤 全マイク合成 (IN 1〜4 自動ミックス中央)",
-            "🎤 ステレオ 1+2 分離 (左右そのまま処理)"
+            "自動モノラル（IN 1〜IN 4 のうち入力があるマイク端子を自動追従して中央 L+R へ）",
+            "IN 1 固定 (左 / Mic 1: 標準XLR端子)",
+            "IN 2 固定 (右 / Mic 2: Solo第4世代・2ch目)",
+            "IN 3 固定 (3ch目: Rubix44・UR44C・4i4・M4)",
+            "IN 4 固定 (4ch目: Rubix44・UR44C・4i4・M4)",
+            "全マイク合成 (IN 1〜4 自動ミックス中央)",
+            "ステレオ 1+2 分離 (左右そのまま処理)"
         };
         const char* en[7] = {
             "Mic Input: Auto Mono (Auto-detects active mic on IN 1..4 and centers to L+R)",
@@ -2830,9 +2830,9 @@ public:
 
         if (processor.isStandalone() && ! isEmbedded)
         {
-            openDevBtn.setButtonText (language->T ("⚙ スタンドアロン 音声デバイス・入出力チャンネル個別設定を開く",
-                                                   "⚙ Open Standalone Audio Device & Individual Channel Settings"));
-            openDevBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.25f));
+            openDevBtn.setButtonText (language->T ("スタンドアロン 音声デバイス・入出力チャンネル設定を開く",
+                                                   "Open Standalone Audio Device & Channel Settings"));
+            openDevBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
             openDevBtn.onClick = [this]
             {
                 launchStandaloneAudioMonoDialog (processor, language);
@@ -2947,17 +2947,17 @@ private:
             const bool mm = processor.getMonitorMute();
             monMuteBtn.setToggleState (mm, juce::dontSendNotification);
             monMuteBtn.setButtonText (mm
-                ? language->T ("🔇 自分の耳への返しミュート: ON（配信・clusterへは声が届きます／自分の耳には返しません）",
-                               "🔇 Self-Monitor Mute: ON (Voice sent to cluster/Stream, muted in your headphones)")
-                : language->T ("🎧 自分の耳への返しミュート: OFF（自分の声がヘッドホンに返ります／二重に聴こえる時はON）",
-                               "🎧 Self-Monitor Mute: OFF (Click to mute your own voice in headphones during calls)"));
+                ? language->T ("モニター返しミュート: ON（配信・通話先へは送出 ／ 自分のヘッドホンは消音）",
+                               "Self-Monitor Mute: ON (Voice sent to stream/call, muted in your headphones)")
+                : language->T ("モニター返しミュート: OFF（自分の声をヘッドホンでモニター ／ 二重に聴こえる時はON）",
+                               "Self-Monitor Mute: OFF (Click to mute your own voice in headphones during calls)"));
         }
 
         if (processor.getFeedbackGuardTripped())
         {
             statusLabel.setText (language->T (
-                "🛡️ ループバック／ハウリング発振を自動検知したため「自分の耳への返しミュート」を自動ONにしました（配信出力は継続中）",
-                "🛡️ Hardware Loopback / Feedback oscillation detected! Self-Monitor Mute auto-enabled to protect your ears."),
+                "ループバック／ハウリング発振を自動検知したため「モニター返しミュート」を自動ONにしました（配信出力は継続中）",
+                "Hardware Loopback / Feedback oscillation detected. Self-Monitor Mute auto-enabled to protect your ears."),
                 juce::dontSendNotification);
             return;
         }
@@ -3025,12 +3025,12 @@ public:
         detailExpanded = ((int) processor.apvts.state.getProperty ("ui_stage_detail", 0) != 0);
 
         detailFoldBtn.setClickingTogglesState (true);
-        detailFoldBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2);
-        detailFoldBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow.withAlpha (0.34f));
+        detailFoldBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
+        detailFoldBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice.withAlpha (0.32f));
         detailFoldBtn.setToggleState (detailExpanded, juce::dontSendNotification);
         detailFoldBtn.setTooltip (language->T (
-            "細かい音質こだわりスイッチ群（声ポケット・伴奏追従ライド・v5.3/v5.4歌唱表現7エンジン・サビ自動検知・自作SE・部屋鳴り/ペチャ/息保護）をスッキリ折りたたみ／展開します（折りたたみ中もONにした効果はそのまま効きます）。",
-            "Fold or expand fine-grained vocal & mix switches (Unmask, Rider, 7 Expression Engines, Auto-Chorus, Custom SEs, Room/Lip/Breath guards). Active effects remain active while folded."));
+            "詳細パラメータ群（帯域優先・伴奏追従・発声補正・サビ自動検知・カスタムSE・部屋鳴り/リップ/ブレス制御）を折りたたみ／展開します（折りたたみ中もONにした効果はそのまま有効です）。",
+            "Fold or expand advanced vocal & mix controls (Unmask, Rider, Vocal Expression Engines, Auto-Chorus, Custom SEs, Room/Lip/Breath guards). Active effects remain active while folded."));
         detailFoldBtn.onClick = [this]
         {
             detailExpanded = detailFoldBtn.getToggleState();
@@ -3041,10 +3041,10 @@ public:
         };
         addAndMakeVisible (detailFoldBtn);
 
-        miniBarLaunchBtn.setButtonText (language->T ("📌 配信ミニバーへ切替", "📌 Switch to Mini-Bar"));
-        miniBarLaunchBtn.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.25f));
+        miniBarLaunchBtn.setButtonText (language->T ("ミニバー表示", "Mini-Bar View"));
+        miniBarLaunchBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         miniBarLaunchBtn.setTooltip (language->T (
-            "OBSや歌詞・コメント欄の隅に置けるコンパクトな配信ミニバー画面（520×115px・最前面ピン留め可）に切り替えます。",
+            "OBSや歌詞・コメント欄の隅に配置できるコンパクトな配信ミニバー画面（520×115px・最前面固定対応）に切り替えます。",
             "Switch to the compact Streaming Mini-Bar (520x115 px, optional Always-on-Top pin) for OBS, lyrics, and chat."));
         miniBarLaunchBtn.onClick = [this]
         {
@@ -3058,22 +3058,22 @@ public:
         };
         addAndMakeVisible (miniBarLaunchBtn);
 
-        // ---- 柱①：カラオケ・BGMプレイヤー ＆ 🌐 アプリ別カラオケ音声取込 ＆ 歌枠セットリスト ----
-        loadBgmBtn.setButtonText (language->T ("📂 BGM読込...", "📂 Open BGM"));
-        loadBgmBtn.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.22f));
+        // ---- セクション01：伴奏プレイヤー ＆ アプリ別音声取込 ＆ セットリスト ----
+        loadBgmBtn.setButtonText (language->T ("音源読込...", "Open BGM..."));
+        loadBgmBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         loadBgmBtn.onClick = [this] { browseBgmFile(); };
         addAndMakeVisible (loadBgmBtn);
 
-        appAudioBtn.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.22f));
+        appAudioBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         appAudioBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
         appAudioBtn.setTooltip (language->T (
-            "仮想ドライバ不要！Windows上で起動中のブラウザ（YouTube / カラオケ）やJOYSOUND等の『指定した1アプリの音だけ』を直接取り込み、原曲ボーカル除去・キー変更(±6半音)・コード追従ハモリ・声ポケット掘削・WAV/SNS動画同時録音へ流し込みます（Discord通話や自分の声の回り込みゼロ）。",
-            "No virtual driver needed! Captures audio directly from a single running app (Chrome/YouTube/Edge/Karaoke) without Discord or VocalGzzio feedback, routing it through Vocal Cancel, Key Shift, Chord-Follow Harmony, Ducking, and Recording."));
+            "仮想ドライバ不要でWindows上の特定アプリ（ブラウザ / YouTube / カラオケアプリ等）の音声のみを直接取り込み、ボーカル除去・キー変更(±6半音)・コード追従ハモリ・ダッキング・録音へ統合します（Discord通話や自分の声の回り込みなし）。",
+            "No virtual driver needed. Captures audio directly from a single running app (Chrome/YouTube/Edge/Karaoke) without Discord or VocalGzzio feedback, routing it through Vocal Cancel, Key Shift, Chord-Follow Harmony, Ducking, and Recording."));
         appAudioBtn.onClick = [this] { openAppAudioPopup(); };
         addAndMakeVisible (appAudioBtn);
 
-        demoBgmBtn.setButtonText (language->T ("🎹 デモ伴奏", "🎹 Demo BGM"));
-        demoBgmBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.24f));
+        demoBgmBtn.setButtonText (language->T ("デモ伴奏", "Demo BGM"));
+        demoBgmBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         demoBgmBtn.onClick = [this]
         {
             if (processor.isAppAudioCapturing())
@@ -3105,19 +3105,19 @@ public:
         };
         addAndMakeVisible (playBgmBtn);
 
-        rewBgmBtn.setButtonText (language->T ("⏮先頭", "⏮Top"));
+        rewBgmBtn.setButtonText (language->T ("先頭", "Top"));
         rewBgmBtn.onClick = [this] { processor.rewindBgm(); refresh(); };
         addAndMakeVisible (rewBgmBtn);
 
         loopBgmBtn.setClickingTogglesState (true);
-        loopBgmBtn.setButtonText (language->T ("🔁ループ", "🔁Loop"));
+        loopBgmBtn.setButtonText (language->T ("ループ", "Loop"));
         loopBgmBtn.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
         loopBgmBtn.setToggleState (processor.isBgmLooping(), juce::dontSendNotification);
         loopBgmBtn.onClick = [this] { processor.setBgmLooping (loopBgmBtn.getToggleState()); };
         addAndMakeVisible (loopBgmBtn);
 
-        addSetlistBtn.setButtonText (language->T ("➕登録", "➕Add"));
-        addSetlistBtn.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.25f));
+        addSetlistBtn.setButtonText (language->T ("+登録", "+Add"));
+        addSetlistBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         addSetlistBtn.onClick = [this]
         {
             if (! processor.hasBgmLoaded())
@@ -3128,7 +3128,7 @@ public:
         };
         addAndMakeVisible (addSetlistBtn);
 
-        setlistMenuBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.26f));
+        setlistMenuBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         setlistMenuBtn.onClick = [this] { openSetlistPopup(); };
         addAndMakeVisible (setlistMenuBtn);
 
@@ -3159,22 +3159,22 @@ public:
         bgmGuideBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
         bgmGuideBtn.setToggleState (processor.getBgmGuideMonitorOn(), juce::dontSendNotification);
         bgmGuideBtn.setTooltip (language->T (
-            "【次世代進化①：裏ガイドボーカル分離】配信出力(OBS)やWAV録音にはボーカルを消した純カラオケ伴奏だけを送りつつ、あなたのヘッドホン返しモニターにだけ抽出・キー変更済みの原曲ガイドボーカルを流します（Shift+クリックでガイド音量変更）。",
-            "Secret Guide Vocal Monitor: Cancels the original vocal from Stream/WAV recordings while routing the extracted, key-shifted guide vocal exclusively to your headphones (Shift+Click to adjust level)."));
+            "裏ガイドボーカル分離：配信出力(OBS)やWAV録音にはボーカルを除去した伴奏のみを送り、ヘッドホン返しモニターにのみ抽出・キー変更済みの原曲ガイドボーカルを再生します（Shift+クリックでガイド音量変更）。",
+            "Guide Vocal Monitor: Cancels the original vocal from Stream/WAV recordings while routing the extracted, key-shifted guide vocal exclusively to your headphones (Shift+Click to adjust level)."));
         bgmGuideBtn.onClick = [this]
         {
             if (juce::ModifierKeys::currentModifiers.isShiftDown() || juce::ModifierKeys::currentModifiers.isPopupMenu())
             {
                 bgmGuideBtn.setToggleState (processor.getBgmGuideMonitorOn(), juce::dontSendNotification);
                 juce::PopupMenu m;
-                m.addSectionHeader (language->T ("🎧 裏ガイドボーカル（自分の耳だけ原曲ガイド再生）", "🎧 Secret Guide Vocal Monitor Level"));
+                m.addSectionHeader (language->T ("裏ガイドボーカル（ヘッドホン専用ガイド再生）", "Guide Vocal Monitor Level"));
                 const int curPct = juce::roundToInt (processor.getBgmGuideMonitorLevel() * 100.0f);
-                m.addItem (1, language->T ("🎧 裏ガイドボーカル ON / OFF 切替", "🎧 Toggle Guide Vocal Monitor"), true, processor.getBgmGuideMonitorOn());
+                m.addItem (1, language->T ("裏ガイドボーカル ON / OFF 切替", "Toggle Guide Vocal Monitor"), true, processor.getBgmGuideMonitorOn());
                 m.addSeparator();
-                m.addItem (40,  language->T ("🔉 ガイド音量: 40% (控えめ)", "🔉 Guide Level: 40% (Subtle)"), true, std::abs (curPct - 40) <= 8);
-                m.addItem (65,  language->T ("🎧 ガイド音量: 65% (標準おすすめ)", "🎧 Guide Level: 65% (Recommended)"), true, std::abs (curPct - 65) <= 8);
-                m.addItem (95,  language->T ("🔊 ガイド音量: 95% (はっきり)", "🔊 Guide Level: 95% (Clear)"), true, std::abs (curPct - 95) <= 8);
-                m.addItem (125, language->T ("📢 ガイド音量: 125% (大きめ)", "📢 Guide Level: 125% (Loud)"), true, curPct >= 110);
+                m.addItem (40,  language->T ("ガイド音量: 40% (控えめ)", "Guide Level: 40% (Subtle)"), true, std::abs (curPct - 40) <= 8);
+                m.addItem (65,  language->T ("ガイド音量: 65% (標準)", "Guide Level: 65% (Standard)"), true, std::abs (curPct - 65) <= 8);
+                m.addItem (95,  language->T ("ガイド音量: 95% (明瞭)", "Guide Level: 95% (Clear)"), true, std::abs (curPct - 95) <= 8);
+                m.addItem (125, language->T ("ガイド音量: 125% (大きめ)", "Guide Level: 125% (Loud)"), true, curPct >= 110);
                 juce::Component::SafePointer<StageStudioPanel> safe (this);
                 m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&bgmGuideBtn),
                                  [safe] (int res)
@@ -3194,14 +3194,14 @@ public:
         addAndMakeVisible (bgmGuideBtn);
 
         syncKeyBtn.setClickingTogglesState (true);
-        syncKeyBtn.setButtonText (language->T ("🔗 キー自動連動", "🔗 Sync Key"));
+        syncKeyBtn.setButtonText (language->T ("キー連動", "Sync Key"));
         syncKeyBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
         syncKeyBtn.setToggleState (processor.getBgmSyncKey(), juce::dontSendNotification);
         syncKeyBtn.onClick = [this] { processor.setBgmSyncKey (syncKeyBtn.getToggleState()); };
         addAndMakeVisible (syncKeyBtn);
 
-        autoKeyBpmBtn.setButtonText (language->T ("🎼 キー＆BPM自動反映", "🎼 Apply Key & BPM"));
-        autoKeyBpmBtn.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.28f));
+        autoKeyBpmBtn.setButtonText (language->T ("キー＆BPM反映", "Apply Key/BPM"));
+        autoKeyBpmBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         autoKeyBpmBtn.onClick = [this]
         {
             if (! processor.hasBgmLoaded())
@@ -3240,11 +3240,10 @@ public:
         };
         addAndMakeVisible (bgmRouteBtn);
 
-        // ---- v5.2.0 柱A：🕳️ 伴奏「声ポケット」自動掘り (Spectral Unmasker) ＆ 🎢 伴奏連動ボーカルライダー ----
         bgmUnmaskBtn.setClickingTogglesState (true);
         bgmUnmaskBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
         bgmUnmaskBtn.setToggleState (processor.getBgmUnmaskOn(), juce::dontSendNotification);
-        bgmUnmaskBtn.setTooltip (language->T ("歌っている瞬間だけ、あなたの声とぶつかる伴奏の真ん中(Mid)の周波数だけをピンポイントで最大-5.0dB掘り下げ、伴奏の迫力を保ったまま声をくっきり前に出します。",
+        bgmUnmaskBtn.setTooltip (language->T ("歌っている瞬間だけ、声と重なる伴奏センター(Mid)帯域をピンポイントで最大-5.0dB減衰させ、伴奏の迫力を維持したままボーカルを前面に配置します。",
                                               "Dynamically carves out only the active vocal frequencies in the BGM's Mid channel by up to -5.0 dB so your voice sits clearly in front."));
         bgmUnmaskBtn.onClick = [this]
         {
@@ -3257,7 +3256,7 @@ public:
         bgmRiderBtn.setClickingTogglesState (true);
         bgmRiderBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
         bgmRiderBtn.setToggleState (processor.getBgmVocalRiderOn(), juce::dontSendNotification);
-        bgmRiderBtn.setTooltip (language->T ("伴奏の盛り上がりに合わせて歌声フェーダーを自動調整（静かなAメロは馴染ませ、爆音サビは最大+3.5dB自動リフト）します。",
+        bgmRiderBtn.setTooltip (language->T ("伴奏の音量推移に合わせてボーカルフェーダーを自動追従（静かなパートは馴染ませ、音圧の高いサビは最大+3.5dB自動リフト）します。",
                                              "Automatically rides your vocal gain (-2.5 dB to +3.5 dB) following the backing track's energy from quiet verses to loud choruses."));
         bgmRiderBtn.onClick = [this]
         {
@@ -3267,7 +3266,6 @@ public:
         };
         addAndMakeVisible (bgmRiderBtn);
 
-        // ---- v5.5.0：🎯 声⇄伴奏「音ズレ」ミリ秒補正スライダー（-300 ms 〜 +300 ms、1ms単位） ----
         syncOffsetSlider.setSliderStyle (juce::Slider::LinearHorizontal);
         syncOffsetSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 22);
         syncOffsetSlider.setRange (-300.0, 300.0, 1.0);
@@ -3275,7 +3273,7 @@ public:
         syncOffsetSlider.setTextValueSuffix (" ms");
         syncOffsetSlider.setValue ((double) processor.getSyncOffsetMs(), juce::dontSendNotification);
         syncOffsetSlider.setTooltip (language->T (
-            "OBS配信やYouTube/カラオケ併用時の声と伴奏のタイミング（音ズレ）を1ms単位で合わせます。＋側でマイク歌声を遅らせ、−側で内蔵BGM伴奏を遅らせます（ダブルクリックで0ms）。",
+            "OBS配信や外部カラオケ併用時の声と伴奏のタイミング（音ズレ）を1ms単位で補正します。＋側でマイク音声を遅らせ、−側で内蔵伴奏を遅らせます（ダブルクリックで0ms）。",
             "Aligns vocal and backing track timing in 1 ms steps (-300 to +300 ms). Positive (+) delays mic vocal output; negative (-) delays built-in BGM output (double-click for 0 ms)."));
         syncOffsetSlider.onValueChange = [this]
         {
@@ -3293,11 +3291,11 @@ public:
         };
         addAndMakeVisible (syncZeroBtn);
 
-        syncCalibBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.25f));
+        syncCalibBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         syncCalibBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
         syncCalibBtn.setTooltip (language->T (
-            "ヘッドホン/スピーカーにマイクを近づけて押すと、「コンッ」という短いクリック音を1発鳴らしてオーディオIF往復＋エフェクト遅延を実測し、最適な音ズレ補正値(ms)を自動セットします。",
-            "Hold your mic near your headphones/speakers and click to emit a short woodblock click, measure round-trip + DSP latency, and automatically set the optimal Sync Offset (ms)."));
+            "ヘッドホンまたはスピーカーにマイクを近づけて実行すると、短いパルス音を1回再生してオーディオIF往復＋DSP処理遅延を実測し、最適な補正値(ms)を自動設定します。",
+            "Hold your mic near your headphones/speakers and click to emit a short pulse, measure round-trip + DSP latency, and automatically set the optimal Sync Offset (ms)."));
         syncCalibBtn.onClick = [this]
         {
             processor.startSyncAutoCalibration();
@@ -3305,8 +3303,9 @@ public:
         };
         addAndMakeVisible (syncCalibBtn);
 
-        // ---- 柱②：1クリックWAV録音 ＆ 直前30秒さかのぼり保存 ＆ 🎬 SNS動画保存 ＆ 裏画面グローバルホットキー ----
+        // ---- セクション02：マルチトラックWAV録音 ・ 直前30秒保存 ・ SNS動画出力 ・ 声質カルテ ----
         wavRecBtn.setClickingTogglesState (true);
+        wavRecBtn.setColour (juce::TextButton::buttonColourId, Palette::salmon.withAlpha (0.20f));
         wavRecBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
         wavRecBtn.onClick = [this]
         {
@@ -3316,7 +3315,7 @@ public:
         };
         addAndMakeVisible (wavRecBtn);
 
-        retroSaveBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.28f));
+        retroSaveBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         retroSaveBtn.onClick = [this]
         {
             processor.saveRetroWavRecording();
@@ -3325,23 +3324,24 @@ public:
         };
         addAndMakeVisible (retroSaveBtn);
 
-        snsVideoBtn.setColour (juce::TextButton::buttonColourId, Palette::salmon.withAlpha (0.28f));
+        snsVideoBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         snsVideoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
         snsVideoBtn.setTooltip (language->T (
-            "直近の録音テイクまたは直前30秒バッファから、X(Twitter) / YouTube用の横動画(16:9)や Shorts / TikTok用の縦動画(9:16)、さらに『素の声(Before) ➔ 加工後(After)』比較ビジュアライザ動画(.mp4 / -14 LUFS自動音圧)を外部ソフト不要で1クリック生成します！",
-            "Exports the latest recorded take or 30s retroactive buffer directly to an H.264/AAC .mp4 visualizer video (16:9 X/YouTube, 9:16 Shorts/TikTok, or Dry->Wet Before/After comparison) with -14 LUFS auto-mastering!"));
+            "直近の録音テイクまたは直前30秒バッファから、X / YouTube用の横型動画(16:9)、Shorts / TikTok用の縦型動画(9:16)、またはDry/Wet比較動画(.mp4 / -14 LUFS自動ラウドネス調整済)を書き出します。",
+            "Exports the latest recorded take or 30s retroactive buffer directly to an H.264/AAC .mp4 visualizer video (16:9 X/YouTube, 9:16 Shorts/TikTok, or Dry->Wet Before/After comparison) with -14 LUFS auto-mastering."));
         snsVideoBtn.onClick = [this] { openSnsVideoPopup(); };
         addAndMakeVisible (snsVideoBtn);
 
-        vocalKarteBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.28f));
-        vocalKarteBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+        vocalKarteBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
+        vocalKarteBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
         vocalKarteBtn.setTooltip (language->T (
-            "【次世代進化⑧：リアルタイム歌唱スコア＆声質カルテ診断レポート】歌っている最中のピッチ正確度・ロングトーン安定度・抑揚表現力・倍音艶スコアを100点満点＆ランク(SSS〜B)で自動集計し、1クリックで診断ダイアログまたはブラウザ共有用『歌唱カルテ (.html)』を出力します！",
-            "Real-time Vocal Score & Voice Karte Report: Tracks Pitch Accuracy, Long-Tone Stability, Expressiveness & Harmonic Brilliance (0-100 pts, Rank B to SSS) and exports a shareable HTML Vocal Karte!"));
+            "歌唱中のピッチ正確度・ロングトーン安定度・抑揚表現力・倍音明瞭度をリアルタイム解析し、診断サマリーおよびHTMLレポート（Vocal Karte）を出力します。",
+            "Real-time Vocal Score & Voice Karte Report: Tracks Pitch Accuracy, Long-Tone Stability, Expressiveness & Harmonic Presence (0-100 pts, Rank B to SSS) and exports an HTML report."));
         vocalKarteBtn.onClick = [this] { openVocalKartePopup(); };
         addAndMakeVisible (vocalKarteBtn);
 
-        openRecDirBtn.setButtonText (language->T ("📂開く", "📂Dir"));
+        openRecDirBtn.setButtonText (language->T ("保存先", "Folder"));
+        openRecDirBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         openRecDirBtn.onClick = [this]
         {
             processor.getRecordingsDirectory().startAsProcess();
@@ -3362,12 +3362,12 @@ public:
         globalHotkeyBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
         globalHotkeyBtn.setToggleState (processor.getGlobalHotkeysOn(), juce::dontSendNotification);
         globalHotkeyBtn.setTooltip (language->T (
-            "単体起動(Standalone)時、OBSやブラウザ・歌詞画面が最前面にある裏画面状態や日本語IME(全角かな)入力中でも反応するグローバルホットキーを有効にします。\n"
-            "・Ctrl+Shift+M : 咳ミュート切替  /  F9長押し : 押している間だけ咳ミュート\n"
-            "・Ctrl+Shift+T : 歌枠⇄雑談MC切替 / Ctrl+Shift+S : サビ盛切替 / Ctrl+Shift+V : 声キャラ切替 / Ctrl+Shift+R : 直前30秒保存",
+            "単体起動(Standalone)時、OBSやブラウザ等が最前面にあるバックグラウンド状態や日本語IME入力中でも動作するグローバルホットキーを有効にします。\n"
+            "・Ctrl+Shift+M : 咳ミュート切替  /  F9長押し : 押している間だけミュート\n"
+            "・Ctrl+Shift+T : 歌枠/雑談MC切替 / Ctrl+Shift+S : サビ演出切替 / Ctrl+Shift+V : 声質プリセット切替 / Ctrl+Shift+R : 直前30秒保存",
             "Enables background IME-immune global hotkeys in Standalone mode even while OBS, browser, or Japanese IME is focused:\n"
             "- Ctrl+Shift+M: Toggle Cough Mute / Hold F9: Push-to-Cough-Mute\n"
-            "- Ctrl+Shift+T: Sing <-> Talk MC / Ctrl+Shift+S: Chorus Boost / Ctrl+Shift+V: Voice Character Morph / Ctrl+Shift+R: Save Last 30s WAV"));
+            "- Ctrl+Shift+T: Sing <-> Talk MC / Ctrl+Shift+S: Chorus Boost / Ctrl+Shift+V: Voice Character / Ctrl+Shift+R: Save Last 30s WAV"));
         globalHotkeyBtn.onClick = [this]
         {
             processor.setGlobalHotkeysOn (globalHotkeyBtn.getToggleState());
@@ -3375,26 +3375,26 @@ public:
         };
         addAndMakeVisible (globalHotkeyBtn);
 
-        hotkeyInfoBtn.setButtonText ("⌨?");
-        hotkeyInfoBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2);
-        hotkeyInfoBtn.setTooltip (language->T ("裏画面グローバルホットキーの割り当て一覧を表示します。", "Show background global hotkey shortcut list."));
+        hotkeyInfoBtn.setButtonText ("?");
+        hotkeyInfoBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
+        hotkeyInfoBtn.setTooltip (language->T ("グローバルホットキーの割り当て一覧を表示します。", "Show background global hotkey shortcut list."));
         hotkeyInfoBtn.onClick = [this] { showHotkeyGuideDialog(); };
         addAndMakeVisible (hotkeyInfoBtn);
 
-        // ---- 柱③：5秒声質ターゲット診断（AIオートオーブ調律） ----
+        // ---- セクション03：5秒声質ターゲット診断 ＆ マイクモデリング ----
         static const char* const kTargetJa[5] = {
-            "✨ 透明感ウィスパー",
-            "🔥 歌い手リード",
-            "💎 アイドル艶ポップ",
-            "🎙 ラジオ深み低音",
-            "🎸 弾き語りアコギ"
+            "透明感ウィスパー",
+            "ボーカルリード",
+            "ブライトポップ",
+            "ウォームロー",
+            "アコースティック"
         };
         static const char* const kTargetEn[5] = {
-            "✨ Whisper Air",
-            "🔥 Lead Singer",
-            "💎 Idol Pop",
-            "🎙 Radio Deep",
-            "🎸 Acoustic"
+            "Whisper Air",
+            "Lead Vocal",
+            "Bright Pop",
+            "Warm Low",
+            "Acoustic"
         };
         for (int i = 0; i < 5; ++i)
         {
@@ -3411,7 +3411,7 @@ public:
             addAndMakeVisible (b);
         }
 
-        // ---- v5.1.0 柱③：🎙️ ゼロ遅延・名機マイク・モデリング（0=OFF, 1=800G, 2=U87, 3=SM7B, 4=ASMR） ----
+        // ---- マイク・モデリング（0=OFF, 1=800G, 2=U87, 3=SM7B, 4=Binaural） ----
         for (int i = 0; i < 5; ++i)
         {
             auto& mb = micModBtns[(size_t) i];
@@ -3426,11 +3426,11 @@ public:
             addAndMakeVisible (mb);
         }
 
-        // ---- v5.3.0 新案①・②・④：🪶 ささやき浮上＆ドルビーAエアー ／ 🎯 音程追従オートスイートスポット ／ 🎧 骨伝導補正・歌い手専用モニター ----
+        // ---- 歌唱表現・発声補正エンジン群 ----
         upwardAirBtn.setClickingTogglesState (true);
         upwardAirBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
         upwardAirBtn.setToggleState (processor.getUpwardAirOn(), juce::dontSendNotification);
-        upwardAirBtn.setTooltip (language->T ("大声は一切潰さず、小声・ウィスパー・語尾の余韻(-54〜-14dBFS)だけを下から最大+5.2dB持ち上げ、さらにドルビーA方式の倍音エアー(5.2kHz+)を無音時ノイズ0で付加します。",
+        upwardAirBtn.setTooltip (language->T ("大声のピークは潰さず、小声・ウィスパー・語尾の余韻(-54〜-14dBFS)を下から最大+5.2dB持ち上げ、高域の倍音エアー(5.2kHz+)を付加します。",
                                               "Lifts quiet vocal details and breathy tails (-54 to -14 dBFS) from below by up to +5.2 dB without squashing loud peaks, plus gated Dolby-A harmonic air."));
         upwardAirBtn.onClick = [this]
         {
@@ -3443,7 +3443,7 @@ public:
         pitchSweetSpotBtn.setClickingTogglesState (true);
         pitchSweetSpotBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
         pitchSweetSpotBtn.setToggleState (processor.getPitchSweetSpotOn(), juce::dontSendNotification);
-        pitchSweetSpotBtn.setTooltip (language->T ("歌っている音程(Hz)をリアルタイム追跡し、高音域では中低域の厚み(+3.6dB)を自動補強して喉締め帯域(3.3kHz)を抑え、低音域では胸のボワつきをスッキリ引き締めます。",
+        pitchSweetSpotBtn.setTooltip (language->T ("基本周波数(Hz)をリアルタイム追跡し、高音域では中低域の厚み(+3.6dB)を補強して3.3kHzの硬さを抑え、低音域では低域の膨らみを引き締めます。",
                                                    "Tracks fundamental pitch in real time: adds lower-body warmth and tames 3.3 kHz throat pinch on high notes, while tightening chest boominess on low notes."));
         pitchSweetSpotBtn.onClick = [this]
         {
@@ -3456,7 +3456,7 @@ public:
         singerCueBtn.setClickingTogglesState (true);
         singerCueBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
         singerCueBtn.setToggleState (processor.getSingerCueMonitorOn(), juce::dontSendNotification);
-        singerCueBtn.setTooltip (language->T ("配信・録音WAVの音は1ミリも変えず、あなたのヘッドホン返しモニターだけ頭蓋骨の骨伝導こもり(210Hz)を引き算し、ピッチが取りやすい芯(2.45kHz)をクリアに聴かせます。",
+        singerCueBtn.setTooltip (language->T ("配信・録音WAVの音質は変えず、ヘッドホン返しモニターのみ骨伝導こもり帯域(210Hz)を減衰させ、ピッチが取りやすい2.45kHz帯域を明瞭にします。",
                                               "Monitor-only cue enhancer (broadcast & recorded WAV untouched): cuts 210 Hz bone-conduction mud and enhances 2.45 kHz pitch-lock clarity in your headphones."));
         singerCueBtn.onClick = [this]
         {
@@ -3468,14 +3468,14 @@ public:
 
         vocalCharBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
         vocalCharBtn.setTooltip (language->T (
-            "【次世代進化②：ゼロ遅延・声キャラ瞬間モーフィング】追加遅延0.0msのまま3段フォルマント＆倍音キャラクター（OFF / 💎クール低音 / 🌸スイート高音 / 🌙ウィスパー吐息 / 🔥パワフルロック）を瞬時に切り替え、1人2役デュエットや曲ごとの声色変身を可能にします。",
-            "Zero-Latency Voice Character Morphing (0.0 ms latency): Instantly morphs 3-stage formant & harmonic character (OFF / Cool Deep / Sweet High / Whisper Air / Powerful Rock) for solo duets."));
+            "ゼロ遅延・フォルマント＆倍音キャラクター切替：追加遅延0.0msで5段階のキャラクター（OFF / クール低音 / スイート高音 / ウィスパーAir / パワフルロック）を切り替えます（Shift+クリックで一覧選択）。",
+            "Zero-Latency Formant & Harmonic Character (0.0 ms latency): Switches between OFF, Cool Low, Sweet High, Whisper Air, and Rock Drive (Shift+Click for menu)."));
         vocalCharBtn.onClick = [this]
         {
             if (juce::ModifierKeys::currentModifiers.isShiftDown() || juce::ModifierKeys::currentModifiers.isPopupMenu())
             {
                 juce::PopupMenu m;
-                m.addSectionHeader (language->T ("🎭 ゼロ遅延・声キャラ瞬間モーフィング (0.0ms)", "🎭 Zero-Latency Voice Character Morph"));
+                m.addSectionHeader (language->T ("フォルマント＆倍音キャラクター (0.0ms)", "Formant & Harmonic Character (0.0ms)"));
                 const int cur = processor.getVocalCharPreset();
                 for (int i = 0; i < 5; ++i)
                     m.addItem (10 + i, juce::String::fromUTF8 (VocalGzzioProcessor::getVocalCharPresetName (i, language->english)), true, cur == i);
@@ -3502,8 +3502,8 @@ public:
         symDoublerBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
         symDoublerBtn.setToggleState (processor.getSymphonicDoublerOn(), juce::dontSendNotification);
         symDoublerBtn.setTooltip (language->T (
-            "【次世代進化⑥：ゼロ遅延・壁ドン・シンフォニック・ダブラー】センターの芯（Mid）は100%無傷のまま、左右（Side）に非対称ハース遅延（8.8ms / 14.2ms）＋逆相マイクロピッチ揺らぎの極太ダブルトラックを生成します。モノラル再生でも位相キャンセルが一切起きません。",
-            "Zero-Latency Symphonic Wall Doubler: Keeps Center (Mid) 100% phase-pure while generating asymmetric Haas stereo taps (8.8 ms L / 14.2 ms R) with quadrature micro-pitch modulation."));
+            "シンフォニック・ダブラー：センターの芯（Mid）は無傷のまま、左右（Side）に非対称ハース遅延（8.8ms / 14.2ms）と逆相マイクロピッチ変調によるダブルトラックを生成します。",
+            "Zero-Latency Symphonic Doubler: Keeps Center (Mid) 100% phase-pure while generating asymmetric Haas stereo taps (8.8 ms L / 14.2 ms R) with quadrature micro-pitch modulation."));
         symDoublerBtn.onClick = [this]
         {
             processor.setSymphonicDoublerOn (symDoublerBtn.getToggleState());
@@ -3512,11 +3512,10 @@ public:
         };
         addAndMakeVisible (symDoublerBtn);
 
-        // ---- v5.4.0 新構想4本柱：〰️ 語尾・ロングトーン自然ビブラート生成 ／ 🗣️ 母音フォーム自動統一EQ ／ ⚡ 歌い出し発声アタック＆グルーヴ整形 ／ 🌉 ミックスボイス倍音ブリッジ＆胸鳴りサブアンカー ----
         tailVibratoBtn.setClickingTogglesState (true);
         tailVibratoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::ice);
         tailVibratoBtn.setToggleState (processor.getTailVibratoOn(), juce::dontSendNotification);
-        tailVibratoBtn.setTooltip (language->T ("音程が180ms以上伸びる語尾・ロングトーンを自動検知し、棒立ちの伸ばし音に自然な喉ビブラート（5.5Hzピッチ＋音量＋倍音揺れ）をフェードイン生成します。自前のビブラートがある時は周期の乱れだけを滑らかに整えます。",
+        tailVibratoBtn.setTooltip (language->T ("180ms以上持続するロングトーン語尾を自動検知し、自然なビブラート（5.5Hzピッチ＋音量＋フォルマント変調）をフェードイン付加します。",
                                                 "Detects sustained notes (>180 ms) and fades in natural 5.5 Hz pitch + amplitude + formant vibrato on flat tails, or regularizes uneven natural vibrato."));
         tailVibratoBtn.onClick = [this]
         {
@@ -3529,7 +3528,7 @@ public:
         vowelAlignBtn.setClickingTogglesState (true);
         vowelAlignBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
         vowelAlignBtn.setToggleState (processor.getVowelAlignOn(), juce::dontSendNotification);
-        vowelAlignBtn.setTooltip (language->T ("歌っている最中の母音（あ・い・う・え・お）のF1/F2フォルマント比率をリアルタイム判定し、「い・え」の平べったい鼻声感や「う・お」のこもりを自動補正して、全母音が同じ太い声帯フォームで鳴るように統一します。",
+        vowelAlignBtn.setTooltip (language->T ("発声中の母音（あ・い・う・え・お）のF1/F2フォルマント比率をリアルタイム解析し、「い・え」の細さや「う・お」のこもりを自動補正して声色の厚みを揃えます。",
                                                "Tracks F1/F2 vowel formant ratios in real time to add warm body and tame nasal glare on thin vowels (/i/, /e/) while opening up muffled vowels (/u/, /o/)."));
         vowelAlignBtn.onClick = [this]
         {
@@ -3542,7 +3541,7 @@ public:
         onsetGrooveBtn.setClickingTogglesState (true);
         onsetGrooveBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
         onsetGrooveBtn.setToggleState (processor.getOnsetGrooveOn(), juce::dontSendNotification);
-        onsetGrooveBtn.setTooltip (language->T ("フレーズや言葉の歌い出し先頭35msだけを捉え、弱い入りは声帯の立ち上がりと1.2〜3.8kHzのアタック輪郭を前に出し、強すぎる破裂的な入りは丸めてプロのリズムポケットへ揃えます。",
+        onsetGrooveBtn.setTooltip (language->T ("フレーズ先頭35msの発声アタックを検出し、弱い入りは1.2〜3.8kHzの輪郭を補強し、強すぎる破裂音は滑らかに整えます。",
                                                 "Shapes the first 35 ms of vocal phrase and syllable onsets: firms up hesitant attacks with 1.2-3.8 kHz articulation snap while rounding off harsh bursts."));
         onsetGrooveBtn.onClick = [this]
         {
@@ -3555,7 +3554,7 @@ public:
         mixBridgeBtn.setClickingTogglesState (true);
         mixBridgeBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
         mixBridgeBtn.setToggleState (processor.getMixVoiceBridgeOn(), juce::dontSendNotification);
-        mixBridgeBtn.setTooltip (language->T ("換声点・裏声で倍音が抜けて線が細くなった瞬間に2倍音・3倍音をピンポイント補填して地声と裏声の境目を繋ぎ、さらに高音時のみ基音の1オクターブ下へ微小な胸鳴りサブアンカーを添えてハイトーンに安定感を与えます。",
+        mixBridgeBtn.setTooltip (language->T ("換声点・ファルセットで倍音が薄くなった瞬間に第2・第3倍音を補填して地声と裏声の繋がりを滑らかにし、高音時にオクターブ下のサブ倍音をわずかに添えます。",
                                                "Detects falsetto/passaggio harmonic drop-off to synthesize 2nd/3rd harmonics for seamless mix-voice bridging, plus a subtle -1 octave sub-chest anchor on high notes."));
         mixBridgeBtn.onClick = [this]
         {
@@ -3569,8 +3568,8 @@ public:
         micDistStabBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
         micDistStabBtn.setToggleState (processor.getMicDistStabilizerOn(), juce::dontSendNotification);
         micDistStabBtn.setTooltip (language->T (
-            "【次世代進化⑤：AI 自動マイク距離・近接効果バランサー】歌いながらマイクに近づきすぎた時の低域ボワつき（近接効果 185Hz）を自動で引き算し、マイクから離れた時は声の太さ・3.15kHz明瞭度・音量を自動で引き上げて、立ち位置が動いてもスタジオ一定の距離感に保ちます。",
-            "AI Mic Distance & Proximity Stabilizer: Automatically tames 185 Hz proximity boom when too close to the mic and restores body warmth + 3.15 kHz presence + level when moving away."));
+            "マイク距離・近接効果スタビライザー：マイク接近時の近接効果（185Hzの低域膨張）を自動減衰し、離れた際は中低域の厚み・3.15kHz明瞭度・音量を自動補正して一定の距離感を維持します。",
+            "Mic Distance & Proximity Stabilizer: Automatically tames 185 Hz proximity boom when too close to the mic and restores body warmth + 3.15 kHz presence + level when moving away."));
         micDistStabBtn.onClick = [this]
         {
             processor.setMicDistStabilizerOn (micDistStabBtn.getToggleState());
@@ -3579,7 +3578,7 @@ public:
         };
         addAndMakeVisible (micDistStabBtn);
 
-        // ---- 柱④：絶叫セーフティガード・咳払い瞬間ミュート ＆ 💧 ペチャ音瞬間除去 ----
+        // ---- セクション04：ライブ演出 ・ 効果音サンプラー ・ 配信セーフティガード ----
         coughBtn.setClickingTogglesState (true);
         coughBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
         coughBtn.onClick = [this]
@@ -3610,11 +3609,10 @@ public:
         };
         addAndMakeVisible (lipDeclickBtn);
 
-        // ---- v5.2.0 柱B：🏠 ゼロ遅延・部屋鳴り除去 (Room De-Reverb) ＆ 🌬️ 息継ぎ自動整え・母音/子音セパレート (Velvet Split) ----
         roomDereverbBtn.setClickingTogglesState (true);
         roomDereverbBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
         roomDereverbBtn.setToggleState (processor.getRoomDereverbOn(), juce::dontSendNotification);
-        roomDereverbBtn.setTooltip (language->T ("ゼロ遅延で部屋の反響（風呂場感・壁の跳ね返り・460Hzの箱鳴り）だけを引き算し、防音ブースで録ったようなデッドな声にします。",
+        roomDereverbBtn.setTooltip (language->T ("ゼロ遅延で部屋の反響成分や460Hz付近の箱鳴り感を減衰させ、デッドな録音環境に近づけます。",
                                                  "Zero-latency room de-reverb: strips away muddy room reflections and 460 Hz boxiness without dulling vocal attacks."));
         roomDereverbBtn.onClick = [this]
         {
@@ -3627,7 +3625,7 @@ public:
         breathCtrlBtn.setClickingTogglesState (true);
         breathCtrlBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
         breathCtrlBtn.setToggleState (processor.getBreathControlOn(), juce::dontSendNotification);
-        breathCtrlBtn.setTooltip (language->T ("コンプ前の息継ぎ（ブレス）音量を自動で自然に抑え、さらに母音と子音（サ行・ツ行）を自動分離して高域の刺さりを防ぎます（Velvet Split）。",
+        breathCtrlBtn.setTooltip (language->T ("コンプ前のブレス（息継ぎ）音量を適度に抑え、母音と子音（サ行・ツ行）を分離制御して高域の刺さりを防ぎます。",
                                                "Automatically tames loud breaths before compression and separates tonal vowels from sibilants to prevent harshness (Velvet Split)."));
         breathCtrlBtn.onClick = [this]
         {
@@ -3637,7 +3635,6 @@ public:
         };
         addAndMakeVisible (breathCtrlBtn);
 
-        // ---- v5.0.0 柱④ ＆ v5.1.0 柱②：🔥 サビ1クリック華やか演出・🤖 サビ自動検知 ＆ 👏 4種ライブSEポン出しパッド ----
         chorusBoostBtn.setClickingTogglesState (true);
         chorusBoostBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
         chorusBoostBtn.setToggleState (processor.getChorusBoostMode(), juce::dontSendNotification);
@@ -3664,8 +3661,8 @@ public:
         autoApplauseBtn.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
         autoApplauseBtn.setToggleState (processor.getAutoApplauseOn(), juce::dontSendNotification);
         autoApplauseBtn.setTooltip (language->T (
-            "【次世代進化⑦：歌い終わり検知・オート拍手＆アンコール演出ディレクター】1曲のカラオケ再生が完了した瞬間、または5秒以上の熱唱のあとに1.6秒の歌い終わり余韻（アウトロ静寂）を検知した瞬間に、自動で『👏 拍手歓声』SEを華やかに鳴らします！",
-            "Auto-Applause Encore Director: Automatically triggers Applause & Cheers SE when a backing track finishes or 1.6 s after completing a vocal performance (>=5 s singing)."));
+            "オート拍手演出：伴奏の再生完了時、または5秒以上の歌唱後に1.6秒のアウトロ静寂を検知した際、自動で拍手歓声SEを再生します。",
+            "Auto-Applause Director: Automatically triggers Applause SE when a backing track finishes or 1.6 s after completing a vocal performance (>=5 s singing)."));
         autoApplauseBtn.onClick = [this]
         {
             processor.setAutoApplauseOn (autoApplauseBtn.getToggleState());
@@ -3674,8 +3671,8 @@ public:
         };
         addAndMakeVisible (autoApplauseBtn);
 
-        static const char* const kSeJa[4] = { "👏 拍手歓声", "✨ キラキラ", "🥁 ドラム!", "🔔 チャイム" };
-        static const char* const kSeEn[4] = { "👏 Applause", "✨ Sparkle",  "🥁 Drumroll", "🔔 Chime"   };
+        static const char* const kSeJa[4] = { "拍手歓声", "キラキラ", "ドラム", "チャイム" };
+        static const char* const kSeEn[4] = { "Applause", "Sparkle",  "Drumroll", "Chime" };
         for (int i = 0; i < 4; ++i)
         {
             auto& sb = seBtns[(size_t) i];
@@ -3693,9 +3690,8 @@ public:
             addAndMakeVisible (sb);
         }
 
-        // ---- 自分で用意した音源を4枠セットできる「🎵 自作カスタムSE 4枠ポン出しパッド」 ----
-        customSeMenuBtn.setButtonText (language->T ("📂 自作SE管理▼", "📂 Custom SE▼"));
-        customSeMenuBtn.setTooltip (language->T ("自分で用意した効果音ファイル（.wav / .mp3 / .flac / .ogg / .aiff）を4つの自作SE枠へ読み込む・入れ替える・消去するメニューを開きます。",
+        customSeMenuBtn.setButtonText (language->T ("カスタムSE ▾", "Custom SE ▾"));
+        customSeMenuBtn.setTooltip (language->T ("任意の音声ファイル（.wav / .mp3 / .flac / .ogg / .aiff）を4つのカスタムSEスロットへ割り当て・管理するメニューを開きます。",
                                                  "Open menu to load, replace, or clear your own audio files (.wav / .mp3 / .flac / .ogg / .aiff) in the 4 Custom SE slots."));
         customSeMenuBtn.onClick = [this] { openCustomSeMenu(); };
         addAndMakeVisible (customSeMenuBtn);
@@ -3704,8 +3700,8 @@ public:
         {
             auto& cb = customSeBtns[(size_t) i];
             cb.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
-            cb.setTooltip (language->T ("自分で用意した効果音（.wav / .mp3 / .flac / .ogg / .aiff）をセットできる自作SE枠です。未設定時はクリックでファイル選択、設定後はクリックでポン出し再生／停止します。",
-                                        "Custom SE slot for your own audio file (.wav / .mp3 / .flac / .ogg / .aiff). Click when empty to load a file, or click when loaded to trigger/stop playback."));
+            cb.setTooltip (language->T ("カスタムSEスロット（.wav / .mp3 / .flac / .ogg / .aiff）。未割当時はクリックでファイル選択、割当後はクリックで再生／停止します。",
+                                        "Custom SE slot (.wav / .mp3 / .flac / .ogg / .aiff). Click when empty to load a file, or click when loaded to trigger/stop playback."));
             cb.onClick = [this, i]
             {
                 if (! processor.hasCustomSeLoaded (i) || juce::ModifierKeys::currentModifiers.isShiftDown() || juce::ModifierKeys::currentModifiers.isPopupMenu())
@@ -3735,58 +3731,98 @@ public:
 
     void paint (juce::Graphics& g) override
     {
+        const auto boundsF = getLocalBounds().toFloat();
         g.setColour (Palette::panel);
-        g.fillRoundedRectangle (getLocalBounds().toFloat(), 8.0f);
-        g.setColour (Palette::panelLn);
-        g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 8.0f, 1.2f);
+        g.fillRoundedRectangle (boundsF, 8.0f);
+        g.setColour (Palette::panelLn.withAlpha (0.75f));
+        g.drawRoundedRectangle (boundsF.reduced (0.5f), 8.0f, 1.0f);
 
         if (! topBarTitleRect.isEmpty())
         {
-            g.setColour (Palette::ink);
-            g.setFont (GzzioLnF::uiFont (15.5f, true));
-            g.drawFittedText (language->T ("🎛️ 歌枠ステージ＆スタジオ統合ハブ (音ズレ補正・裏ホットキー搭載)",
-                                           "🎛️ Stage & Studio Live Hub (Sync Offset & Global Hotkeys)"),
-                              topBarTitleRect, juce::Justification::centredLeft, 1, 0.88f);
-        }
+            auto hdr = topBarTitleRect;
+            auto pill = hdr.removeFromLeft (58).reduced (0, 4).toFloat();
+            g.setColour (Palette::ice.withAlpha (0.14f));
+            g.fillRoundedRectangle (pill, 4.0f);
+            g.setColour (Palette::ice.withAlpha (0.45f));
+            g.drawRoundedRectangle (pill, 4.0f, 1.0f);
+            g.setColour (Palette::ice);
+            g.setFont (GzzioLnF::uiFont (11.0f, true));
+            g.drawText ("STUDIO", pill, juce::Justification::centred, false);
 
-        auto drawSectionCard = [&] (juce::Rectangle<int> r, juce::Colour accent, const juce::String& title)
-        {
-            const auto rf = r.toFloat();
-            g.setColour (Palette::panel2.withAlpha (0.88f));
-            g.fillRoundedRectangle (rf, 8.0f);
-            g.setColour (accent.withAlpha (0.55f));
-            g.drawRoundedRectangle (rf.reduced (0.5f), 8.0f, 1.2f);
-            g.setColour (accent);
-            g.fillRoundedRectangle (rf.getX() + 10.0f, rf.getY() + 8.0f, 4.0f, 18.0f, 2.0f);
+            hdr.removeFromLeft (8);
             g.setColour (Palette::ink);
             g.setFont (GzzioLnF::uiFont (15.0f, true));
-            g.drawText (title, r.withX (r.getX() + 20).withY (r.getY() + 5).withHeight (24),
-                        juce::Justification::centredLeft);
+            g.drawFittedText (language->T ("ステージ＆スタジオ コンソール",
+                                           "Stage & Studio Console"),
+                              hdr, juce::Justification::centredLeft, 1, 0.90f);
+        }
+
+        auto drawSectionCard = [&] (juce::Rectangle<int> r, const char* numTag, juce::Colour accent,
+                                    const juce::String& title, const juce::String& specRight)
+        {
+            const auto rf = r.toFloat();
+            g.setColour (Palette::panel2.withAlpha (0.94f));
+            g.fillRoundedRectangle (rf, 6.0f);
+
+            // 落ち着いた1pxヘアライン枠＋上部リムハイライト
+            g.setColour (Palette::panelLn.withAlpha (0.48f));
+            g.drawRoundedRectangle (rf.reduced (0.5f), 6.0f, 1.0f);
+            g.setColour (Palette::ink.withAlpha (0.04f));
+            g.drawHorizontalLine (r.getY() + 1, rf.getX() + 6.0f, rf.getRight() - 6.0f);
+
+            // セクション番号ピルバッジ
+            const juce::Rectangle<float> badge (rf.getX() + 10.0f, rf.getY() + 7.0f, 26.0f, 18.0f);
+            g.setColour (accent.withAlpha (0.15f));
+            g.fillRoundedRectangle (badge, 3.5f);
+            g.setColour (accent.withAlpha (0.55f));
+            g.drawRoundedRectangle (badge, 3.5f, 1.0f);
+            g.setColour (accent);
+            g.setFont (GzzioLnF::uiFont (11.5f, true));
+            g.drawText (numTag, badge, juce::Justification::centred, false);
+
+            // セクション見出し
+            g.setColour (Palette::ink);
+            g.setFont (GzzioLnF::uiFont (14.0f, true));
+            g.drawText (title, r.withX (r.getX() + 44).withY (r.getY() + 4).withWidth (r.getWidth() - 210).withHeight (24),
+                        juce::Justification::centredLeft, false);
+
+            // 右側スペック表記
+            if (specRight.isNotEmpty())
+            {
+                g.setColour (Palette::inkSoft.withAlpha (0.78f));
+                g.setFont (GzzioLnF::uiFont (11.5f, false));
+                g.drawText (specRight, r.withX (r.getRight() - 170).withY (r.getY() + 4).withWidth (158).withHeight (24),
+                            juce::Justification::centredRight, false);
+            }
         };
 
-        drawSectionCard (secBgmRect,   Palette::green,
-                         language->T ("① 🎵 カラオケ再生 ・ 🌐 アプリ音取込 ＆ 声⇄伴奏「音ズレ」自動補正（±300ms）",
-                                      "1. Karaoke Player, App Audio Capture & Auto Sync Offset (-300..+300 ms)"));
-        drawSectionCard (secRecRect,   Palette::salmon,
-                         language->T ("② 🔴 WAV録音 ・ 直前30秒保存 ・ 🎬 SNS動画(.mp4)書き出し ＆ ⌨️ 裏ホットキー",
-                                      "2. WAV Rec, 30s Retro Save, SNS MP4 Video Export & Global Hotkeys"));
-        drawSectionCard (secDiagRect,  Palette::yellow,
+        drawSectionCard (secBgmRect, "01", Palette::green,
+                         language->T ("伴奏プレイヤー ＆ アプリ音取込",
+                                      "Backing Track Player & App Audio Capture"),
+                         language->T ("Key ±6 / Sync ±300ms", "Key ±6 / Sync ±300ms"));
+        drawSectionCard (secRecRect, "02", Palette::salmon,
+                         language->T ("マルチトラック録音 ・ 動画出力 ・ 声質カルテ",
+                                      "Multi-Track WAV, Video Export & Vocal Karte"),
+                         language->T ("24-bit WAV / MP4 / HTML", "24-bit WAV / MP4 / HTML"));
+        drawSectionCard (secDiagRect, "03", Palette::yellow,
                          detailExpanded
-                             ? language->T ("③ 🎯 5秒AI声質診断 ・ 🎙️ 名機マイクモデリング ・ 歌唱表現エンジン",
-                                            "3. 5s Voice AI Diagnosis, Studio Mic Models & Vocal Expression Engines")
-                             : language->T ("③ 🎯 5秒AI声質診断 ＆ 🎙️ 名機マイクモデリング",
-                                            "3. 5s Voice AI Diagnosis & Studio Mic Models"));
-        drawSectionCard (secGuardRect, Palette::ice,
+                             ? language->T ("声質ターゲット診断 ・ マイクモデリング ・ 発声補正",
+                                            "Voice Target Diagnosis, Mic Modeling & Vocal Shaping")
+                             : language->T ("声質ターゲット診断 ＆ マイクモデリング",
+                                            "Voice Target Diagnosis & Studio Mic Modeling"),
+                         language->T ("Zero-Latency DSP", "Zero-Latency DSP"));
+        drawSectionCard (secGuardRect, "04", Palette::ice,
                          detailExpanded
-                             ? language->T ("④ 🔥 サビ盛り演出 ・ 👏 効果音ポン出し（内蔵4種＋自作4枠）＆ 配信ガード",
-                                            "4. Chorus Boost, Sound Pads (4 Built-in + 4 Custom) & Stream Safety Guards")
-                             : language->T ("④ 🔥 サビ盛り演出 ・ 👏 効果音ポン出し ＆ 咳ミュート／絶叫ガード",
-                                            "4. Chorus Boost, Sound Pads, Cough Mute & Scream Guard"));
+                             ? language->T ("ライブ演出 ・ 効果音サンプラー（8枠）＆ 配信ガード",
+                                            "Chorus Director, 8-Slot SE Sampler & Stream Safety")
+                             : language->T ("ライブ演出 ・ 効果音サンプラー ＆ 配信ガード",
+                                            "Chorus Director, SE Sampler & Stream Safety"),
+                         language->T ("-0.5 dBFS True-Peak", "-0.5 dBFS True-Peak"));
 
         // BGM状態＆プログレスバー描画
         {
             g.setColour (Palette::ink);
-            g.setFont (GzzioLnF::uiFont (14.0f, true));
+            g.setFont (GzzioLnF::uiFont (13.5f, true));
             const float dur = processor.getBgmDurationSec();
             const float cur = dur * processor.getBgmProgress();
             auto fmtTime = [] (float s)
@@ -3795,11 +3831,11 @@ public:
                 return juce::String (tot / 60) + ":" + juce::String (tot % 60).paddedLeft ('0', 2);
             };
             const juce::String liveChord = processor.getDetectedBgmChordName();
-            const juce::String chordBadge = liveChord.isNotEmpty() ? ("  [🎹 " + liveChord + "]") : juce::String();
+            const juce::String chordBadge = liveChord.isNotEmpty() ? ("  [" + liveChord + "]") : juce::String();
             const juce::String bgmInfo = processor.isAppAudioCapturing()
-                ? (language->T ("🌐 アプリ音取込中: ", "🌐 Live App Audio: ") + processor.getAppAudioLabel() + chordBadge)
+                ? (language->T ("アプリ音取込中: ", "App Audio: ") + processor.getAppAudioLabel() + chordBadge)
                 : (processor.getBgmTitle()
-                   + (dur > 0.1f ? ("  [" + fmtTime (cur) + "/" + fmtTime (dur) + "]") : "")
+                   + (dur > 0.1f ? ("  [" + fmtTime (cur) + " / " + fmtTime (dur) + "]") : "")
                    + chordBadge);
             g.drawFittedText (bgmInfo, bgmStatusRect.withTrimmedRight (224), juce::Justification::centredLeft, 1, 0.88f);
 
@@ -3812,11 +3848,11 @@ public:
             // プログレスバー（クリックでシーク可能）
             const auto pb = bgmProgRect.toFloat();
             g.setColour (Palette::track);
-            g.fillRoundedRectangle (pb, 4.0f);
+            g.fillRoundedRectangle (pb, 3.5f);
             g.setColour (processor.isBgmPlaying() ? Palette::green : Palette::blue);
-            g.fillRoundedRectangle (pb.withWidth (pb.getWidth() * processor.getBgmProgress()), 4.0f);
+            g.fillRoundedRectangle (pb.withWidth (pb.getWidth() * processor.getBgmProgress()), 3.5f);
 
-            // スライダー見出し＋音ズレ補正ラベル＋声ポケット掘削／伴奏追従ライダー／ダッキング減衰メーター
+            // スライダー見出し＋音ズレ補正ラベル＋減衰メーター
             g.setColour (Palette::inkSoft);
             g.setFont (GzzioLnF::uiFont (13.0f, true));
             g.drawText (language->T ("BGM:", "BGM:"), bgmVolLabelRect, juce::Justification::centredLeft);
@@ -3826,7 +3862,7 @@ public:
                 const int syncMs = processor.getSyncOffsetMs();
                 g.setColour (syncMs != 0 ? Palette::yellow : Palette::inkSoft);
                 g.drawFittedText (detailExpanded
-                                      ? language->T ("🎯 声⇄伴奏 音ズレ補正:", "🎯 Voice/BGM Sync:")
+                                      ? language->T ("声/伴奏 タイミング補正:", "Voice/BGM Sync Offset:")
                                       : language->T ("音ズレ:", "Sync:"),
                                   syncOffsetLabelRect, juce::Justification::centredLeft, 1, 0.85f);
             }
@@ -3844,10 +3880,10 @@ public:
                     const int syncMs = processor.getSyncOffsetMs();
                     g.setColour (syncMs > 0 ? Palette::ice : (syncMs < 0 ? Palette::yellow : Palette::inkSoft));
                     const juce::String syncDesc = syncMs > 0
-                        ? (language->T ("歌声を +", "Mic delayed +") + juce::String (syncMs) + language->T ("ms 遅延中", " ms"))
+                        ? (language->T ("歌声を +", "Mic +") + juce::String (syncMs) + language->T ("ms 遅延", " ms"))
                         : (syncMs < 0
-                            ? (language->T ("伴奏を ", "BGM delayed ") + juce::String (-syncMs) + language->T ("ms 遅延中", " ms"))
-                            : language->T ("+側:声を遅延 / -側:BGMを遅延", "+:Delay Mic / -:Delay BGM"));
+                            ? (language->T ("伴奏を ", "BGM ") + juce::String (-syncMs) + language->T ("ms 遅延", " ms"))
+                            : language->T ("+側:声遅延 / -側:伴奏遅延", "+:Delay Mic / -:Delay BGM"));
                     g.drawFittedText (syncDesc, syncStatusRect, juce::Justification::centredRight, 1, 0.85f);
                 }
             }
@@ -3867,7 +3903,7 @@ public:
                 else if (processor.getBgmUnmaskOn() && unmaskDb > 0.15f)
                 {
                     g.setColour (Palette::ice);
-                    g.drawFittedText (language->T ("掘削:-", "Unmask:-") + juce::String (unmaskDb, 1) + "dB",
+                    g.drawFittedText (language->T ("帯域:-", "Unmask:-") + juce::String (unmaskDb, 1) + "dB",
                                       bgmDuckMeterRect, juce::Justification::centredRight, 1, 0.85f);
                 }
                 else
@@ -3882,14 +3918,14 @@ public:
         // WAV録音ステータス描画
         {
             g.setColour (Palette::inkSoft);
-            g.setFont (GzzioLnF::uiFont (14.0f, false));
+            g.setFont (GzzioLnF::uiFont (13.5f, false));
             g.drawFittedText (processor.getLastSavedWavStatus(), wavStatusRect, juce::Justification::centredLeft, 2);
         }
 
-        // 5秒声質ターゲット診断ステータス＆4帯域バー＋v5.3 ボーカル特化3エンジン稼働メーター描画
+        // 声質ターゲット診断ステータス＆4帯域バー＋稼働メーター描画
         {
             g.setColour (Palette::ink);
-            g.setFont (GzzioLnF::uiFont (14.0f, false));
+            g.setFont (GzzioLnF::uiFont (13.5f, false));
             g.drawFittedText (processor.getVoiceTargetSummary(), diagStatusRect, juce::Justification::centredLeft, 2);
 
             static const char* const kBandJa[4] = { "低域の厚み", "中域の声芯", "中高域の抜け", "高域の空気感" };
@@ -3899,7 +3935,7 @@ public:
             {
                 auto cell = juce::Rectangle<int> (diagBarsRect.getX() + b * bw, diagBarsRect.getY(), bw - 6, diagBarsRect.getHeight());
                 g.setColour (Palette::inkSoft);
-                g.setFont (GzzioLnF::uiFont (14.0f, true));
+                g.setFont (GzzioLnF::uiFont (13.5f, true));
                 g.drawText (language->T (kBandJa[b], kBandEn[b]), cell.removeFromLeft (86), juce::Justification::centredLeft);
                 auto track = cell.reduced (2, 5).toFloat();
                 g.setColour (Palette::track);
@@ -3917,7 +3953,7 @@ public:
             {
                 const float upAirDb = processor.getUpwardAirMeterDb();
                 const float sweetDb = processor.getPitchSweetSpotDb();
-                const float cueDb   = processor.getSingerCueMeterDb();
+                const float cueDb   = processor.getSingerCueMonitorOn() ? processor.getSingerCueMeterDb() : 0.0f;
                 const float symDb   = processor.getSymphonicDoublerMeterDb();
                 g.setFont (GzzioLnF::uiFont (13.0f, true));
                 if (processor.getSymphonicDoublerOn() && symDb >= cueDb && symDb >= upAirDb && symDb >= std::abs (sweetDb) && symDb > 0.1f)
@@ -3987,7 +4023,7 @@ public:
             }
         }
 
-        // 絶叫セーフティガード／リップノイズ瞬間除去／部屋鳴り除去／息継ぎ＆Velvet保護メーター描画
+        // セーフティガード稼働メーター描画
         {
             const float grDb     = processor.getScreamGuardDb();
             const float lipDb    = processor.getLipDeclickMeterDb();
@@ -4009,7 +4045,7 @@ public:
             else if (processor.getLipDeclickOn() && lipDb > grDb && lipDb > 0.1f)
             {
                 g.setColour (Palette::ice);
-                g.drawFittedText (language->T ("ペチャ:-", "Lip:-") + juce::String (lipDb, 1) + "dB",
+                g.drawFittedText (language->T ("リップ:-", "Lip:-") + juce::String (lipDb, 1) + "dB",
                                   guardMeterRect, juce::Justification::centredRight, 1, 0.85f);
             }
             else
@@ -4283,23 +4319,23 @@ private:
     void openCustomSeMenu()
     {
         juce::PopupMenu m;
-        m.addSectionHeader (language->T ("🎵 自作カスタムSE 4枠（自分で用意した効果音 .wav / .mp3 / .flac / .ogg / .aiff）",
-                                         "🎵 Custom User SE 4 Slots (.wav / .mp3 / .flac / .ogg / .aiff)"));
+        m.addSectionHeader (language->T ("カスタムSE 4スロット（音声ファイル .wav / .mp3 / .flac / .ogg / .aiff）",
+                                         "Custom User SE 4 Slots (.wav / .mp3 / .flac / .ogg / .aiff)"));
         for (int i = 0; i < 4; ++i)
         {
             const bool loaded = processor.hasCustomSeLoaded (i);
-            const juce::String title = loaded ? processor.getCustomSeTitle (i) : language->T ("未設定", "Empty");
+            const juce::String title = loaded ? processor.getCustomSeTitle (i) : language->T ("未割当", "Empty");
             m.addItem (100 + i,
-                       language->T ("📂 枠", "📂 Slot ") + juce::String (i + 1)
-                           + language->T (" に音源ファイルを選択... (現在: ", " — Select Audio File... (Current: ")
+                       language->T ("スロット ", "Slot ") + juce::String (i + 1)
+                           + language->T (" に音声ファイルを選択... (現在: ", " — Select Audio File... (Current: ")
                            + title + ")");
             if (loaded)
             {
                 m.addItem (200 + i,
-                           language->T ("▶ 枠", "▶ Slot ") + juce::String (i + 1)
+                           language->T ("▶ スロット ", "▶ Slot ") + juce::String (i + 1)
                                + language->T (" をテスト再生: ", " — Play: ") + title);
                 m.addItem (300 + i,
-                           language->T ("🗑 枠", "🗑 Slot ") + juce::String (i + 1)
+                           language->T ("スロット ", "Slot ") + juce::String (i + 1)
                                + language->T (" の音源をクリア", " — Clear Slot"));
             }
             if (i < 3) m.addSeparator();
@@ -4334,19 +4370,19 @@ private:
         const int cnt = processor.getSetlistCount();
         const int curIdx = processor.getCurrentSetlistIndex();
 
-        m.addSectionHeader (language->T ("📋 歌枠セットリスト (曲ごとの伴奏・キー・ボーカル除去・声質を一括記憶)",
-                                         "📋 Karaoke Setlist Manager (Backing Track + Key + Vocal Cancel + Voice Preset)"));
-        m.addItem (1001, language->T ("➕ 現在の曲・キー・声質設定をセトリに追加登録",
-                                      "➕ Add Current Song & Settings to Setlist"));
-        m.addItem (1002, language->T ("⏮ 前の曲へ切り替え", "⏮ Previous Song in Setlist"), cnt > 0);
-        m.addItem (1003, language->T ("⏭ 次の曲へ切り替え", "⏭ Next Song in Setlist"), cnt > 0);
+        m.addSectionHeader (language->T ("セットリスト管理 (曲ごとの伴奏・キー・ボーカル除去・声質設定を保存)",
+                                         "Setlist Manager (Backing Track + Key + Vocal Cancel + Voice Preset)"));
+        m.addItem (1001, language->T ("+ 現在の曲・キー・声質設定をセットリストに登録",
+                                      "+ Add Current Song & Settings to Setlist"));
+        m.addItem (1002, language->T ("前の曲へ切り替え", "Previous Song in Setlist"), cnt > 0);
+        m.addItem (1003, language->T ("次の曲へ切り替え", "Next Song in Setlist"), cnt > 0);
         m.addSeparator();
 
         static const char* const kNotes[12] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
         if (cnt == 0)
         {
-            m.addItem (9999, language->T ("(まだセトリ登録がありません — 「➕ セトリ登録」で追加できます)",
-                                          "(Setlist is empty — click '➕ Add Setlist' to register current song)"), false);
+            m.addItem (9999, language->T ("(登録された曲がありません — 「+登録」ボタンから追加できます)",
+                                          "(Setlist is empty — click '+Add' to register current song)"), false);
         }
         else
         {
@@ -4361,18 +4397,18 @@ private:
                     ? (", " + juce::String::fromUTF8 (VocalGzzioProcessor::getVocalCharPresetName (item.vocalCharPreset, language->english)))
                     : juce::String();
                 const juce::String label = "[" + juce::String (i + 1) + "] " + item.title
-                    + "   |   🎼 " + keyStr + " / " + juce::String (item.detBpm) + " BPM"
+                    + "   |   " + keyStr + " / " + juce::String (item.detBpm) + " BPM"
                     + "  (Key " + semiStr + ", " + vcStr + vcpStr + ")";
                 m.addItem (2000 + i, label, true, i == curIdx);
             }
         }
 
         m.addSeparator();
-        m.addItem (1006, language->T ("📺 OBSブラウザソース用『Now Playing 曲名・キー表示オーバーレイ (.html)』を出力＆表示",
-                                      "📺 Export & Reveal OBS Browser Source 'Now Playing Overlay (.html)'"));
+        m.addItem (1006, language->T ("OBSブラウザソース用 Now Playing オーバーレイ (.html) を出力＆表示",
+                                      "Export & Reveal OBS Browser Source Now Playing Overlay (.html)"));
         m.addSeparator();
-        m.addItem (1004, language->T ("🗑 現在選択中の曲をセトリから削除", "🗑 Remove Current Song from Setlist"), curIdx >= 0 && curIdx < cnt);
-        m.addItem (1005, language->T ("🧹 セットリストをすべて消去", "🧹 Clear Entire Setlist"), cnt > 0);
+        m.addItem (1004, language->T ("現在選択中の曲をセットリストから削除", "Remove Current Song from Setlist"), curIdx >= 0 && curIdx < cnt);
+        m.addItem (1005, language->T ("セットリストをすべて消去", "Clear Entire Setlist"), cnt > 0);
 
         juce::Component::SafePointer<StageStudioPanel> safe (this);
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&setlistMenuBtn),
@@ -4425,7 +4461,7 @@ private:
     void browseBgmFile()
     {
         chooser = std::make_unique<juce::FileChooser> (
-            language->T ("カラオケ・BGM音声ファイルを選択 (.wav / .mp3 / .flac / .ogg / .aiff)",
+            language->T ("伴奏・BGM音声ファイルを選択 (.wav / .mp3 / .flac / .ogg / .aiff)",
                          "Select Backing Track Audio File (.wav / .mp3 / .flac / .ogg / .aiff)"),
             juce::File(), "*.wav;*.mp3;*.flac;*.ogg;*.aif;*.aiff");
         const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
@@ -4450,15 +4486,15 @@ private:
     {
         juce::PopupMenu m;
         m.addSectionHeader (language->T (
-            "🌐 アプリ別カラオケ音声取込 (Windows 10/11 Process Loopback — 仮想ドライバ不要)",
-            "🌐 App-Specific Karaoke Audio Capture (Windows 10/11 Process Loopback)"));
+            "アプリ別音声取込 (Windows 10/11 Process Loopback — 仮想ドライバ不要)",
+            "App-Specific Audio Capture (Windows 10/11 Process Loopback)"));
 
         const bool capturing = processor.isAppAudioCapturing();
         const juce::uint32 curPid = processor.getAppAudioTargetPid();
 
         if (capturing)
         {
-            m.addItem (1, language->T ("⏹ 現在のアプリ音声取込を停止する (", "⏹ Stop App Audio Capture (")
+            m.addItem (1, language->T ("■ 現在のアプリ音声取込を停止 (", "■ Stop App Audio Capture (")
                           + processor.getAppAudioLabel() + ")");
             m.addSeparator();
         }
@@ -4466,7 +4502,7 @@ private:
         const auto apps = gz::AppAudioCapture::enumerateRunningAudioApps (language->english);
         if (apps.empty())
         {
-            m.addItem (9990, language->T ("(起動中のブラウザ・音楽アプリが見つかりません — Chrome / YouTube 等を開いてください)",
+            m.addItem (9990, language->T ("(起動中のブラウザ・音声アプリが見つかりません — Chrome / YouTube 等を開いてください)",
                                           "(No running browser or media apps detected — open Chrome / YouTube first)"), false);
         }
         else
@@ -4475,13 +4511,13 @@ private:
             {
                 const auto& a = apps[i];
                 const bool isCur = capturing && (a.pid == curPid);
-                m.addItem (100 + (int) i, (a.pid == 0 ? "🖥️ " : "🎵 ") + a.displayLabel, true, isCur);
+                m.addItem (100 + (int) i, (a.pid == 0 ? "[SYS] " : "[APP] ") + a.displayLabel, true, isCur);
             }
         }
 
         m.addSeparator();
-        m.addItem (3, language->T ("🎧 加工後(キー変更・ボーカル除去後)のアプリ音を自分のヘッドホンにも返す",
-                                   "🎧 Monitor Processed App Audio in Local Headphones (Enable for Key-Shift/Vocal-Cancel)"),
+        m.addItem (3, language->T ("処理後（キー変更・ボーカル除去後）のアプリ音をローカルヘッドホンにも返す",
+                                   "Monitor Processed App Audio in Local Headphones (Enable for Key-Shift/Vocal-Cancel)"),
                    true, processor.getAppAudioMonitorLocal());
 
         juce::Component::SafePointer<StageStudioPanel> safe (this);
@@ -4503,7 +4539,7 @@ private:
                              {
                                  const auto& chosen = apps[(size_t) (res - 100)];
                                  const auto shortLbl = chosen.pid == 0
-                                     ? safe->language->T ("PC全アプリ音", "Desktop Audio")
+                                     ? safe->language->T ("PC全体音", "Desktop Audio")
                                      : (chosen.processName.isNotEmpty() ? chosen.processName : chosen.displayLabel);
                                  if (! p.startAppAudioCapture (chosen.pid, shortLbl, safe->language->english))
                                  {
@@ -4543,9 +4579,9 @@ private:
         else if (processor.hasBgmLoaded())
             opt.titleText = processor.getBgmTitle();
         else
-            opt.titleText = language->T ("VocalGzzio 歌ってみたテイク", "VocalGzzio Vocal Take");
+            opt.titleText = language->T ("VocalGzzio ボーカルテイク", "VocalGzzio Vocal Take");
 
-        opt.subTitleText  = language->T ("-14 LUFS 自動音圧マスタリング済", "-14 LUFS Auto-Mastered");
+        opt.subTitleText  = language->T ("-14 LUFS 自動ラウドネス調整済", "-14 LUFS Auto-Mastered");
         opt.metaBadgeText = processor.getBgmKeyBpmSummary (language->english);
         return opt;
     }
@@ -4557,34 +4593,34 @@ private:
 
         juce::PopupMenu m;
         m.addSectionHeader (language->T (
-            "🎬 SNS投稿用ビジュアライザ動画 1クリック保存 (.mp4 / H.264+AAC / -14 LUFS自動音圧)",
-            "🎬 1-Click SNS Visualizer Video Export (.mp4 / H.264+AAC / -14 LUFS Mastered)"));
-        m.addItem (1, language->T ("📺 16:9 横型動画を書き出し (1280×720 — X / YouTube 投稿用)",
-                                   "📺 Export 16:9 Landscape MP4 (1280x720 — X / YouTube)"));
-        m.addItem (2, language->T ("📱 9:16 縦型ショート動画を書き出し (720×1280 — Shorts / TikTok / Reels 用)",
-                                   "📱 Export 9:16 Vertical MP4 (720x1280 — Shorts / TikTok / Reels)"));
+            "SNSビジュアライザ動画出力 (.mp4 / H.264+AAC / -14 LUFS自動調整)",
+            "SNS Visualizer Video Export (.mp4 / H.264+AAC / -14 LUFS Mastered)"));
+        m.addItem (1, language->T ("16:9 横型動画を書き出し (1280×720 — X / YouTube 用)",
+                                   "Export 16:9 Landscape MP4 (1280x720 — X / YouTube)"));
+        m.addItem (2, language->T ("9:16 縦型ショート動画を書き出し (720×1280 — Shorts / TikTok / Reels 用)",
+                                   "Export 9:16 Vertical MP4 (720x1280 — Shorts / TikTok / Reels)"));
         m.addSeparator();
-        m.addItem (3, language->T ("✨ 16:9 『素の声(Before) ➔ 加工後(After)』聴き比べ横動画を書き出し",
-                                   "✨ Export 16:9 Before (Dry) -> After (Wet) Comparison MP4"));
-        m.addItem (4, language->T ("✨ 9:16 『素の声(Before) ➔ 加工後(After)』聴き比べ縦動画を書き出し",
-                                   "✨ Export 9:16 Before (Dry) -> After (Wet) Vertical Comparison MP4"));
+        m.addItem (3, language->T ("16:9 『Dry (処理前) -> Wet (処理後)』比較横型動画を書き出し",
+                                   "Export 16:9 Before (Dry) -> After (Wet) Comparison MP4"));
+        m.addItem (4, language->T ("9:16 『Dry (処理前) -> Wet (処理後)』比較縦型動画を書き出し",
+                                   "Export 9:16 Before (Dry) -> After (Wet) Vertical Comparison MP4"));
         m.addSeparator();
-        m.addItem (5, language->T ("🏷️ 右下に「✦ VocalGzzio」透かしロゴを表示する",
-                                   "🏷️ Show '✦ VocalGzzio' Corner Watermark"),
+        m.addItem (5, language->T ("右下に「VocalGzzio」透かしロゴを表示する",
+                                   "Show 'VocalGzzio' Corner Watermark"),
                    true, processor.getSnsWatermarkOn());
-        m.addItem (7, language->T ("🎤 歌声連動『PNGTuber 立ち絵・口パク＆歌唱バウンス』を表示する",
-                                   "🎤 Show Voice-Reactive PNGTuber Lip-Sync & Bounce Avatar"),
+        m.addItem (7, language->T ("音声連動 PNGTuber アバター（口パク＆モーション）を表示する",
+                                   "Show Voice-Reactive PNGTuber Lip-Sync Avatar"),
                    true, processor.getSnsAvatarOn());
-        m.addItem (8, language->T ("🖼️ 自作の立ち絵PNG画像を設定する (口閉じ画像)... ",
-                                   "🖼️ Load Custom PNGTuber Image (Closed Mouth)..."));
-        m.addItem (9, language->T ("😮 自作の口パク差分PNG画像を設定する (口開け画像)... ",
-                                   "😮 Load Custom PNGTuber Image (Open Mouth)..."));
+        m.addItem (8, language->T ("カスタム立ち絵PNG画像を設定する (口閉じ画像)...",
+                                   "Load Custom PNGTuber Image (Closed Mouth)..."));
+        m.addItem (9, language->T ("カスタム口パク差分PNG画像を設定する (口開け画像)...",
+                                   "Load Custom PNGTuber Image (Open Mouth)..."));
         if (processor.hasCustomSnsAvatar())
-            m.addItem (10, language->T ("🔄 立ち絵を標準シンガーアバターに戻す",
-                                        "🔄 Reset to Built-in Singer Avatar"));
+            m.addItem (10, language->T ("立ち絵を標準アバターに戻す",
+                                        "Reset to Built-in Avatar"));
         m.addSeparator();
         const auto lastMp4 = processor.getLastExportedSnsVideoFile();
-        m.addItem (6, language->T ("📂 直近に書き出したMP4動画を表示", "📂 Reveal Latest Exported MP4 File"),
+        m.addItem (6, language->T ("直近に書き出したMP4動画を表示", "Reveal Latest Exported MP4 File"),
                    lastMp4.existsAsFile());
 
         juce::Component::SafePointer<StageStudioPanel> safe (this);
@@ -4642,18 +4678,18 @@ private:
     {
         juce::PopupMenu m;
         m.addSectionHeader (language->T (
-            "🏆 リアルタイム歌唱スコア＆声質カルテ診断レポート",
-            "🏆 Real-Time Vocal Score & Voice Karte Report"));
+            "ボーカル解析・声質カルテ (Vocal Karte)",
+            "Vocal Analysis & Voice Karte Report"));
         m.addItem (1, language->T (
-            "🏆 現在の『歌唱スコア＆声質カルテ診断ダイアログ』を表示する",
-            "🏆 Show Live Vocal Score & Voice Karte Summary Dialog"));
+            "現在の『声質カルテ解析サマリー』を表示する",
+            "Show Live Vocal Analysis & Voice Karte Summary"));
         m.addItem (2, language->T (
-            "📄 ブラウザ共有用『歌唱スコア＆声質カルテ診断書 (.html)』を出力＆開く",
-            "📄 Export & Open Shareable HTML Vocal Karte Report (.html)"));
+            "ブラウザ表示用『声質カルテレポート (.html)』を出力＆開く",
+            "Export & Open HTML Vocal Karte Report (.html)"));
         m.addSeparator();
         m.addItem (3, language->T (
-            "🔄 歌唱スコア集計をリセットして次の曲の採点を始める",
-            "🔄 Reset Current Vocal Score & Start Fresh Measurement"));
+            "解析スコアをリセットして新規計測を開始する",
+            "Reset Current Vocal Score & Start Fresh Measurement"));
 
         juce::Component::SafePointer<StageStudioPanel> safe (this);
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&vocalKarteBtn),
@@ -4666,8 +4702,8 @@ private:
                              {
                                  juce::AlertWindow::showMessageBoxAsync (
                                      juce::MessageBoxIconType::InfoIcon,
-                                     safe->language->T ("🏆 VocalGzzio リアルタイム歌唱スコア＆声質カルテ診断",
-                                                        "🏆 VocalGzzio Real-Time Vocal Score & Voice Karte"),
+                                     safe->language->T ("VocalGzzio 声質カルテ解析サマリー",
+                                                        "VocalGzzio Vocal Analysis & Voice Karte"),
                                      p.getVocalKarteSummaryText (safe->language->english),
                                      safe->language->T ("閉じる", "Close"));
                              }
@@ -4712,23 +4748,23 @@ private:
     void showHotkeyGuideDialog()
     {
         const juce::String title = language->T (
-            "⌨️ 裏画面・全角かな無敵グローバルホットキー一覧 (Standalone版)",
-            "⌨️ Background IME-Immune Global Hotkeys (Standalone)");
+            "グローバルホットキー一覧 (Standalone版)",
+            "Background IME-Immune Global Hotkeys (Standalone)");
         const juce::String body = language->T (
-            "OBS・ブラウザ（YouTube歌詞/カラオケ）・ゲーム・コメント欄が最前面にある状態や、日本語IME（全角かな入力中）でも誤爆せず即座に反応します：\n\n"
-            "・Ctrl + Shift + M  ： 😷 咳払いミュート ON / OFF トグル切替\n"
-            "・F9（押している間）： 🔇 Push-to-Cough-Mute（離すと即復帰）\n"
-            "・Ctrl + Shift + T  ： 🎤 歌枠モード ⇄ 💬 雑談MCモード 瞬間切替\n"
-            "・Ctrl + Shift + S  ： ★ サビ盛り演出（Chorus Boost）ON / OFF 切替\n"
-            "・Ctrl + Shift + V  ： 🎭 声キャラ瞬間モーフィング切替（OFF / 💎クール / 🌸スイート / 🌙吐息 / 🔥ロック）\n"
-            "・Ctrl + Shift + R  ： ⏪ 直前30秒さかのぼりWAV保存\n\n"
-            "※ 誤操作防止のため「⌨️ 裏ホットキー: OFF」にいつでも切り替え可能です（DAWプラグイン版ではホストDAWのショートカットを妨げないよう自動的に無効化されます）。",
+            "OBS・ブラウザ・ゲーム・チャット欄が最前面にある状態や、日本語IME入力中でも動作します：\n\n"
+            "・Ctrl + Shift + M  ： 咳ミュート ON / OFF トグル切替\n"
+            "・F9（押している間）： プッシュ・トゥ・ミュート（離すと即復帰）\n"
+            "・Ctrl + Shift + T  ： 歌枠モード / 雑談MCモード 切替\n"
+            "・Ctrl + Shift + S  ： サビ演出（Chorus Boost）ON / OFF 切替\n"
+            "・Ctrl + Shift + V  ： 声質キャラクター切替（OFF / クール低音 / スイート高音 / ウィスパーAir / パワフルロック）\n"
+            "・Ctrl + Shift + R  ： 直前30秒さかのぼりWAV保存\n\n"
+            "※ 誤操作防止のため「ホットキー: OFF」にいつでも切り替え可能です（VST3プラグイン版ではホストDAWのショートカットを妨げないよう自動的に無効化されます）。",
             "Works reliably in Windows Standalone mode even while OBS, browser lyrics, games, or Japanese IME composition have focus:\n\n"
             "- Ctrl + Shift + M : Toggle Cough Mute ON / OFF\n"
             "- Hold F9          : Push-to-Cough-Mute (mutes while held, unmutes on release)\n"
             "- Ctrl + Shift + T : Toggle Singing Mode <-> Talk MC Mode\n"
             "- Ctrl + Shift + S : Toggle Chorus Boost ON / OFF\n"
-            "- Ctrl + Shift + V : Cycle Zero-Latency Voice Character Morph\n"
+            "- Ctrl + Shift + V : Cycle Zero-Latency Voice Character\n"
             "- Ctrl + Shift + R : Save Last 30s Retroactive WAV\n\n"
             "Note: Can be toggled OFF anytime. Automatically disabled in VST3 plugin mode so host DAW shortcuts are never intercepted.");
         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
@@ -4749,76 +4785,75 @@ private:
         if (appCapOn)
         {
             auto lbl = processor.getAppAudioLabel();
-            if (lbl.length() > 7)
-                lbl = lbl.substring (0, 7) + "..";
-            appAudioBtn.setButtonText (language->T ("🌐 ", "🌐 ") + lbl + "▼");
+            if (lbl.length() > 8)
+                lbl = lbl.substring (0, 8) + "..";
+            appAudioBtn.setButtonText (lbl + " ▾");
         }
         else
         {
-            appAudioBtn.setButtonText (language->T ("🌐 アプリ音取込▼", "🌐 App Audio▼"));
+            appAudioBtn.setButtonText (language->T ("アプリ音取込 ▾", "App Audio ▾"));
         }
 
         const bool playing = processor.isBgmPlaying();
         playBgmBtn.setToggleState (playing || appCapOn, juce::dontSendNotification);
-        playBgmBtn.setButtonText (appCapOn ? language->T ("⏹ 取込停止", "⏹ Stop App")
-                                : (playing ? language->T ("⏸ 一時停止", "⏸ Pause")
-                                           : language->T ("▶ BGM再生", "▶ Play")));
+        playBgmBtn.setButtonText (appCapOn ? language->T ("■ 取込停止", "■ Stop App")
+                                : (playing ? language->T ("❚❚ 一時停止", "❚❚ Pause")
+                                           : language->T ("▶ 伴奏再生", "▶ Play")));
         loopBgmBtn.setToggleState (processor.isBgmLooping(), juce::dontSendNotification);
         syncKeyBtn.setToggleState (processor.getBgmSyncKey(), juce::dontSendNotification);
 
         const int slCount = processor.getSetlistCount();
         const int slIdx   = processor.getCurrentSetlistIndex();
         if (slCount > 0 && slIdx >= 0)
-            setlistMenuBtn.setButtonText (language->T ("📋[", "📋[")
-                                          + juce::String (slIdx + 1) + "/" + juce::String (slCount) + "]▼");
+            setlistMenuBtn.setButtonText ("[" + juce::String (slIdx + 1) + "/" + juce::String (slCount) + "] ▾");
         else
-            setlistMenuBtn.setButtonText (language->T ("📋セトリ(", "📋List(")
-                                          + juce::String (slCount) + ")▼");
+            setlistMenuBtn.setButtonText (language->T ("セトリ(", "Setlist(")
+                                          + juce::String (slCount) + ") ▾");
 
         const bool vocCancel = processor.getBgmVocalCancel();
         vocalCancelBtn.setToggleState (vocCancel, juce::dontSendNotification);
         vocalCancelBtn.setButtonText (vocCancel
-            ? language->T ("✨ ボーカル消:ON", "✨ VocalCut:ON")
-            : language->T ("✨ 原曲ボーカル消", "✨ Vocal Cancel"));
+            ? language->T ("Vo除去: ON", "VocalCut: ON")
+            : language->T ("原曲Vo除去", "Vocal Cancel"));
 
         const bool guideMon = processor.getBgmGuideMonitorOn();
         bgmGuideBtn.setToggleState (guideMon, juce::dontSendNotification);
         bgmGuideBtn.setButtonText (guideMon
-            ? language->T ("🎧 裏ガイド:ON", "🎧 GuideVoc:ON")
-            : language->T ("🎧 裏ガイド分離", "🎧 Guide Vocal"));
+            ? language->T ("裏ガイド: ON", "GuideVoc: ON")
+            : language->T ("裏ガイド分離", "Guide Vocal"));
 
         const bool toStream = processor.getBgmToStream();
         bgmRouteBtn.setToggleState (toStream, juce::dontSendNotification);
         bgmRouteBtn.setButtonText (toStream
-            ? language->T ("📡 配信混音", "📡 Stream")
-            : language->T ("🎧 自分のみ", "🎧 Monitor"));
+            ? language->T ("配信送出", "Stream")
+            : language->T ("モニターのみ", "Monitor"));
 
         const bool unmaskOn = processor.getBgmUnmaskOn();
         bgmUnmaskBtn.setToggleState (unmaskOn, juce::dontSendNotification);
         bgmUnmaskBtn.setButtonText (unmaskOn
-            ? language->T ("🕳️ 声ポケット ON", "🕳️ Unmask ON")
-            : language->T ("🕳️ 声ポケット掘り", "🕳️ Unmask BGM"));
+            ? language->T ("帯域優先: ON", "Unmask: ON")
+            : language->T ("声帯域優先", "Unmask BGM"));
 
         const bool riderOn = processor.getBgmVocalRiderOn();
         bgmRiderBtn.setToggleState (riderOn, juce::dontSendNotification);
         bgmRiderBtn.setButtonText (riderOn
-            ? language->T ("🎢 伴奏追従 ON", "🎢 BGM Rider ON")
-            : language->T ("🎢 伴奏追従ライド", "🎢 BGM Rider"));
+            ? language->T ("伴奏追従: ON", "BGM Rider: ON")
+            : language->T ("伴奏追従ライド", "BGM Rider"));
 
         const bool rec = processor.isWavRecording();
         wavRecBtn.setToggleState (rec, juce::dontSendNotification);
         if (rec)
         {
-            wavRecBtn.setButtonText (language->T ("⏹ 停止・保存(", "⏹ Save (")
+            wavRecBtn.setButtonText (language->T ("■ 停止・保存(", "■ Save (")
                                      + juce::String (processor.getWavRecordingSec(), 0) + "s)");
         }
         else
         {
-            wavRecBtn.setButtonText (language->T ("🔴 WAV録音 開始", "🔴 WAV Record"));
+            wavRecBtn.setButtonText (language->T ("● WAV録音", "● WAV Record"));
         }
 
         const int retroSec = juce::jmax (1, (int) std::round (processor.getRetroBufferedSec()));
-        retroSaveBtn.setButtonText (language->T ("⏪ 直前", "⏪ Last ")
+        retroSaveBtn.setButtonText (language->T ("直前", "Last ")
                                     + juce::String (retroSec)
                                     + language->T ("秒保存", "s WAV"));
 
@@ -4827,31 +4862,30 @@ private:
         if (snsBusy)
         {
             const int pct = juce::jlimit (1, 99, juce::roundToInt (processor.getSnsVideoExportProgress() * 100.0f));
-            snsVideoBtn.setButtonText (language->T ("🎬 動画 ", "🎬 MP4 ") + juce::String (pct) + "%");
+            snsVideoBtn.setButtonText (language->T ("動画出力 ", "MP4 ") + juce::String (pct) + "%");
         }
         else
         {
-            snsVideoBtn.setButtonText (language->T ("🎬 SNS動画▼", "🎬 SNS MP4▼"));
+            snsVideoBtn.setButtonText (language->T ("SNS動画 ▾", "SNS Video ▾"));
         }
 
         const bool hasKarte = processor.getVocalKarteVoicedSeconds() >= 1.2f;
         vocalKarteBtn.setToggleState (hasKarte, juce::dontSendNotification);
         if (hasKarte)
         {
-            vocalKarteBtn.setButtonText (language->T ("🏆 ", "🏆 ")
-                                         + juce::String (processor.getVocalKarteTotalScore(), 0)
-                                         + language->T ("点(", "pt(") + processor.getVocalKarteRank() + ")▼");
+            vocalKarteBtn.setButtonText (juce::String (processor.getVocalKarteTotalScore(), 0)
+                                         + language->T ("点 [", "pt [") + processor.getVocalKarteRank() + "] ▾");
         }
         else
         {
-            vocalKarteBtn.setButtonText (language->T ("🏆 歌唱カルテ▼", "🏆 VocalKarte▼"));
+            vocalKarteBtn.setButtonText (language->T ("声質カルテ ▾", "Vocal Karte ▾"));
         }
 
         const bool autoMst = processor.getRecAutoMaster();
         autoMasterBtn.setToggleState (autoMst, juce::dontSendNotification);
         autoMasterBtn.setButtonText (autoMst
-            ? language->T ("💿-14LUFS:ON", "💿-14LUFS:ON")
-            : language->T ("💿-14LUFS:OFF", "💿-14LUFS:OFF"));
+            ? language->T ("-14 LUFS: ON", "-14 LUFS: ON")
+            : language->T ("-14 LUFS: OFF", "-14 LUFS: OFF"));
 
         const int activeDiag = processor.getLastVoiceTargetStyle();
         for (int i = 0; i < 5; ++i)
@@ -4864,35 +4898,35 @@ private:
         const bool upAirOn = processor.getUpwardAirOn();
         upwardAirBtn.setToggleState (upAirOn, juce::dontSendNotification);
         upwardAirBtn.setButtonText (upAirOn
-            ? language->T ("🪶 ささやき浮上＆Air ON", "🪶 Upward & Air ON")
-            : language->T ("🪶 ささやき浮上＆Air", "🪶 Upward & Dolby Air"));
+            ? language->T ("ささやき浮上: ON", "Upward Air: ON")
+            : language->T ("ささやき浮上", "Upward Air"));
 
         const bool sweetOn = processor.getPitchSweetSpotOn();
         pitchSweetSpotBtn.setToggleState (sweetOn, juce::dontSendNotification);
         pitchSweetSpotBtn.setButtonText (sweetOn
-            ? language->T ("🎯 音程追従スイート ON", "🎯 Pitch Sweet Spot ON")
-            : language->T ("🎯 音程追従スイート", "🎯 Pitch Sweet Spot"));
+            ? language->T ("音程スイート: ON", "Pitch Sweet: ON")
+            : language->T ("音程スイート", "Pitch Sweet"));
 
         const bool cueOn = processor.getSingerCueMonitorOn();
         singerCueBtn.setToggleState (cueOn, juce::dontSendNotification);
         singerCueBtn.setButtonText (cueOn
-            ? language->T ("🎧 骨伝導モニター ON", "🎧 Singer's Cue ON")
-            : language->T ("🎧 骨伝導モニター補正", "🎧 Singer's Cue Monitor"));
+            ? language->T ("骨伝導補正: ON", "Singer Cue: ON")
+            : language->T ("骨伝導モニター", "Singer Cue"));
 
         const int vcp = processor.getVocalCharPreset();
         static const char* const kVcpShortJa[5] = {
-            "🎭 声キャラ: OFF",
-            "💎 クール低音 ON",
-            "🌸 スイート高音 ON",
-            "🌙 ウィスパー吐息 ON",
-            "🔥 パワフルロック ON"
+            "声質変化: OFF",
+            "クール低音: ON",
+            "スイート高音: ON",
+            "ウィスパー: ON",
+            "ロック倍音: ON"
         };
         static const char* const kVcpShortEn[5] = {
-            "🎭 VoiceChar: OFF",
-            "💎 Cool Deep ON",
-            "🌸 Sweet High ON",
-            "🌙 Whisper Air ON",
-            "🔥 Power Rock ON"
+            "Character: OFF",
+            "Cool Low: ON",
+            "Sweet High: ON",
+            "Whisper Air: ON",
+            "Rock Drive: ON"
         };
         vocalCharBtn.setToggleState (vcp > 0, juce::dontSendNotification);
         vocalCharBtn.setButtonText (language->T (kVcpShortJa[juce::jlimit (0, 4, vcp)],
@@ -4901,65 +4935,64 @@ private:
         const bool symOn = processor.getSymphonicDoublerOn();
         symDoublerBtn.setToggleState (symOn, juce::dontSendNotification);
         symDoublerBtn.setButtonText (symOn
-            ? language->T ("👯 立体ダブラー ON", "👯 Wall Doubler ON")
-            : language->T ("👯 立体ダブラー", "👯 Wall Doubler"));
+            ? language->T ("立体ダブラー: ON", "Doubler: ON")
+            : language->T ("立体ダブラー", "Wall Doubler"));
 
         const bool vibOn = processor.getTailVibratoOn();
         tailVibratoBtn.setToggleState (vibOn, juce::dontSendNotification);
         tailVibratoBtn.setButtonText (vibOn
-            ? language->T ("〰️ 語尾ビブラート ON", "〰️ Tail Vibrato ON")
-            : language->T ("〰️ 語尾ビブラート", "〰️ Tail Vibrato"));
+            ? language->T ("語尾ビブラート: ON", "Tail Vibrato: ON")
+            : language->T ("語尾ビブラート", "Tail Vibrato"));
 
         const bool vowOn = processor.getVowelAlignOn();
         vowelAlignBtn.setToggleState (vowOn, juce::dontSendNotification);
         vowelAlignBtn.setButtonText (vowOn
-            ? language->T ("🗣️ 母音フォーム統一 ON", "🗣️ Vowel Align ON")
-            : language->T ("🗣️ 母音フォーム統一", "🗣️ Vowel Align EQ"));
+            ? language->T ("母音均一EQ: ON", "Vowel EQ: ON")
+            : language->T ("母音均一EQ", "Vowel Align EQ"));
 
         const bool onsOn = processor.getOnsetGrooveOn();
         onsetGrooveBtn.setToggleState (onsOn, juce::dontSendNotification);
         onsetGrooveBtn.setButtonText (onsOn
-            ? language->T ("⚡ 歌い出しグルーヴ ON", "⚡ Onset Groove ON")
-            : language->T ("⚡ 歌い出しグルーヴ", "⚡ Onset Groove"));
+            ? language->T ("発声アタック: ON", "Onset Shape: ON")
+            : language->T ("発声アタック", "Onset Shape"));
 
         const bool mixBrOn = processor.getMixVoiceBridgeOn();
         mixBridgeBtn.setToggleState (mixBrOn, juce::dontSendNotification);
         mixBridgeBtn.setButtonText (mixBrOn
-            ? language->T ("🌉 ミックス＆胸鳴り ON", "🌉 Mix & Chest ON")
-            : language->T ("🌉 ミックス＆胸鳴り", "🌉 Mix & Sub-Chest"));
+            ? language->T ("倍音ブリッジ: ON", "Mix Bridge: ON")
+            : language->T ("倍音ブリッジ", "Mix Bridge"));
 
         const bool distStabOn = processor.getMicDistStabilizerOn();
         micDistStabBtn.setToggleState (distStabOn, juce::dontSendNotification);
         micDistStabBtn.setButtonText (distStabOn
-            ? language->T ("📏 距離ロック ON", "📏 Dist Lock ON")
-            : language->T ("📏 距離ロック補正", "📏 Mic Dist Lock"));
+            ? language->T ("マイク距離補正: ON", "Dist Lock: ON")
+            : language->T ("マイク距離補正", "Mic Dist Lock"));
 
         const bool cBoost = processor.getChorusBoostMode();
         chorusBoostBtn.setToggleState (cBoost, juce::dontSendNotification);
         chorusBoostBtn.setButtonText (cBoost
-            ? language->T ("🔥 サビ演出 ON!", "🔥 Chorus ON!")
-            : language->T ("🔥 サビ1クリック演出", "🔥 Chorus Boost"));
+            ? language->T ("サビ盛り演出: ON", "Chorus Boost: ON")
+            : language->T ("サビ盛り演出", "Chorus Boost"));
 
         const bool autoCh = processor.getAutoChorusMode();
         const bool autoTrig = processor.isAutoChorusTriggered();
         autoChorusBtn.setToggleState (autoCh, juce::dontSendNotification);
         autoChorusBtn.setButtonText (autoCh
-            ? (autoTrig ? language->T ("🤖 サビ自動発動!", "🤖 Auto-Chorus!")
-                        : language->T ("🤖 サビ自動:待機", "🤖 Auto-Chorus"))
-            : language->T ("🤖 サビ自動 OFF", "🤖 Auto-Chorus"));
+            ? (autoTrig ? language->T ("サビ自動: 稼働中", "Auto-Chorus: ON")
+                        : language->T ("サビ自動: 待機", "Auto-Chorus"))
+            : language->T ("サビ自動: OFF", "Auto-Chorus: OFF"));
 
         const bool autoAppOn = processor.getAutoApplauseOn();
         autoApplauseBtn.setToggleState (autoAppOn, juce::dontSendNotification);
         autoApplauseBtn.setButtonText (autoAppOn
-            ? language->T ("👏 自動拍手 ON", "👏 Auto-Clap ON")
-            : language->T ("👏 歌終り拍手", "👏 Auto-Applause"));
+            ? language->T ("自動拍手: ON", "Auto-Clap: ON")
+            : language->T ("歌終り拍手", "Auto-Applause"));
 
         const int activeSe = processor.getActiveLiveSe();
         for (int i = 0; i < 4; ++i)
             seBtns[(size_t) i].setToggleState (activeSe == i, juce::dontSendNotification);
 
-        static const char* const kCircleNumJa[4] = { "①", "②", "③", "④" };
-        customSeMenuBtn.setButtonText (language->T ("📂 自作SE管理▼", "📂 Custom SE▼"));
+        customSeMenuBtn.setButtonText (language->T ("カスタムSE ▾", "Custom SE ▾"));
         for (int i = 0; i < 4; ++i)
         {
             auto& cb = customSeBtns[(size_t) i];
@@ -4968,14 +5001,14 @@ private:
             if (loaded)
             {
                 auto title = processor.getCustomSeTitle (i);
-                if (title.length() > 8)
-                    title = title.substring (0, 8) + "..";
-                cb.setButtonText (language->T ("🎵", "🎵") + juce::String::fromUTF8 (kCircleNumJa[i]) + " " + title);
+                if (title.length() > 9)
+                    title = title.substring (0, 9) + "..";
+                cb.setButtonText ("[" + juce::String (i + 1) + "] " + title);
             }
             else
             {
-                cb.setButtonText (language->T ("➕ 音源", "➕ Slot ")
-                                  + (language->english ? juce::String (i + 1) : juce::String::fromUTF8 (kCircleNumJa[i]))
+                cb.setButtonText (language->T ("+ SE枠 ", "+ Slot ")
+                                  + juce::String (i + 1)
                                   + language->T (" (読込)", " (Load)"));
             }
         }
@@ -4983,32 +5016,32 @@ private:
         const bool cMute = processor.getCoughMute();
         coughBtn.setToggleState (cMute, juce::dontSendNotification);
         coughBtn.setButtonText (cMute
-            ? language->T ("🔇 咳ミュート中", "🔇 COUGH MUTED")
-            : language->T ("😷 咳払いミュート", "😷 Cough Mute"));
+            ? language->T ("咳ミュート中", "COUGH MUTED")
+            : language->T ("咳ミュート", "Cough Mute"));
 
         const bool sgOn = processor.getScreamGuardOn();
         screamGuardBtn.setToggleState (sgOn, juce::dontSendNotification);
         screamGuardBtn.setButtonText (sgOn
-            ? language->T ("🛡 絶叫ガード ON", "🛡 Scream Guard ON")
-            : language->T ("🛡 絶叫ガード OFF", "🛡 Scream Guard OFF"));
+            ? language->T ("絶叫ガード: ON", "Scream Guard: ON")
+            : language->T ("絶叫ガード: OFF", "Scream Guard: OFF"));
 
         const bool lipOn = processor.getLipDeclickOn();
         lipDeclickBtn.setToggleState (lipOn, juce::dontSendNotification);
         lipDeclickBtn.setButtonText (lipOn
-            ? language->T ("💧 ペチャ除去 ON", "💧 Lip Click ON")
-            : language->T ("💧 ペチャ音除去", "💧 Lip Click Cut"));
+            ? language->T ("リップ音除去: ON", "Lip De-Click: ON")
+            : language->T ("リップ音除去", "Lip De-Click"));
 
         const bool derevOn = processor.getRoomDereverbOn();
         roomDereverbBtn.setToggleState (derevOn, juce::dontSendNotification);
         roomDereverbBtn.setButtonText (derevOn
-            ? language->T ("🏠 部屋鳴り消 ON", "🏠 De-Reverb ON")
-            : language->T ("🏠 部屋鳴り消し", "🏠 Room De-Rev"));
+            ? language->T ("部屋鳴り除去: ON", "De-Reverb: ON")
+            : language->T ("部屋鳴り除去", "Room De-Rev"));
 
         const bool breathOn = processor.getBreathControlOn();
         breathCtrlBtn.setToggleState (breathOn, juce::dontSendNotification);
         breathCtrlBtn.setButtonText (breathOn
-            ? language->T ("🌬️ 息＆サ行保護ON", "🌬️ Breath/Velvet ON")
-            : language->T ("🌬️ 息＆サ行保護", "🌬️ Breath & Velvet"));
+            ? language->T ("息＆サ行保護: ON", "Breath/Velvet: ON")
+            : language->T ("息＆サ行保護", "Breath & Velvet"));
 
         if (! syncOffsetSlider.isMouseButtonDown())
             syncOffsetSlider.setValue ((double) processor.getSyncOffsetMs(), juce::dontSendNotification);
@@ -5016,15 +5049,15 @@ private:
         const bool calibBusy = processor.isSyncCalibrating();
         syncCalibBtn.setToggleState (calibBusy, juce::dontSendNotification);
         syncCalibBtn.setButtonText (calibBusy
-            ? language->T ("⚡計測中..", "⚡Wait..")
-            : (detailExpanded ? language->T ("⚡自動計測", "⚡AutoSync")
-                              : language->T ("⚡自動", "⚡Auto")));
+            ? language->T ("計測中..", "Wait..")
+            : (detailExpanded ? language->T ("自動計測", "AutoSync")
+                              : language->T ("自動", "Auto")));
 
         const bool hkOn = processor.getGlobalHotkeysOn();
         globalHotkeyBtn.setToggleState (hkOn, juce::dontSendNotification);
         globalHotkeyBtn.setButtonText (hkOn
-            ? language->T ("⌨️裏キー:ON", "⌨️Hotkeys:ON")
-            : language->T ("⌨️裏キー:OFF", "⌨️Hotkeys:OFF"));
+            ? language->T ("ホットキー:ON", "Hotkeys:ON")
+            : language->T ("ホットキー:OFF", "Hotkeys:OFF"));
         globalHotkeyBtn.setEnabled (processor.isStandalone());
 
         int foldedActiveCount = 0;
@@ -5033,19 +5066,19 @@ private:
         detailFoldBtn.setToggleState (detailExpanded, juce::dontSendNotification);
         if (detailExpanded)
         {
-            detailFoldBtn.setButtonText (language->T ("✨ こだわり詳細をたたむ ▲", "✨ Fold Fine Controls ▲"));
+            detailFoldBtn.setButtonText (language->T ("詳細パラメータを折りたたむ ▲", "Fold Advanced Controls ▲"));
         }
         else if (foldedActiveCount > 0)
         {
-            detailFoldBtn.setButtonText (language->T ("✨ こだわり詳細を展開 (", "✨ Fine Controls (")
+            detailFoldBtn.setButtonText (language->T ("詳細パラメータを展開 (", "Advanced Controls (")
                                          + juce::String (foldedActiveCount)
-                                         + language->T ("個ON) ▼", " ON) ▼"));
+                                         + language->T ("項目ON) ▾", " ON) ▾"));
         }
         else
         {
-            detailFoldBtn.setButtonText (language->T ("✨ こだわり詳細を展開 ▼", "✨ Expand Fine Controls ▼"));
+            detailFoldBtn.setButtonText (language->T ("詳細パラメータを展開 ▾", "Expand Advanced Controls ▾"));
         }
-        miniBarLaunchBtn.setButtonText (language->T ("📌 配信ミニバーへ切替", "📌 Switch to Mini-Bar"));
+        miniBarLaunchBtn.setButtonText (language->T ("ミニバー表示", "Mini-Bar View"));
 
         repaint();
     }
@@ -13161,7 +13194,7 @@ public:
         };
         addAndMakeVisible (keyUpBtn);
 
-        retroBtn.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.24f));
+        retroBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         retroBtn.onClick = [this]
         {
             processor.saveRetroWavRecording();
@@ -13181,7 +13214,7 @@ public:
         };
         addAndMakeVisible (pinBtn);
 
-        fullUiBtn.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.28f));
+        fullUiBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2.brighter (0.04f));
         fullUiBtn.onClick = [this]
         {
             auto* edPtr = &editor;
@@ -13218,31 +13251,31 @@ public:
 
         const bool isTalk = processor.getLiveTalkMode();
         talkBtn.setToggleState (isTalk, juce::dontSendNotification);
-        talkBtn.setButtonText (isTalk ? language->T ("💬 雑談MC中", "💬 Talk MC")
-                                      : language->T ("🎤 歌枠モード", "🎤 Singing"));
+        talkBtn.setButtonText (isTalk ? language->T ("雑談MC中", "Talk MC")
+                                      : language->T ("歌枠モード", "Singing"));
         talkBtn.setTooltip (language->T ("歌枠モードと雑談MCモード（残響・エコー・ハモリ一時オフ）を瞬時に切り替えます (Ctrl+Shift+T)。",
                                          "Instantly toggle Singing Mode and Talk MC Mode (Ctrl+Shift+T)."));
 
         const bool isMuted = processor.getCoughMute();
         coughBtn.setToggleState (isMuted, juce::dontSendNotification);
-        coughBtn.setButtonText (isMuted ? language->T ("🔇 ミュート中", "🔇 MUTED")
-                                        : language->T ("😷 咳ミュート", "😷 Cough"));
+        coughBtn.setButtonText (isMuted ? language->T ("ミュート中", "MUTED")
+                                        : language->T ("咳ミュート", "Cough Mute"));
         coughBtn.setTooltip (language->T ("マイク入力を8ms滑らかに無音遮断します (Ctrl+Shift+M トグル / F9 押している間だけミュート)。",
                                           "Smooth 8ms microphone mute (Ctrl+Shift+M toggle / Hold F9 push-to-mute)."));
 
         const bool isChorus = processor.getChorusBoostMode();
         chorusBtn.setToggleState (isChorus, juce::dontSendNotification);
-        chorusBtn.setButtonText (isChorus ? language->T ("★ サビ盛ON", "★ Chorus ON")
-                                          : language->T ("★ サビ盛", "★ Chorus"));
-        chorusBtn.setTooltip (language->T ("サビ1クリック華やか演出（Chorus Boost）を切り替えます (Ctrl+Shift+S)。",
-                                           "Toggle 1-Click Chorus Boost (Ctrl+Shift+S)."));
+        chorusBtn.setButtonText (isChorus ? language->T ("サビ演出:ON", "Chorus:ON")
+                                          : language->T ("サビ演出", "Chorus"));
+        chorusBtn.setTooltip (language->T ("サビ盛り演出（Chorus Boost）を切り替えます (Ctrl+Shift+S)。",
+                                           "Toggle Chorus Boost (Ctrl+Shift+S)."));
 
         const int activeSe = processor.getActiveLiveSe();
         seBtn.setToggleState (activeSe >= 0, juce::dontSendNotification);
-        seBtn.setButtonText (activeSe >= 0 ? language->T ("⏹ SE", "⏹ SE")
-                                           : language->T ("👏 SE", "👏 SE"));
-        seBtn.setTooltip (language->T ("クリックで拍手歓声SEをポン出し再生／停止、Shift+クリックで全効果音メニューを開きます。",
-                                       "Click to trigger/stop Applause SE; Shift+Click to open all SE pads."));
+        seBtn.setButtonText (activeSe >= 0 ? language->T ("■ SE", "■ SE")
+                                           : language->T ("▶ SE", "▶ SE"));
+        seBtn.setTooltip (language->T ("クリックで拍手歓声SEを再生／停止、Shift+クリックまたは右クリックで全効果音メニューを開きます。",
+                                       "Click to trigger/stop Applause SE; Shift+Click or right-click to open all SE pads."));
 
         const int semi = processor.getBgmPitchSemi();
         keyDownBtn.setTooltip (language->T ("内蔵BGMのキーを1半音下げます。", "Lower built-in BGM key by 1 semitone."));
@@ -13253,18 +13286,18 @@ public:
         keyZeroBtn.setTooltip (language->T ("クリックで内蔵BGMのキーを原曲(±0)に戻します。", "Click to reset BGM key to original (0)."));
 
         retroBtn.setButtonText (savedFlashTicks > 0
-                                    ? language->T ("✓ 保存完了!", "✓ Saved!")
-                                    : language->T ("⏪ 30秒保存", "⏪ Save 30s"));
+                                    ? language->T ("✓ 保存完了", "✓ Saved")
+                                    : language->T ("30秒保存", "Save 30s"));
         retroBtn.setTooltip (language->T ("直前30秒をさかのぼってWAV保存します (Ctrl+Shift+R)。",
                                           "Save the last 30 seconds retroactively to WAV (Ctrl+Shift+R)."));
 
         pinBtn.setToggleState (pinned, juce::dontSendNotification);
-        pinBtn.setButtonText (pinned ? language->T ("📌 最前面ON", "📌 Pinned")
-                                     : language->T ("📌 最前面", "📌 Pin Top"));
-        pinBtn.setTooltip (language->T ("ミニバーをOBSやブラウザの最前面にピン留め固定します。",
+        pinBtn.setButtonText (pinned ? language->T ("最前面:ON", "Pinned")
+                                     : language->T ("最前面固定", "Pin Top"));
+        pinBtn.setTooltip (language->T ("ミニバーをOBSやブラウザの最前面に固定します。",
                                         "Pin Mini-Bar always on top of OBS and browser windows."));
 
-        fullUiBtn.setButtonText (language->T ("↗ 通常画面", "↗ Full UI"));
+        fullUiBtn.setButtonText (language->T ("通常画面", "Full UI"));
         fullUiBtn.setTooltip (language->T ("元の通常サイズ画面（総合画面／詳細画面）へ戻ります。",
                                            "Return to the full-size VocalGzzio window."));
         repaint();
@@ -13373,18 +13406,18 @@ private:
     void openSePopupMenu()
     {
         juce::PopupMenu m;
-        m.addSectionHeader (language->T ("👏 ライブ効果音ポン出し", "👏 Live Sound Effects"));
-        static const char* const kSeJa[4] = { "👏 拍手歓声", "✨ キラキラ", "🥁 ドラム!", "🔔 チャイム" };
-        static const char* const kSeEn[4] = { "👏 Applause", "✨ Sparkle",  "🥁 Drumroll", "🔔 Chime"   };
+        m.addSectionHeader (language->T ("ライブ効果音サンプラー", "Live Sound Effects"));
+        static const char* const kSeJa[4] = { "拍手歓声", "キラキラ", "ドラム", "チャイム" };
+        static const char* const kSeEn[4] = { "Applause", "Sparkle",  "Drumroll", "Chime" };
         for (int i = 0; i < 4; ++i)
             m.addItem (10 + i, language->T (kSeJa[i], kSeEn[i]), true, processor.getActiveLiveSe() == i);
         m.addSeparator();
         for (int i = 0; i < 4; ++i)
         {
             if (processor.hasCustomSeLoaded (i))
-                m.addItem (20 + i, "🎵 " + processor.getCustomSeTitle (i), true, processor.getActiveLiveSe() == 4 + i);
+                m.addItem (20 + i, "[" + juce::String (i + 1) + "] " + processor.getCustomSeTitle (i), true, processor.getActiveLiveSe() == 4 + i);
         }
-        m.addItem (99, language->T ("⏹ 効果音を停止", "⏹ Stop SE"), processor.getActiveLiveSe() >= 0);
+        m.addItem (99, language->T ("■ 効果音を停止", "■ Stop SE"), processor.getActiveLiveSe() >= 0);
 
         juce::Component::SafePointer<StreamingMiniBarComponent> safe (this);
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&seBtn),

@@ -8641,7 +8641,7 @@ void VocalGzzioProcessor::loadBuiltinDemoBgm()
     }
     {
         const juce::ScopedLock sl (bgmMetaLock);
-        bgmTitle = juce::String::fromUTF8 ("🎹 内蔵デモ伴奏（J-POPカノン進行 / Key: C / 120BPM）");
+        bgmTitle = juce::String::fromUTF8 ("内蔵デモ伴奏 (Canon Pop / Key: C / 120 BPM)");
         bgmFilePath.clear();
     }
     bgmPitchSemi.store (0, std::memory_order_relaxed);
@@ -8818,7 +8818,7 @@ juce::String VocalGzzioProcessor::getBgmKeyBpmSummary (bool english) const
     const int effKey = (detKey + semi + 120) % 12;
 
     juce::String s;
-    s << (english ? "🎼 Auto-Detected: " : "🎼 自動解析: ")
+    s << (english ? "Detected: " : "自動解析: ")
       << kKeyNames[effKey] << (detMin ? "m" : " Maj")
       << " / " << detBpm << " BPM";
     return s;
@@ -8827,18 +8827,18 @@ juce::String VocalGzzioProcessor::getBgmKeyBpmSummary (bool english) const
 const char* VocalGzzioProcessor::getMicModelName (int m, bool english) noexcept
 {
     static const char* const kJa[5] = {
-        "🎙 素のマイク (OFF)",
-        "✨ 800G 真空管",
-        "👑 U87 王道",
-        "📻 SM7B 配信",
-        "💎 ASMR 極艶"
+        "マイク補正: OFF",
+        "800G 真空管",
+        "U87 スタジオ",
+        "SM7B 配信・実況",
+        "ASMR リボン"
     };
     static const char* const kEn[5] = {
-        "🎙 Raw Mic (OFF)",
-        "✨ 800G Tube",
-        "👑 U87 Studio",
-        "📻 SM7B Broadcast",
-        "💎 ASMR Ribbon"
+        "Mic Model: OFF",
+        "800G Tube",
+        "U87 Studio",
+        "SM7B Broadcast",
+        "ASMR Ribbon"
     };
     const int idx = juce::jlimit (0, 4, m);
     return english ? kEn[idx] : kJa[idx];
@@ -9643,11 +9643,11 @@ bool VocalGzzioProcessor::runVoiceTargetDiagnosis (int targetStyle)
         float consPct, brPct, ringPct, susPct, resPct, ridePct;
     };
     static const TargetSpec specs[5] = {
-        { "✨ 透明感ウィスパー（バラード・ASMR歌枠）",     { 0.42f, 0.56f, 0.88f, 0.68f }, -2.2f, 3.0f, 7.5f, 34.0f, 16.0f, 18.0f, 34.0f, 22.0f, 36.0f, 30.0f, 46.0f },
-        { "🔥 芯のある歌い手リード（王道主役ボーカル）",   { 0.68f, 0.86f, 0.64f, 0.44f }, -1.8f, 4.8f, 5.5f, 26.0f, 32.0f, 30.0f, 16.0f, 36.0f, 28.0f, 38.0f, 44.0f },
-        { "💎 アイドル・キラ艶ポップ（華やか高域＆立体）", { 0.54f, 0.78f, 0.84f, 0.62f }, -2.0f, 4.5f, 7.0f, 30.0f, 22.0f, 36.0f, 26.0f, 32.0f, 24.0f, 34.0f, 42.0f },
-        { "🎙 深みのあるラジオ・雑談低音（温かい包容力）", { 0.84f, 0.70f, 0.42f, 0.24f }, -0.8f, 2.6f, 3.0f, 36.0f, 38.0f, 32.0f, 12.0f, 22.0f, 20.0f, 32.0f, 48.0f },
-        { "🎸 アコギ・バンド弾き語り（中域の輪郭重視）",   { 0.60f, 0.82f, 0.58f, 0.36f }, -2.6f, 4.2f, 4.8f, 28.0f, 26.0f, 28.0f, 16.0f, 28.0f, 28.0f, 36.0f, 40.0f }
+        { "透明感ウィスパー（バラード・ASMR）",     { 0.42f, 0.56f, 0.88f, 0.68f }, -2.2f, 3.0f, 7.5f, 34.0f, 16.0f, 18.0f, 34.0f, 22.0f, 36.0f, 30.0f, 46.0f },
+        { "芯のあるリードボーカル（王道ポップス）", { 0.68f, 0.86f, 0.64f, 0.44f }, -1.8f, 4.8f, 5.5f, 26.0f, 32.0f, 30.0f, 16.0f, 36.0f, 28.0f, 38.0f, 44.0f },
+        { "ブライト・ポップ（華やか高域＆立体）",   { 0.54f, 0.78f, 0.84f, 0.62f }, -2.0f, 4.5f, 7.0f, 30.0f, 22.0f, 36.0f, 26.0f, 32.0f, 24.0f, 34.0f, 42.0f },
+        { "ウォーム・ラジオ低音（落ち着いた深み）", { 0.84f, 0.70f, 0.42f, 0.24f }, -0.8f, 2.6f, 3.0f, 36.0f, 38.0f, 32.0f, 12.0f, 22.0f, 20.0f, 32.0f, 48.0f },
+        { "アコースティック・弾き語り（中域輪郭）", { 0.60f, 0.82f, 0.58f, 0.36f }, -2.6f, 4.2f, 4.8f, 28.0f, 26.0f, 28.0f, 16.0f, 28.0f, 28.0f, 36.0f, 40.0f }
     };
     const auto& sp = specs[targetStyle];
 
@@ -9706,14 +9706,14 @@ bool VocalGzzioProcessor::runVoiceTargetDiagnosis (int targetStyle)
     {
         const juce::ScopedLock sl (bgmMetaLock);
         voiceTargetSummary = (measuredFromVoice
-            ? (juce::String::fromUTF8 ("🎯 声質診断【") + juce::String::fromUTF8 (voiceTypeTag) + juce::String::fromUTF8 ("】→「"))
-            : juce::String::fromUTF8 ("🎯 推奨プロファイルに基づき、「"))
+            ? (juce::String::fromUTF8 ("声質解析 [") + juce::String::fromUTF8 (voiceTypeTag) + juce::String::fromUTF8 ("] → 「"))
+            : juce::String::fromUTF8 ("標準プロファイルに基づき、「"))
             + juce::String::fromUTF8 (sp.name)
-            + juce::String::fromUTF8 ("」へ2Dオーブ4軸（倍音 ") + juce::String ((int) outVelvet)
+            + juce::String::fromUTF8 ("」へ4軸バランス（倍音 ") + juce::String ((int) outVelvet)
             + juce::String::fromUTF8 ("% / 声芯 ") + juce::String ((int) outFocus)
             + juce::String::fromUTF8 ("% / 空気 ") + juce::String ((int) outSilk)
             + juce::String::fromUTF8 ("% / 立体 ") + juce::String ((int) outHalo)
-            + juce::String::fromUTF8 ("%）＆声質補正DSPを自動調律しました！");
+            + juce::String::fromUTF8 ("%）とEQ・ダイナミクスを最適化しました。");
     }
     markStateDirty();
     return true;
@@ -10163,18 +10163,18 @@ double gz::StreamOut::rescueWindowsDefaultSpeakerAndGetSampleRate (juce::String*
 const char* VocalGzzioProcessor::getVocalCharPresetName (int preset, bool english) noexcept
 {
     static const char* const kJa[5] = {
-        "🎭 声キャラ: OFF (素の声色)",
-        "💎 クール低音 (イケボ・深み)",
-        "🌸 スイート高音 (カワボ・透明感)",
-        "🌙 ウィスパー吐息 (ASMR・息艶)",
-        "🔥 パワフルロック (熱い芯・倍音)"
+        "声質シフト: OFF (原音)",
+        "01 クール・ロー (深み低音)",
+        "02 ブライト・ハイ (透明高音)",
+        "03 ウィスパー・エア (息感重視)",
+        "04 ソリッド・ロック (倍音ドライブ)"
     };
     static const char* const kEn[5] = {
-        "🎭 Voice Char: OFF (Natural)",
-        "💎 Cool Deep (Low Formant)",
-        "🌸 Sweet High (Bright Formant)",
-        "🌙 Whisper Air (ASMR Breath)",
-        "🔥 Powerful Rock (Harmonic Drive)"
+        "Voice Shift: OFF (Natural)",
+        "01 Cool Low (Deep Formant)",
+        "02 Bright High (Clear Formant)",
+        "03 Whisper Air (Breathy)",
+        "04 Solid Rock (Harmonic Drive)"
     };
     const int idx = juce::jlimit (0, 4, preset);
     return english ? kEn[idx] : kJa[idx];
@@ -10269,8 +10269,8 @@ bool VocalGzzioProcessor::updateObsNowPlayingOverlayFile() const
                                 + " (Key " + semiStr + ")";
     const juce::String bpmBadge = juce::String (detBpm) + " BPM";
     const juce::String setBadge = (curIdx >= 0 && totalSongs > 0)
-                                ? (juce::String::fromUTF8 ("セトリ ") + juce::String (curIdx + 1) + "/" + juce::String (totalSongs))
-                                : juce::String::fromUTF8 ("NOW SINGING");
+                                ? ("TRACK " + juce::String (curIdx + 1) + " / " + juce::String (totalSongs))
+                                : juce::String ("ON AIR");
     const juce::String charBadge = (vcp > 0) ? juce::String::fromUTF8 (getVocalCharPresetName (vcp, false)) : juce::String();
 
     juce::String html;
@@ -10279,42 +10279,48 @@ bool VocalGzzioProcessor::updateObsNowPlayingOverlayFile() const
          << "<title>VocalGzzio OBS Now Playing Overlay</title>\n"
          << "<style>\n"
          << "  * { box-sizing: border-box; margin: 0; padding: 0; }\n"
-         << "  body { background: transparent; font-family: 'Segoe UI', 'Yu Gothic UI', 'Meiryo', sans-serif; overflow: hidden; padding: 16px; }\n"
+         << "  body { background: transparent; font-family: 'Inter', 'Segoe UI', 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif; overflow: hidden; padding: 16px; -webkit-font-smoothing: antialiased; }\n"
          << "  .card {\n"
-         << "    display: inline-flex; flex-direction: column; gap: 8px;\n"
-         << "    min-width: 420px; max-width: 760px;\n"
-         << "    padding: 16px 24px;\n"
-         << "    border-radius: 18px;\n"
-         << "    background: linear-gradient(135deg, rgba(13, 18, 30, 0.88), rgba(22, 32, 54, 0.84));\n"
-         << "    border: 1.5px solid rgba(56, 189, 248, 0.55);\n"
-         << "    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 18px rgba(56, 189, 248, 0.22);\n"
-         << "    color: #f8fafc;\n"
+         << "    display: inline-flex; flex-direction: column; gap: 10px;\n"
+         << "    min-width: 440px; max-width: 780px;\n"
+         << "    padding: 16px 22px 16px 20px;\n"
+         << "    border-radius: 10px;\n"
+         << "    background: rgba(14, 17, 23, 0.92);\n"
+         << "    border: 1px solid rgba(255, 255, 255, 0.12);\n"
+         << "    border-left: 3px solid #38bdf8;\n"
+         << "    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.48);\n"
+         << "    color: #f1f5f9;\n"
+         << "    font-variant-numeric: tabular-nums;\n"
          << "  }\n"
-         << "  .top-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }\n"
+         << "  .top-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }\n"
+         << "  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block; margin-right: 4px; }\n"
          << "  .pill {\n"
-         << "    font-size: 13px; font-weight: 700; padding: 3px 11px; border-radius: 999px;\n"
-         << "    background: rgba(56, 189, 248, 0.20); border: 1px solid rgba(56, 189, 248, 0.65); color: #7dd3fc;\n"
+         << "    font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; padding: 3px 9px; border-radius: 4px;\n"
+         << "    background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: #cbd5e1;\n"
          << "  }\n"
-         << "  .pill.gold { background: rgba(251, 191, 36, 0.18); border-color: rgba(251, 191, 36, 0.65); color: #fde68a; }\n"
-         << "  .pill.pink { background: rgba(244, 114, 182, 0.18); border-color: rgba(244, 114, 182, 0.65); color: #fbcfe8; }\n"
+         << "  .pill.key { background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.35); color: #7dd3fc; }\n"
+         << "  .pill.char { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.18); color: #e2e8f0; }\n"
          << "  .title {\n"
-         << "    font-size: 28px; font-weight: 800; letter-spacing: 0.02em; color: #ffffff;\n"
-         << "    text-shadow: 0 2px 10px rgba(56, 189, 248, 0.35);\n"
+         << "    font-size: 24px; font-weight: 700; letter-spacing: -0.01em; color: #ffffff;\n"
          << "    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n"
          << "  }\n"
-         << "  .next { font-size: 13px; color: #94a3b8; font-weight: 600; }\n"
+         << "  .next {\n"
+         << "    font-size: 12px; color: #94a3b8; font-weight: 500; letter-spacing: 0.02em;\n"
+         << "    border-top: 1px solid rgba(255, 255, 255, 0.07); padding-top: 7px;\n"
+         << "  }\n"
+         << "  .next-label { color: #64748b; font-weight: 700; margin-right: 6px; font-size: 11px; }\n"
          << "</style>\n</head>\n<body>\n"
          << "  <div class=\"card\">\n"
          << "    <div class=\"top-row\">\n"
-         << "      <span class=\"pill\">🎤 " << escHtml (setBadge) << "</span>\n"
-         << "      <span class=\"pill gold\">🎼 " << escHtml (keyBadge) << "</span>\n"
-         << "      <span class=\"pill\">🥁 " << escHtml (bpmBadge) << "</span>\n";
+         << "      <span class=\"pill\"><span class=\"status-dot\"></span>" << escHtml (setBadge) << "</span>\n"
+         << "      <span class=\"pill key\">" << escHtml (keyBadge) << "</span>\n"
+         << "      <span class=\"pill\">" << escHtml (bpmBadge) << "</span>\n";
     if (charBadge.isNotEmpty())
-        html << "      <span class=\"pill pink\">" << escHtml (charBadge) << "</span>\n";
+        html << "      <span class=\"pill char\">" << escHtml (charBadge) << "</span>\n";
     html << "    </div>\n"
-         << "    <div class=\"title\">🎵 " << escHtml (songTitle) << "</div>\n";
+         << "    <div class=\"title\">" << escHtml (songTitle) << "</div>\n";
     if (nextTitle.isNotEmpty())
-        html << "    <div class=\"next\">NEXT ▸ " << escHtml (nextTitle) << "</div>\n";
+        html << "    <div class=\"next\"><span class=\"next-label\">NEXT</span>" << escHtml (nextTitle) << "</div>\n";
     html << "  </div>\n</body>\n</html>\n";
 
     return outFile.replaceWithText (html, false, false, "\n");
@@ -10344,11 +10350,11 @@ float VocalGzzioProcessor::getVocalKarteTotalScore() const noexcept
 juce::String VocalGzzioProcessor::getVocalKarteRank() const
 {
     const float sc = getVocalKarteTotalScore();
-    if (sc >= 95.0f) return juce::String::fromUTF8 ("👑 SSS (神歌唱)");
-    if (sc >= 91.5f) return juce::String::fromUTF8 ("💎 SS (プロ級)");
-    if (sc >= 87.5f) return juce::String::fromUTF8 ("✨ S (極上)");
-    if (sc >= 82.0f) return juce::String::fromUTF8 ("🎵 A (好調)");
-    return juce::String::fromUTF8 ("🌱 B (成長中)");
+    if (sc >= 95.0f) return "SSS";
+    if (sc >= 91.5f) return "SS";
+    if (sc >= 87.5f) return "S";
+    if (sc >= 82.0f) return "A";
+    return "B";
 }
 
 juce::String VocalGzzioProcessor::getVocalKarteSummaryText (bool english) const
@@ -10361,26 +10367,26 @@ juce::String VocalGzzioProcessor::getVocalKarteSummaryText (bool english) const
 
     if (english)
     {
-        return "🏆 Vocal Karte Score: " + juce::String (total, 1) + " pts\n"
-             + "  • Pitch Accuracy: " + juce::String (pitch, 1) + "%\n"
-             + "  • Note Stability: " + juce::String (stab, 1)  + "%\n"
-             + "  • Expressiveness: " + juce::String (expr, 1)  + "%\n"
-             + "  • Tone Brilliance: " + juce::String (gloss, 1) + "%";
+        return "Vocal Analysis Score: " + juce::String (total, 1) + " pts  [Rank " + getVocalKarteRank() + "]\n"
+             + "  - Pitch Accuracy : " + juce::String (pitch, 1) + "%\n"
+             + "  - Note Stability : " + juce::String (stab, 1)  + "%\n"
+             + "  - Dynamic Range  : " + juce::String (expr, 1)  + "%\n"
+             + "  - Tone Presence  : " + juce::String (gloss, 1) + "%";
     }
 
     juce::String advice;
     if (pitch <= stab && pitch <= expr)
-        advice = juce::String::fromUTF8 ("💡 AIコーチ助言: 「🎹コードハモリ」や「🎧裏ガイド」をONにすると、さらに音程の芯がピタッと吸い付きます！");
+        advice = juce::String::fromUTF8 ("推奨セッティング: 「裏ガイド分離」または「コード追従ハモリ」を有効にすると、基準ピッチのモニタリング精度が向上します。");
     else if (stab <= expr)
-        advice = juce::String::fromUTF8 ("💡 AIコーチ助言: 「〰️語尾ビブラート」や「📏距離ロック」をONにすると、ロングトーンの安定感が一段と輝きます！");
+        advice = juce::String::fromUTF8 ("推奨セッティング: 「語尾ビブラート」および「マイク距離補正」を有効にすると、ロングトーン後半の安定感が増します。");
     else
-        advice = juce::String::fromUTF8 ("💡 AIコーチ助言: 「👯立体ダブラー」や「🤖サビ自動」を合わせると、サビの広がりと熱量がさらに際立ちます！");
+        advice = juce::String::fromUTF8 ("推奨セッティング: 「シンフォニックW」および「サビ自動演出」を組み合わせると、サビの定位感とダイナミクスがさらに引き立ちます。");
 
-    return juce::String::fromUTF8 ("🏆 総合歌唱スコア: ") + juce::String (total, 1) + juce::String::fromUTF8 (" 点  【") + getVocalKarteRank() + juce::String::fromUTF8 ("】\n")
-         + juce::String::fromUTF8 ("  🎯 音程正確度: ") + juce::String (pitch, 1) + "%   "
-         + juce::String::fromUTF8 ("〰️ ロングトーン安定度: ") + juce::String (stab, 1) + "%\n"
-         + juce::String::fromUTF8 ("  🔥 抑揚・表現力: ") + juce::String (expr, 1) + "%   "
-         + juce::String::fromUTF8 ("💎 倍音・声の艶抜け: ") + juce::String (gloss, 1) + "%\n\n"
+    return juce::String::fromUTF8 ("総合スコア: ") + juce::String (total, 1) + juce::String::fromUTF8 (" 点   [Rank ") + getVocalKarteRank() + "]\n"
+         + juce::String::fromUTF8 ("  ・ピッチ正確度: ") + juce::String (pitch, 1) + "%    "
+         + juce::String::fromUTF8 ("・ロングトーン安定度: ") + juce::String (stab, 1) + "%\n"
+         + juce::String::fromUTF8 ("  ・抑揚表現力  : ") + juce::String (expr, 1) + "%    "
+         + juce::String::fromUTF8 ("・倍音・声芯明瞭度  : ") + juce::String (gloss, 1) + "%\n\n"
          + advice;
 }
 
@@ -10412,7 +10418,7 @@ bool VocalGzzioProcessor::exportVocalKarteHtmlFile (bool english) const
             songTitle = bgmTitle;
     }
     if (songTitle.trim().isEmpty())
-        songTitle = appAudioCap.isCapturing() ? appAudioCap.getActiveLabel() : juce::String::fromUTF8 ("VocalGzzio 歌唱セッション");
+        songTitle = appAudioCap.isCapturing() ? appAudioCap.getActiveLabel() : juce::String::fromUTF8 ("Vocal Session");
 
     auto escHtml = [] (const juce::String& s) -> juce::String
     {
@@ -10424,52 +10430,55 @@ bool VocalGzzioProcessor::exportVocalKarteHtmlFile (bool english) const
 
     juce::String html;
     html << "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n"
-         << "<title>VocalGzzio 歌唱スコア＆声質カルテ診断レポート</title>\n"
+         << "<title>VocalGzzio Vocal Session Report</title>\n"
          << "<style>\n"
          << "  * { box-sizing: border-box; margin: 0; padding: 0; }\n"
-         << "  body { background: #080d1a; color: #f8fafc; font-family: 'Segoe UI', 'Yu Gothic UI', 'Meiryo', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 24px; }\n"
+         << "  body { background: #0b0d12; color: #f1f5f9; font-family: 'Inter', 'Segoe UI', 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 32px; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }\n"
          << "  .karte {\n"
-         << "    width: 100%; max-width: 680px; border-radius: 24px; padding: 32px;\n"
-         << "    background: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(23, 37, 84, 0.90));\n"
-         << "    border: 2px solid rgba(56, 189, 248, 0.55);\n"
-         << "    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(56, 189, 248, 0.22);\n"
+         << "    width: 100%; max-width: 660px; border-radius: 12px; padding: 32px;\n"
+         << "    background: #12161f;\n"
+         << "    border: 1px solid rgba(255, 255, 255, 0.10);\n"
+         << "    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);\n"
          << "  }\n"
-         << "  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.25); padding-bottom: 16px; margin-bottom: 22px; }\n"
-         << "  .brand { font-size: 14px; font-weight: 800; color: #38bdf8; letter-spacing: 0.08em; }\n"
-         << "  .song { font-size: 22px; font-weight: 800; color: #ffffff; margin-top: 4px; }\n"
-         << "  .hero { display: flex; align-items: center; justify-content: space-between; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(251, 191, 36, 0.45); border-radius: 18px; padding: 20px 26px; margin-bottom: 24px; }\n"
-         << "  .score-num { font-size: 54px; font-weight: 900; color: #fde047; line-height: 1; text-shadow: 0 0 20px rgba(250, 204, 21, 0.4); }\n"
-         << "  .score-unit { font-size: 18px; font-weight: 700; color: #cbd5e1; margin-left: 6px; }\n"
-         << "  .rank-pill { font-size: 22px; font-weight: 800; color: #fef08a; background: rgba(234, 179, 8, 0.2); border: 1.5px solid #facc15; padding: 8px 18px; border-radius: 999px; }\n"
-         << "  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; }\n"
-         << "  .metric { background: rgba(30, 41, 59, 0.65); border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 14px; padding: 14px 18px; }\n"
-         << "  .m-top { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; color: #e2e8f0; margin-bottom: 8px; }\n"
-         << "  .bar-bg { height: 10px; background: rgba(15, 23, 42, 0.9); border-radius: 999px; overflow: hidden; }\n"
-         << "  .bar-fg { height: 100%; background: linear-gradient(90deg, #38bdf8, #818cf8, #f472b6); border-radius: 999px; }\n"
-         << "  .footer { font-size: 13px; color: #94a3b8; line-height: 1.6; background: rgba(15, 23, 42, 0.6); padding: 14px 18px; border-radius: 12px; border-left: 4px solid #38bdf8; }\n"
+         << "  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 18px; margin-bottom: 24px; }\n"
+         << "  .brand { font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.12em; text-transform: uppercase; }\n"
+         << "  .song { font-size: 20px; font-weight: 700; color: #f8fafc; margin-top: 6px; letter-spacing: -0.01em; }\n"
+         << "  .rank-badge { display: flex; flex-direction: column; align-items: flex-end; }\n"
+         << "  .rank-label { font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 0.1em; }\n"
+         << "  .rank-val { font-size: 24px; font-weight: 800; color: #38bdf8; letter-spacing: 0.02em; margin-top: 2px; }\n"
+         << "  .hero { display: flex; align-items: baseline; justify-content: space-between; background: #171c28; border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 20px 24px; margin-bottom: 20px; }\n"
+         << "  .score-num { font-size: 46px; font-weight: 800; color: #ffffff; line-height: 1; letter-spacing: -0.02em; }\n"
+         << "  .score-unit { font-size: 14px; font-weight: 600; color: #64748b; margin-left: 6px; }\n"
+         << "  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }\n"
+         << "  .metric { background: #171c28; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 14px 16px; }\n"
+         << "  .m-top { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 10px; }\n"
+         << "  .m-val { color: #f8fafc; font-weight: 700; }\n"
+         << "  .bar-bg { height: 6px; background: rgba(255, 255, 255, 0.06); border-radius: 3px; overflow: hidden; }\n"
+         << "  .bar-fg { height: 100%; background: #38bdf8; border-radius: 3px; }\n"
+         << "  .footer { font-size: 12.5px; color: #94a3b8; line-height: 1.7; background: #171c28; padding: 14px 18px; border-radius: 8px; border-left: 3px solid #38bdf8; }\n"
          << "</style>\n</head>\n<body>\n"
          << "  <div class=\"karte\">\n"
          << "    <div class=\"header\">\n"
          << "      <div>\n"
-         << "        <div class=\"brand\">VOCALGZZIO v5.5.0 AI VOCAL KARTE</div>\n"
-         << "        <div class=\"song\">🎵 " << escHtml (songTitle) << "</div>\n"
+         << "        <div class=\"brand\">VocalGzzio 5.5 — Studio Vocal Report</div>\n"
+         << "        <div class=\"song\">" << escHtml (songTitle) << "</div>\n"
          << "      </div>\n"
-         << "      <div class=\"rank-pill\">" << escHtml (rank) << "</div>\n"
+         << "      <div class=\"rank-badge\"><span class=\"rank-label\">GRADE</span><span class=\"rank-val\">" << escHtml (rank) << "</span></div>\n"
          << "    </div>\n"
          << "    <div class=\"hero\">\n"
          << "      <div>\n"
-         << "        <div style=\"font-size:13px;color:#94a3b8;font-weight:700;\">TOTAL SINGING SCORE / 総合歌唱スコア</div>\n"
-         << "        <div style=\"font-size:13px;color:#7dd3fc;margin-top:4px;\">" << escHtml (prof) << "</div>\n"
+         << "        <div style=\"font-size:11px;color:#64748b;font-weight:700;letter-spacing:0.08em;\">TOTAL SINGING SCORE / 総合スコア</div>\n"
+         << "        <div style=\"font-size:12.5px;color:#94a3b8;margin-top:6px;\">" << escHtml (prof) << "</div>\n"
          << "      </div>\n"
-         << "      <div><span class=\"score-num\">" << juce::String (total, 1) << "</span><span class=\"score-unit\">点</span></div>\n"
+         << "      <div><span class=\"score-num\">" << juce::String (total, 1) << "</span><span class=\"score-unit\">/ 100</span></div>\n"
          << "    </div>\n"
          << "    <div class=\"grid\">\n"
-         << "      <div class=\"metric\"><div class=\"m-top\"><span>🎯 音程正確度</span><span>" << juce::String (pitch, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) pitch) << "%\"></div></div></div>\n"
-         << "      <div class=\"metric\"><div class=\"m-top\"><span>〰️ ロングトーン安定度</span><span>" << juce::String (stab, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) stab) << "%\"></div></div></div>\n"
-         << "      <div class=\"metric\"><div class=\"m-top\"><span>🔥 抑揚・表現力</span><span>" << juce::String (expr, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) expr) << "%\"></div></div></div>\n"
-         << "      <div class=\"metric\"><div class=\"m-top\"><span>💎 倍音・声の艶抜け</span><span>" << juce::String (gloss, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) gloss) << "%\"></div></div></div>\n"
+         << "      <div class=\"metric\"><div class=\"m-top\"><span>01 ピッチ正確度</span><span class=\"m-val\">" << juce::String (pitch, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) pitch) << "%\"></div></div></div>\n"
+         << "      <div class=\"metric\"><div class=\"m-top\"><span>02 ロングトーン安定度</span><span class=\"m-val\">" << juce::String (stab, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) stab) << "%\"></div></div></div>\n"
+         << "      <div class=\"metric\"><div class=\"m-top\"><span>03 抑揚・ダイナミクス</span><span class=\"m-val\">" << juce::String (expr, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) expr) << "%\"></div></div></div>\n"
+         << "      <div class=\"metric\"><div class=\"m-top\"><span>04 倍音・声芯明瞭度</span><span class=\"m-val\">" << juce::String (gloss, 1) << "%</span></div><div class=\"bar-bg\"><div class=\"bar-fg\" style=\"width:" << juce::String ((int) gloss) << "%\"></div></div></div>\n"
          << "    </div>\n"
-         << "    <div class=\"footer\">" << escHtml (getVocalKarteSummaryText (false)).replace ("\n", "<br>") << "</div>\n"
+         << "    <div class=\"footer\">" << escHtml (getVocalKarteSummaryText (english)).replace ("\n", "<br>") << "</div>\n"
          << "  </div>\n</body>\n</html>\n";
 
     return outFile.replaceWithText (html, false, false, "\n");

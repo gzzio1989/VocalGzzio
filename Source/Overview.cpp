@@ -2382,8 +2382,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         g.drawRoundedRectangle (vf.reduced (0.5f), 6.5f, 1.2f);
         g.setColour (Palette::accentOn (isLeg ? vCol : Palette::ink, Palette::panel));
         const juce::String vLabel = isLeg
-            ? (juce::String::fromUTF8 ("🕰 ") + vSpec.verTag + juce::String::fromUTF8 (" ▼ ") + language->T ("世代再現", "Legacy"))
-            : (juce::String ("v") + JucePlugin_VersionString + juce::String::fromUTF8 (" ▼ ") + language->T ("歴代切替", "Versions"));
+            ? (juce::String (vSpec.verTag) + juce::String::fromUTF8 (" ▾ ") + language->T ("世代再現", "Legacy"))
+            : (juce::String ("v") + JucePlugin_VersionString + juce::String::fromUTF8 (" ▾ ") + language->T ("歴代切替", "Versions"));
         fitText (g, vLabel, verR.reduced (5, 1), juce::Justification::centred, 15.5f, true);
 
         if (! overviewUpdateRect.isEmpty())
@@ -2394,19 +2394,19 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             g.setColour (Palette::yellow);
             g.drawRoundedRectangle (uf.reduced (0.5f), 6.0f, 1.3f);
             g.setColour (Palette::accentOn (Palette::yellow, Palette::panel));
-            fitText (g, juce::String::fromUTF8 ("🆙") + latestUpdateTag,
+            fitText (g, "NEW " + latestUpdateTag,
                      overviewUpdateRect.reduced (3, 1), juce::Justification::centred, 12.0f, true);
         }
     }
 
-    // ---- 1段目中央: 4種ワークスペース配置アーキテクチャ切替ピル ＋ [⚡軽量] ＋ [🎯中央/MONO] ＋ [📡外部出力] ----
+    // ---- 1段目中央: 4種ワークスペース配置アーキテクチャ切替ピル ＋ [軽量] ＋ [入出力モノ] ＋ [外部出力] ----
     if (! staticPass && g.clipRegionIntersects ({ 0, 0, getWidth(), 124 }))
     {
         auto drawHeaderPill = [&] (juce::Rectangle<int> ri, bool active, juce::Colour col, const juce::String& label)
         {
             if (ri.isEmpty() || ! g.clipRegionIntersects (ri.expanded (3))) return;
             const auto r = ri.toFloat();
-            const float pillRad = pastelTheme() ? r.getHeight() * 0.5f : 8.5f;
+            const float pillRad = pastelTheme() ? r.getHeight() * 0.5f : 6.5f;
             if (liteMode)
             {
                 g.setColour (active ? col.withAlpha (0.35f) : Palette::panel2);
@@ -2414,7 +2414,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
             else if (pastelTheme() && ! nightTheme())
             {
-                // ♥ クチュール・エナメル＆宝飾金具・ヘッダーピル
+                // クチュール・エナメル＆宝飾金具・ヘッダーピル
                 g.setColour (Palette::panelLn.withAlpha (active ? 0.38f : 0.22f));
                 g.fillRoundedRectangle (r.translated (0.0f, 1.8f), pillRad);
                 const auto topC = active ? col.brighter (0.12f) : Palette::panel.brighter (0.04f);
@@ -2434,28 +2434,28 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             else
             {
                 g.setColour (pastelTheme() ? col.withAlpha (active ? 0.24f : 0.10f)
-                                           : juce::Colours::black.withAlpha (active ? 0.26f : 0.12f));
-                g.fillRoundedRectangle (r.translated (0.0f, 1.5f), pillRad);
-                const auto topC = active ? col.withAlpha (pastelTheme() ? 0.34f : 0.42f) : Palette::panel2.brighter (0.08f).withAlpha (0.92f);
-                const auto botC = active ? col.darker (0.14f).withAlpha (0.24f)          : Palette::panel2.darker (0.06f).withAlpha (0.92f);
+                                           : juce::Colours::black.withAlpha (active ? 0.22f : 0.10f));
+                g.fillRoundedRectangle (r.translated (0.0f, 1.2f), pillRad);
+                const auto topC = active ? col.withAlpha (pastelTheme() ? 0.30f : 0.28f) : Palette::panel2.brighter (0.04f).withAlpha (0.94f);
+                const auto botC = active ? col.darker (0.14f).withAlpha (0.20f)          : Palette::panel2.darker (0.04f).withAlpha (0.94f);
                 g.setGradientFill (juce::ColourGradient (topC, r.getX(), r.getY(), botC, r.getX(), r.getBottom(), false));
                 g.fillRoundedRectangle (r, pillRad);
-                g.setColour (juce::Colours::white.withAlpha (pastelTheme() ? 0.65f : (active ? 0.36f : 0.18f)));
-                g.drawHorizontalLine (juce::roundToInt (r.getY() + 1.0f), r.getX() + 7.0f, r.getRight() - 7.0f);
+                g.setColour (juce::Colours::white.withAlpha (pastelTheme() ? 0.65f : (active ? 0.20f : 0.08f)));
+                g.drawHorizontalLine (juce::roundToInt (r.getY() + 1.0f), r.getX() + 6.0f, r.getRight() - 6.0f);
                 if (active)
                 {
-                    g.setColour (col.withAlpha (0.95f));
-                    g.fillRoundedRectangle (r.getX() + 8.0f, r.getBottom() - 3.5f, r.getWidth() - 16.0f, 2.5f, 1.2f);
+                    g.setColour (col.withAlpha (0.90f));
+                    g.fillRoundedRectangle (r.getX() + 8.0f, r.getBottom() - 3.0f, r.getWidth() - 16.0f, 2.0f, 1.0f);
                 }
             }
-            g.setColour (active ? col : (liverTheme() ? Palette::metalMid : Palette::panelLn));
-            g.drawRoundedRectangle (r.reduced (0.5f), pillRad, active ? 1.8f : 1.0f);
+            g.setColour (active ? col : (liverTheme() ? Palette::metalMid : Palette::panelLn.withAlpha (0.65f)));
+            g.drawRoundedRectangle (r.reduced (0.5f), pillRad, active ? 1.5f : 1.0f);
             g.setColour (active ? Palette::ink : Palette::inkSoft);
-            fitText (g, label, ri.reduced (2, 0), juce::Justification::centred, 14.0f, active);
+            fitText (g, label, ri.reduced (2, 0), juce::Justification::centred, 13.5f, active);
         };
 
-        const char* pillJa[4] = { oceanStarTheme() ? "✦天球水鏡" : "★ARGON", "♥LIVER", "🎛STUDIO", "◎従来" };
-        const char* pillEn[4] = { oceanStarTheme() ? "HORIZON"   : "ARGON",  "LIVER",  "STUDIO",  "CLASSIC" };
+        const char* pillJa[4] = { oceanStarTheme() ? "天球水鏡" : "ARGON", "LIVER", "STUDIO", "従来" };
+        const char* pillEn[4] = { oceanStarTheme() ? "HORIZON"  : "ARGON", "LIVER", "STUDIO", "CLASSIC" };
         const juce::Colour pillCols[4] = { Palette::ice, Palette::salmon, Palette::yellow, Palette::blue };
         for (int i = 0; i < 4; ++i)
         {
@@ -2463,45 +2463,45 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                             juce::String::fromUTF8 (language->english ? pillEn[i] : pillJa[i]));
         }
 
-        // [⚡軽量 / LITE] ワンタッチ省負荷モードピル
-        drawHeaderPill (litePillRect, liteMode, Palette::green, language->T ("⚡軽量", "LITE"));
+        // [軽量 / LITE] ワンタッチ省負荷モードピル
+        drawHeaderPill (litePillRect, liteMode, Palette::green, language->T ("軽量", "LITE"));
 
-        // [🎯入出力モノラル / MONO] 入力・出力モノラル／ステレオ切替ピル
+        // [入出力モノラル / MONO] 入力・出力モノラル／ステレオ切替ピル
         if (! routePillRect.isEmpty())
         {
             const int rMode = processor.getInputRouteMode();
             const bool outMono = processor.getOutputMonoMode();
             const bool rActive = outMono || (rMode != 4);
             const auto rCol = outMono ? Palette::blue : Palette::ice;
-            const char* rJa[5] = { "🎯入:自動モノ", "🎯入:IN1モノ", "🎯入:IN2モノ", "🎯入:1+2モノ", "🎯ステレオ" };
-            const char* rEn[5] = { "IN:AUTO-M",    "IN:1-MONO",    "IN:2-MONO",    "IN:1+2-M",     "STEREO"     };
+            const char* rJa[5] = { "入:自動モノ", "入:IN1モノ", "入:IN2モノ", "入:1+2モノ", "ステレオ" };
+            const char* rEn[5] = { "IN:AUTO-M",  "IN:1-MONO",  "IN:2-MONO",  "IN:1+2-M",   "STEREO"   };
             const int idx = juce::jlimit (0, 4, rMode);
             const juce::String rLabel = outMono
-                ? language->T ("🎯入出力:モノ", "I/O:MONO")
+                ? language->T ("入出力:モノ", "I/O:MONO")
                 : juce::String::fromUTF8 (language->english ? rEn[idx] : rJa[idx]);
             drawHeaderPill (routePillRect, rActive, rCol, rLabel);
         }
 
-        // [📡外部出力] VocalGzzio Driver (WDM) / SYNCROOM / VB-CABLE 同時出力ブリッジピル
+        // [外部出力] VocalGzzio Driver (WDM) / SYNCROOM / VB-CABLE 同時出力ブリッジピル
         if (! streamPillRect.isEmpty())
         {
             const bool sOn = processor.getStreamOut().isRunning();
             const bool isVgWdm = sOn && processor.getStreamOut().getDeviceName().containsIgnoreCase ("VocalGzzio");
             drawHeaderPill (streamPillRect, sOn, sOn ? Palette::green : Palette::salmon,
-                            sOn ? (isVgWdm ? language->T ("📡WDM出力中", "WDM ON")
-                                           : language->T ("📡SYNC中", "SYNC ON"))
-                                : language->T ("📡外部出力", "SYNC OUT"));
+                            sOn ? (isVgWdm ? language->T ("●WDM出力中", "WDM ON")
+                                           : language->T ("●SYNC中", "SYNC ON"))
+                                : language->T ("外部出力", "SYNC OUT"));
         }
 
-        // [🎤歌枠 ⇄ 💬雑談MC] 歌設定を100%保ったまま残響・エコー・ハモリを一時オフにするライブ瞬間切替ピル
+        // [歌枠 / 雑談MC] 歌設定を保ったまま残響・エコー・ハモリを一時オフにするライブ切替ピル
         if (! talkPillRect.isEmpty())
         {
             const bool isTalk = processor.getLiveTalkMode();
             drawHeaderPill (talkPillRect, isTalk, isTalk ? Palette::yellow : Palette::ice,
-                            isTalk ? language->T ("💬雑談MC中", "MC TALK") : language->T ("🎤歌枠/MC", "SING/MC"));
+                            isTalk ? language->T ("雑談MC中", "MC TALK") : language->T ("歌枠/MC", "SING/MC"));
         }
 
-        // [🔄5秒試聴] 5秒録って手放し聴き比べできる試聴ルーパーピル（録音中・再生中はプログレスバーも表示）
+        // [5秒試聴] 5秒録って手放し聴き比べできる試聴ルーパーピル（録音中・再生中はプログレスバーも表示）
         if (! loopPillRect.isEmpty())
         {
             const int aState = processor.getAuditionState();
@@ -2511,8 +2511,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             const juce::String aLabel = (aState == VocalGzzioProcessor::AuditionRecording)
                 ? language->T ("●録音中...", "●REC 5s")
                 : (aState == VocalGzzioProcessor::AuditionPlaying)
-                    ? language->T ("🔄試聴再生", "LOOP ON")
-                    : language->T ("🔄5秒試聴", "5s LOOP");
+                    ? language->T ("▶試聴再生", "LOOP ON")
+                    : language->T ("5秒試聴", "5s LOOP");
             drawHeaderPill (loopPillRect, aActive, aCol, aLabel);
             if (aActive)
             {
@@ -2526,15 +2526,15 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
         }
 
-        // [😷咳ミュート] 咳払い・くしゃみ瞬間無音遮断ピル（8ms滑らかフェード・残響鳴り残り防止）
+        // [咳ミュート] 咳払い・くしゃみ瞬間無音遮断ピル（8ms滑らかフェード・残響鳴り残り防止）
         if (! coughPillRect.isEmpty())
         {
             const bool cMute = processor.getCoughMute();
             drawHeaderPill (coughPillRect, cMute, cMute ? Palette::salmon : Palette::inkSoft,
-                            cMute ? language->T ("🔇ミュート中", "MUTED") : language->T ("😷咳ミュート", "COUGH"));
+                            cMute ? language->T ("ミュート中", "MUTED") : language->T ("咳ミュート", "COUGH"));
         }
 
-        // [🎵BGM・録音・診断] カラオケ伴奏・1クリックWAV録音・30秒さかのぼり・声質ターゲット診断ピル
+        // [BGM・録音・診断] カラオケ伴奏・1クリックWAV録音・30秒さかのぼり・声質ターゲット診断ピル
         if (! stagePillRect.isEmpty())
         {
             const bool recOn = processor.isWavRecording();
@@ -2542,10 +2542,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             const bool stAct = recOn || bgmOn;
             const auto stCol = recOn ? Palette::salmon : (bgmOn ? Palette::green : Palette::yellow);
             const juce::String stLab = recOn
-                ? language->T ("🔴WAV録音中", "●WAV REC")
+                ? language->T ("●WAV録音中", "●WAV REC")
                 : bgmOn
-                    ? language->T ("🎵BGM再生中", "🎵BGM ON")
-                    : language->T ("🎵BGM・録音", "BGM/REC");
+                    ? language->T ("▶BGM再生中", "▶BGM ON")
+                    : language->T ("BGM・録音", "BGM/REC");
             drawHeaderPill (stagePillRect, stAct, stCol, stLab);
             if (bgmOn)
             {
@@ -2594,8 +2594,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             g.drawRoundedRectangle (lb.reduced (0.5f), 7.0f, isLeg ? 1.4f : 1.0f);
 
             g.setColour (isLeg ? bCol : Palette::ink);
-            const juce::String topVerTxt = (isLeg ? juce::String::fromUTF8 ("🕰") : juce::String())
-                + juce::String (vSpec.verTag) + juce::String::fromUTF8 ("▼");
+            const juce::String topVerTxt = juce::String (vSpec.verTag) + juce::String::fromUTF8 (" ▾");
             fitText (g, topVerTxt,
                      { latBadgeArea.getX() + 2, latBadgeArea.getY() + 2, latBadgeArea.getWidth() - 4, 16 },
                      juce::Justification::centred, 11.5f, true);
@@ -2625,7 +2624,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             g.setColour (has3Axis ? Palette::ice.withAlpha (0.75f) : Palette::panelLn.withAlpha (0.65f));
             g.drawRoundedRectangle (pb.toFloat().reduced (0.5f), 8.0f, 1.0f);
             text (language->T ("仕上がり", "FINISH"), { 26, 73, 82, 20 }, 14.5f, Palette::ink, true, juce::Justification::centred);
-            text (language->T ("🎛3軸▼", "3D▼"),      { 26, 91, 82, 18 }, 11.5f, has3Axis ? Palette::ice : Palette::inkSoft, true, juce::Justification::centred);
+            text (language->T ("3軸 ▾", "3D ▾"),      { 26, 91, 82, 18 }, 11.5f, has3Axis ? Palette::ice : Palette::inkSoft, true, juce::Justification::centred);
         }
     }
 
@@ -2732,64 +2731,52 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             return;
         }
 
-        // ★ 1. ARGON SCI-FI / CYBER NEON: 斜めカット8角形メカ・アーマーフレーム＆台形ネームプレート
+        // 1. ARGON STUDIO: 精密マットベゼル＆クリーンな1pxヘアラインフレーム
         if (isSciFiStyle)
         {
-            const float ch = 15.0f;
-            const auto armorPath = makeChamferPath (rf, ch);
-
+            const float rad = 11.0f;
             if (themeMode == 0)
             {
                 g.setColour (Palette::panel);
-                g.fillRoundedRectangle (rf, ch);
+                g.fillRoundedRectangle (rf, rad);
                 g.setColour (Palette::panel2.withAlpha (0.85f));
-                g.fillRoundedRectangle (rf.withHeight (45.0f), ch);
+                g.fillRoundedRectangle (rf.withHeight (45.0f), rad);
             }
             else
             {
-                const auto shadowPath = makeChamferPath (rf.translated (0.0f, 4.0f), ch);
-                g.setColour (juce::Colours::black.withAlpha (nightTheme() ? 0.42f : 0.14f));
-                g.fillPath (shadowPath);
-                const auto topBg = nightTheme() ? Palette::panel.brighter (0.06f).withMultipliedAlpha (cardAlpha)
-                                                : Palette::panel.brighter (0.04f).withMultipliedAlpha (cardAlpha);
-                const auto botBg = nightTheme() ? Palette::bgBot.darker   (0.18f).withMultipliedAlpha (cardAlpha)
-                                                : Palette::panel.darker   (0.05f).withMultipliedAlpha (cardAlpha);
+                g.setColour (juce::Colours::black.withAlpha (nightTheme() ? 0.34f : 0.12f));
+                g.fillRoundedRectangle (rf.translated (0.0f, 3.0f), rad);
+                const auto topBg = nightTheme() ? Palette::panel.brighter (0.04f).withMultipliedAlpha (cardAlpha)
+                                                : Palette::panel.brighter (0.03f).withMultipliedAlpha (cardAlpha);
+                const auto botBg = nightTheme() ? Palette::bgBot.darker   (0.14f).withMultipliedAlpha (cardAlpha)
+                                                : Palette::panel.darker   (0.04f).withMultipliedAlpha (cardAlpha);
                 g.setGradientFill (juce::ColourGradient (topBg, rf.getX(), rf.getY(), botBg, rf.getX(), rf.getBottom(), false));
-                g.fillPath (armorPath);
+                g.fillRoundedRectangle (rf, rad);
             }
 
-            // 台形コックピット・ネームプレート帯 (y .. y+46)
+            // ヘッダー背景の控えめなティント
             {
-                const float trapW = rf.getWidth() * 0.66f;
-                g.setColour (accent.withAlpha (nightTheme() ? 0.14f : 0.08f));
-                g.fillRoundedRectangle (rf.getX() + 2.0f, rf.getY() + 2.0f, trapW - 4.0f, 42.0f, 10.0f);
+                juce::Path hdrClip;
+                hdrClip.addRoundedRectangle (rf.getX() + 1.0f, rf.getY() + 1.0f, rf.getWidth() - 2.0f, 44.0f,
+                                             rad - 1.0f, rad - 1.0f, true, true, false, false);
+                g.setGradientFill (juce::ColourGradient (accent.withAlpha (nightTheme() ? 0.12f : 0.08f), rf.getX(), rf.getY(),
+                                                         juce::Colours::transparentBlack, rf.getX() + rf.getWidth() * 0.75f, rf.getY(), false));
+                g.fillPath (hdrClip);
             }
 
-            // ヘッダー仕切りレーザーコンジットライン
-            g.setColour (accent.withAlpha (0.58f));
-            g.fillRect (rf.getX() + 12.0f, (float) (r.getY() + 45), rf.getWidth() - 24.0f, 1.6f);
+            // ヘッダー下部1pxセパレーターライン
+            g.setColour (Palette::panelLn.withAlpha (0.55f));
+            g.fillRect (rf.getX() + 12.0f, (float) (r.getY() + 45), rf.getWidth() - 24.0f, 1.0f);
 
-            // 8角形ベゼル＆四隅の斜め発光コンジット
-            g.setColour (Palette::panelLn.brighter (0.12f));
-            g.strokePath (armorPath, juce::PathStrokeType (1.4f));
+            // 上縁の微細なスペキュラハイライト＆1px外周ベゼル
+            g.setColour (juce::Colours::white.withAlpha (nightTheme() ? 0.06f : 0.35f));
+            g.drawHorizontalLine (r.getY() + 1, rf.getX() + 12.0f, rf.getRight() - 12.0f);
+            g.setColour (Palette::panelLn.withAlpha (0.68f));
+            g.drawRoundedRectangle (rf.reduced (0.5f), rad, 1.0f);
 
-            // 4箇所の斜めチャンファー角をアクセント色でハイライト発光
-            g.setColour (accent.withAlpha (0.90f));
-            g.drawLine (rf.getX(), rf.getY() + ch, rf.getX() + ch, rf.getY(), 2.4f);
-            g.drawLine (rf.getRight() - ch, rf.getY(), rf.getRight(), rf.getY() + ch, 2.4f);
-            g.drawLine (rf.getX(), rf.getBottom() - ch, rf.getX() + ch, rf.getBottom(), 2.4f);
-            g.drawLine (rf.getRight() - ch, rf.getBottom(), rf.getRight(), rf.getBottom() - ch, 2.4f);
-
-            // 下辺センターのサイバー・エネルギーレール
-            const float railW = juce::jmin (110.0f, rf.getWidth() * 0.32f);
-            g.setColour (accent.withAlpha (0.65f));
-            g.fillRoundedRectangle (rf.getCentreX() - railW * 0.5f, rf.getBottom() - 3.2f, railW, 2.4f, 1.2f);
-
-            // 3D発光アクセント・ピラーバッジ
-            g.setColour (accent.withAlpha (0.36f));
-            g.fillRoundedRectangle (rf.getX() + 13.5f, rf.getY() + 11.5f, 7.0f, 25.0f, 3.5f);
-            g.setColour (accent.brighter (0.20f));
-            g.fillRoundedRectangle (rf.getX() + 15.0f, rf.getY() + 13.0f, 4.5f, 22.0f, 2.2f);
+            // 見出し左端のクリーンなアクセントピラー
+            g.setColour (accent);
+            g.fillRoundedRectangle (rf.getX() + 14.0f, rf.getY() + 13.0f, 4.0f, 20.0f, 2.0f);
             g.setColour (Palette::ink);
             return;
         }
@@ -4269,13 +4256,13 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         const bool inMonoActive = (rMode != 4);
         const bool outMonoActive = processor.getOutputMonoMode();
         const bool shortIo = (ioInMonoRect.getWidth() < 90);
-        const char* inJaFull[5]  = { "🎤入力:自動モノ", "🎤入力:IN1モノ", "🎤入力:IN2モノ", "🎤入力:1+2モノ", "🎤入力:ステレオ" };
-        const char* inJaShort[5] = { "🎤入:自動",       "🎤入:IN1",       "🎤入:IN2",       "🎤入:1+2",       "🎤入:ステ"       };
-        const char* inEn[5]      = { "IN:AUTO-M",       "IN:1-MONO",      "IN:2-MONO",      "IN:1+2-M",       "IN:STEREO"       };
+        const char* inJaFull[5]  = { "入力:自動モノ", "入力:IN1モノ", "入力:IN2モノ", "入力:1+2モノ", "入力:ステレオ" };
+        const char* inJaShort[5] = { "入:自動",       "入:IN1",       "入:IN2",       "入:1+2",       "入:ステ"       };
+        const char* inEn[5]      = { "IN:AUTO-M",     "IN:1-MONO",    "IN:2-MONO",    "IN:1+2-M",     "IN:STEREO"     };
         const juce::String inTxt = juce::String::fromUTF8 (language->english ? inEn[rMode] : (shortIo ? inJaShort[rMode] : inJaFull[rMode]));
         const juce::String outTxt = outMonoActive
-            ? (shortIo ? language->T ("🔊出:モノ", "OUT:M") : language->T ("🔊出力:モノラル", "OUT:MONO"))
-            : (shortIo ? language->T ("🔊出:ステ", "OUT:S") : language->T ("🔊出力:ステレオ", "OUT:STEREO"));
+            ? (shortIo ? language->T ("出:モノ", "OUT:M") : language->T ("出力:モノラル", "OUT:MONO"))
+            : (shortIo ? language->T ("出:ステ", "OUT:S") : language->T ("出力:ステレオ", "OUT:STEREO"));
         drawIoPill (ioInMonoRect,  inMonoActive,  Palette::green, inTxt);
         drawIoPill (ioOutMonoRect, outMonoActive, Palette::blue,  outTxt);
 
@@ -4286,13 +4273,13 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             const auto exprCol = (exprMode == 1) ? Palette::salmon : ((exprMode == 2) ? Palette::blue : Palette::green);
             const bool compactExpr = (ioExprRect.getWidth() < 168);
             const juce::String exprTxt = (exprMode == 1)
-                ? (compactExpr ? language->T ("🎤声量:10割!", "🎤Dyn:100%!")
-                               : language->T ("🎤声量幅:10割ダイレクト!", "🎤Dyn:Full 100%!"))
+                ? (compactExpr ? language->T ("声量:10割", "Dyn:100%")
+                               : language->T ("声量幅:10割ダイレクト", "Dyn:Full 100%"))
                 : (exprMode == 2)
-                    ? (compactExpr ? language->T ("📻一定キープ", "📻Dyn:Steady")
-                                   : language->T ("📻声量幅:一定キープ", "📻Dyn:Steady"))
-                    : (compactExpr ? language->T ("🎵声量:標準", "🎵Dyn:Auto")
-                                   : language->T ("🎵声量幅:標準バランス", "🎵Dyn:Balanced"));
+                    ? (compactExpr ? language->T ("一定キープ", "Dyn:Steady")
+                                   : language->T ("声量幅:一定キープ", "Dyn:Steady"))
+                    : (compactExpr ? language->T ("声量:標準", "Dyn:Auto")
+                                   : language->T ("声量幅:標準バランス", "Dyn:Balanced"));
             drawIoPill (ioExprRect, exprActive, exprCol, exprTxt);
         }
     }
@@ -4464,12 +4451,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 if (zh >= 36)
                 {
                     const juce::String statusGuide = (outDb <= -56.0f)
-                        ? language->T ("🎤 声を出すと今の音量が適正かここに表示されます", "🎤 Sing or speak to check your volume zone")
+                        ? language->T ("声を出すと現在の音量が適正ゾーンか表示されます", "Sing or speak to check your volume zone")
                         : inLoud
-                            ? language->T ("⚠ 少し大きめです：「最終音量」を100%方向へ下げると安心", "⚠ Slightly hot: lower Volume % toward 100%")
+                            ? language->T ("少し大きめです：「最終音量」を100%方向へ下げると安定します", "Slightly hot: lower Volume % toward 100%")
                             : inGood
-                                ? language->T ("◎ ちょうど良い音量です！（もっと上げたい時は最終音量%へ）", "◎ Great vocal level! (Use Volume % for clean boost)")
-                                : language->T ("💡 少し小さめです：「入力音量」か「最終音量%」を上げてください", "💡 Quiet signal: raise Input or Volume %");
+                                ? language->T ("◎ 適正な出力レベルです（さらに上げたい場合は最終音量%へ）", "◎ Optimal vocal level (Use Volume % for clean boost)")
+                                : language->T ("少し小さめです：「入力音量」または「最終音量%」を上げてください", "Quiet signal: raise Input or Volume %");
                     g.setColour (inLoud ? Palette::salmon : (inGood ? Palette::accentOn (Palette::green, Palette::panel) : Palette::inkSoft));
                     fitText (g, statusGuide, zr.withTrimmedTop (18), juce::Justification::centredLeft, 12.0f, inGood || inLoud);
                 }
@@ -4740,11 +4727,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     }
                 }
 
-                const juce::String themePoem = (themeMode == 14) ? language->T ("🌌 01 星降る天の川銀河と蛍火の夜 — GALACTIC MILKY WAY", "🌌 01 GALACTIC MILKY WAY & FIREFLY")
-                                             : (themeMode == 15) ? language->T ("🌊 02 瑞々しい碧海と水紋ラグーン — LUSH AQUA CAUSTICS", "🌊 02 LUSH AQUA SEA & CAUSTICS")
-                                             : (themeMode == 16) ? language->T ("🌅 03 朝焼けの海と暁の水平線 — RADIANT DAWN SUNRISE", "🌅 03 RADIANT DAWN & SUNRISE SEA")
-                                             : (themeMode == 17) ? language->T ("🍁 04 晩秋から初冬へ・茜空と初雪の水鏡 — AUTUMN TO WINTER", "🍁 04 LATE AUTUMN & FIRST SNOW")
-                                                                 : language->T ("👑 05 蒼海オペラ座と黄金シャンデリア — GRAND OPERA SAPPHIRE", "👑 05 GRAND OPERA SAPPHIRE");
+                const juce::String themePoem = (themeMode == 14) ? language->T ("01 星降る天の川銀河と蛍火の夜 — GALACTIC MILKY WAY", "01 GALACTIC MILKY WAY & FIREFLY")
+                                             : (themeMode == 15) ? language->T ("02 瑞々しい碧海と水紋ラグーン — LUSH AQUA CAUSTICS", "02 LUSH AQUA SEA & CAUSTICS")
+                                             : (themeMode == 16) ? language->T ("03 朝焼けの海と暁の水平線 — RADIANT DAWN SUNRISE", "03 RADIANT DAWN & SUNRISE SEA")
+                                             : (themeMode == 17) ? language->T ("04 晩秋から初冬へ・茜空と初雪の水鏡 — AUTUMN TO WINTER", "04 LATE AUTUMN & FIRST SNOW")
+                                                                 : language->T ("05 蒼海オペラ座と黄金シャンデリア — GRAND OPERA SAPPHIRE", "05 GRAND OPERA SAPPHIRE");
                 const juce::Rectangle<float> leftTitlePill (leftVista.getX() + 8.0f, leftVista.getY() + 4.0f, leftVista.getWidth() - 136.0f, 20.0f);
                 g.setColour (Palette::bgTop.darker (0.48f).withAlpha (0.72f));
                 g.fillRoundedRectangle (leftTitlePill, 9.0f);
@@ -4761,7 +4748,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (Palette::metalHi.withAlpha (0.72f));
                 g.drawRoundedRectangle (auraBadge, 10.0f, 1.0f);
                 g.setColour (Palette::yellow);
-                static const char* const kMoodBadge[3] = { "✦ TOUCH AURA", "✦ PRISM WAVE", "✦ DEEP ECHO" };
+                static const char* const kMoodBadge[3] = { "TOUCH AURA", "PRISM WAVE", "DEEP ECHO" };
                 fitText (g, juce::String::fromUTF8 (kMoodBadge[g_vistaMood % 3]), auraBadge.toNearestInt().reduced (4, 0), juce::Justification::centred, 14.0f, true);
 
                 // ★ 音の変化ビジュアライザー (Before 原音ノイズ波形 vs After 整音・美声波形 ＆ 4連リアルタイム効果カプセル)
@@ -4808,13 +4795,13 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 // 下段：今どの処理がどれだけ効いているか一目で分かる4連「音の変化カプセル」
                 struct EffChip { juce::String text; float norm; juce::Colour col; };
                 const EffChip chips[4] = {
-                    { language->T ("🧹雑音 ", "🧹NR ")   + juce::String (juce::roundToInt (dnPct)) + "%",
+                    { language->T ("雑音 ", "NR ")    + juce::String (juce::roundToInt (dnPct)) + "%",
                       juce::jlimit (0.0f, 1.0f, dnPct / 60.0f), Palette::green },
-                    { language->T ("💎こもり ", "💎MUD ") + juce::String (mudDb, 1) + "dB",
+                    { language->T ("こもり ", "MUD ") + juce::String (mudDb, 1) + "dB",
                       juce::jlimit (0.0f, 1.0f, std::abs (mudDb) / 6.0f), Palette::ice },
-                    { language->T ("⚖声量 ", "⚖COMP ")  + juce::String (juce::roundToInt (compPct)) + "%",
+                    { language->T ("声量 ", "COMP ")  + juce::String (juce::roundToInt (compPct)) + "%",
                       juce::jlimit (0.0f, 1.0f, compPct / 80.0f), Palette::blue },
-                    { language->T ("✨倍音 ", "✨GLOW ")  + juce::String (juce::roundToInt (velvPct)) + "%",
+                    { language->T ("倍音 ", "GLOW ")  + juce::String (juce::roundToInt (velvPct)) + "%",
                       juce::jlimit (0.0f, 1.0f, velvPct / 90.0f), Palette::yellow }
                 };
                 const float chipGap = 5.0f;
@@ -4853,10 +4840,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (Palette::metalHi.withAlpha (0.28f));
                 g.drawRoundedRectangle (rightVista.reduced (3.2f), 10.5f, 0.8f);
 
-                const juce::String rightTitle = (themeMode == 15) ? language->T ("💧 水紋コースティクス ＆ 瑞々しい倍音ストリーム", "💧 AQUA CAUSTICS & HARMONIC STREAM")
-                                              : (themeMode == 16) ? language->T ("🌅 朝日の光の道 ＆ 暁の倍音リフレクション", "🌅 SUNRISE GOLDEN PATH & HARMONICS")
-                                              : (themeMode == 17) ? language->T ("🍁 散り紅葉と初雪が溶け合う静寂の水鏡波紋", "🍁 FALLING MAPLE & FIRST SNOW RIPPLES")
-                                                                  : language->T ("🌊 水鏡の倍音・残響リフレクション — SEA-MIRROR HORIZON", "🌊 SEA-MIRROR HARMONIC HORIZON");
+                const juce::String rightTitle = (themeMode == 15) ? language->T ("水紋コースティクス ＆ 瑞々しい倍音ストリーム", "AQUA CAUSTICS & HARMONIC STREAM")
+                                              : (themeMode == 16) ? language->T ("朝日の光の道 ＆ 暁の倍音リフレクション", "SUNRISE GOLDEN PATH & HARMONICS")
+                                              : (themeMode == 17) ? language->T ("散り紅葉と初雪が溶け合う静寂の水鏡波紋", "FALLING MAPLE & FIRST SNOW RIPPLES")
+                                                                  : language->T ("水鏡の倍音・残響リフレクション — SEA-MIRROR HORIZON", "SEA-MIRROR HARMONIC HORIZON");
                 const juce::Rectangle<float> rightTitlePill (rightVista.getX() + 8.0f, rightVista.getY() + 4.0f, rightVista.getWidth() - 136.0f, 20.0f);
                 g.setColour (Palette::bgTop.darker (0.48f).withAlpha (0.72f));
                 g.fillRoundedRectangle (rightTitlePill, 9.0f);
@@ -4869,7 +4856,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (Palette::metalHi.withAlpha (0.72f));
                 g.drawRoundedRectangle (rtaBadge, 10.0f, 1.0f);
                 g.setColour (Palette::ice);
-                fitText (g, juce::String::fromUTF8 ("✦ MIRROR 32ch"), rtaBadge.toNearestInt().reduced (4, 0), juce::Justification::centred, 14.0f, true);
+                fitText (g, juce::String::fromUTF8 ("MIRROR 32ch"), rtaBadge.toNearestInt().reduced (4, 0), juce::Justification::centred, 14.0f, true);
             }
 
             if (! staticPass)
@@ -4967,11 +4954,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 // 下段：空間・残響・やまびこ・左右の広がりがどう効いているか一目で伝わる3連「空間変化カプセル」
                 struct SpChip { juce::String text; float norm; juce::Colour col; };
                 const SpChip spChips[3] = {
-                    { language->T ("🏛残響余韻 ", "🏛REV ")  + juce::String (juce::roundToInt (revMixPct)) + "%",
+                    { language->T ("残響余韻 ", "REV ")   + juce::String (juce::roundToInt (revMixPct)) + "%",
                       juce::jlimit (0.0f, 1.0f, revMixPct / 50.0f), Palette::yellow },
-                    { language->T ("🔊やまびこ ", "🔊ECHO ") + juce::String (juce::roundToInt (dlyPct)) + "%",
+                    { language->T ("やまびこ ", "ECHO ")  + juce::String (juce::roundToInt (dlyPct)) + "%",
                       juce::jlimit (0.0f, 1.0f, dlyPct / 55.0f), Palette::salmon },
-                    { language->T ("↔左右拡大 +", "↔WIDE +") + juce::String (juce::roundToInt (widPct)) + "%",
+                    { language->T ("左右拡大 +", "WIDE +") + juce::String (juce::roundToInt (widPct)) + "%",
                       juce::jlimit (0.0f, 1.0f, std::abs (widPct) / 70.0f), Palette::ice }
                 };
                 const float chipGap = 6.0f;
@@ -5508,7 +5495,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (Palette::salmon.withAlpha (0.82f));
                 g.drawRoundedRectangle (rf.reduced (0.5f), rad, 1.2f);
                 g.setColour (Palette::ink);
-                fitText (g, language->T ("↺初期", "↺INIT"),
+                fitText (g, language->T ("初期値", "INIT"),
                          fineResetRect.reduced (4, 0), juce::Justification::centred, 14.0f, true);
             }
         }
@@ -5525,7 +5512,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             g.setFont (GzzioLnF::uiFont (16.5f * juce::jlimit (1.0f, 1.20f, fontScale / 1.5f), false));
             g.drawFittedText (hint, overviewHelp.reduced (14, 5).withTrimmedRight (fineTargetRect.isEmpty() ? 0 : 798), juce::Justification::centredLeft, 2, 0.90f);
 
-            // ---- ★ 指が太い人・タッチ操作対応：「🎯 ワンタップ微調整ドック (ターゲット)」描画 ----
+            // ---- ★ 指が太い人・タッチ操作対応：「ワンタップ微調整ドック (ターゲット)」描画 ----
             Knob* const targetK = (lastTouchedKnob != nullptr && lastTouchedKnob->slider.isVisible()) ? lastTouchedKnob : &presenceK;
             if (! fineTargetRect.isEmpty() && targetK != nullptr)
             {
@@ -5544,7 +5531,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                          juce::Justification::centred, 14.5f, true);
             }
 
-            // ---- v5.0/v5.1: フッター右デッキ「🔥サビ盛 / 🤖サビ自動」＋「👏4種ライブSEポン出しパッド」描画 ----
+            // ---- v5.0/v5.1: フッター右デッキ「サビ演出 / サビ自動」＋「4種ライブSEポン出しパッド」描画 ----
             if (! chorusPillRect.isEmpty())
             {
                 const auto cf = chorusPillRect.toFloat();
@@ -5562,15 +5549,15 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.drawRoundedRectangle (cf.reduced (0.5f), rad, cOn ? 1.8f : 1.1f);
                 g.setColour (cOn ? Palette::ink : Palette::inkSoft);
                 const juce::String cTxt = cManual
-                    ? language->T ("★サビON!", "★CHORUS!")
+                    ? language->T ("サビ演出:ON", "CHORUS:ON")
                     : cAuto
-                        ? (cTrig ? language->T ("🤖サビ中!", "🤖AUTO!") : language->T ("🤖サビ自動", "🤖AUTO"))
-                        : language->T ("★サビ盛", "★CHORUS");
+                        ? (cTrig ? language->T ("サビ自動:ON", "AUTO:ON") : language->T ("サビ自動", "AUTO"))
+                        : language->T ("サビ演出", "CHORUS");
                 fitText (g, cTxt,
                          chorusPillRect.reduced (4, 0), juce::Justification::centred, 14.0f, true);
             }
-            static const char* const kSeShortJa[4] = { "♪拍手", "✦キラ", "◉ドラム", "♦ベル" };
-            static const char* const kSeShortEn[4] = { "♪CLAP", "✦GLOW", "◉ROLL",  "♦BELL" };
+            static const char* const kSeShortJa[4] = { "拍手", "キラ", "ドラム", "ベル" };
+            static const char* const kSeShortEn[4] = { "CLAP", "GLOW", "ROLL",   "BELL" };
             const int activeSe = processor.getActiveLiveSe();
             for (int s = 0; s < 4; ++s)
             {
@@ -5610,11 +5597,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                         auto t = processor.getCustomSeTitle (s);
                         if (t.length() > 5)
                             t = t.substring (0, 5) + "..";
-                        cLabel = juce::String::fromUTF8 ("🎵") + t;
+                        cLabel = "[" + juce::String (s + 1) + "] " + t;
                     }
                     else
                     {
-                        cLabel = language->T ("➕音源", "➕SE ") + juce::String (s + 1);
+                        cLabel = language->T ("+音源 ", "+SE ") + juce::String (s + 1);
                     }
                     fitText (g, cLabel, cr.reduced (4, 0), juce::Justification::centred, 14.0f, cOn || loaded);
                 }
@@ -6002,7 +5989,7 @@ public:
     {
         if (idx < 0 || idx >= itemCountForTab (activeTab))
             return;
-        const juce::String previewPrefix = language->T ("【🔍 プリセット解説プレビュー】", "[Preset Preview] ");
+        const juce::String previewPrefix = language->T ("【プリセット解説プレビュー】", "[Preset Preview] ");
         const juce::String text = previewPrefix + itemName (activeTab, idx) + " — " + itemDescription (activeTab, idx);
         owner.overviewHint = text;
         owner.infoText     = text;
@@ -6171,11 +6158,11 @@ public:
         }
         else
         {
-            addColumnGroup (0, language->T ("🎤 ボイスチェンジャー（カワボ / イケボ / 声質変換 6種）",
-                                            "🎤 Voice Changer (Pitch & Formant Shift - 6 Presets)"),
+            addColumnGroup (0, language->T ("01 ボイスチェンジャー（カワボ / イケボ / 声質変換 6種）",
+                                            "01 Voice Changer (Pitch & Formant Shift - 6 Presets)"),
                             0, 6, 64, 7, 32);
-            addColumnGroup (1, language->T ("🎭 特殊キャラ演出（ロボット / 宇宙人 / 電話 / 拡声器 6種）",
-                                            "🎭 Character & Performance FX (Robot / Alien / Radio - 6 Presets)"),
+            addColumnGroup (1, language->T ("02 特殊キャラ演出（ロボット / 宇宙人 / 電話 / 拡声器 6種）",
+                                            "02 Character & Performance FX (Robot / Alien / Radio - 6 Presets)"),
                             6, gzzio::kNumCharPresets, 64, 7, 32);
         }
     }
@@ -6408,7 +6395,7 @@ public:
         // ---- 1. 最上段：パレット見出し ＋ 3軸ステータス帯 ＋ 操作モードボタン群 (y = 6..42) ----
         g.setColour (Palette::ink);
         drawPaletteText (g,
-                         language->T ("🎨 プリセット・パレット", "🎨 Preset Palette"),
+                         language->T ("プリセット・パレット", "Preset Palette"),
                          { 14, 6, 218, 36 }, juce::Justification::centredLeft, 24.5f, true, 21.0f);
 
         const int selIds[3] = {
@@ -6416,8 +6403,8 @@ public:
             owner.micBox.getSelectedId() - 1,
             owner.eqPresetBox.getSelectedId() - 1
         };
-        const char* axisPrefixJa[3] = { "①声質: ", "②マイク: ", "③曲調: " };
-        const char* axisPrefixEn[3] = { "①Voice: ", "②Mic: ",   "③Genre: " };
+        const char* axisPrefixJa[3] = { "01 声質: ", "02 マイク: ", "03 曲調: " };
+        const char* axisPrefixEn[3] = { "01 Voice: ", "02 Mic: ",   "03 Genre: " };
         for (int a = 0; a < 3; ++a)
         {
             const auto& sr = comboStripRects[(size_t) a];
@@ -6448,28 +6435,28 @@ public:
         };
 
         drawPillBtn (keepOpenRect, keepOpen, Palette::yellow,
-                     keepOpen ? language->T ("📌 開いたまま比較: ON", "📌 Keep Open: ON")
-                              : language->T ("📌 クリックで即決定",   "📌 Click & Close"));
+                     keepOpen ? language->T ("開いたまま比較: ON", "Keep Open: ON")
+                              : language->T ("クリックで即決定",   "Click & Close"));
         const bool any3Axis = (owner.voiceBox.getSelectedId() > 0 || owner.micBox.getSelectedId() > 0 || owner.eqPresetBox.getSelectedId() > 0);
         drawPillBtn (clearAxisRect, any3Axis, Palette::salmon,
-                     language->T ("🔄 3軸クリア", "🔄 Clear 3-Axis"));
+                     language->T ("3軸クリア", "Clear 3-Axis"));
         drawPillBtn (closeRect, true, Palette::green,
                      language->T ("✓ 閉じる", "✓ Done"));
 
         // ---- 2. 5カテゴリ切替タブバー (y = 46..92, 26.5px太字) ----
         static const char* const kTabJa[5] = {
             "★ 全体仕上がり (6)",
-            "① 声質・発声・悩み (20)",
-            "② マイク・環境補正 (20)",
-            "③ 曲調・ジャンル (20)",
-            "🎭 ボイチェン・演出 (12)"
+            "01 声質・発声・悩み (20)",
+            "02 マイク・環境補正 (20)",
+            "03 曲調・ジャンル (20)",
+            "04 ボイチェン・演出 (12)"
         };
         static const char* const kTabEn[5] = {
             "★ Quick Finish (6)",
-            "① Voice & Fix (20)",
-            "② Mic & Room (20)",
-            "③ Genre & Style (20)",
-            "🎭 Voice Changer (12)"
+            "01 Voice & Fix (20)",
+            "02 Mic & Room (20)",
+            "03 Genre & Style (20)",
+            "04 Voice Changer (12)"
         };
         for (int t = 0; t < 5; ++t)
         {
@@ -6554,7 +6541,7 @@ public:
                 g.setColour (isHover ? activeAcc : Palette::bgTop.darker (0.25f).withAlpha (0.82f));
                 g.fillRoundedRectangle (tagR.toFloat(), 7.0f);
                 g.setColour (isHover ? Palette::readableOn (activeAcc) : Palette::inkSoft.brighter (0.12f));
-                drawPaletteText (g, isHover ? language->T ("👆 決定 / 再タップ", "👆 Tap / Click")
+                drawPaletteText (g, isHover ? language->T ("決定 / 再タップ", "Tap / Click")
                                             : itemQuickTag (activeTab, c.index),
                                  tagR.reduced (6, 0), juce::Justification::centred, 21.5f, true, 19.0f);
 
@@ -6576,15 +6563,15 @@ public:
             }
             else if (c.bounds.getHeight() >= 60)
             {
-                // ★ 指が太い人向け「🖐 特大カード表示」(750×64〜76px):
+                // ★ 指が太い人向け「特大カード表示」(750×64〜76px):
                 //   上段に 27.5px 太字のプリセット名＋レシピタグ、下段に 21.5px 太字の1行説明を表示！
                 const int tagW = isHover ? 176 : 186;
                 const juce::Rectangle<int> tagR (c.bounds.getRight() - tagW - 6, c.bounds.getY() + 5, tagW, 30);
                 g.setColour (isHover ? activeAcc : (isSel ? activeAcc.withAlpha (0.30f) : Palette::bgTop.darker (0.25f).withAlpha (0.82f)));
                 g.fillRoundedRectangle (tagR.toFloat(), 6.0f);
                 g.setColour (isHover ? Palette::readableOn (activeAcc) : (isSel ? Palette::ink : Palette::inkSoft.brighter (0.14f)));
-                drawPaletteText (g, isHover ? language->T ("👆 決定 / 再タップ", "👆 Tap / Click")
-                                  : isSel   ? language->T ("✓ 現在選択中",     "✓ Active")
+                drawPaletteText (g, isHover ? language->T ("決定 / 再タップ", "Tap / Click")
+                                  : isSel   ? language->T ("✓ 現在選択中",    "✓ Active")
                                             : itemQuickTag (activeTab, c.index),
                                  tagR.reduced (6, 0), juce::Justification::centred, 20.5f, true, 18.0f);
 
@@ -6610,7 +6597,7 @@ public:
                     g.setColour (isHover ? activeAcc : activeAcc.withAlpha (0.28f));
                     g.fillRoundedRectangle (tagR.toFloat(), 6.0f);
                     g.setColour (isHover ? Palette::readableOn (activeAcc) : Palette::ink);
-                    drawPaletteText (g, isHover ? language->T ("👆 決定 / 再タップ", "👆 Tap / Click")
+                    drawPaletteText (g, isHover ? language->T ("決定 / 再タップ", "Tap / Click")
                                                 : language->T ("✓ 選択中", "✓ Active"),
                                      tagR.reduced (6, 0), juce::Justification::centred, 22.5f, true, 19.5f);
                     rightReserved = tagW + 14;
@@ -6665,7 +6652,7 @@ public:
         const int inspIdx = inspectedIndex();
         const bool isInspSelected = (inspIdx == curSelected);
 
-        // ドック1段目: 状態バッジ ＋ 指が太い人向け「🖐 特大カード切替」「◀ 前へ」「次へ ▶」 ＋ 「🔊 開いたまま試聴」「✓ このプリセットで決定」大型ボタン
+        // ドック1段目: 状態バッジ ＋ 指が太い人向け「特大カード切替」「◀ 前へ」「次へ ▶」 ＋ 「開いたまま試聴」「✓ このプリセットで決定」大型ボタン
         const juce::Rectangle<int> modeBadgeR (dockRect.getX() + 12, dockRect.getY() + 5, 412, 32);
         const auto badgeCol = (hoveredIndex >= 0) ? activeAcc : (isInspSelected ? Palette::green : Palette::blue);
         g.setColour (badgeCol.withAlpha (0.28f));
@@ -6674,23 +6661,23 @@ public:
         g.drawRoundedRectangle (modeBadgeR.toFloat().reduced (0.5f), 6.0f, 1.5f);
         g.setColour (Palette::ink);
         const juce::String modeTxt = (hoveredIndex >= 0)
-            ? language->T ("🔍 解説プレビュー中（再タップで決定）", "🔍 PREVIEWING (Tap again to apply)")
+            ? language->T ("● 解説プレビュー中（再タップで決定）", "● PREVIEWING (Tap again to apply)")
             : isInspSelected
                 ? language->T ("✓ 現在選択中のプリセット解説", "✓ CURRENTLY SELECTED PRESET")
-                : language->T ("💡 カードにふれる／なぞると説明を表示", "💡 Touch, drag or hover any card");
+                : language->T ("カードにふれる／なぞると説明を表示", "Touch, drag or hover any card");
         drawPaletteText (g, modeTxt, modeBadgeR.reduced (6, 0), juce::Justification::centred, 21.0f, true, 18.5f);
 
         const juce::String largeModeTxt = (largeCardPage == 0)
-            ? language->T ("🖐 特大カード (01-10)", "🖐 Giant Cards (1-10)")
+            ? language->T ("特大カード (01-10)", "Large Cards (1-10)")
             : (largeCardPage == 1)
-                ? language->T ("🖐 特大 (11-20へ) ▶", "🖐 Giant (11-20) ▶")
-                : language->T ("📋 20項目一覧へ戻す", "📋 All 20 View");
+                ? language->T ("特大 (11-20へ) ▶", "Large (11-20) ▶")
+                : language->T ("20項目一覧へ戻す", "All 20 View");
         drawPillBtn (dockLargeModeRect, largeCardPage > 0, Palette::yellow, largeModeTxt);
         drawPillBtn (dockPrevRect, true, Palette::salmon, language->T ("◀ 前へ", "◀ Prev"));
         drawPillBtn (dockNextRect, true, Palette::salmon, language->T ("次へ ▶", "Next ▶"));
 
         drawPillBtn (dockAuditionRect, true, Palette::ice,
-                     language->T ("🔊 開いたまま試聴", "🔊 Audition Here"));
+                     language->T ("▶ 開いたまま試聴", "▶ Audition Here"));
         drawPillBtn (dockApplyRect, true, activeAcc,
                      language->T ("✓ このプリセットで決定", "✓ Apply & Close"));
 
