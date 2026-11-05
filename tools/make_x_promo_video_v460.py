@@ -374,7 +374,7 @@ def main():
         "noir": load_ui("v4.8.0_couture_03_noir.png", "v4.6.0_couture_03_noir.png", ui_Sz),
         "mint": load_ui("v550_couture_mint_switches.png", "v4.6.0_couture_04_mint.png", ui_Sz),
         "peach": load_ui("v4.8.0_couture_05_peach.png", "v4.6.0_couture_05_peach.png", ui_Sz),
-        "argon": load_ui("v550_overview_final.png", "v4.8.0_argon_cockpit.png", ui_Sz),
+        "argon": load_ui("v550_midnight_lantern_bokeh_ui.png", "v550_overview_final.png", ui_Sz),
         "yurufuwa": load_ui("v4.8.0_persona_yurufuwa_cafe.png", "v4.6.0_persona_yurufuwa_cafe.png", ui_Sz),
         "studio": load_ui("v4.8.0_persona_studio_pro.png", "v4.6.0_persona_studio_pro.png", ui_Sz),
     }

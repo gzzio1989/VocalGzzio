@@ -2355,63 +2355,137 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
 
             if (themeMode == 0)
             {
-                // ★ Midnight Forest Canopy & Warm Lantern Bokeh Atmosphere (リファレンス画像の情緒的ボケ光粒・宵闇の森と暖色ランタンの光輪)
-                // 1. 中央奥の宵闇インディゴ・セルリアン天窓の抜け感
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0x381c4488), fw * 0.48f, fh * 0.18f,
-                                                         juce::Colours::transparentBlack, fw * 0.48f, fh * 0.72f, true));
+                // ★ Midnight Forest Canopy & Warm Lantern Firework Bokeh Atmosphere (リファレンス画像の情緒的ボケ光粒・綿毛状花火クラスタ・宵闇の森と黄金ランタン逆光)
+                // 1. 中央上部〜中景に広がる深いミッドナイト・セルリアン夜空の天窓（.withAlpha(0.0f) で黒濁りゼロ）
+                const juce::Colour skyBlue (0xff1c4ea8);
+                g.setGradientFill (juce::ColourGradient (skyBlue.withAlpha (0.42f), fw * 0.48f, fh * 0.14f,
+                                                         skyBlue.withAlpha (0.0f),  fw * 0.48f, fh * 0.78f, true));
                 g.fillRect (getLocalBounds());
 
-                // 2. 下部中央から立ち昇る暖色ランタン・アンバーゴールドの柔らかい逆光ハロー
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0x46e89638), fw * 0.50f, fh * 0.88f,
-                                                         juce::Colours::transparentBlack, fw * 0.50f, fh * 0.24f, true));
+                // 2. 下部中央から立ち昇る鮮烈な黄金ホワイト・ランタン＆花火コアの逆光ハロー (Reference Image Center-Bottom Core)
+                const juce::Colour coreGold (0xffffaa2b), coreWarm (0xfffff4c2), coreWhite (0xffffffff);
+                g.setGradientFill (juce::ColourGradient (coreGold.withAlpha (0.56f), fw * 0.51f, fh * 0.72f,
+                                                         coreGold.withAlpha (0.0f),  fw * 0.51f, fh * 0.08f, true));
                 g.fillRect (getLocalBounds());
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0x32ffdf96), fw * 0.52f, fh * 0.76f,
-                                                         juce::Colours::transparentBlack, fw * 0.52f, fh * 0.42f, true));
+                g.setGradientFill (juce::ColourGradient (coreWarm.withAlpha (0.64f), fw * 0.52f, fh * 0.70f,
+                                                         coreWarm.withAlpha (0.0f),  fw * 0.52f, fh * 0.30f, true));
                 g.fillRect (getLocalBounds());
-
-                // 3. 左右中景のセルリアンブルー＆トワイライトローズの淡い霧ボケ
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0x2c3898d4), fw * 0.24f, fh * 0.54f,
-                                                         juce::Colours::transparentBlack, fw * 0.54f, fh * 0.54f, true));
-                g.fillRect (getLocalBounds());
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0x2c3898d4), fw * 0.76f, fh * 0.46f,
-                                                         juce::Colours::transparentBlack, fw * 0.46f, fh * 0.46f, true));
-                g.fillRect (getLocalBounds());
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0x26e67890), fw * 0.60f, fh * 0.56f,
-                                                         juce::Colours::transparentBlack, fw * 0.34f, fh * 0.34f, true));
+                g.setGradientFill (juce::ColourGradient (coreWhite.withAlpha (0.72f), fw * 0.53f, fh * 0.71f,
+                                                         coreWhite.withAlpha (0.0f),  fw * 0.53f, fh * 0.50f, true));
                 g.fillRect (getLocalBounds());
 
-                // 4. 多層アウトフォーカス玉ボケ（Warm Amber-Gold / Twilight Rose-Coral / Cerulean-Cyan / Firefly Teal）
+                // 3. 左右・中景のバイオルミネセンス・セルリアンシアン＆トワイライト・ローズコーラルの彩雲ボケ
+                const juce::Colour nebCyan (0xff38c8f2), nebRose (0xfff4688c);
+                g.setGradientFill (juce::ColourGradient (nebCyan.withAlpha (0.36f), fw * 0.22f, fh * 0.46f,
+                                                         nebCyan.withAlpha (0.0f),  fw * 0.50f, fh * 0.46f, true));
+                g.fillRect (getLocalBounds());
+                g.setGradientFill (juce::ColourGradient (nebCyan.withAlpha (0.38f), fw * 0.76f, fh * 0.40f,
+                                                         nebCyan.withAlpha (0.0f),  fw * 0.48f, fh * 0.40f, true));
+                g.fillRect (getLocalBounds());
+                g.setGradientFill (juce::ColourGradient (nebRose.withAlpha (0.35f), fw * 0.58f, fh * 0.50f,
+                                                         nebRose.withAlpha (0.0f),  fw * 0.30f, fh * 0.26f, true));
+                g.fillRect (getLocalBounds());
+                g.setGradientFill (juce::ColourGradient (nebRose.withAlpha (0.32f), fw * 0.34f, fh * 0.62f,
+                                                         nebRose.withAlpha (0.0f),  fw * 0.12f, fh * 0.40f, true));
+                g.fillRect (getLocalBounds());
+
+                // 4. リファレンス画像の象徴的な『綿毛状の花火・光のフィラメントバースト (Dandelion Firework Clusters)』
+                struct FireworkCluster { float nx, ny, rad; juce::uint32 col; int rays; };
+                static const FireworkCluster kClusters[] = {
+                    { 0.24f, 0.46f, 68.0f, 0xff44d2f6, 26 },
+                    { 0.36f, 0.34f, 62.0f, 0xffffb84d, 24 },
+                    { 0.48f, 0.28f, 58.0f, 0xff48dec0, 22 },
+                    { 0.61f, 0.48f, 76.0f, 0xfff87898, 28 },
+                    { 0.74f, 0.38f, 66.0f, 0xff44d2f6, 26 },
+                    { 0.33f, 0.68f, 72.0f, 0xffffc458, 28 },
+                    { 0.53f, 0.64f, 88.0f, 0xffffe89e, 32 },
+                    { 0.68f, 0.68f, 64.0f, 0xfff87898, 24 }
+                };
+                for (int ci = 0; ci < 8; ++ci)
+                {
+                    const auto& cl = kClusters[ci];
+                    const float cx = fw * cl.nx, cy = fh * cl.ny;
+                    const juce::Colour cc (cl.col);
+                    g.setGradientFill (juce::ColourGradient (cc.withAlpha (0.28f), cx, cy,
+                                                             cc.withAlpha (0.0f),  cx + cl.rad, cy, true));
+                    g.fillEllipse (cx - cl.rad, cy - cl.rad, cl.rad * 2.0f, cl.rad * 2.0f);
+                    for (int rIdx = 0; rIdx < cl.rays; ++rIdx)
+                    {
+                        const float ang = (float) rIdx * juce::MathConstants<float>::twoPi / (float) cl.rays
+                                        + ThemePainter::hash01 (ci * 41 + rIdx * 7) * 0.22f;
+                        const float rLen = cl.rad * (0.48f + 0.52f * ThemePainter::hash01 (ci * 41 + rIdx * 13));
+                        const float rIn  = cl.rad * 0.08f;
+                        const float x0 = cx + std::cos (ang) * rIn,  y0 = cy + std::sin (ang) * rIn;
+                        const float x1 = cx + std::cos (ang) * rLen, y1 = cy + std::sin (ang) * rLen;
+                        g.setGradientFill (juce::ColourGradient (cc.brighter (0.35f).withAlpha (0.42f), x0, y0,
+                                                                 cc.withAlpha (0.0f), x1, y1, false));
+                        g.drawLine (x0, y0, x1, y1, 1.35f);
+                        g.setColour (cc.brighter (0.45f).withAlpha (0.52f));
+                        g.fillEllipse (x1 - 1.5f, y1 - 1.5f, 3.0f, 3.0f);
+                    }
+                }
+
+                // 5. 花火・ランタンの微細スパーク粒子クラスター（全画面に舞う光の粒）
+                for (int sp = 0; sp < 110; ++sp)
+                {
+                    const float h1 = ThemePainter::hash01 (sp * 31 + 7);
+                    const float h2 = ThemePainter::hash01 (sp * 31 + 19);
+                    const float h3 = ThemePainter::hash01 (sp * 31 + 29);
+                    const float sx = fw * (0.06f + 0.88f * h1);
+                    const float sy = fh * (0.16f + 0.80f * h2);
+                    const float sr = 1.6f + 4.2f * h3;
+                    const juce::Colour sc = (sp % 4 == 0) ? juce::Colour (0xfffff6d6)
+                                          : (sp % 4 == 1) ? juce::Colour (0xffffb444)
+                                          : (sp % 4 == 2) ? juce::Colour (0xff5ce1f8)
+                                                          : juce::Colour (0xfff47c98);
+                    g.setColour (sc.withAlpha (0.26f + 0.40f * h3));
+                    g.fillEllipse (sx - sr, sy - sr, sr * 2.0f, sr * 2.0f);
+                }
+
+                // 6. 下辺の黄金に輝く草原・光の穂ストリーク (Golden Meadow Light Streaks)
+                for (int gr = 0; gr < 54; ++gr)
+                {
+                    const float gx = fw * (0.03f + 0.94f * ((float) gr / 53.0f));
+                    const float gh = 32.0f + 58.0f * ThemePainter::hash01 (gr * 17 + 5);
+                    const float tilt = (ThemePainter::hash01 (gr * 17 + 11) - 0.5f) * 14.0f;
+                    const float distCenter = std::abs (gx - fw * 0.52f) / (fw * 0.5f);
+                    const float ga = juce::jlimit (0.14f, 0.55f, (1.0f - distCenter * 0.62f) * 0.48f);
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffffdf88).withAlpha (ga), gx, fh,
+                                                             juce::Colour (0xffff9828).withAlpha (0.0f), gx + tilt, fh - gh, false));
+                    g.drawLine (gx, fh, gx + tilt, fh - gh, 2.3f);
+                }
+
+                // 7. 多層アウトフォーカス玉ボケ（Warm Amber-Gold / Twilight Rose-Coral / Cerulean-Cyan / Firefly Teal）
                 struct BokehOrb { float nx, ny, r, alpha; juce::uint32 col; };
                 static const BokehOrb kBokeh[] = {
                     // 大口径の柔らかい後景ボケ
-                    { 0.18f, 0.62f, 68.0f, 0.12f, 0xff4aaee0 },
-                    { 0.32f, 0.48f, 54.0f, 0.14f, 0xfff6b856 },
-                    { 0.49f, 0.36f, 62.0f, 0.11f, 0xff48c4aa },
-                    { 0.62f, 0.52f, 72.0f, 0.14f, 0xffe67890 },
-                    { 0.77f, 0.42f, 64.0f, 0.13f, 0xff4aaee0 },
-                    { 0.54f, 0.74f, 88.0f, 0.18f, 0xffffd278 },
-                    { 0.38f, 0.78f, 66.0f, 0.15f, 0xfff6b856 },
-                    { 0.68f, 0.76f, 60.0f, 0.14f, 0xffe67890 },
-                    // 中口径の幻想的な光粒ボケ（八角絞り風ソフトエッジ）
-                    { 0.14f, 0.76f, 26.0f, 0.22f, 0xfff6b856 },
-                    { 0.22f, 0.52f, 32.0f, 0.18f, 0xff7ad4f4 },
-                    { 0.29f, 0.68f, 28.0f, 0.24f, 0xffffebb8 },
-                    { 0.39f, 0.40f, 34.0f, 0.20f, 0xffe67890 },
-                    { 0.45f, 0.58f, 24.0f, 0.25f, 0xffffebb8 },
-                    { 0.56f, 0.64f, 38.0f, 0.26f, 0xffffebb8 },
-                    { 0.64f, 0.42f, 29.0f, 0.21f, 0xff7ad4f4 },
-                    { 0.72f, 0.60f, 31.0f, 0.22f, 0xfff6b856 },
-                    { 0.83f, 0.54f, 27.0f, 0.19f, 0xff48c4aa },
-                    { 0.88f, 0.32f, 36.0f, 0.24f, 0xffe67890 },
+                    { 0.16f, 0.58f, 82.0f, 0.24f, 0xff4aaee0 },
+                    { 0.30f, 0.44f, 70.0f, 0.28f, 0xfff6b856 },
+                    { 0.48f, 0.32f, 74.0f, 0.22f, 0xff48c4aa },
+                    { 0.61f, 0.48f, 88.0f, 0.28f, 0xffe67890 },
+                    { 0.76f, 0.38f, 78.0f, 0.25f, 0xff38c8f2 },
+                    { 0.53f, 0.70f, 108.0f, 0.34f, 0xffffdf88 },
+                    { 0.37f, 0.74f, 80.0f, 0.28f, 0xfff6b856 },
+                    { 0.67f, 0.72f, 74.0f, 0.26f, 0xffe67890 },
+                    // 中口径の幻想的な光粒ボケ（ソフトエッジ玉ボケ）
+                    { 0.13f, 0.72f, 34.0f, 0.38f, 0xfff6b856 },
+                    { 0.22f, 0.48f, 38.0f, 0.32f, 0xff7ad4f4 },
+                    { 0.29f, 0.64f, 36.0f, 0.42f, 0xffffebb8 },
+                    { 0.39f, 0.38f, 40.0f, 0.38f, 0xfff2889c },
+                    { 0.45f, 0.56f, 32.0f, 0.44f, 0xffffebb8 },
+                    { 0.56f, 0.62f, 46.0f, 0.46f, 0xfffff2c6 },
+                    { 0.64f, 0.40f, 36.0f, 0.36f, 0xff7ad4f4 },
+                    { 0.72f, 0.58f, 38.0f, 0.38f, 0xfff6b856 },
+                    { 0.82f, 0.50f, 34.0f, 0.34f, 0xff48c4aa },
                     // 小口径の煌めくランタン・ホタル光球
-                    { 0.25f, 0.82f, 14.0f, 0.32f, 0xffffebb8 },
-                    { 0.35f, 0.62f, 12.0f, 0.30f, 0xffffebb8 },
-                    { 0.43f, 0.72f, 16.0f, 0.35f, 0xfffff6d6 },
-                    { 0.52f, 0.48f, 13.0f, 0.28f, 0xff7ad4f4 },
-                    { 0.59f, 0.70f, 15.0f, 0.34f, 0xfffff6d6 },
-                    { 0.67f, 0.52f, 12.0f, 0.29f, 0xffe67890 },
-                    { 0.75f, 0.74f, 15.0f, 0.31f, 0xfff6b856 },
-                    { 0.82f, 0.68f, 11.0f, 0.28f, 0xff7ad4f4 }
+                    { 0.25f, 0.78f, 18.0f, 0.54f, 0xffffebb8 },
+                    { 0.35f, 0.60f, 16.0f, 0.52f, 0xfffff6d6 },
+                    { 0.43f, 0.70f, 20.0f, 0.60f, 0xfffff8e2 },
+                    { 0.52f, 0.46f, 17.0f, 0.48f, 0xff7ad4f4 },
+                    { 0.59f, 0.68f, 19.0f, 0.58f, 0xfffff6d6 },
+                    { 0.67f, 0.50f, 16.0f, 0.50f, 0xffe67890 },
+                    { 0.75f, 0.72f, 18.0f, 0.52f, 0xfff6b856 },
+                    { 0.82f, 0.66f, 15.0f, 0.48f, 0xff7ad4f4 }
                 };
                 for (const auto& b : kBokeh)
                 {
@@ -2420,17 +2494,39 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
                     g.setGradientFill (juce::ColourGradient (c.withAlpha (b.alpha), bx, by,
                                                              c.withAlpha (0.0f), bx + br, by, true));
                     g.fillEllipse (bx - br, by - br, br * 2.0f, br * 2.0f);
-                    g.setColour (c.brighter (0.25f).withAlpha (b.alpha * 0.42f));
+                    g.setColour (c.brighter (0.30f).withAlpha (b.alpha * 0.62f));
                     g.fillEllipse (bx - br * 0.52f, by - br * 0.52f, br * 1.04f, br * 1.04f);
+                    g.setColour (juce::Colours::white.withAlpha (b.alpha * 0.32f));
+                    g.drawEllipse (bx - br * 0.52f, by - br * 0.52f, br * 1.04f, br * 1.04f, 1.2f);
                 }
 
-                // 5. 上部左右の深い森の樹冠ビネット（視線を中央の光へ自然に誘導）
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0xb802040a), 0.0f, 0.0f,
-                                                         juce::Colours::transparentBlack, fw * 0.36f, fh * 0.42f, true));
+                // 8. 上部左右の深い森の樹冠シルエット＆右側の小枝と大口径前景ピーチ玉ボケ (Reference Image Canopy & Branch Bokeh)
+                const juce::Colour canopyDark (0xff02040a);
+                g.setGradientFill (juce::ColourGradient (canopyDark.withAlpha (0.82f), 0.0f, 0.0f,
+                                                         canopyDark.withAlpha (0.0f),  fw * 0.36f, fh * 0.44f, true));
                 g.fillRect (getLocalBounds());
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0xb802040a), fw, 0.0f,
-                                                         juce::Colours::transparentBlack, fw * 0.64f, fh * 0.42f, true));
+                g.setGradientFill (juce::ColourGradient (canopyDark.withAlpha (0.82f), fw, 0.0f,
+                                                         canopyDark.withAlpha (0.0f),  fw * 0.64f, fh * 0.44f, true));
                 g.fillRect (getLocalBounds());
+
+                // 右上から右下へ斜めに横切る小枝のアウトフォーカスシルエットと、枝に重なる大きな桃色シャンパン玉ボケ
+                {
+                    juce::Path branch;
+                    branch.startNewSubPath (fw * 0.96f, fh * 0.14f);
+                    branch.quadraticTo (fw * 0.87f, fh * 0.52f, fw * 0.78f, fh * 0.96f);
+                    g.setColour (juce::Colour (0x88030610));
+                    g.strokePath (branch, juce::PathStrokeType (12.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                    const float fgX = fw * 0.885f, fgY = fh * 0.30f, fgR = 35.0f;
+                    const juce::Colour fgCol (0xffffd6c2);
+                    g.setGradientFill (juce::ColourGradient (fgCol.withAlpha (0.62f), fgX, fgY,
+                                                             fgCol.withAlpha (0.0f), fgX + fgR * 1.35f, fgY, true));
+                    g.fillEllipse (fgX - fgR * 1.35f, fgY - fgR * 1.35f, fgR * 2.7f, fgR * 2.7f);
+                    g.setColour (fgCol.withAlpha (0.74f));
+                    g.fillEllipse (fgX - fgR * 0.75f, fgY - fgR * 0.75f, fgR * 1.5f, fgR * 1.5f);
+                    g.setColour (juce::Colours::white.withAlpha (0.50f));
+                    g.drawEllipse (fgX - fgR * 0.75f, fgY - fgR * 0.75f, fgR * 1.5f, fgR * 1.5f, 1.5f);
+                }
             }
         }
     }
@@ -2446,23 +2542,31 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
     if (! liteMode)
     {
         const bool lightDeck = Palette::panel.getPerceivedBrightness() > 0.55f;
-        const float deckAlpha = (accessMode == 1 || accessMode == 3 || themeMode == 0) ? 1.0f : (nightTheme() ? 0.78f : (lightDeck ? 0.94f : 0.66f));
+        const float deckAlpha = (accessMode == 1 || accessMode == 3) ? 1.0f
+                              : (themeMode == 0) ? 0.58f
+                              : (nightTheme() ? 0.78f : (lightDeck ? 0.94f : 0.66f));
         const juce::Rectangle<float> topDeck (16.0f, 9.0f, (float) getWidth() - 32.0f, 52.0f);
         const juce::Rectangle<float> botDeck (16.0f, 65.0f, (float) getWidth() - 32.0f, 52.0f);
         for (const auto& d : { topDeck, botDeck })
         {
-            g.setColour (lightDeck ? Palette::metalDark.withAlpha (0.16f) : juce::Colours::black.withAlpha (nightTheme() ? 0.28f : 0.08f));
+            g.setColour (lightDeck ? Palette::metalDark.withAlpha (0.16f) : juce::Colours::black.withAlpha (nightTheme() ? 0.34f : 0.08f));
             g.fillRoundedRectangle (d.translated (0.0f, 2.5f), 14.0f);
-            const auto dTop = lightDeck ? Palette::panel.brighter (0.03f) : Palette::panel.brighter (0.08f).withMultipliedAlpha (deckAlpha);
-            const auto dBot = lightDeck ? Palette::panel2.interpolatedWith (Palette::panel, 0.42f) : Palette::panel.darker (0.08f).withMultipliedAlpha (deckAlpha);
+            const auto dTop = lightDeck ? Palette::panel.brighter (0.03f) : Palette::panel2.brighter (0.08f).withMultipliedAlpha (deckAlpha);
+            const auto dBot = lightDeck ? Palette::panel2.interpolatedWith (Palette::panel, 0.42f) : Palette::bgTop.darker (0.12f).withMultipliedAlpha (deckAlpha + 0.08f);
             g.setGradientFill (juce::ColourGradient (dTop, d.getX(), d.getY(), dBot, d.getX(), d.getBottom(), false));
             g.fillRoundedRectangle (d, 14.0f);
-            g.setColour (juce::Colours::white.withAlpha (nightTheme() ? 0.16f : 0.82f));
+            g.setColour (juce::Colours::white.withAlpha (nightTheme() ? 0.22f : 0.82f));
             g.drawHorizontalLine (juce::roundToInt (d.getY() + 1.2f), d.getX() + 14.0f, d.getRight() - 14.0f);
-            g.setColour (liverTheme() ? Palette::metalMid
-                       : lightDeck    ? Palette::panelLn.darker (0.08f)
-                                      : Palette::panelLn.withAlpha (0.90f));
-            g.drawRoundedRectangle (d.reduced (0.6f), 14.0f, (lightDeck || liverTheme()) ? 1.5f : 1.1f);
+            g.setColour (liverTheme()      ? Palette::metalMid
+                       : (themeMode == 0)  ? Palette::metalMid.interpolatedWith (Palette::panelLn, 0.35f).withAlpha (0.78f)
+                       : lightDeck         ? Palette::panelLn.darker (0.08f)
+                                           : Palette::panelLn.withAlpha (0.90f));
+            g.drawRoundedRectangle (d.reduced (0.6f), 14.0f, (lightDeck || liverTheme() || themeMode == 0) ? 1.35f : 1.1f);
+            if (themeMode == 0)
+            {
+                g.setColour (Palette::metalHi.withAlpha (0.20f));
+                g.drawRoundedRectangle (d.reduced (2.2f), 12.5f, 0.8f);
+            }
         }
 
         // 3D発光ブランド・エンブレムバッジ
@@ -2821,9 +2925,9 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         }
     }
 
-    // テーマ風景が透けて見えるよう、風景テーマおよび標準Midnight Lantern Bokeh時は半透明ガラス調、軽量・アクセシビリティ時はAlpha=1.0の完全不透明下地にする
+    // テーマ風景が透けて見えるよう、風景テーマは半透明ガラス調、Midnight Lantern Bokeh時は濁りのない深紺サファイア・クリスタル下地(0.88f)にする
     const float cardAlpha = (liteMode || accessMode == 1 || accessMode == 3) ? 1.0f
-                          : (themeMode == 0) ? 0.80f
+                          : (themeMode == 0) ? 0.88f
                           : oceanStarTheme() ? 0.38f
                           : liverTheme() ? 0.96f
                           : (themeMode == 2 || themeMode == 4 || themeMode == 6) ? 0.86f
@@ -2925,25 +3029,75 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             return;
         }
 
-        // 1. ARGON STUDIO / MIDNIGHT LANTERN BOKEH: 精密ボケ透過ガラスベゼル＆シャンパンアンバー・リムフレーム
+        // 1. MIDNIGHT LANTERN BOKEH & STUDIO: 宵闇サファイア・クリスタル＆花火綿毛ボケ＆シャンパンゴールド宝飾リムカード
         if (isSciFiStyle)
         {
-            const float rad = 12.0f;
+            const float rad = 14.0f;
             if (themeMode == 0)
             {
-                g.setColour (juce::Colours::black.withAlpha (0.42f));
-                g.fillRoundedRectangle (rf.translated (0.0f, 3.5f), rad);
-                const auto topBg = Palette::panel.brighter (0.05f).withMultipliedAlpha (cardAlpha);
-                const auto botBg = Palette::bgBot.darker (0.12f).withMultipliedAlpha (cardAlpha + 0.08f);
+                g.setColour (juce::Colours::black.withAlpha (0.52f));
+                g.fillRoundedRectangle (rf.translated (0.0f, 4.2f), rad);
+                const auto topBg = juce::Colour (0xff071028).withMultipliedAlpha (cardAlpha);
+                const auto botBg = juce::Colour (0xff030714).withMultipliedAlpha (juce::jmin (0.95f, cardAlpha + 0.05f));
                 g.setGradientFill (juce::ColourGradient (topBg, rf.getX(), rf.getY(), botBg, rf.getX(), rf.getBottom(), false));
                 g.fillRoundedRectangle (rf, rad);
 
-                // カード下部にほんのり映り込む暖色ランタン＆セルリアンのボケ反射
-                g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.07f), rf.getCentreX(), rf.getBottom(),
-                                                         juce::Colours::transparentBlack, rf.getCentreX(), rf.getY() + rf.getHeight() * 0.45f, false));
-                g.fillRoundedRectangle (rf, rad);
-                g.setGradientFill (juce::ColourGradient (Palette::panel2.withAlpha (0.86f), rf.getX(), rf.getY(),
-                                                         Palette::panel.withAlpha (0.72f), rf.getX(), rf.getY() + 45.0f, false));
+                // カード内部の純粋な深紺キャンバス上に「光の綿毛（タンポポ状の花火フィラメント）」とシネマ玉ボケを直接描画（茶濁りゼロ！）
+                {
+                    juce::Path cClip;
+                    cClip.addRoundedRectangle (rf.reduced (1.2f), rad - 1.0f);
+                    juce::Graphics::ScopedSaveState cs (g);
+                    g.reduceClipRegion (cClip);
+
+                    // 下辺エッジのみをほんのり照らす暖色ランタン・リムグロー（カード中央の深紺は一切濁らせない）
+                    const juce::Colour cardGlow = Palette::yellow.interpolatedWith (accent, 0.48f);
+                    g.setGradientFill (juce::ColourGradient (cardGlow.withAlpha (0.20f), rf.getCentreX(), rf.getBottom(),
+                                                             cardGlow.withAlpha (0.0f),  rf.getCentreX(), rf.getBottom() - juce::jmin (54.0f, rf.getHeight() * 0.26f), false));
+                    g.fillRect (rf.withTop (rf.getBottom() - 56.0f));
+
+                    // カード内の2箇所に浮かぶ繊細な「花火の光の綿毛クラスタ」＆玉ボケ
+                    auto drawCardDandelion = [&] (float fx, float fy, float fRad, juce::Colour fCol, float fAlpha)
+                    {
+                        g.setGradientFill (juce::ColourGradient (fCol.withAlpha (fAlpha * 0.42f), fx, fy,
+                                                                 fCol.withAlpha (0.0f), fx + fRad, fy, true));
+                        g.fillEllipse (fx - fRad, fy - fRad, fRad * 2.0f, fRad * 2.0f);
+                        const int rays = 18;
+                        for (int ri = 0; ri < rays; ++ri)
+                        {
+                            const float ang = (float) ri * juce::MathConstants<float>::twoPi / (float) rays + (fx * 0.013f);
+                            const float rLen = fRad * ((ri % 3 == 0) ? 0.92f : ((ri % 2 == 0) ? 0.68f : 0.46f));
+                            const float r0 = fRad * 0.10f;
+                            const float x0 = fx + std::cos (ang) * r0, y0 = fy + std::sin (ang) * r0;
+                            const float x1 = fx + std::cos (ang) * rLen, y1 = fy + std::sin (ang) * rLen;
+                            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (fAlpha * 0.55f), x0, y0,
+                                                                     fCol.withAlpha (0.0f), x1, y1, false));
+                            g.drawLine (x0, y0, x1, y1, (ri % 3 == 0) ? 1.0f : 0.65f);
+                            if (ri % 2 == 0)
+                            {
+                                g.setColour (fCol.brighter (0.35f).withAlpha (fAlpha * 0.65f));
+                                g.fillEllipse (x1 - 1.3f, y1 - 1.3f, 2.6f, 2.6f);
+                            }
+                        }
+                    };
+                    drawCardDandelion (rf.getX() + rf.getWidth() * 0.18f, rf.getBottom() - rf.getHeight() * 0.24f,
+                                       juce::jmin (48.0f, rf.getWidth() * 0.14f), accent, 0.34f);
+                    drawCardDandelion (rf.getRight() - rf.getWidth() * 0.16f, rf.getY() + rf.getHeight() * 0.34f,
+                                       juce::jmin (42.0f, rf.getWidth() * 0.12f), Palette::yellow.interpolatedWith (Palette::salmon, 0.35f), 0.28f);
+
+                    // ソフトな大口径レンズ玉ボケ（純色 .withAlpha(0.0f) フェード）
+                    const float b1x = rf.getRight() - rf.getWidth() * 0.26f, b1y = rf.getBottom() - 24.0f;
+                    g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.16f), b1x, b1y,
+                                                             Palette::yellow.withAlpha (0.0f),  b1x + 28.0f, b1y, true));
+                    g.fillEllipse (b1x - 28.0f, b1y - 28.0f, 56.0f, 56.0f);
+                    const float b2x = rf.getX() + rf.getWidth() * 0.38f, b2y = rf.getY() + 62.0f;
+                    g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.14f), b2x, b2y,
+                                                             accent.withAlpha (0.0f),  b2x + 22.0f, b2y, true));
+                    g.fillEllipse (b2x - 22.0f, b2y - 22.0f, 44.0f, 44.0f);
+                }
+
+                // 見出し帯の深紺サファイア・クリスタルシェルフ
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0xff102048).withAlpha (0.68f), rf.getX(), rf.getY(),
+                                                         juce::Colour (0xff060d22).withAlpha (0.36f), rf.getX(), rf.getY() + 45.0f, false));
                 g.fillRoundedRectangle (rf.withHeight (45.0f), rad);
             }
             else
@@ -2958,29 +3112,55 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.fillRoundedRectangle (rf, rad);
             }
 
-            // ヘッダー背景の控えめなティント
+            // ヘッダー背景のセクションカラー＆アンバー光彩グラデーション
             {
                 juce::Path hdrClip;
                 hdrClip.addRoundedRectangle (rf.getX() + 1.0f, rf.getY() + 1.0f, rf.getWidth() - 2.0f, 44.0f,
                                              rad - 1.0f, rad - 1.0f, true, true, false, false);
-                g.setGradientFill (juce::ColourGradient (accent.withAlpha (nightTheme() ? 0.12f : 0.08f), rf.getX(), rf.getY(),
-                                                         juce::Colours::transparentBlack, rf.getX() + rf.getWidth() * 0.75f, rf.getY(), false));
+                g.setGradientFill (juce::ColourGradient (accent.withAlpha (nightTheme() ? 0.22f : 0.10f), rf.getX(), rf.getY(),
+                                                         Palette::yellow.withAlpha (themeMode == 0 ? 0.08f : 0.0f), rf.getX() + rf.getWidth() * 0.80f, rf.getY(), false));
                 g.fillPath (hdrClip);
             }
 
-            // ヘッダー下部1pxセパレーターライン
-            g.setColour (Palette::panelLn.withAlpha (0.55f));
-            g.fillRect (rf.getX() + 12.0f, (float) (r.getY() + 45), rf.getWidth() - 24.0f, 1.0f);
+            // ヘッダー下部のシャンパン＆セクション色グラデーション・ライトパイプライン
+            g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.82f), rf.getX() + 14.0f, (float) (r.getY() + 45),
+                                                     Palette::metalMid.withAlpha (0.28f), rf.getRight() - 14.0f, (float) (r.getY() + 45), false));
+            g.fillRect (rf.getX() + 14.0f, (float) (r.getY() + 45), rf.getWidth() - 28.0f, 1.4f);
 
-            // 上縁の微細なスペキュラハイライト＆1px外周ベゼル
-            g.setColour (juce::Colours::white.withAlpha (nightTheme() ? 0.06f : 0.35f));
-            g.drawHorizontalLine (r.getY() + 1, rf.getX() + 12.0f, rf.getRight() - 12.0f);
-            g.setColour (Palette::panelLn.withAlpha (0.68f));
-            g.drawRoundedRectangle (rf.reduced (0.5f), rad, 1.0f);
+            // VisionOS / Leica 風の二重スペキュラ・シャンパンゴールド＆スターライトベゼル
+            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (themeMode == 0 ? 0.30f : 0.14f), rf.getX(), rf.getY(),
+                                                     Palette::metalMid.withAlpha (0.10f), rf.getRight(), rf.getBottom(), false));
+            g.drawRoundedRectangle (rf.reduced (1.6f), rad - 1.2f, 1.0f);
+            g.setColour (themeMode == 0 ? Palette::metalMid.interpolatedWith (accent, 0.38f).withAlpha (0.78f) : Palette::panelLn.withAlpha (0.72f));
+            g.drawRoundedRectangle (rf.reduced (0.5f), rad, 1.35f);
 
-            // 見出し左端のクリーンなアクセントピラー
-            g.setColour (accent);
-            g.fillRoundedRectangle (rf.getX() + 14.0f, rf.getY() + 13.0f, 4.0f, 20.0f, 2.0f);
+            // 四隅のクロノグラフ・コーナーラグ金具＆下辺センターのオプティカル・ライトパイプバー
+            if (themeMode == 0)
+            {
+                const float lugLen = 12.0f, inset = 3.4f;
+                g.setColour (Palette::metalHi.interpolatedWith (accent, 0.45f).withAlpha (0.72f));
+                g.drawLine (rf.getX() + inset, rf.getY() + rad, rf.getX() + inset, rf.getY() + rad + lugLen, 1.8f);
+                g.drawLine (rf.getRight() - inset, rf.getY() + rad, rf.getRight() - inset, rf.getY() + rad + lugLen, 1.8f);
+                g.drawLine (rf.getX() + inset, rf.getBottom() - rad - lugLen, rf.getX() + inset, rf.getBottom() - rad, 1.8f);
+                g.drawLine (rf.getRight() - inset, rf.getBottom() - rad - lugLen, rf.getRight() - inset, rf.getBottom() - rad, 1.8f);
+
+                const float botBarW = juce::jmin (92.0f, rf.getWidth() * 0.28f);
+                g.setGradientFill (juce::ColourGradient (juce::Colours::transparentWhite, rf.getCentreX() - botBarW * 0.5f, rf.getBottom() - 2.4f,
+                                                         accent.interpolatedWith (Palette::yellow, 0.40f).withAlpha (0.82f), rf.getCentreX(), rf.getBottom() - 2.4f, false));
+                g.fillRoundedRectangle (rf.getCentreX() - botBarW * 0.5f, rf.getBottom() - 2.8f, botBarW * 0.5f, 2.0f, 1.0f);
+                g.setGradientFill (juce::ColourGradient (accent.interpolatedWith (Palette::yellow, 0.40f).withAlpha (0.82f), rf.getCentreX(), rf.getBottom() - 2.4f,
+                                                         juce::Colours::transparentWhite, rf.getCentreX() + botBarW * 0.5f, rf.getBottom() - 2.4f, false));
+                g.fillRoundedRectangle (rf.getCentreX(), rf.getBottom() - 2.8f, botBarW * 0.5f, 2.0f, 1.0f);
+            }
+
+            // 見出し左端の3Dランタン・ジュエルエンブレム
+            const float gx = rf.getX() + 16.0f, gy = rf.getY() + 23.0f;
+            g.setColour (accent.withAlpha (0.36f));
+            g.fillEllipse (gx - 6.5f, gy - 6.5f, 13.0f, 13.0f);
+            g.setGradientFill (juce::ColourGradient (Palette::metalHi, gx - 4.0f, gy - 4.0f, accent, gx + 4.0f, gy + 4.0f, false));
+            g.fillEllipse (gx - 4.2f, gy - 4.2f, 8.4f, 8.4f);
+            g.setColour (juce::Colours::white.withAlpha (0.92f));
+            g.fillEllipse (gx - 1.8f, gy - 2.0f, 2.4f, 2.0f);
             g.setColour (Palette::ink);
             return;
         }
@@ -3308,7 +3488,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 
     if (staticPass)
     {
-        card (overviewMonitor, isLiverStyle ? Palette::salmon : (isYuruStyle ? Palette::yellow : Palette::ice));
+        card (overviewMonitor, isLiverStyle ? Palette::salmon
+                             : isYuruStyle  ? Palette::yellow
+                             : (themeMode == 0) ? Palette::yellow.interpolatedWith (Palette::salmon, 0.35f)
+                             : Palette::ice);
         g.setColour (Palette::ink);
         const bool hasSwatches = ! coutureSwatchRects[0].isEmpty();
         const juce::String monTitle = (accessMode == 1)
@@ -3932,23 +4115,44 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         }
         else
         {
-            const auto rimAccent = oceanStarTheme() ? Palette::metalHi
+            const auto rimAccent = (oceanStarTheme() || themeMode == 0) ? Palette::metalHi
                                  : (isStudioStyle || themeMode == 3) ? Palette::yellow : Palette::ice;
             if (staticPass)
             {
                 // =========================================================================
                 // 🌿✦🎛★ PERSONA C / D / E: 静的ソケット・ベゼル・36目盛り・球面ジオラマ下地
                 // =========================================================================
-                const auto deckBgTop = oceanStarTheme() ? Palette::mirrorTop.withAlpha (0.36f)
-                                     : pastelTheme()    ? Palette::panel2.darker (0.04f) : Palette::bgTop.darker (0.48f);
-                const auto deckBgBot = oceanStarTheme() ? Palette::mirrorBot.withAlpha (0.48f)
-                                     : pastelTheme()    ? Palette::panel.darker  (0.08f) : Palette::panel.darker (0.30f);
-                g.setGradientFill (juce::ColourGradient (deckBgTop, padF.getX(), padF.getY(),
-                                                         deckBgBot, padF.getRight(), padF.getBottom(), false));
-                g.fillRoundedRectangle (padF, 14.0f);
-                g.setColour (oceanStarTheme() ? Palette::metalMid.withAlpha (0.68f)
-                           : isStudioStyle    ? Palette::yellow.withAlpha (0.55f) : Palette::panelLn.withAlpha (0.65f));
-                g.drawRoundedRectangle (padF.reduced (0.5f), 14.0f, 1.2f);
+                if (themeMode == 0)
+                {
+                    // ★ 3D天球の四角い囲い枠を撤廃し、背後のボケ光彩の上に直接アストロラーベ天球リングを浮遊させる
+                    const juce::Colour orbAura = Palette::yellow.interpolatedWith (Palette::salmon, 0.35f);
+                    g.setGradientFill (juce::ColourGradient (orbAura.withAlpha (0.20f), cx, cy,
+                                                             orbAura.withAlpha (0.0f),  cx + socketR * 1.38f, cy, true));
+                    g.fillEllipse (cx - socketR * 1.38f, cy - socketR * 1.38f, socketR * 2.76f, socketR * 2.76f);
+                    g.setColour (Palette::metalHi.withAlpha (0.24f));
+                    g.drawEllipse (cx - socketR - 11.0f, cy - socketR - 11.0f, (socketR + 11.0f) * 2.0f, (socketR + 11.0f) * 2.0f, 0.85f);
+                    for (int deg = 0; deg < 36; ++deg)
+                    {
+                        const float da = (float) deg * juce::MathConstants<float>::twoPi / 36.0f;
+                        const float r0 = socketR + 8.5f, r1 = socketR + ((deg % 3 == 0) ? 12.0f : 10.2f);
+                        g.setColour (Palette::metalHi.withAlpha ((deg % 3 == 0) ? 0.45f : 0.20f));
+                        g.drawLine (cx + r0 * std::cos (da), cy + r0 * std::sin (da),
+                                    cx + r1 * std::cos (da), cy + r1 * std::sin (da), (deg % 3 == 0) ? 1.2f : 0.8f);
+                    }
+                }
+                else
+                {
+                    const auto deckBgTop = oceanStarTheme() ? Palette::mirrorTop.withAlpha (0.34f)
+                                         : pastelTheme()    ? Palette::panel2.darker (0.04f) : Palette::bgTop.darker (0.48f);
+                    const auto deckBgBot = oceanStarTheme() ? Palette::mirrorBot.withAlpha (0.44f)
+                                         : pastelTheme()    ? Palette::panel.darker  (0.08f) : Palette::panel.darker (0.30f);
+                    g.setGradientFill (juce::ColourGradient (deckBgTop, padF.getX(), padF.getY(),
+                                                             deckBgBot, padF.getRight(), padF.getBottom(), false));
+                    g.fillRoundedRectangle (padF, 14.0f);
+                    g.setColour (oceanStarTheme() ? Palette::metalMid.withAlpha (0.72f)
+                               : isStudioStyle    ? Palette::yellow.withAlpha (0.55f) : Palette::panelLn.withAlpha (0.65f));
+                    g.drawRoundedRectangle (padF.reduced (0.5f), 14.0f, 1.25f);
+                }
 
                 for (int q = 0; q < 4; ++q)
                 {
@@ -3956,13 +4160,13 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     juce::Path orbitArc;
                     orbitArc.addCentredArc (cx, cy, socketR + 6.5f, socketR + 6.5f, 0.0f,
                                             qa - 0.34f, qa + 0.34f, true);
-                    g.setColour (rimAccent.withAlpha (0.45f));
-                    g.strokePath (orbitArc, juce::PathStrokeType (1.4f));
+                    g.setColour (rimAccent.withAlpha (0.55f));
+                    g.strokePath (orbitArc, juce::PathStrokeType (1.5f));
                 }
 
                 g.setColour (juce::Colours::black.withAlpha (pastelTheme() ? 0.18f : 0.55f));
                 g.fillEllipse (cx - socketR - 2.0f, cy - socketR + 2.0f, (socketR + 2.0f) * 2.0f, (socketR + 2.0f) * 2.0f);
-                if (oceanStarTheme())
+                if (oceanStarTheme() || themeMode == 0)
                 {
                     g.setGradientFill (juce::ColourGradient (Palette::metalHi,   cx - socketR, cy - socketR,
                                                              Palette::metalDark, cx + socketR, cy + socketR, false));
@@ -3978,10 +4182,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                                                              Palette::bgTop.darker (pastelTheme() ? 0.15f : 0.50f), cx + socketR, cy + socketR, false));
                 }
                 g.fillEllipse (cx - socketR, cy - socketR, socketR * 2.0f, socketR * 2.0f);
-                g.setColour (rimAccent.withAlpha (0.55f));
-                g.drawEllipse (cx - socketR, cy - socketR, socketR * 2.0f, socketR * 2.0f, 1.4f);
+                g.setColour (rimAccent.withAlpha (0.68f));
+                g.drawEllipse (cx - socketR, cy - socketR, socketR * 2.0f, socketR * 2.0f, 1.5f);
 
-                if (isNatureAura)
+                if (isNatureAura || themeMode == 0)
                 {
                     drawSparkle4 (cx, cy - socketR - 1.0f, 5.5f, Palette::yellow);
                     drawSparkle4 (cx, cy + socketR + 1.0f, 5.5f, Palette::blue);
@@ -3995,13 +4199,13 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.reduceClipRegion (sphereClip);
 
                 const auto spTop = (themeMode == 15) ? juce::Colour (0xff00f5d4)
-                                 : (themeMode == 0 || themeMode == 14) ? juce::Colour (0xff182c5e)
+                                 : (themeMode == 0 || themeMode == 14) ? juce::Colour (0xff12285c)
                                  : oceanStarTheme()  ? Palette::mirrorTop.brighter (0.18f)
                                  : (themeMode == 2)  ? juce::Colour (0xffe8f6ee)
                                  : isStudioStyle     ? juce::Colour (0xff2c2419)
                                                      : Palette::panel2.brighter (0.20f);
                 const auto spBot = (themeMode == 15) ? juce::Colour (0xff023e8a)
-                                 : (themeMode == 0 || themeMode == 14) ? juce::Colour (0xff050918)
+                                 : (themeMode == 0 || themeMode == 14) ? juce::Colour (0xff040714)
                                  : oceanStarTheme()  ? Palette::mirrorBot.darker (0.25f)
                                  : (themeMode == 2)  ? juce::Colour (0xffb8dec8)
                                  : isStudioStyle     ? juce::Colour (0xff120e0a)
@@ -4013,19 +4217,57 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 
                 if (themeMode == 0 || themeMode == 14)
                 {
-                    // ★ 球体内部の宵闇ランタン＆マルチカラー玉ボケ・ジオラマ下地
-                    g.setGradientFill (juce::ColourGradient (juce::Colour (0x66f6b856), cx, cy + ballR * 0.65f,
-                                                             juce::Colours::transparentBlack, cx, cy - ballR * 0.25f, true));
+                    // ★ 球体内部の宵闇ランタン花火コア＆タンポポ状「花火の光の綿毛」＆マルチカラー玉ボケ（純粋深紺コントラスト）
+                    const juce::Colour orbAmber (0xffffaa2b), orbCream (0xfffff8d8);
+                    g.setGradientFill (juce::ColourGradient (orbAmber.withAlpha (0.58f), cx + ballR * 0.06f, cy + ballR * 0.56f,
+                                                             orbAmber.withAlpha (0.0f),  cx + ballR * 0.06f, cy - ballR * 0.08f, true));
                     g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+                    g.setGradientFill (juce::ColourGradient (orbCream.withAlpha (0.76f), cx + ballR * 0.08f, cy + ballR * 0.52f,
+                                                             orbCream.withAlpha (0.0f),  cx + ballR * 0.08f, cy + ballR * 0.14f, true));
+                    g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+
+                    // 球体内部に咲く3つの「花火の光の綿毛クラスタ」
+                    struct OrbFirework { float dx, dy, r; juce::uint32 col; float a; };
+                    static const OrbFirework kOrbFw[3] = {
+                        { -0.34f, -0.18f, 0.38f, 0xff38d9bf, 0.72f },
+                        {  0.28f, -0.22f, 0.42f, 0xffff708e, 0.75f },
+                        {  0.04f,  0.22f, 0.46f, 0xffffb838, 0.82f }
+                    };
+                    for (const auto& fw : kOrbFw)
+                    {
+                        const float fx = cx + fw.dx * ballR, fy = cy + fw.dy * ballR, fr = fw.r * ballR;
+                        const juce::Colour fc (fw.col);
+                        g.setGradientFill (juce::ColourGradient (fc.withAlpha (fw.a * 0.40f), fx, fy,
+                                                                 fc.withAlpha (0.0f), fx + fr, fy, true));
+                        g.fillEllipse (fx - fr, fy - fr, fr * 2.0f, fr * 2.0f);
+                        const int rays = 20;
+                        for (int ri = 0; ri < rays; ++ri)
+                        {
+                            const float ang = (float) ri * juce::MathConstants<float>::twoPi / (float) rays + fw.dx;
+                            const float rLen = fr * ((ri % 3 == 0) ? 0.94f : ((ri % 2 == 0) ? 0.68f : 0.46f));
+                            const float x0 = fx + std::cos (ang) * (fr * 0.08f), y0 = fy + std::sin (ang) * (fr * 0.08f);
+                            const float x1 = fx + std::cos (ang) * rLen,         y1 = fy + std::sin (ang) * rLen;
+                            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (fw.a * 0.62f), x0, y0,
+                                                                     fc.withAlpha (0.0f), x1, y1, false));
+                            g.drawLine (x0, y0, x1, y1, (ri % 3 == 0) ? 1.1f : 0.7f);
+                            if (ri % 2 == 0)
+                            {
+                                g.setColour (fc.brighter (0.40f).withAlpha (fw.a * 0.75f));
+                                g.fillEllipse (x1 - 1.3f, y1 - 1.3f, 2.6f, 2.6f);
+                            }
+                        }
+                    }
+
                     struct OrbBokeh { float dx, dy, r; juce::uint32 col; float a; };
                     static const OrbBokeh kOrbBokeh[] = {
-                        { -0.42f,  0.22f, 0.28f, 0xff4aaee0, 0.26f },
-                        { -0.18f, -0.26f, 0.22f, 0xfff6b856, 0.28f },
-                        {  0.28f, -0.18f, 0.26f, 0xffe67890, 0.26f },
-                        {  0.44f,  0.18f, 0.24f, 0xff48c4aa, 0.24f },
-                        {  0.04f,  0.38f, 0.32f, 0xffffebb8, 0.32f },
-                        { -0.32f,  0.46f, 0.18f, 0xfff6b856, 0.30f },
-                        {  0.26f,  0.42f, 0.20f, 0xffe67890, 0.28f }
+                        { -0.46f,  0.16f, 0.26f, 0xff38c8f2, 0.46f },
+                        { -0.22f, -0.32f, 0.22f, 0xfff6b856, 0.48f },
+                        {  0.30f, -0.26f, 0.24f, 0xffff708e, 0.46f },
+                        {  0.48f,  0.14f, 0.22f, 0xff38d9bf, 0.44f },
+                        {  0.06f,  0.42f, 0.30f, 0xfffff2b8, 0.56f },
+                        { -0.30f,  0.44f, 0.20f, 0xffffaa2b, 0.48f },
+                        {  0.28f,  0.40f, 0.20f, 0xffff708e, 0.46f },
+                        {  0.52f, -0.34f, 0.16f, 0xffffe6c8, 0.58f }
                     };
                     for (const auto& ob : kOrbBokeh)
                     {
@@ -4034,6 +4276,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                         g.setGradientFill (juce::ColourGradient (c.withAlpha (ob.a), bx, by,
                                                                  c.withAlpha (0.0f), bx + br, by, true));
                         g.fillEllipse (bx - br, by - br, br * 2.0f, br * 2.0f);
+                        g.setColour (c.brighter (0.35f).withAlpha (ob.a * 0.60f));
+                        g.fillEllipse (bx - br * 0.44f, by - br * 0.44f, br * 0.88f, br * 0.88f);
                     }
                 }
                 else if (themeMode == 15)
@@ -4100,18 +4344,21 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     g.drawLine (cx - ballR * 0.7f, cy + ballR * 0.7f, cx + ballR * 0.7f, cy - ballR * 0.7f, 0.9f);
                 }
 
-                g.setGradientFill (juce::ColourGradient (Palette::salmon.withAlpha (0.24f), cx - ballR * 0.7f, cy,
-                                                         juce::Colours::transparentBlack, cx + ballR * 0.2f, cy, true));
-                g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
-                g.setGradientFill (juce::ColourGradient (Palette::ice.withAlpha (0.24f), cx + ballR * 0.7f, cy,
-                                                         juce::Colours::transparentBlack, cx - ballR * 0.2f, cy, true));
-                g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
-                g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.20f), cx, cy - ballR * 0.7f,
-                                                         juce::Colours::transparentBlack, cx, cy + ballR * 0.2f, true));
-                g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
-                g.setGradientFill (juce::ColourGradient (Palette::blue.withAlpha (0.24f), cx, cy + ballR * 0.7f,
-                                                         juce::Colours::transparentBlack, cx, cy - ballR * 0.2f, true));
-                g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+                if (themeMode != 0 && themeMode != 14)
+                {
+                    g.setGradientFill (juce::ColourGradient (Palette::salmon.withAlpha (0.28f), cx - ballR * 0.7f, cy,
+                                                             Palette::salmon.withAlpha (0.0f),  cx + ballR * 0.2f, cy, true));
+                    g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+                    g.setGradientFill (juce::ColourGradient (Palette::ice.withAlpha (0.28f), cx + ballR * 0.7f, cy,
+                                                             Palette::ice.withAlpha (0.0f),  cx - ballR * 0.2f, cy, true));
+                    g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+                    g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.24f), cx, cy - ballR * 0.7f,
+                                                             Palette::yellow.withAlpha (0.0f),  cx, cy + ballR * 0.2f, true));
+                    g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+                    g.setGradientFill (juce::ColourGradient (Palette::blue.withAlpha (0.28f), cx, cy + ballR * 0.7f,
+                                                             Palette::blue.withAlpha (0.0f),  cx, cy - ballR * 0.2f, true));
+                    g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+                }
             }
             else
             {
@@ -4252,8 +4499,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                             g.fillEllipse (sx - 2.2f, sy - 2.2f, 4.4f, 4.4f);
                         }
                     }
-                    g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.54f), ox, oy,
-                                                             juce::Colours::transparentBlack, ox + pulseR * 1.8f, oy, true));
+                    g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.58f), ox, oy,
+                                                             Palette::yellow.withAlpha (0.0f),  ox + pulseR * 1.8f, oy, true));
                     g.fillEllipse (ox - pulseR * 1.8f, oy - pulseR * 1.8f, pulseR * 3.6f, pulseR * 3.6f);
 
                     g.setColour (Palette::salmon.withAlpha (0.68f));
@@ -4278,9 +4525,9 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                         g.fillEllipse (ox - 5.0f, oy - 5.0f, 4.2f, 3.2f);
                     }
 
-                    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.28f), cx - ballR * 0.25f, cy - ballR * 0.92f,
-                                                             juce::Colours::transparentWhite,        cx - ballR * 0.10f, cy - ballR * 0.05f, false));
-                    g.fillEllipse (cx - ballR * 0.78f, cy - ballR * 0.92f, ballR * 1.56f, ballR * 0.88f);
+                    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (themeMode == 0 ? 0.16f : 0.28f), cx - ballR * 0.25f, cy - ballR * 0.92f,
+                                                             juce::Colours::transparentWhite, cx - ballR * 0.10f, cy - ballR * (themeMode == 0 ? 0.42f : 0.05f), false));
+                    g.fillEllipse (cx - ballR * 0.74f, cy - ballR * 0.92f, ballR * 1.48f, ballR * (themeMode == 0 ? 0.50f : 0.88f));
 
                     g.setColour (juce::Colours::black.withAlpha (pastelTheme() ? 0.16f : 0.48f));
                     g.drawEllipse (cx - ballR + 1.0f, cy - ballR + 1.0f, (ballR - 1.0f) * 2.0f, (ballR - 1.0f) * 2.0f, 3.2f);
@@ -4289,24 +4536,23 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (rimAccent.withAlpha (0.82f));
                 g.drawEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f, 1.6f);
 
-                // ★ ライブ・マスタリングプリズム HUD ステータス表示（Density 倍音密度 ＆ Crest Factor 芯圧）
+                // ★ ライブ・マスタリングプリズム HUD ステータス表示（四角い枠線を廃止し、透過ガラス上に上品に浮かぶテレメトリ表記）
                 if (argonPadRect.getHeight() >= 170)
                 {
                     const float densDb = processor.getMasteringDensityDb() + processor.getRearBusAuthorityDb();
                     const float crestDb = processor.getVocalCrestFactorDb();
                     const juce::String hudTxt = language->T ("倍音密度 +", "Density +")
-                                              + juce::String (densDb, 1) + "dB  |  "
+                                              + juce::String (densDb, 1) + "dB  ·  "
                                               + language->T ("芯圧 Crest ", "Crest ")
                                               + juce::String (crestDb, 1) + "dB";
                     const juce::Rectangle<int> hudRect (argonPadRect.getX() + 18,
-                                                        (int) (cy + ballR - 20.0f),
-                                                        argonPadRect.getWidth() - 36, 18);
-                    g.setColour (Palette::bgBot.withAlpha (0.72f));
-                    g.fillRoundedRectangle (hudRect.toFloat(), 9.0f);
-                    g.setColour (Palette::yellow.withAlpha (0.55f));
-                    g.drawRoundedRectangle (hudRect.toFloat().reduced (0.5f), 9.0f, 1.0f);
-                    g.setColour (Palette::ink);
-                    fitText (g, hudTxt, hudRect.reduced (6, 0), juce::Justification::centred, 11.5f, true);
+                                                        (int) (cy + ballR - 23.0f),
+                                                        argonPadRect.getWidth() - 36, 17);
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff040816).withAlpha (0.64f), (float) hudRect.getCentreX(), (float) hudRect.getCentreY(),
+                                                             juce::Colour (0xff040816).withAlpha (0.0f),  (float) hudRect.getRight(),   (float) hudRect.getCentreY(), true));
+                    g.fillRoundedRectangle (hudRect.toFloat(), 8.5f);
+                    g.setColour (Palette::metalHi);
+                    fitText (g, hudTxt, hudRect.reduced (6, 0), juce::Justification::centred, 11.2f, true);
                 }
             }
         }
@@ -4435,44 +4681,77 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
             else
             {
-                // ★ すっきり見やすい連続グラデーション・タッチフェーダー
-                g.setColour (pastelTheme() ? Palette::panel2.darker (0.05f) : Palette::bgTop.darker (0.48f).withAlpha (0.94f));
-                g.fillRoundedRectangle (rf, 6.5f);
+                // ★ 発光リキッドライト・ガラスチューブ＆3Dボケジュエル・タッチフェーダー
+                g.setGradientFill (juce::ColourGradient (
+                    pastelTheme() ? Palette::panel2.darker (0.05f) : Palette::panel2.brighter (0.08f).withAlpha (0.62f), rf.getX(), rf.getY(),
+                    pastelTheme() ? Palette::panel.darker (0.08f)  : Palette::bgTop.darker (0.28f).withAlpha (0.74f),    rf.getX(), rf.getBottom(), false));
+                g.fillRoundedRectangle (rf, 7.5f);
 
-                const float lblW = juce::jmin (90.0f, rf.getWidth() * 0.44f);
+                // 左端のジュエルインジケータードット
+                const float dotX = rf.getX() + 7.5f, dotY = rf.getCentreY();
+                g.setColour (barCols[b].withAlpha (0.38f));
+                g.fillEllipse (dotX - 3.6f, dotY - 3.6f, 7.2f, 7.2f);
+                g.setColour (barCols[b].brighter (0.25f));
+                g.fillEllipse (dotX - 2.0f, dotY - 2.0f, 4.0f, 4.0f);
+
+                const float lblW = juce::jmin (92.0f, rf.getWidth() * 0.44f);
                 const float pctW = 46.0f;
                 const float trkX = rf.getX() + lblW + 4.0f;
                 const float trkW = juce::jmax (24.0f, rf.getWidth() - lblW - pctW - 8.0f);
-                const juce::Rectangle<float> trkRect (trkX, rf.getY() + 4.0f, trkW, rf.getHeight() - 8.0f);
-                g.setColour (Palette::track.withAlpha (0.65f));
-                g.fillRoundedRectangle (trkRect, trkRect.getHeight() * 0.45f);
+                const juce::Rectangle<float> trkRect (trkX, rf.getY() + 4.2f, trkW, rf.getHeight() - 8.4f);
+                const float trkRad = trkRect.getHeight() * 0.48f;
+
+                // 待機中(0%)でも美しい光学ガラスの奥行きと10分割マイクロ目盛りが見えるトラック
+                g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (0.45f).withAlpha (0.75f), trkRect.getX(), trkRect.getY(),
+                                                         barCols[b].withAlpha (0.22f), trkRect.getRight(), trkRect.getY(), false));
+                g.fillRoundedRectangle (trkRect, trkRad);
+                g.setColour (barCols[b].withAlpha (0.35f));
+                g.drawRoundedRectangle (trkRect, trkRad, 0.9f);
+                for (int dt = 1; dt < 8; ++dt)
+                {
+                    const float dx = trkX + trkW * ((float) dt / 8.0f);
+                    g.setColour (Palette::metalHi.withAlpha (0.25f));
+                    g.fillEllipse (dx - 1.0f, trkRect.getCentreY() - 1.0f, 2.0f, 2.0f);
+                }
 
                 if (norm > 0.005f)
                 {
-                    const float fillW = juce::jmax (4.0f, trkW * norm);
+                    const float fillW = juce::jmax (6.0f, trkW * norm);
                     const juce::Rectangle<float> fillRect (trkX, trkRect.getY(), fillW, trkRect.getHeight());
-                    g.setGradientFill (juce::ColourGradient (barCols[b].withAlpha (0.55f), fillRect.getX(), fillRect.getY(),
-                                                             barCols[b].brighter (0.20f).withAlpha (0.90f), fillRect.getRight(), fillRect.getY(), false));
-                    g.fillRoundedRectangle (fillRect, trkRect.getHeight() * 0.45f);
+                    g.setGradientFill (juce::ColourGradient (barCols[b].withAlpha (0.68f), fillRect.getX(), fillRect.getY(),
+                                                             barCols[b].interpolatedWith (Palette::metalHi, 0.38f).withAlpha (0.96f), fillRect.getRight(), fillRect.getY(), false));
+                    g.fillRoundedRectangle (fillRect, trkRad);
                 }
 
-                // スライダーノブ（つまみ）
-                const float capW = 8.0f;
-                const float capX = trkX + norm * juce::jmax (2.0f, trkW - capW);
-                g.setColour (juce::Colours::white.withAlpha (0.92f));
-                g.fillRoundedRectangle (capX, rf.getY() + 2.5f, capW, rf.getHeight() - 5.0f, 3.0f);
-                g.setColour (barCols[b]);
-                g.drawRoundedRectangle (capX, rf.getY() + 2.5f, capW, rf.getHeight() - 5.0f, 3.0f, 1.2f);
+                // 3Dボケジュエル・スライダーサム（つまみ）
+                const float thumbX = trkX + 5.0f + norm * juce::jmax (2.0f, trkW - 10.0f);
+                const float thumbY = trkRect.getCentreY();
+                const float thumbR = juce::jmin (6.8f, rf.getHeight() * 0.36f);
+                g.setColour (barCols[b].withAlpha (0.45f));
+                g.fillEllipse (thumbX - thumbR * 1.45f, thumbY - thumbR * 1.45f, thumbR * 2.9f, thumbR * 2.9f);
+                g.setGradientFill (juce::ColourGradient (Palette::metalHi, thumbX - thumbR, thumbY - thumbR,
+                                                         barCols[b].darker (0.15f), thumbX + thumbR, thumbY + thumbR, false));
+                g.fillEllipse (thumbX - thumbR, thumbY - thumbR, thumbR * 2.0f, thumbR * 2.0f);
+                g.setColour (juce::Colours::white.withAlpha (0.95f));
+                g.fillEllipse (thumbX - thumbR * 0.45f, thumbY - thumbR * 0.45f, thumbR * 0.9f, thumbR * 0.9f);
             }
 
-            g.setColour (kawaiiBars ? Palette::metalMid : (oceanStarTheme() ? Palette::metalMid.withAlpha (0.85f) : barCols[b].withAlpha (0.88f)));
-            g.drawRoundedRectangle (rf.reduced (0.5f), barRad, 1.3f);
+            if (themeMode != 0)
+            {
+                g.setColour (kawaiiBars ? Palette::metalMid : (oceanStarTheme() ? Palette::metalMid.interpolatedWith (barCols[b], 0.45f).withAlpha (0.82f) : barCols[b].withAlpha (0.88f)));
+                g.drawRoundedRectangle (rf.reduced (0.5f), barRad, 1.3f);
+            }
+            else
+            {
+                g.setColour (barCols[b].withAlpha (0.26f));
+                g.drawRoundedRectangle (rf.reduced (0.5f), barRad, 0.85f);
+            }
             g.setColour (Palette::ink);
             const int lblRectW = kawaiiBars ? (r.getWidth() - 52)
-                                            : juce::roundToInt (juce::jmin (90.0f, rf.getWidth() * 0.44f));
+                                            : juce::roundToInt (juce::jmin (92.0f, rf.getWidth() * 0.44f));
             fitText (g, juce::String::fromUTF8 (language->english ? barEn[b] : barJa[b]),
-                     r.withWidth (lblRectW).reduced (kawaiiBars ? 12 : 6, 1),
-                     juce::Justification::centredLeft, 13.5f, true);
+                     r.withWidth (lblRectW).withTrimmedLeft (kawaiiBars ? 12 : 14).reduced (2, 1),
+                     juce::Justification::centredLeft, 13.0f, true);
             fitText (g, juce::String (juce::roundToInt (vals[b])) + "%",
                      r.withTrimmedLeft (r.getWidth() - 46).reduced (4, 1),
                      juce::Justification::centredRight, 13.5f, true);
@@ -4493,12 +4772,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         {
             const auto r = argonTargetRects[(size_t) t];
             const auto rf = r.toFloat();
-            const float tRad = kawaiiPills ? rf.getHeight() * 0.5f : 8.0f;
+            const float tRad = kawaiiPills ? rf.getHeight() * 0.5f : 8.5f;
             const bool active = (argonActiveTarget == t);
             if (! liteMode)
             {
                 g.setColour (kawaiiPills ? tCols[t].withAlpha (active ? 0.28f : 0.14f)
-                                         : juce::Colours::black.withAlpha (active ? 0.28f : 0.14f));
+                                         : juce::Colours::black.withAlpha (active ? 0.32f : 0.18f));
                 g.fillRoundedRectangle (rf.translated (0.0f, 2.0f), tRad);
             }
             if (kawaiiPills && ! nightTheme())
@@ -4514,27 +4793,30 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             else
             {
                 g.setGradientFill (juce::ColourGradient (
-                    active ? tCols[t].withAlpha (0.42f) : Palette::panel2.brighter (0.06f).withAlpha (0.92f), rf.getX(), rf.getY(),
-                    active ? tCols[t].darker (0.15f).withAlpha (0.28f) : Palette::panel2.darker (0.05f).withAlpha (0.92f), rf.getX(), rf.getBottom(), false));
+                    active ? tCols[t].withAlpha (0.46f) : Palette::panel2.brighter (0.14f).withAlpha (0.66f), rf.getX(), rf.getY(),
+                    active ? tCols[t].darker (0.15f).withAlpha (0.32f) : Palette::bgTop.darker (0.12f).withAlpha (0.76f), rf.getX(), rf.getBottom(), false));
                 g.fillRoundedRectangle (rf, tRad);
+                g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (active ? 0.24f : 0.14f), rf.getX(), rf.getY() + 1.0f,
+                                                         juce::Colours::transparentWhite, rf.getX(), rf.getY() + rf.getHeight() * 0.45f, false));
+                g.fillRoundedRectangle (rf.reduced (2.0f, 1.0f).withHeight (rf.getHeight() * 0.42f), tRad * 0.8f);
             }
             if (! liteMode)
             {
-                g.setColour (tCols[t].withAlpha (active ? 0.95f : 0.50f));
+                g.setColour (tCols[t].withAlpha (active ? 0.96f : 0.65f));
                 g.fillRoundedRectangle (rf.getX() + 10.0f, rf.getBottom() - 3.2f, rf.getWidth() - 20.0f, 2.2f, 1.1f);
             }
-            g.setColour (active ? tCols[t] : (kawaiiPills ? Palette::metalMid : Palette::panelLn));
+            g.setColour (active ? tCols[t] : (kawaiiPills ? Palette::metalMid : Palette::metalMid.interpolatedWith (tCols[t], 0.45f).withAlpha (0.68f)));
             g.drawRoundedRectangle (rf.reduced (0.5f), tRad, active ? 1.8f : 1.2f);
-            g.setColour (active ? Palette::ink : Palette::inkSoft);
+            g.setColour (active ? Palette::ink : Palette::ink.withAlpha (0.90f));
             const char* jaTxt = compactPill ? tJaShort[t] : tJaFull[t];
             fitText (g, juce::String::fromUTF8 (language->english ? tEn[t] : jaTxt),
-                     r.reduced (4, 0), juce::Justification::centred, 14.0f, active);
+                     r.reduced (4, 0), juce::Justification::centred, 14.0f, true);
         }
     }
 
     if (staticPass)
     {
-        card (overviewOutput, Palette::green);
+        card (overviewOutput, (themeMode == 0) ? Palette::yellow.interpolatedWith (Palette::salmon, 0.42f) : Palette::green);
         g.setColour (Palette::ink);
         const bool compactOut = (overviewOutput.getWidth() < 340);
         const int titleW = (overviewOutput.getWidth() >= 400 && ! ioInMonoRect.isEmpty())
@@ -4553,6 +4835,25 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             if (r.isEmpty()) return;
             const auto rf = r.toFloat();
             const float rad = rf.getHeight() * 0.46f;
+            if (themeMode == 0 && accessMode == 0 && ! liteMode)
+            {
+                const juce::Colour mCol = col.interpolatedWith (Palette::yellow, 0.48f);
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0xff091530).withAlpha (0.94f), rf.getX(), rf.getY(),
+                                                         juce::Colour (0xff040918).withAlpha (0.97f), rf.getX(), rf.getBottom(), false));
+                g.fillRoundedRectangle (rf, rad);
+                if (active)
+                {
+                    g.setGradientFill (juce::ColourGradient (mCol.withAlpha (0.28f), rf.getCentreX(), rf.getBottom(),
+                                                             mCol.withAlpha (0.0f),  rf.getCentreX(), rf.getY() + rf.getHeight() * 0.40f, false));
+                    g.fillRoundedRectangle (rf, rad);
+                }
+                g.setColour (active ? mCol.interpolatedWith (Palette::metalHi, 0.42f).withAlpha (0.92f)
+                                    : Palette::metalMid.interpolatedWith (Palette::panelLn, 0.45f).withAlpha (0.58f));
+                g.drawRoundedRectangle (rf.reduced (0.5f), rad, active ? 1.45f : 1.0f);
+                g.setColour (active ? Palette::ink : Palette::inkSoft);
+                fitText (g, label, r.reduced (4, 0), juce::Justification::centred, 12.5f, active);
+                return;
+            }
             g.setColour (active ? col.withAlpha (pastelTheme() ? 0.30f : 0.36f)
                                 : Palette::panel2.withAlpha (0.92f));
             g.fillRoundedRectangle (rf, rad);
@@ -4714,8 +5015,24 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 {
                     const float fillW = juce::jmax (4.0f, (brf.getWidth() - 2.0f) * rows[i].norm);
                     const juce::Rectangle<float> fillR (brf.getX() + 1.0f, brf.getY() + 1.2f, fillW, brf.getHeight() - 2.4f);
-                    g.setColour (rows[i].col.withAlpha (0.88f));
-                    g.fillRoundedRectangle (fillR, 3.2f);
+                    if (themeMode == 0 && accessMode == 0)
+                    {
+                        const juce::Colour c0 = rows[i].levelZone ? Palette::ice : rows[i].col.darker (0.15f);
+                        const juce::Colour c1 = rows[i].levelZone ? Palette::yellow : rows[i].col.interpolatedWith (Palette::metalHi, 0.42f);
+                        juce::ColourGradient mg (c0.withAlpha (0.86f), fillR.getX(), fillR.getCentreY(),
+                                                 c1.withAlpha (0.96f), fillR.getRight(), fillR.getCentreY(), false);
+                        if (rows[i].levelZone)
+                            mg.addColour (0.55, Palette::green.interpolatedWith (Palette::yellow, 0.45f).withAlpha (0.92f));
+                        g.setGradientFill (mg);
+                        g.fillRoundedRectangle (fillR, 3.2f);
+                        g.setColour (Palette::metalHi.withAlpha (0.92f));
+                        g.fillEllipse (fillR.getRight() - 3.6f, fillR.getCentreY() - 1.8f, 3.6f, 3.6f);
+                    }
+                    else
+                    {
+                        g.setColour (rows[i].col.withAlpha (0.88f));
+                        g.fillRoundedRectangle (fillR, 3.2f);
+                    }
                 }
             }
             g.setColour (Palette::inkSoft);
@@ -5350,11 +5667,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
     const char* namesJaStep[]     = { "STEP 1 雑音を消す",   "STEP 2 声を揃える",   "STEP 3 残響を足す" };
     const char* namesJaConcrete[] = { "01 雑音・不要帯域除去", "02 音量均一・周波数", "03 残響・空間幅" };
     const char* namesEn[]         = { "01 CLEAN",            "02 CHARACTER",        "03 SPACE" };
-    // V-Liver時は 01=ピーチコーラルチーク, 02=モーヴアイシャドウ, 03=ベリーローズティント のコスメ3色パレットに統一
+    // Midnight Lantern Bokeh時は参考写真の3色構成（左:ジェイドシアン, 中央:ゴールデンアンバーランタン, 右:トワイライトローズコーラル）に完全調和
     const juce::Colour accents[] = {
         Palette::green,
-        (isLiverStyle && (accessMode == 0 || accessMode == 2)) ? Palette::yellow : Palette::blue,
-        (isLiverStyle && (accessMode == 0 || accessMode == 2)) ? Palette::blue   : Palette::yellow
+        (themeMode == 0 || (isLiverStyle && (accessMode == 0 || accessMode == 2))) ? Palette::yellow : Palette::blue,
+        (themeMode == 0) ? Palette::salmon
+                         : ((isLiverStyle && (accessMode == 0 || accessMode == 2)) ? Palette::blue : Palette::yellow)
     };
 
     // ★ Red Dot 仕様: セクションカード間を結ぶ「オプティカル信号フロー・ライトパイプ (01 ➔ 02 ➔ 03)」
@@ -5598,52 +5916,115 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     }
                     else
                     {
-                        // 左側: 大型主役ノブ専用の8角形凹みリアクター台座
-                        const auto pedPath = makeChamferPath (heroRect, 10.0f);
-                        g.setGradientFill (juce::ColourGradient (Palette::bgTop.darker (0.28f).withAlpha (0.68f), heroRect.getX(), heroRect.getY(),
-                                                                 accents[i].withAlpha (heroOn ? (0.18f + 0.18f * kEff[0]) : 0.04f), heroRect.getCentreX(), heroRect.getBottom(), false));
-                        g.fillPath (pedPath);
-                        g.setColour (heroOn ? accents[i].withAlpha (0.68f) : Palette::panelLn.withAlpha (0.35f));
-                        g.strokePath (pedPath, juce::PathStrokeType (heroOn ? 1.5f : 1.0f));
+                        // ★ フラッグシップ・オープンガラス設計（入れ子の四角い枠線を完全撤廃し、円形アストロラーベ花火光輪と極細光仕切り線でノブを浮遊配置）
+                        const float hcx = heroRect.getCentreX(), hcy = heroRect.getCentreY() - 6.0f;
+                        const float hRad = juce::jmin (heroRect.getWidth(), heroRect.getHeight()) * 0.44f;
+                        const juce::Colour heroGlow = accents[i].interpolatedWith (Palette::yellow, 0.42f);
+                        g.setGradientFill (juce::ColourGradient (heroGlow.withAlpha (heroOn ? (0.30f + 0.14f * kEff[0]) : 0.16f), hcx, hcy,
+                                                                 heroGlow.withAlpha (0.0f), hcx + hRad * 1.28f, hcy, true));
+                        g.fillEllipse (hcx - hRad * 1.28f, hcy - hRad * 1.28f, hRad * 2.56f, hRad * 2.56f);
+                        g.setColour (Palette::metalHi.interpolatedWith (accents[i], 0.42f).withAlpha (heroOn ? 0.50f : 0.24f));
+                        g.drawEllipse (hcx - hRad * 0.94f, hcy - hRad * 0.94f, hRad * 1.88f, hRad * 1.88f, 0.95f);
+                        g.setColour (heroGlow.withAlpha (heroOn ? 0.26f : 0.12f));
+                        g.drawEllipse (hcx - hRad * 1.06f, hcy - hRad * 1.06f, hRad * 2.12f, hRad * 2.12f, 0.75f);
+                        for (int deg = 0; deg < 24; ++deg)
+                        {
+                            const float da = (float) deg * juce::MathConstants<float>::twoPi / 24.0f;
+                            const bool isCard = (deg % 6 == 0);
+                            const bool isMaj  = (deg % 2 == 0);
+                            const float r0 = hRad * 0.95f, r1 = hRad * (isCard ? 1.12f : (isMaj ? 1.05f : 1.01f));
+                            g.setColour ((isCard ? Palette::yellow : Palette::metalHi).withAlpha (heroOn ? (isCard ? 0.68f : 0.38f) : 0.18f));
+                            g.drawLine (hcx + r0 * std::cos (da), hcy + r0 * std::sin (da),
+                                        hcx + r1 * std::cos (da), hcy + r1 * std::sin (da), isCard ? 1.3f : 0.85f);
+                            if (isCard && heroOn)
+                                drawSparkle4 (hcx + (r1 + 2.5f) * std::cos (da), hcy + (r1 + 2.5f) * std::sin (da), 3.4f, Palette::metalHi);
+                        }
 
-                        // 右側: 3連サテライトノブのハードウェア・モジュールカプセル枠（効いているモジュールだけ左端LEDバーが鮮烈に点灯！）
+                        // 主役ノブ区画と右3連サテライト区画を隔てる極細の光学ヘアライン仕切り
+                        const float divX = heroRect.getRight() + 3.0f;
+                        g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.0f), divX, heroRect.getY() + 8.0f,
+                                                                 accents[i].interpolatedWith (Palette::metalHi, 0.45f).withAlpha (0.34f), divX, heroRect.getCentreY(), false));
+                        g.drawLine (divX, heroRect.getY() + 8.0f, divX, heroRect.getCentreY(), 1.0f);
+                        g.setGradientFill (juce::ColourGradient (accents[i].interpolatedWith (Palette::metalHi, 0.45f).withAlpha (0.34f), divX, heroRect.getCentreY(),
+                                                                 accents[i].withAlpha (0.0f), divX, heroRect.getBottom() - 8.0f, false));
+                        g.drawLine (divX, heroRect.getCentreY(), divX, heroRect.getBottom() - 8.0f, 1.0f);
+
+                        // 右側: 3連サテライトノブ（四角い箱を排し、極細の水平光学ヘアラインと左端ジュエル・ライトバーのみで上品に整列）
                         const int satH = body.getHeight() / 3;
                         for (int s = 0; s < 3; ++s)
                         {
                             const bool satOn = (kEff[s + 1] > 0.02f);
-                            const auto satR = juce::Rectangle<int> (body.getX(), body.getY() + s * satH, body.getWidth(), satH).reduced (2, 3).toFloat();
-                            g.setColour (Palette::bgTop.darker (satOn ? 0.18f : 0.35f).withAlpha (satOn ? 0.72f : 0.48f));
-                            g.fillRoundedRectangle (satR, 8.0f);
-                            g.setColour (satOn ? accents[i].withAlpha (0.68f) : Palette::panelLn.withAlpha (0.35f));
-                            g.drawRoundedRectangle (satR, 8.0f, satOn ? 1.3f : 0.9f);
-                            g.setColour (satOn ? accents[i].brighter (0.20f).withAlpha (0.95f) : Palette::inkSoft.withAlpha (0.22f));
-                            g.fillRoundedRectangle (satR.getX() + 3.0f, satR.getY() + 8.0f, satOn ? 3.2f : 2.0f, satR.getHeight() - 16.0f, 1.4f);
+                            const auto satR = juce::Rectangle<int> (body.getX(), body.getY() + s * satH, body.getWidth(), satH).reduced (2, 2).toFloat();
+                            if (satOn)
+                            {
+                                const float scx = satR.getX() + 34.0f, scy = satR.getCentreY();
+                                const float sRad = satR.getHeight() * 0.46f;
+                                g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.20f + 0.10f * kEff[s + 1]), scx, scy,
+                                                                         accents[i].withAlpha (0.0f), scx + sRad, scy, true));
+                                g.fillEllipse (scx - sRad, scy - sRad, sRad * 2.0f, sRad * 2.0f);
+                            }
+                            if (s > 0)
+                            {
+                                const float lineY = (float) (body.getY() + s * satH);
+                                g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.0f), satR.getX() + 6.0f, lineY,
+                                                                         Palette::metalMid.interpolatedWith (accents[i], 0.45f).withAlpha (0.28f), satR.getCentreX(), lineY, false));
+                                g.drawLine (satR.getX() + 6.0f, lineY, satR.getRight() - 6.0f, lineY, 0.85f);
+                            }
+
+                            // 左端のランタンジュエル・ライトパイプドット
+                            const juce::Colour barC = satOn ? accents[i].brighter (0.25f) : accents[i].interpolatedWith (Palette::metalHi, 0.40f);
+                            g.setColour (barC.withAlpha (satOn ? 0.90f : 0.42f));
+                            g.fillRoundedRectangle (satR.getX() + 2.5f, satR.getCentreY() - 9.0f, satOn ? 2.8f : 2.0f, 18.0f, 1.2f);
                         }
                     }
                 }
                 else if (i == 1)
                 {
-                    // 中央下 Card 1: 大・小段違い4連コンソールの主役台座＆信号コンジットライン
+                    // 中央下 Card 1: 四角い個別ボックスを撤廃し、4連ノブを結ぶ黄金＆シアンの天球コンジット軌道と円形ハローで浮かび上がらせる
                     auto body = r.reduced (12).withTrimmedTop (122);
                     const int wHero = body.getWidth() * 27 / 100;
                     const int wSub  = (body.getWidth() - wHero * 2) / 2;
                     const int ws[4] = { wHero, wSub, wHero, wSub };
                     const bool isH[4] = { true, false, true, false };
                     int cx = body.getX();
-                    g.setColour (accents[i].withAlpha (0.32f));
-                    g.drawHorizontalLine (body.getCentreY() + 10, (float) body.getX() + 24.0f, (float) body.getRight() - 24.0f);
+                    g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.0f), (float) body.getX() + 18.0f, (float) (body.getCentreY() + 8),
+                                                             Palette::yellow.withAlpha (0.38f), (float) body.getCentreX(), (float) (body.getCentreY() + 8), false));
+                    g.drawHorizontalLine (body.getCentreY() + 8, (float) body.getX() + 18.0f, (float) body.getRight() - 18.0f);
                     for (int kIdx = 0; kIdx < 4; ++kIdx)
                     {
                         const bool kOn = (kEff[kIdx] > 0.02f);
-                        if (isH[kIdx])
+                        const auto hr = juce::Rectangle<int> (cx, body.getY(), ws[kIdx], body.getHeight()).reduced (3, 2).toFloat();
+                        if (softPedestal)
                         {
-                            const auto hr = juce::Rectangle<int> (cx, body.getY(), ws[kIdx], body.getHeight()).reduced (3, 2).toFloat();
-                            g.setColour (softPedestal ? accents[i].withAlpha (kOn ? 0.22f : 0.08f)
-                                                      : Palette::bgTop.darker (0.24f).withAlpha (kOn ? 0.65f : 0.42f));
-                            g.fillRoundedRectangle (hr, softPedestal ? 15.0f : 10.0f);
-                            g.setColour (kOn ? (isLiverStyle ? Palette::metalMid : accents[i].withAlpha (0.68f))
-                                             : Palette::panelLn.withAlpha (0.35f));
-                            g.drawRoundedRectangle (hr, softPedestal ? 15.0f : 10.0f, kOn ? 1.5f : 1.0f);
+                            if (isH[kIdx])
+                            {
+                                g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (kOn ? 0.22f : 0.08f), hr.getX(), hr.getY(),
+                                                                         accents[i].interpolatedWith (Palette::yellow, 0.35f).withAlpha (kOn ? 0.26f : 0.12f), hr.getCentreX(), hr.getBottom(), false));
+                                g.fillRoundedRectangle (hr, 15.0f);
+                                g.setColour (Palette::metalMid.withAlpha (kOn ? 0.90f : 0.45f));
+                                g.drawRoundedRectangle (hr.reduced (0.5f), 15.0f, kOn ? 1.5f : 1.0f);
+                            }
+                        }
+                        else
+                        {
+                            const float kcx = hr.getCentreX(), kcy = hr.getCentreY() + (isH[kIdx] ? -4.0f : 4.0f);
+                            const float kRad = juce::jmin (hr.getWidth(), hr.getHeight()) * (isH[kIdx] ? 0.44f : 0.38f);
+                            const juce::Colour kGlow = accents[i].interpolatedWith (Palette::yellow, isH[kIdx] ? 0.42f : 0.25f);
+                            g.setGradientFill (juce::ColourGradient (kGlow.withAlpha (kOn ? (isH[kIdx] ? 0.26f : 0.18f) : 0.10f), kcx, kcy,
+                                                                     kGlow.withAlpha (0.0f), kcx + kRad * 1.22f, kcy, true));
+                            g.fillEllipse (kcx - kRad * 1.22f, kcy - kRad * 1.22f, kRad * 2.44f, kRad * 2.44f);
+                            if (isH[kIdx])
+                            {
+                                g.setColour (Palette::metalHi.interpolatedWith (accents[i], 0.45f).withAlpha (kOn ? 0.42f : 0.20f));
+                                g.drawEllipse (kcx - kRad * 0.94f, kcy - kRad * 0.94f, kRad * 1.88f, kRad * 1.88f, 0.85f);
+                            }
+                            if (kIdx > 0)
+                            {
+                                const float vx = (float) cx;
+                                g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.0f), vx, hr.getY() + 14.0f,
+                                                                         Palette::metalMid.withAlpha (0.22f), vx, hr.getCentreY(), false));
+                                g.drawLine (vx, hr.getY() + 14.0f, vx, hr.getBottom() - 14.0f, 0.8f);
+                            }
                         }
                         cx += ws[kIdx];
                     }
@@ -5715,34 +6096,23 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             drawJuiceServer (g);
     }
 
-    // ★ 指が太い人・タッチ操作対応：現在「🎯 ワンタップ微調整ドック」の操作対象になっているツマミのラベル周囲に
-    //   ターゲット・フォーカスコーナー枠を描画し、どのツマミが [ ➖ ] [ ➕ ] [ ↺初期 ] で動くか一目で分かるようにする！
+    // ★ 指が太い人・タッチ操作対応：現在「🎯 ワンタップ微調整ドック」の操作対象になっているツマミのラベル下に
+    //   洗練されたオプティカル・フォーカスアンダーラインを描画（不自然な四隅カギ括弧を廃止）
     if (! staticPass)
     {
         Knob* const targetK = (lastTouchedKnob != nullptr && lastTouchedKnob->slider.isVisible()) ? lastTouchedKnob : &presenceK;
         if (targetK != nullptr && targetK->label.isVisible() && g.clipRegionIntersects (targetK->label.getBounds().expanded (6)))
         {
-            const auto lb = targetK->label.getBounds().toFloat().expanded (1.5f, 1.0f);
-            const float cl = 6.5f;
-            juce::Path corners;
-            // 左上コーナー
-            corners.startNewSubPath (lb.getX(), lb.getY() + cl);
-            corners.lineTo (lb.getX(), lb.getY());
-            corners.lineTo (lb.getX() + cl, lb.getY());
-            // 右上コーナー
-            corners.startNewSubPath (lb.getRight() - cl, lb.getY());
-            corners.lineTo (lb.getRight(), lb.getY());
-            corners.lineTo (lb.getRight(), lb.getY() + cl);
-            // 左下コーナー
-            corners.startNewSubPath (lb.getX(), lb.getBottom() - cl);
-            corners.lineTo (lb.getX(), lb.getBottom());
-            corners.lineTo (lb.getX() + cl, lb.getBottom());
-            // 右下コーナー
-            corners.startNewSubPath (lb.getRight() - cl, lb.getBottom());
-            corners.lineTo (lb.getRight(), lb.getBottom());
-            corners.lineTo (lb.getRight(), lb.getBottom() - cl);
-            g.setColour (Palette::ice.withAlpha (0.92f));
-            g.strokePath (corners, juce::PathStrokeType (1.8f));
+            const auto lb = targetK->label.getBounds().toFloat();
+            const float barW = juce::jmin (44.0f, lb.getWidth() * 0.56f);
+            const float bx0  = lb.getCentreX() - barW * 0.5f;
+            const float by   = lb.getBottom() - 1.5f;
+            g.setGradientFill (juce::ColourGradient (Palette::ice.withAlpha (0.0f), bx0, by,
+                                                     Palette::yellow.withAlpha (0.85f), lb.getCentreX(), by, false));
+            g.fillRoundedRectangle (bx0, by - 0.8f, barW * 0.5f, 1.6f, 0.8f);
+            g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.85f), lb.getCentreX(), by,
+                                                     Palette::ice.withAlpha (0.0f), bx0 + barW, by, false));
+            g.fillRoundedRectangle (lb.getCentreX(), by - 0.8f, barW * 0.5f, 1.6f, 0.8f);
         }
     }
 
@@ -5751,10 +6121,25 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         const float rad = (accessMode == 3) ? 6.0f : 10.0f;
         if (staticPass)
         {
-            g.setColour (Palette::panel2.withMultipliedAlpha (cardAlpha));
-            g.fillRoundedRectangle (overviewHelp.toFloat(), 12.0f);
-            g.setColour (Palette::panelLn);
-            g.drawRoundedRectangle (overviewHelp.toFloat().reduced (0.5f), 12.0f, 1.0f);
+            if (themeMode == 0 && accessMode == 0 && ! liteMode)
+            {
+                const auto hf = overviewHelp.toFloat();
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0xff071026).withAlpha (0.92f), hf.getX(), hf.getY(),
+                                                         juce::Colour (0xff030714).withAlpha (0.96f), hf.getX(), hf.getBottom(), false));
+                g.fillRoundedRectangle (hf, 12.0f);
+                g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.16f), hf.getCentreX(), hf.getBottom(),
+                                                         Palette::yellow.withAlpha (0.0f),  hf.getCentreX(), hf.getY(), false));
+                g.fillRoundedRectangle (hf, 12.0f);
+                g.setColour (Palette::metalMid.withAlpha (0.64f));
+                g.drawRoundedRectangle (hf.reduced (0.5f), 12.0f, 1.15f);
+            }
+            else
+            {
+                g.setColour (Palette::panel2.withMultipliedAlpha (cardAlpha));
+                g.fillRoundedRectangle (overviewHelp.toFloat(), 12.0f);
+                g.setColour (Palette::panelLn);
+                g.drawRoundedRectangle (overviewHelp.toFloat().reduced (0.5f), 12.0f, 1.0f);
+            }
 
             // 微調整ドック＆ライブSEパッドの整理トレイ枠（ごちゃつきを防ぎ2ブロックに整頓）
             if (! fineTargetRect.isEmpty() && ! fineResetRect.isEmpty())

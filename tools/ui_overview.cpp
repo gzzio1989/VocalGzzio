@@ -1750,23 +1750,51 @@ int main()
                     for (auto* c : view.getChildren())
                         if (c->getWidth() > 900)
                             c->setVisible (false);
+                    for (int m = 0; m < gz::ModuleChain::Count; ++m)
+                        setParameter (gz::ModuleChain::paramId (m), 1.0f);
+                    setParameter ("dn_on",        1.0f);
+                    setParameter ("revon",        1.0f);
+                    setParameter ("denoise",      28.0f);
+                    setParameter ("gate",        -52.0f);
+                    setParameter ("lowcut",       85.0f);
+                    setParameter ("mud",          -2.4f);
+                    setParameter ("comp2",        48.0f);
+                    setParameter ("deess",        32.0f);
+                    setParameter ("presence",      2.6f);
+                    setParameter ("air",           2.2f);
+                    setParameter ("drive",        22.0f);
+                    setParameter ("revmix",       18.0f);
+                    setParameter ("revsize",      42.0f);
+                    setParameter ("delay",        14.0f);
+                    setParameter ("width",        24.0f);
+                    setParameter ("argon_velvet", 64.0f);
+                    setParameter ("argon_focus",  58.0f);
+                    setParameter ("argon_silk",   58.0f);
+                    setParameter ("argon_halo",   46.0f);
                     processor->setMasteringPrismMode (3);
-                    setParameter ("mod_neiro",    1.0f);
-                    setParameter ("argon_velvet", 55.0f);
-                    setParameter ("argon_focus",  50.0f);
-                    setParameter ("argon_silk",   45.0f);
-                    setParameter ("argon_halo",   40.0f);
+                    for (auto* ch : view.getChildren())
+                    {
+                        if (auto* sl = dynamic_cast<juce::Slider*> (ch))
+                        {
+                            const juce::String pid = sl->getProperties().getWithDefault ("paramID", "").toString();
+                            if (pid.isNotEmpty())
+                                if (auto* rv = processor->apvts.getRawParameterValue (pid))
+                                    sl->setValue (rv->load(), juce::dontSendNotification);
+                        }
+                    }
                     {
                         juce::AudioBuffer<float> showcaseBuf (2, 256);
                         juce::MidiBuffer showcaseMidi;
-                        for (int b = 0; b < 12; ++b)
+                        for (int b = 0; b < 18; ++b)
                         {
                             for (int i = 0; i < 256; ++i)
                             {
                                 const float t = (float) (b * 256 + i) / 48000.0f;
                                 const float v = 0.24f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * t)
-                                              + 0.12f * std::sin (2.0f * juce::MathConstants<float>::pi * 440.0f * t)
-                                              + 0.06f * std::sin (2.0f * juce::MathConstants<float>::pi * 1320.0f * t);
+                                              + 0.14f * std::sin (2.0f * juce::MathConstants<float>::pi * 440.0f * t)
+                                              + 0.08f * std::sin (2.0f * juce::MathConstants<float>::pi * 880.0f * t)
+                                              + 0.05f * std::sin (2.0f * juce::MathConstants<float>::pi * 1760.0f * t)
+                                              + 0.03f * std::sin (2.0f * juce::MathConstants<float>::pi * 3520.0f * t);
                                 showcaseBuf.setSample (0, i, v);
                                 showcaseBuf.setSample (1, i, v);
                             }

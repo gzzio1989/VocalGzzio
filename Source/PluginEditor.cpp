@@ -646,15 +646,38 @@ void VocalTuner::paint (juce::Graphics& g)
         g.setColour (juce::Colours::white.withAlpha (0.85f));
         g.drawRoundedRectangle (full.reduced (2.4f), 12.5f, 1.0f);
     }
-    else if (GzzioLnF::getKnobStyle() == 6)
+    else if ((GzzioLnF::getKnobStyle() == 6 || GzzioLnF::getKnobStyle() == 0) && GzzioLnF::getAccessMode() == 0)
     {
-        g.setGradientFill (juce::ColourGradient (Palette::panel.withAlpha (0.58f), 0.0f, full.getY(),
-                                                 Palette::mirrorBot.withAlpha (0.56f), 0.0f, full.getBottom(), false));
+        const bool isMidnight = (GzzioLnF::getKnobStyle() == 0);
+        const auto topCol = isMidnight ? juce::Colour (0xff071028).withAlpha (0.88f) : Palette::panel.withAlpha (0.50f);
+        const auto botCol = isMidnight ? juce::Colour (0xff030714).withAlpha (0.93f) : Palette::mirrorBot.withAlpha (0.58f);
+        g.setGradientFill (juce::ColourGradient (topCol, 0.0f, full.getY(),
+                                                 botCol, 0.0f, full.getBottom(), false));
         g.fillRoundedRectangle (full, 14.0f);
-        g.setColour (Palette::metalHi.withAlpha (0.42f));
-        g.drawRoundedRectangle (full.reduced (3.5f), 11.5f, 1.0f);
-        g.setColour (Palette::metalMid.withAlpha (0.72f));
-        g.drawRoundedRectangle (full.reduced (0.5f), 14.0f, 1.3f);
+        if (isMidnight)
+        {
+            juce::Path tClip;
+            tClip.addRoundedRectangle (full.reduced (1.2f), 13.0f);
+            juce::Graphics::ScopedSaveState cs (g);
+            g.reduceClipRegion (tClip);
+            g.setGradientFill (juce::ColourGradient (Palette::green.withAlpha (0.18f), full.getX() + full.getWidth() * 0.25f, full.getBottom(),
+                                                     Palette::green.withAlpha (0.0f),  full.getX() + full.getWidth() * 0.25f, full.getBottom() - 48.0f, false));
+            g.fillRect (full.withTop (full.getBottom() - 50.0f));
+            const float fx = full.getRight() - 68.0f, fy = full.getY() + 48.0f;
+            g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.20f), fx, fy,
+                                                     Palette::yellow.withAlpha (0.0f),  fx + 38.0f, fy, true));
+            g.fillEllipse (fx - 38.0f, fy - 38.0f, 76.0f, 76.0f);
+        }
+        else
+        {
+            g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.14f), full.getCentreX(), full.getBottom(),
+                                                     Palette::yellow.withAlpha (0.0f),  full.getCentreX(), full.getY() + full.getHeight() * 0.45f, false));
+            g.fillRoundedRectangle (full, 14.0f);
+        }
+        g.setColour (Palette::metalHi.withAlpha (0.30f));
+        g.drawRoundedRectangle (full.reduced (2.0f), 12.5f, 1.0f);
+        g.setColour (Palette::metalMid.interpolatedWith (isMidnight ? Palette::green : Palette::blue, 0.38f).withAlpha (0.78f));
+        g.drawRoundedRectangle (full.reduced (0.5f), 14.0f, 1.35f);
     }
     else
     {
@@ -762,14 +785,38 @@ void VocalTuner::paint (juce::Graphics& g)
     {
         // ★ Red Dot 仕様: ダーククリスタル・ストロボピッチダイヤル窓
         const bool isScenic = (GzzioLnF::getKnobStyle() == 6);
-        g.setGradientFill (juce::ColourGradient (
-            inTune ? Palette::green.withAlpha (0.28f)
-                   : (lightTheme ? Palette::panel2 : Palette::bgTop.darker (0.42f).withAlpha (0.88f)),
-            note.getX(), note.getY(),
-            inTune ? Palette::green.darker (0.35f).withAlpha (0.24f)
-                   : (lightTheme ? Palette::panel.darker (0.04f) : Palette::panel2.darker (0.18f).withAlpha (0.90f)),
-            note.getX(), note.getBottom(), false));
-        g.fillRoundedRectangle (note, 11.0f);
+        const bool isMidnight = (GzzioLnF::getKnobStyle() == 0 && GzzioLnF::getAccessMode() == 0 && ! lightTheme);
+        if (isMidnight)
+        {
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xff081430).withAlpha (0.94f), note.getX(), note.getY(),
+                                                     juce::Colour (0xff030714).withAlpha (0.97f), note.getX(), note.getBottom(), false));
+            g.fillRoundedRectangle (note, 11.0f);
+            const juce::Colour tuneGlow = inTune ? Palette::green.interpolatedWith (Palette::yellow, 0.46f) : Palette::yellow;
+            const float ncx = note.getCentreX(), ncy = note.getCentreY() - 2.0f;
+            g.setGradientFill (juce::ColourGradient (tuneGlow.withAlpha (0.28f), ncx, ncy,
+                                                     tuneGlow.withAlpha (0.0f),  ncx + note.getWidth() * 0.48f, ncy, true));
+            g.fillRoundedRectangle (note, 11.0f);
+            for (int rIdx = 0; rIdx < 16; ++rIdx)
+            {
+                const float ra = (float) rIdx * juce::MathConstants<float>::twoPi / 16.0f + 0.15f;
+                const float rl = note.getHeight() * ((rIdx % 2 == 0) ? 0.38f : 0.24f);
+                g.setGradientFill (juce::ColourGradient (Palette::metalHi.withAlpha (0.36f), ncx + std::cos (ra) * 6.0f, ncy + std::sin (ra) * 6.0f,
+                                                         tuneGlow.withAlpha (0.0f),          ncx + std::cos (ra) * rl,   ncy + std::sin (ra) * rl, false));
+                g.drawLine (ncx + std::cos (ra) * 6.0f, ncy + std::sin (ra) * 6.0f,
+                            ncx + std::cos (ra) * rl,   ncy + std::sin (ra) * rl, (rIdx % 2 == 0) ? 0.95f : 0.65f);
+            }
+        }
+        else
+        {
+            g.setGradientFill (juce::ColourGradient (
+                inTune ? Palette::green.withAlpha (0.28f)
+                       : (lightTheme ? Palette::panel2 : Palette::bgTop.darker (0.42f).withAlpha (0.88f)),
+                note.getX(), note.getY(),
+                inTune ? Palette::green.darker (0.35f).withAlpha (0.24f)
+                       : (lightTheme ? Palette::panel.darker (0.04f) : Palette::panel2.darker (0.18f).withAlpha (0.90f)),
+                note.getX(), note.getBottom(), false));
+            g.fillRoundedRectangle (note, 11.0f);
+        }
 
         // 上部の半円ストロボ・ピッチアーク目盛り
         const float arcCx = note.getCentreX();
@@ -788,7 +835,7 @@ void VocalTuner::paint (juce::Graphics& g)
                 const bool isZero = (t == 0);
                 const float r0 = arcR + (isZero ? 2.0f : 2.5f);
                 const float r1 = arcR + (isZero ? 6.2f : 4.6f);
-                g.setColour (isZero ? Palette::green : Palette::inkSoft.withAlpha (0.45f));
+                g.setColour (isZero ? (isMidnight ? Palette::yellow : Palette::green) : Palette::inkSoft.withAlpha (0.45f));
                 g.drawLine (arcCx + r0 * std::sin (ta), arcCy - r0 * std::cos (ta),
                             arcCx + r1 * std::sin (ta), arcCy - r1 * std::cos (ta),
                             isZero ? 1.8f : 1.0f);
@@ -808,8 +855,9 @@ void VocalTuner::paint (juce::Graphics& g)
                                                  juce::Colours::transparentWhite, note.getX(), note.getY() + 16.0f, false));
         g.fillRoundedRectangle (note.reduced (2.0f, 1.0f).withHeight (14.0f), 9.0f);
 
-        g.setColour (inTune ? Palette::green : (isScenic ? Palette::metalMid.withAlpha (0.78f) : Palette::panelLn.brighter (0.15f)));
-        g.drawRoundedRectangle (note.reduced (0.5f), 11.0f, inTune ? 1.8f : 1.2f);
+        g.setColour (isMidnight ? Palette::metalMid.interpolatedWith (inTune ? Palette::green : Palette::yellow, 0.42f).withAlpha (0.88f)
+                                : (inTune ? Palette::green : (isScenic ? Palette::metalMid.withAlpha (0.78f) : Palette::panelLn.brighter (0.15f))));
+        g.drawRoundedRectangle (note.reduced (0.5f), 11.0f, inTune ? 1.6f : 1.2f);
     }
     auto noteText = note.withTrimmedBottom (21.0f);
     g.setColour (Palette::ink);
@@ -840,7 +888,8 @@ void VocalTuner::paint (juce::Graphics& g)
                                              keyStrip.getHeight());
             const bool isCurrent = show && (pc == activePc);
             const bool isRefA    = (! show) && (pc == 9);
-            const juce::Colour kCol = isCurrent ? (inTune ? Palette::green : Palette::yellow)
+            const bool isMidKey  = (GzzioLnF::getKnobStyle() == 0 && GzzioLnF::getAccessMode() == 0 && ! lightTheme);
+            const juce::Colour kCol = isCurrent ? (isMidKey ? Palette::yellow : (inTune ? Palette::green : Palette::yellow))
                                     : isRefA    ? Palette::ice.withAlpha (0.38f)
                                                 : Palette::bgTop.darker (0.35f).withAlpha (0.82f);
             g.setColour (kCol);
@@ -1109,8 +1158,22 @@ void EQGraph::updateSpectrum()
 void EQGraph::paint (juce::Graphics& g)
 {
     auto full = getLocalBounds().toFloat();
-    g.setColour (Palette::bgTop);
-    g.fillRoundedRectangle (full, 8.0f);
+    if (GzzioLnF::getKnobStyle() == 0 && GzzioLnF::getAccessMode() == 0)
+    {
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff050c20).withAlpha (0.92f), full.getX(), full.getY(),
+                                                 juce::Colour (0xff020510).withAlpha (0.96f), full.getX(), full.getBottom(), false));
+        g.fillRoundedRectangle (full, 10.0f);
+        g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.15f), full.getCentreX(), full.getBottom(),
+                                                 Palette::yellow.withAlpha (0.0f),  full.getCentreX(), full.getBottom() - 42.0f, false));
+        g.fillRoundedRectangle (full, 10.0f);
+        g.setColour (Palette::metalMid.interpolatedWith (Palette::yellow, 0.35f).withAlpha (0.64f));
+        g.drawRoundedRectangle (full.reduced (0.5f), 10.0f, 1.15f);
+    }
+    else
+    {
+        g.setColour (Palette::bgTop);
+        g.fillRoundedRectangle (full, 8.0f);
+    }
 
     // inner plot area (leave a margin for axis labels so +18/+12 never truncate)
     plot = full.reduced (10.0f).withTrimmedBottom (18.0f).withTrimmedLeft (26.0f);
