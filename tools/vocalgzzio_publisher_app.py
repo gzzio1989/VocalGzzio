@@ -58,8 +58,12 @@ YT_TITLE = "【歌枠・歌ってみた】声量10割開放＆音量250%でも�
 
 YT_DESC = """歌枠・歌ってみた・VRChat / cluster・DTM向けオールインワン日本語ボーカルプロセッサー『VocalGzzio（ボーカルグッジオ）』が v5.5.0（Windows ＆ Mac Universal 対応）へ大型アップデート！
 
+■ デモボーカル素材クレジット (CC BY 3.0)
+Vocal Source: "Come Inside (pell)" by Madam Snowflake (2019) — Licensed under Creative Commons Attribution (3.0)
+https://ccmixter.org/files/snowflake/59563
+
 ■ VocalGzzio v5.5.0 の8大新機能
-1. アプリ別カラオケ音声の直接取込（YouTubeやJOYSOUNDの伴奏だけを指定して取り込み＆声⇄伴奏±300ms音ズレ自動計測）
+1. アプリ別カラオケ音声の直接取込（YouTubeやカラオケアプリの伴奏だけを指定して取り込み＆声⇄伴奏±300ms音ズレ自動計測）
 2. 伴奏コード自動追従の知能派ハモリ生成（スマート・ハーモニー）
 3. SNS投稿用ショート動画（.mp4 横型16:9 ＆ 縦型9:16）の1クリック書き出し
 4. 新プリセットパレット ＆ 巨大プレビュー「デカ文字ルーペ」＋配信ミニバー(520×115px)
@@ -80,10 +84,9 @@ https://github.com/gzzio1989/VocalGzzio/releases/tag/v5.5.0
 #VocalGzzio #歌枠 #歌ってみた #OBS #VTuber #VRChat #cluster #DTM #VST3"""
 
 X_MAIN_POST = """【大型更新】歌枠・歌ってみたを1画面で完結『VocalGzzio v5.5.0』Win/Mac公開🎤
-🌐アプリ別カラオケ取込＆音ズレ自動計測
-🎹コード追従ハモリ＆SNS動画化
-🎤声量10割＆250%無歪みDSP
-🕰️全19世代復元
+🌐アプリ別カラオケ取込＆音ズレ計測
+🎹コード追従ハモリ＆動画保存
+🎤声量10割＆全19世代復元
 https://gzzio.booth.pm/items/8764003 #歌枠"""
 
 STATE_FILE = ROOT_DIR / "promo_v550" / "publish_state_v550.json"
@@ -329,6 +332,12 @@ def publish_youtube_shorts() -> dict:
         cdp.call("Page.bringToFront", session_id=sid)
 
         log("YouTube Studio アップロードダイアログを開いています...")
+        cdp.call(
+            "Page.navigate",
+            {"url": "https://studio.youtube.com/channel/UCzsPKMV4lkM6e4hmau7QJ2g/videos/upload?d=ud"},
+            session_id=sid,
+        )
+        time.sleep(5.0)
         doc = cdp.call("DOM.getDocument", {"depth": -1}, session_id=sid)
         q = cdp.call(
             "DOM.querySelector",
@@ -680,25 +689,32 @@ def publish_note() -> dict:
 # 4. X (Twitter) 自動投稿 (本投稿＋動画添付＋ツリーリプライ自動連投)
 # ---------------------------------------------------------------------------
 def _paste_into_x_editor(cdp: CdpClient, sid: str, text: str) -> str:
-    js_paste = f"""
-    (() => {{
+    js_focus = """
+    (() => {
         const dlg = document.querySelector('[role="dialog"]') || document;
         const el = dlg.querySelector('[data-testid="tweetTextarea_0"]') || document.querySelector('[data-testid="tweetTextarea_0"]');
         if (!el) return 'no_el';
+        el.scrollIntoView({ block: 'center' });
+        el.click();
         el.focus();
-        const dt = new DataTransfer();
-        dt.setData('text/plain', {json.dumps(text, ensure_ascii=False)});
-        const ev = new ClipboardEvent('paste', {{
-            clipboardData: dt,
-            bubbles: true,
-            cancelable: true
-        }});
-        el.dispatchEvent(ev);
-        return el.innerText;
-    }})()
+        return 'focused';
+    })()
+    """
+    foc = cdp.call("Runtime.evaluate", {"expression": js_focus, "returnByValue": True}, session_id=sid)["result"]["value"]
+    if foc == "no_el":
+        return "no_el"
+    time.sleep(0.4)
+    cdp.call("Input.insertText", {"text": text}, session_id=sid)
+    time.sleep(0.5)
+    js_read = """
+    (() => {
+        const dlg = document.querySelector('[role="dialog"]') || document;
+        const el = dlg.querySelector('[data-testid="tweetTextarea_0"]') || document.querySelector('[data-testid="tweetTextarea_0"]');
+        return el ? (el.innerText || '') : '';
+    })()
     """
     return cdp.call(
-        "Runtime.evaluate", {"expression": js_paste, "returnByValue": True}, session_id=sid
+        "Runtime.evaluate", {"expression": js_read, "returnByValue": True}, session_id=sid
     )["result"]["value"]
 
 
@@ -833,9 +849,10 @@ def publish_x() -> dict:
         if new_status_url:
             st["x_status_url"] = new_status_url
             reply_text = (
-                f"📺YouTube Shorts 音比較デモ\n{st.get('youtube_shorts_url', 'https://youtube.com/shorts/eY_yB3da90g')}\n\n"
+                f"📺YouTube Shorts 音比較デモ\n{st.get('youtube_shorts_url', '')}\n\n"
                 f"📘v5.5.0全機能解説(note)\n{st.get('note_url', 'https://note.com/gzzio/n/ndc7393460e75')}\n\n"
-                f"💻公式サイト＆無料体験版直DL\nhttps://gzzio1989.github.io/apps/vocalgzzio/"
+                f"💻公式サイト＆無料体験版直DL\nhttps://gzzio1989.github.io/apps/vocalgzzio/\n\n"
+                f"🎵Vocal: Come Inside (pell) / Madam Snowflake (CC BY 3.0)"
             )
             cdp.call("Page.navigate", {"url": new_status_url}, session_id=xsid)
             time.sleep(4.5)
