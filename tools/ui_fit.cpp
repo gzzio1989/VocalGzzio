@@ -183,9 +183,11 @@ int main()
     //  4サイズ × 3通り の合計12回まわす。
     struct Mode { const char* name; bool advanced; int theme; };
     const Mode modes[] = {
-        { "くわしい/日本語", true,  1 },   // 1 = ゆるふわ(既定)
-        { "かんたん/日本語", false, 1 },
-        { "くわしい/英語",   true,  3 },   // 3 = ブランド = 全UI英語
+        { "くわしい/標準(0)",   true,  0 },   // 0 = ふつう(ミッドナイト)
+        { "くわしい/日本語(1)", true,  1 },   // 1 = ゆるふわ
+        { "くわしい/自然(2)",   true,  2 },   // 2 = 自然(明色ボタニカル)
+        { "かんたん/日本語(1)", false, 1 },
+        { "くわしい/英語(3)",   true,  3 },   // 3 = ブランド = 全UI英語
     };
     const double sizes[] = { 0.80, 1.00, 1.25, 1.50 };
 
@@ -348,6 +350,77 @@ int main()
             if ((int) small.size() > shown) std::printf ("      …ほか %d 個\n", (int) small.size() - shown);
             CHECK (counted > 20, "押す物をちゃんと数えている（%d 個）", counted);
         }
+    }
+
+    // ---- 全テーマでのボタン文字コントラスト＆「文字・見た目」吹き出しZオーダー貫通防止の検査 ----
+    std::printf ("\n---- 全テーマでのボタンコントラスト＆吹き出しZオーダー検査 ----\n");
+    {
+        VocalGzzioProcessor p;
+        GzzioLnF look;
+        VocalGzzioContent content (p);
+        content.setLookAndFeel (&look);
+        content.setSize (VocalGzzioEditor::baseW, VocalGzzioEditor::baseH);
+        content.restoreUiState (true, 0, false, 0);
+        content.setOverview (false);
+        content.setDenoiseClearVisibleForTest (true);
+        content.openSizePopupForTest();
+
+        int zFail = 0;
+        int contrastFail = 0;
+        int totalBtnChecks = 0;
+        for (int tm = 0; tm <= 18; ++tm)
+        {
+            content.setThemeMode (tm);
+            content.resized();
+            auto& children = content.getChildren();
+            int calloutIdx = -1, maxButtonIdx = -1;
+            for (int ci = 0; ci < children.size(); ++ci)
+            {
+                if (dynamic_cast<juce::CallOutBox*> (children[ci]) != nullptr)
+                    calloutIdx = ci;
+                else if (dynamic_cast<juce::Button*> (children[ci]) != nullptr && children[ci]->isVisible())
+                    maxButtonIdx = ci;
+            }
+            if (calloutIdx < 0 || calloutIdx < maxButtonIdx)
+                ++zFail;
+
+            std::vector<juce::Component*> allComps;
+            collect (content, allComps);
+            const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
+            const bool isMidnight = (! lightPanel && Palette::currentTheme == 0
+                                     && GzzioLnF::getKnobStyle() == 0);
+            for (auto* c : allComps)
+            {
+                auto* tb = dynamic_cast<juce::TextButton*> (c);
+                if (tb == nullptr || tb->getButtonText().trim().isEmpty()) continue;
+                const bool on = tb->getToggleState();
+                const auto onCol = tb->findColour (juce::TextButton::buttonOnColourId);
+                const auto rawOffBg = tb->findColour (juce::TextButton::buttonColourId);
+                const auto effOffBg = isMidnight ? juce::Colour (0xff071024)
+                                    : (rawOffBg.getFloatAlpha() < 0.85f)
+                                        ? Palette::panel2.interpolatedWith (rawOffBg.withAlpha (1.0f),
+                                              juce::jlimit (0.18f, 0.42f, rawOffBg.getFloatAlpha() * 1.35f))
+                                        : rawOffBg.withAlpha (1.0f);
+                const auto effBg = on
+                    ? ((isMidnight && onCol != Palette::yellow) ? juce::Colour (0xff091530) : onCol.withAlpha (1.0f))
+                    : effOffBg;
+                const auto txtCol = on
+                    ? ((isMidnight && onCol != Palette::yellow) ? Palette::ink : Palette::readableOn (onCol))
+                    : Palette::accentOn (tb->findColour (juce::TextButton::textColourOffId), effOffBg, 4.5f);
+                const float cr = Palette::wcagContrast (txtCol, effBg);
+                ++totalBtnChecks;
+                if (cr < 4.2f)
+                {
+                    ++contrastFail;
+                    std::printf ("  [FAIL theme=%d] '%s' (on=%d) contrast=%.2f:1\n",
+                                 tm, tb->getButtonText().toRawUTF8(), (int) on, cr);
+                }
+            }
+        }
+        CHECK (zFail == 0, "全19テーマ切替・resized()後も「文字・見た目」吹き出しが常に最前面（貫通 0 件）");
+        CHECK (contrastFail == 0, "全19テーマ×全ボタン（計 %d 箇所）でコントラスト比 4.2:1 以上を達成（違反 %d 件）",
+               totalBtnChecks, contrastFail);
+        content.setLookAndFeel (nullptr);
     }
 
     std::printf (gFail ? "== %d 段階で FAIL ==\n" : "\n== 全テスト PASS ==\n", gFail);

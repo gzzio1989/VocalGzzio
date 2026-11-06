@@ -648,9 +648,9 @@ void VocalTuner::paint (juce::Graphics& g)
         g.setColour (juce::Colours::white.withAlpha (0.85f));
         g.drawRoundedRectangle (full.reduced (2.4f), 12.5f, 1.0f);
     }
-    else if ((GzzioLnF::getKnobStyle() == 6 || GzzioLnF::getKnobStyle() == 0) && GzzioLnF::getAccessMode() == 0)
+    else if ((GzzioLnF::getKnobStyle() == 6 || (GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0)) && GzzioLnF::getAccessMode() == 0)
     {
-        const bool isMidnight = (GzzioLnF::getKnobStyle() == 0);
+        const bool isMidnight = (GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0);
         const auto topCol = isMidnight ? juce::Colour (0xff071028).withAlpha (0.88f) : Palette::panel.withAlpha (0.50f);
         const auto botCol = isMidnight ? juce::Colour (0xff030714).withAlpha (0.93f) : Palette::mirrorBot.withAlpha (0.58f);
         g.setGradientFill (juce::ColourGradient (topCol, 0.0f, full.getY(),
@@ -890,15 +890,18 @@ void VocalTuner::paint (juce::Graphics& g)
                                              keyStrip.getHeight());
             const bool isCurrent = show && (pc == activePc);
             const bool isRefA    = (! show) && (pc == 9);
-            const bool isMidKey  = (GzzioLnF::getKnobStyle() == 0 && GzzioLnF::getAccessMode() == 0 && ! lightTheme);
+            const bool isMidKey  = (GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0 && GzzioLnF::getAccessMode() == 0 && ! lightTheme);
             const juce::Colour kCol = isCurrent ? (isMidKey ? Palette::yellow : (inTune ? Palette::green : Palette::yellow))
-                                    : isRefA    ? Palette::ice.withAlpha (0.38f)
-                                                : Palette::bgTop.darker (0.35f).withAlpha (0.82f);
+                                    : isRefA    ? (lightTheme ? Palette::green.interpolatedWith (Palette::panel, 0.62f) : Palette::ice.withAlpha (0.38f))
+                                    : lightTheme ? Palette::panel.brighter (0.04f)
+                                                 : Palette::bgTop.darker (0.35f).withAlpha (0.82f);
             g.setColour (kCol);
             g.fillRoundedRectangle (kr, 3.5f);
-            g.setColour (isCurrent ? juce::Colours::white : Palette::panelLn.withAlpha (0.72f));
+            g.setColour (isCurrent ? (lightTheme ? Palette::ink : juce::Colours::white)
+                                   : (lightTheme ? Palette::panelLn.darker (0.18f) : Palette::panelLn.withAlpha (0.72f)));
             g.drawRoundedRectangle (kr, 3.5f, isCurrent ? 1.4f : 0.9f);
-            g.setColour (isCurrent ? juce::Colour (0xff061018) : Palette::ink.withAlpha (0.92f));
+            g.setColour (isCurrent ? (lightTheme ? Palette::readableOn (kCol) : juce::Colour (0xff061018))
+                                   : Palette::ink.withAlpha (0.92f));
             g.drawText (kWhiteName[w], kr.toNearestInt(), juce::Justification::centred, false);
         }
         // 白鍵の境界上部に5つの黒鍵（シャープ音: C#, D#, F#, G#, A#）のジュエルLEDを配置
@@ -910,9 +913,10 @@ void VocalTuner::paint (juce::Graphics& g)
             const bool isCurrent = show && (pc == activePc);
             const float bx = keyStrip.getX() + (float) (kBlackAfterWhite[b] + 1) * kw;
             const juce::Rectangle<float> br (bx - 3.5f, keyStrip.getY() - 1.0f, 7.0f, 6.5f);
-            g.setColour (isCurrent ? (inTune ? Palette::green : Palette::yellow) : Palette::panel2.brighter (0.25f));
+            g.setColour (isCurrent ? (inTune ? Palette::green : Palette::yellow)
+                                   : (lightTheme ? Palette::ink.withAlpha (0.72f) : Palette::panel2.brighter (0.25f)));
             g.fillRoundedRectangle (br, 2.0f);
-            g.setColour (isCurrent ? juce::Colours::white : Palette::metalMid.withAlpha (0.85f));
+            g.setColour (isCurrent ? juce::Colours::white : (lightTheme ? Palette::panel : Palette::metalMid.withAlpha (0.85f)));
             g.drawRoundedRectangle (br, 2.0f, 0.9f);
         }
     }
@@ -1160,7 +1164,9 @@ void EQGraph::updateSpectrum()
 void EQGraph::paint (juce::Graphics& g)
 {
     auto full = getLocalBounds().toFloat();
-    if (GzzioLnF::getKnobStyle() == 0 && GzzioLnF::getAccessMode() == 0)
+    const bool lightTheme = Palette::panel.getPerceivedBrightness() > 0.55f;
+    const bool isMidnightEq = (! lightTheme && Palette::currentTheme == 0 && GzzioLnF::getKnobStyle() == 0 && GzzioLnF::getAccessMode() == 0);
+    if (isMidnightEq)
     {
         g.setGradientFill (juce::ColourGradient (juce::Colour (0xff050c20).withAlpha (0.92f), full.getX(), full.getY(),
                                                  juce::Colour (0xff020510).withAlpha (0.96f), full.getX(), full.getBottom(), false));
@@ -1170,6 +1176,14 @@ void EQGraph::paint (juce::Graphics& g)
         g.fillRoundedRectangle (full, 10.0f);
         g.setColour (Palette::metalMid.interpolatedWith (Palette::yellow, 0.35f).withAlpha (0.64f));
         g.drawRoundedRectangle (full.reduced (0.5f), 10.0f, 1.15f);
+    }
+    else if (lightTheme)
+    {
+        g.setGradientFill (juce::ColourGradient (Palette::bgTop, full.getX(), full.getY(),
+                                                 Palette::panel2.interpolatedWith (Palette::panel, 0.55f), full.getX(), full.getBottom(), false));
+        g.fillRoundedRectangle (full, 10.0f);
+        g.setColour (Palette::panelLn.darker (0.14f));
+        g.drawRoundedRectangle (full.reduced (0.5f), 10.0f, 1.2f);
     }
     else
     {
@@ -1183,13 +1197,17 @@ void EQGraph::paint (juce::Graphics& g)
     auto lf = GzzioLnF::uiFont;
 
     // ---- v1.5.0: the grid + axis labels never change at a given size, so they
-    //      are rendered once into an image (rebuilt on resize). This removes a
-    //      few dozen text-layout calls from every animation frame. ----
-    if (! gridImage.isValid())
+    //      are rendered once into an image (rebuilt on resize or theme switch). ----
+    if (! gridImage.isValid() || cachedGridTheme != Palette::currentTheme || cachedGridAccess != GzzioLnF::getAccessMode())
     {
+        cachedGridTheme  = Palette::currentTheme;
+        cachedGridAccess = GzzioLnF::getAccessMode();
         gridImage = juce::Image (juce::Image::ARGB,
                                  juce::jmax (1, getWidth()), juce::jmax (1, getHeight()), true);
         juce::Graphics gg (gridImage);
+
+        const auto gridLineCol = lightTheme ? Palette::panelLn.darker (0.18f) : Palette::panelLn;
+        const auto axisTextCol = Palette::accentOn (Palette::inkSoft, lightTheme ? Palette::bgTop : juce::Colour (0xff050c20), 4.0f);
 
         // vertical grid: decade + 1-2-5 log lines
         const float decadeMarks[] = { 20, 30, 50, 100, 200, 300, 500,
@@ -1199,11 +1217,11 @@ void EQGraph::paint (juce::Graphics& g)
         {
             const float gx = freqToX (hz);
             const bool major = (hz == 100 || hz == 1000 || hz == 10000);
-            gg.setColour (Palette::panelLn.withAlpha (major ? 0.7f : 0.35f));
+            gg.setColour (gridLineCol.withAlpha (major ? 0.75f : 0.40f));
             gg.fillRect (gx, plot.getY(), 1.0f, plot.getHeight());
             if (major)
             {
-                gg.setColour (Palette::inkSoft.withAlpha (0.9f));
+                gg.setColour (axisTextCol.withAlpha (0.95f));
                 const juce::String lab = hz >= 1000.0f ? juce::String ((int) (hz / 1000)) + "k"
                                                        : juce::String ((int) hz);
                 gg.drawText (lab, juce::Rectangle<float> (gx - 16, plot.getBottom() + 1, 32, 16),
@@ -1217,12 +1235,12 @@ void EQGraph::paint (juce::Graphics& g)
         {
             const float gy = dbToY ((float) db);
             const bool zero = (db == 0);
-            gg.setColour (zero ? Palette::panelLn.withAlpha (0.9f)
-                               : Palette::panelLn.withAlpha (0.30f));
+            gg.setColour (zero ? gridLineCol.withAlpha (0.92f)
+                               : gridLineCol.withAlpha (0.38f));
             gg.fillRect (plot.getX(), gy, plot.getWidth(), zero ? 1.4f : 1.0f);
             if (! compactH || db == -18 || db == 0 || db == 18)
             {
-                gg.setColour (Palette::inkSoft.withAlpha (0.85f));
+                gg.setColour (axisTextCol.withAlpha (0.92f));
                 gg.setFont (lf (14.0f, false));
                 gg.drawText ((db > 0 ? "+" : "") + juce::String (db),
                              juce::Rectangle<float> (full.getX() + 1, gy - 8, 25, 16),
@@ -7238,9 +7256,10 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                                   juce::dontSendNotification);
                 labOcean.setColour (juce::Label::textColourId, Palette::ink);
 
+                const bool lightTheme = Palette::panel.getPerceivedBrightness() > 0.55f;
                 static const char* const kStyleJa[4] = { "標準デザイン", "◉ くっきり大文字", "★ かんたん3ステップ", "● マット・具体表記" };
                 static const char* const kStyleEn[4] = { "Standard",     "◉ High Contrast",  "★ 3-Step Guide",      "● Matte & Concrete" };
-                const juce::Colour styleCols[4] = { Palette::inkSoft, Palette::yellow, Palette::blue, Palette::green };
+                const juce::Colour styleCols[4] = { lightTheme ? Palette::green : Palette::blue, Palette::yellow, Palette::blue, Palette::green };
                 for (int a = 0; a < styleBtns.size(); ++a)
                 {
                     auto* sb = styleBtns[a];
@@ -7273,7 +7292,9 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                         ? (juce::String::fromUTF8 ("🆙 ") + foundTag + language->T (" を入手", " Get"))
                         : language->T ("今すぐ確認", "Check Now"));
                     updNowBtn.setColour (juce::TextButton::buttonColourId,
-                                         foundTag.isNotEmpty() ? Palette::yellow.withAlpha (0.32f) : Palette::blue.withAlpha (0.20f));
+                                         foundTag.isNotEmpty()
+                                             ? (lightTheme ? Palette::panel2.interpolatedWith (Palette::yellow, 0.38f) : Palette::yellow.withAlpha (0.32f))
+                                             : (lightTheme ? Palette::panel2.interpolatedWith (Palette::blue, 0.24f)   : Palette::blue.withAlpha (0.20f)));
                     updNowBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 }
                 {
@@ -7282,11 +7303,15 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     legacyVerBtn.setButtonText (legId > 0
                         ? language->T ("🕰 歴代バージョン切替 (現在: ", "🕰 Legacy Version (Active: ") + vSpec.verTag + ")"
                         : language->T ("🕰 歴代バージョン呼び出し (全19世代: v1.0〜v5.5)", "🕰 Recall Legacy Versions (All 19: v1.0-v5.5)"));
-                    legacyVerBtn.setColour (juce::TextButton::buttonColourId, legId > 0 ? Palette::yellow.withAlpha (0.28f) : Palette::panel2);
+                    legacyVerBtn.setColour (juce::TextButton::buttonColourId,
+                                            legId > 0
+                                                ? (lightTheme ? Palette::panel2.interpolatedWith (Palette::yellow, 0.35f) : Palette::yellow.withAlpha (0.28f))
+                                                : Palette::panel2);
                     legacyVerBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 }
                 manualBtn.setButtonText (language->T ("📖 取扱説明書・OBS/DAW配線ガイドを開く", "📖 Open User Manual & Routing Guide"));
-                manualBtn.setColour (juce::TextButton::buttonColourId, Palette::blue.withAlpha (0.22f));
+                manualBtn.setColour (juce::TextButton::buttonColourId,
+                                     lightTheme ? Palette::panel2.interpolatedWith (Palette::blue, 0.24f) : Palette::blue.withAlpha (0.22f));
                 manualBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 for (auto* s : { &bigFont, &bigZoom })
                 {
@@ -8022,6 +8047,11 @@ void VocalGzzioContent::placeLamp (Lamp& l, const Knob& k)
     const int d = advancedMode ? 22 : 26;
     l.btn.setBounds (r.getRight() - d - 1, r.getY() + 1, d, d);
     l.btn.toFront (false);
+    // ★「文字・見た目」等の吹き出し(CallOutBox)を開いたままテーマ切替・リサイズした際、
+    //   ツマミ右上の電源ボタン(lampDbl / lampRev 等)が吹き出しの手前に突き抜けるのを防ぐ
+    for (auto* ch : getChildren())
+        if (dynamic_cast<juce::CallOutBox*> (ch) != nullptr)
+            ch->toFront (false);
 }
 
 void VocalGzzioContent::updateTabVisibility()
@@ -8939,6 +8969,7 @@ void VocalGzzioContent::timerCallback()
         if (learned != dnClearButton.isVisible())
         {
             dnClearButton.setVisible (learned);
+            resized();
             repaint();
         }
     }
@@ -11062,14 +11093,30 @@ void VocalGzzioContent::resized()
         }
     }
 
-    // LEARN button: top-right inside the CLEAN UP panel header
-    learnButton.setBounds (cleanArea.getRight() - 84, cleanArea.getY() + 3, 78, 19);
-    // v3.0 じどう学びなおしは「学習ずみ(もどす)」のさらに左。幅は実測。
-    //  席順: [じどう学習] [学習ずみ] [LEARN]（ui_fit が重なりを毎回見張る）
+    // LEARN / 学習ずみ / じどう学習: CLEAN UP パネル見出し右側に実測幅で整然と配置
+    //  席順: [じどう学習] [学習ずみ] [ノイズを測る]（ui_fit が重なりと文字潰れを毎回見張る）
     {
-        const int rw = lnf != nullptr ? juce::jmax (72, lnf->buttonWidthFor (relearnBtn, 19, 14)) : 92;
-        relearnBtn.setVisible (eraNow >= 300 || showAllKnobs);
-        relearnBtn.setBounds (cleanArea.getRight() - 84 - 6 - 72 - 6 - rw, cleanArea.getY() + 3, rw, 19);
+        const int clH = 20;
+        const int maxRightW = juce::jmax (220, cleanArea.getWidth() - 196);
+        int lw = lnf != nullptr ? juce::jmax (86, lnf->buttonWidthFor (learnButton, clH, 12)) : 92;
+        int cw = lnf != nullptr ? juce::jmax (74, lnf->buttonWidthFor (dnClearButton, clH, 12)) : 78;
+        int rw = lnf != nullptr ? juce::jmax (92, lnf->buttonWidthFor (relearnBtn, clH, 12)) : 104;
+        const int totalNeed = lw + 6 + cw + 6 + rw;
+        if (totalNeed > maxRightW && totalNeed > 0)
+        {
+            const float scaleW = (float) (maxRightW - 12) / (float) (lw + cw + rw);
+            lw = juce::jmax (76, juce::roundToInt ((float) lw * scaleW));
+            cw = juce::jmax (68, juce::roundToInt ((float) cw * scaleW));
+            rw = juce::jmax (82, maxRightW - 12 - lw - cw);
+        }
+        const int cy = cleanArea.getY() + 3;
+        const int learnX = cleanArea.getRight() - 6 - lw;
+        const int clearX = learnX - 6 - cw;
+        learnButton  .setBounds (learnX, cy, lw, clH);
+        dnClearButton.setBounds (clearX, cy, cw, clH);
+        relearnBtn   .setVisible (eraNow >= 300 || showAllKnobs);
+        const int relearnX = dnClearButton.isVisible() ? (clearX - 6 - rw) : (learnX - 6 - rw);
+        relearnBtn   .setBounds (relearnX, cy, rw, clH);
     }
     // v3.0「つぶさない」: 音量そろえの見出し右。幅は実測（文字が切れないように）
     {
@@ -11079,8 +11126,6 @@ void VocalGzzioContent::resized()
         crushBtn.setBounds (dynArea.getRight() - 8 - w, dynArea.getY() + 3, w, h);
         crushReadArea = { dynArea.getRight() - 8 - w - 76, dynArea.getY() + 3, 72, h };
     }
-    // v2.10.0 その左に「学習ずみ」。覚えている間だけ出る(timerCallback が制御)。
-    dnClearButton.setBounds (cleanArea.getRight() - 84 - 6 - 72, cleanArea.getY() + 3, 72, 19);
     // (v1.5.0: auto-setup buttons moved to the hero band above the columns)
     // TEMPO FIT: v2.8.0 ★位置を直した。
     // 右端に置いていたが、同じ場所に「ひびきの種類」プルダウン

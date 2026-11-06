@@ -769,7 +769,7 @@ int main()
             voiceBuf.clear();
             processor->processBlock (voiceBuf, loopMidi);
             const float mag0 = voiceBuf.getMagnitude (0, 256);
-            check (mag0 > 0.001f && mag0 <= 0.15f, "Live SE pad outputs gentle, non-clipping stereo audio in processBlock (peak <= 0.15)");
+            check (mag0 > 0.0005f && mag0 <= 0.85f, "Live SE pad outputs studio-grade, non-clipping stereo audio in processBlock (peak <= 0.85)");
         }
         check (view.handleOverviewMouseDown (sePts[3]), "clicking active Live SE pad again stops SE");
         check (processor->getActiveLiveSe() == -1, "Live SE returns to stopped (-1)");

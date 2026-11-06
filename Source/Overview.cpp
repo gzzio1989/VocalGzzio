@@ -2068,7 +2068,7 @@ void VocalGzzioContent::resizedOverview()
     if ((accessMode == 0 || accessMode == 2) && (liverTheme() || oceanStarTheme() || themeMode == 2 || themeMode == 4
         || (overviewLayoutMode == 1 && themeMode != 1 && themeMode != 8 && themeMode != 9)))
     {
-        const int swW = (overviewMonitor.getWidth() < 460) ? 44 : 58;
+        const int swW = (overviewMonitor.getWidth() < 460) ? 44 : (overviewMonitor.getWidth() < 640 ? 52 : 58);
         const int swGap = 4;
         const int swTotal = swW * 5 + swGap * 4;
         const int swX0 = overviewMonitor.getRight() - 12 - swTotal;
@@ -2084,9 +2084,9 @@ void VocalGzzioContent::resizedOverview()
             const int prW = (overviewMonitor.getWidth() < 420) ? 118 : 158;
             prismPillRect = { overviewMonitor.getRight() - prW - 12, overviewMonitor.getY() + 9, prW, 26 };
         }
-        else if (overviewMonitor.getWidth() >= 540)
+        else if (overviewMonitor.getWidth() >= 520)
         {
-            prismPillRect = { coutureSwatchRects[0].getX() - 116, overviewMonitor.getY() + 9, 110, 26 };
+            prismPillRect = { coutureSwatchRects[0].getX() - 106, overviewMonitor.getY() + 9, 102, 26 };
         }
     }
 
@@ -2710,25 +2710,26 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         {
             if (ri.isEmpty() || ! g.clipRegionIntersects (ri.expanded (3))) return;
             const auto r = ri.toFloat();
+            const bool lightHdr = (! nightTheme()) && (pastelTheme() || Palette::panel.getPerceivedBrightness() > 0.55f);
             const float pillRad = pastelTheme() ? r.getHeight() * 0.5f : 6.5f;
             if (liteMode)
             {
                 g.setColour (active ? col.withAlpha (0.35f) : Palette::panel2);
                 g.fillRoundedRectangle (r, pillRad);
             }
-            else if (pastelTheme() && ! nightTheme())
+            else if (lightHdr)
             {
-                // クチュール・エナメル＆宝飾金具・ヘッダーピル
-                g.setColour (Palette::panelLn.withAlpha (active ? 0.38f : 0.22f));
+                // クチュール・エナメル＆ボタニカル明色・ヘッダーピル
+                g.setColour (Palette::panelLn.withAlpha (active ? 0.38f : 0.24f));
                 g.fillRoundedRectangle (r.translated (0.0f, 1.8f), pillRad);
                 const auto topC = active ? col.brighter (0.12f) : Palette::panel.brighter (0.04f);
                 const auto botC = active ? col.darker (0.08f)   : Palette::panel2;
                 g.setGradientFill (juce::ColourGradient (topC, r.getX(), r.getY(), botC, r.getX(), r.getBottom(), false));
                 g.fillRoundedRectangle (r, pillRad);
-                g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (active ? 0.45f : 0.75f), r.getX(), r.getY() + 1.0f,
+                g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (active ? 0.45f : 0.72f), r.getX(), r.getY() + 1.0f,
                                                          juce::Colours::transparentWhite, r.getX(), r.getY() + r.getHeight() * 0.45f, false));
                 g.fillRoundedRectangle (r.reduced (2.0f, 1.0f).withHeight (r.getHeight() * 0.44f), pillRad * 0.85f);
-                const juce::Colour goldBorder = liverTheme() ? Palette::metalMid : Palette::panelLn.darker (0.12f);
+                const juce::Colour goldBorder = liverTheme() ? Palette::metalMid : Palette::panelLn.darker (0.18f);
                 g.setColour (active ? col.darker (0.28f) : goldBorder);
                 g.drawRoundedRectangle (r.reduced (0.5f), pillRad, active ? 1.8f : 1.3f);
                 g.setColour (active ? Palette::readableOn (col) : Palette::ink);
@@ -3535,17 +3536,22 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                  : themeMode == 17 ? language->T ("🍁 晩秋と初雪の水鏡", "AUTUMN & FIRST SNOW MIRROR")
                                    : language->T ("👑 蒼海オペラ天球", "GRAND OPERA SAPPHIRE ORB")))
             : (themeMode == 2)
-            ? language->T ("✦ 四季の水紋オーブ ＆ 音の輪郭モニター", "BOTANICAL WATER ORB & SPECTRUM")
+            ? (hasSwatches ? language->T ("✦ 四季の水紋オーブ", "WATER ORB")
+                           : language->T ("✦ 四季の水紋オーブ ＆ 音の輪郭モニター", "BOTANICAL WATER ORB & SPECTRUM"))
             : (themeMode == 4)
-            ? language->T ("✦ 星屑プラネタリウム天球儀 ＆ 輪郭モニター", "CELESTIAL ASTROLABE & SPECTRUM")
+            ? (hasSwatches ? language->T ("✦ 星屑天球儀", "ASTROLABE")
+                           : language->T ("✦ 星屑プラネタリウム天球儀 ＆ 輪郭モニター", "CELESTIAL ASTROLABE & SPECTRUM"))
             : isStudioStyle
             ? language->T ("◆ アナログ位相ゴニオメーター ＆ スペクトラム RTA", "ANALOG GONIOMETER & RTA")
-            : language->T ("声の質感パッド ＆ 4軸バランス調整", "VOICE TEXTURE PAD & 4-AXIS BALANCE");
+            : (hasSwatches ? language->T ("声の質感パッド", "VOICE ORB")
+                           : language->T ("声の質感パッド ＆ 4軸バランス調整", "VOICE TEXTURE PAD & 4-AXIS BALANCE"));
         auto monTitleRect = overviewMonitor.reduced (28, 8).withHeight (28);
+        int rightLim = monTitleRect.getRight();
         if (hasSwatches)
-            monTitleRect.setRight (juce::jmax (monTitleRect.getX() + 60, coutureSwatchRects[0].getX() - 6));
-        else if (! prismPillRect.isEmpty())
-            monTitleRect.setRight (juce::jmax (monTitleRect.getX() + 60, prismPillRect.getX() - 6));
+            rightLim = juce::jmin (rightLim, coutureSwatchRects[0].getX() - 6);
+        if (! prismPillRect.isEmpty())
+            rightLim = juce::jmin (rightLim, prismPillRect.getX() - 6);
+        monTitleRect.setRight (juce::jmax (monTitleRect.getX() + 60, rightLim));
         fitText (g, monTitle, monTitleRect, juce::Justification::centredLeft, (accessMode == 1) ? 17.5f : 16.0f, true);
 
         // ---- 💄 クチュール・コスメ / 🌌 風景・季節コレクション 5色ワンタッチ・ジュエルスウォッチピル描画 ----
@@ -4565,10 +4571,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     const juce::Rectangle<int> hudRect (argonPadRect.getX() + 18,
                                                         (int) (cy + ballR - 23.0f),
                                                         argonPadRect.getWidth() - 36, 17);
-                    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff040816).withAlpha (0.64f), (float) hudRect.getCentreX(), (float) hudRect.getCentreY(),
-                                                             juce::Colour (0xff040816).withAlpha (0.0f),  (float) hudRect.getRight(),   (float) hudRect.getCentreY(), true));
+                    const juce::Colour hudBg = (themeMode == 2) ? Palette::panel : juce::Colour (0xff040816);
+                    g.setGradientFill (juce::ColourGradient (hudBg.withAlpha (themeMode == 2 ? 0.86f : 0.64f), (float) hudRect.getCentreX(), (float) hudRect.getCentreY(),
+                                                             hudBg.withAlpha (0.0f),                           (float) hudRect.getRight(),   (float) hudRect.getCentreY(), true));
                     g.fillRoundedRectangle (hudRect.toFloat(), 8.5f);
-                    g.setColour (Palette::metalHi);
+                    g.setColour ((themeMode == 2) ? Palette::ink : Palette::metalHi);
                     fitText (g, hudTxt, hudRect.reduced (6, 0), juce::Justification::centred, 11.2f, true);
                 }
             }
@@ -4597,12 +4604,14 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         if (! staticPass && ! argonResetRect.isEmpty())
         {
             const bool anyArgonOn = (vVal > 0.5f || fVal > 0.5f || sVal > 0.5f || hVal > 0.5f);
+            const bool lightRst   = (! nightTheme()) && Palette::panel.getPerceivedBrightness() > 0.55f;
             const auto rf = argonResetRect.toFloat();
-            g.setColour (anyArgonOn ? Palette::salmon.withAlpha (0.34f) : Palette::bgTop.darker (0.35f).withAlpha (0.86f));
+            g.setColour (anyArgonOn ? (lightRst ? Palette::panel.interpolatedWith (Palette::salmon, 0.28f) : Palette::salmon.withAlpha (0.34f))
+                                    : (lightRst ? Palette::panel.brighter (0.04f) : Palette::bgTop.darker (0.35f).withAlpha (0.86f)));
             g.fillRoundedRectangle (rf, 6.0f);
-            g.setColour (anyArgonOn ? Palette::salmon.withAlpha (0.95f) : Palette::panelLn.withAlpha (0.72f));
+            g.setColour (anyArgonOn ? Palette::salmon.withAlpha (0.95f) : (lightRst ? Palette::panelLn.darker (0.18f) : Palette::panelLn.withAlpha (0.72f)));
             g.drawRoundedRectangle (rf.reduced (0.5f), 6.0f, anyArgonOn ? 1.5f : 1.0f);
-            g.setColour (anyArgonOn ? Palette::ink : Palette::inkSoft);
+            g.setColour (anyArgonOn ? Palette::ink : (lightRst ? Palette::ink.withAlpha (0.88f) : Palette::inkSoft));
             fitText (g, language->T ("↺ 0%", "↺ 0%"), argonResetRect.reduced (3, 0), juce::Justification::centred, 13.5f, true);
         }
     }
@@ -4785,6 +4794,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         const char* tEn[4]      = { "VELVET",        "ASMR",        "CRYSTAL",        "3D HALO" };
         const juce::Colour tCols[4] = { Palette::salmon, Palette::yellow, Palette::ice, Palette::blue };
         const bool kawaiiPills = (isLiverStyle || isYuruStyle);
+        const bool lightPills  = (! nightTheme()) && (kawaiiPills || Palette::panel.getPerceivedBrightness() > 0.55f);
         for (int t = 0; t < 4; ++t)
         {
             const auto r = argonTargetRects[(size_t) t];
@@ -4793,16 +4803,16 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             const bool active = (argonActiveTarget == t);
             if (! liteMode)
             {
-                g.setColour (kawaiiPills ? tCols[t].withAlpha (active ? 0.28f : 0.14f)
-                                         : juce::Colours::black.withAlpha (active ? 0.32f : 0.18f));
+                g.setColour (lightPills ? tCols[t].withAlpha (active ? 0.28f : 0.14f)
+                                        : juce::Colours::black.withAlpha (active ? 0.32f : 0.18f));
                 g.fillRoundedRectangle (rf.translated (0.0f, 2.0f), tRad);
             }
-            if (kawaiiPills && ! nightTheme())
+            if (lightPills)
             {
-                // クチュール・エナメル＆クッションピル
+                // クチュール・エナメル＆ボタニカル明色・クッションピル
                 g.setGradientFill (juce::ColourGradient (
                     active ? tCols[t].brighter (0.55f)  : Palette::panel.brighter (0.05f), rf.getX(), rf.getY(),
-                    active ? tCols[t].withAlpha (0.42f) : Palette::panel2.darker (0.04f),  rf.getX(), rf.getBottom(), false));
+                    active ? tCols[t].withAlpha (0.42f) : Palette::panel2.darker (0.03f),  rf.getX(), rf.getBottom(), false));
                 g.fillRoundedRectangle (rf, tRad);
                 g.setColour (juce::Colours::white.withAlpha (0.68f));
                 g.fillRoundedRectangle (rf.getX() + 4.0f, rf.getY() + 1.5f, rf.getWidth() - 8.0f, rf.getHeight() * 0.40f, tRad * 0.45f);
@@ -4871,13 +4881,16 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 fitText (g, label, r.reduced (4, 0), juce::Justification::centred, 12.5f, active);
                 return;
             }
-            g.setColour (active ? col.withAlpha (pastelTheme() ? 0.30f : 0.36f)
-                                : Palette::panel2.withAlpha (0.92f));
+            const bool lightIo = (! nightTheme()) && (pastelTheme() || Palette::panel.getPerceivedBrightness() > 0.55f);
+            g.setColour (active ? (lightIo ? col : col.withAlpha (0.36f))
+                                : (lightIo ? Palette::panel.brighter (0.04f) : Palette::panel2.withAlpha (0.92f)));
             g.fillRoundedRectangle (rf, rad);
-            g.setColour (active ? col : Palette::panelLn);
-            g.drawRoundedRectangle (rf.reduced (0.5f), rad, active ? 1.6f : 1.0f);
-            g.setColour (active ? Palette::ink : Palette::inkSoft);
-            fitText (g, label, r.reduced (4, 0), juce::Justification::centred, 12.5f, active);
+            g.setColour (active ? (lightIo ? col.darker (0.28f) : col)
+                                : (lightIo ? Palette::panelLn.darker (0.16f) : Palette::panelLn));
+            g.drawRoundedRectangle (rf.reduced (0.5f), rad, active ? 1.6f : 1.1f);
+            g.setColour (active ? (lightIo ? Palette::readableOn (col) : Palette::ink)
+                                : (lightIo ? Palette::ink : Palette::inkSoft));
+            fitText (g, label, r.reduced (4, 0), juce::Justification::centred, 12.5f, active || lightIo);
         };
         const int rMode = juce::jlimit (0, 4, processor.getInputRouteMode());
         const bool inMonoActive = (rMode != 4);
@@ -6159,30 +6172,33 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
 
             // 微調整ドック＆ライブSEパッドの整理トレイ枠（ごちゃつきを防ぎ2ブロックに整頓）
+            const bool lightDock = (! nightTheme()) && Palette::panel.getPerceivedBrightness() > 0.55f;
             if (! fineTargetRect.isEmpty() && ! fineResetRect.isEmpty())
             {
                 const auto fineTray = fineTargetRect.getUnion (fineResetRect).expanded (4, 3).toFloat();
-                g.setColour (Palette::bgTop.darker (0.22f).withAlpha (0.55f));
+                g.setColour (lightDock ? Palette::panel2.darker (0.05f).withAlpha (0.82f)
+                                       : Palette::bgTop.darker (0.22f).withAlpha (0.55f));
                 g.fillRoundedRectangle (fineTray, rad + 2.0f);
-                g.setColour (Palette::panelLn.withAlpha (0.45f));
+                g.setColour (lightDock ? Palette::panelLn.darker (0.14f) : Palette::panelLn.withAlpha (0.45f));
                 g.drawRoundedRectangle (fineTray, rad + 2.0f, 1.0f);
             }
             const auto lastSeRect = ! customSeRects[3].isEmpty() ? customSeRects[3] : liveSeRects[3];
             if (! chorusPillRect.isEmpty() && ! lastSeRect.isEmpty())
             {
                 const auto seTray = chorusPillRect.getUnion (lastSeRect).expanded (4, 3).toFloat();
-                g.setColour (Palette::bgTop.darker (0.22f).withAlpha (0.55f));
+                g.setColour (lightDock ? Palette::panel2.darker (0.05f).withAlpha (0.82f)
+                                       : Palette::bgTop.darker (0.22f).withAlpha (0.55f));
                 g.fillRoundedRectangle (seTray, rad + 2.0f);
-                g.setColour (Palette::panelLn.withAlpha (0.45f));
+                g.setColour (lightDock ? Palette::panelLn.darker (0.14f) : Palette::panelLn.withAlpha (0.45f));
                 g.drawRoundedRectangle (seTray, rad + 2.0f, 1.0f);
             }
 
             if (! fineMinusRect.isEmpty())
             {
                 const auto mf = fineMinusRect.toFloat();
-                g.setColour (Palette::bgTop.darker (0.35f).withAlpha (0.92f));
+                g.setColour (lightDock ? Palette::panel.brighter (0.04f) : Palette::bgTop.darker (0.35f).withAlpha (0.92f));
                 g.fillRoundedRectangle (mf, rad);
-                g.setColour (Palette::ice.withAlpha (0.78f));
+                g.setColour (lightDock ? Palette::ice.darker (0.10f) : Palette::ice.withAlpha (0.78f));
                 g.drawRoundedRectangle (mf.reduced (0.5f), rad, 1.2f);
                 g.setColour (Palette::ink);
                 g.fillRoundedRectangle (mf.getCentreX() - 8.5f, mf.getCentreY() - 1.8f, 17.0f, 3.6f, 1.6f);
@@ -6190,20 +6206,20 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             if (! finePlusRect.isEmpty())
             {
                 const auto pf = finePlusRect.toFloat();
-                g.setColour (Palette::bgTop.darker (0.35f).withAlpha (0.92f));
+                g.setColour (lightDock ? Palette::panel.brighter (0.04f) : Palette::bgTop.darker (0.35f).withAlpha (0.92f));
                 g.fillRoundedRectangle (pf, rad);
-                g.setColour (Palette::yellow.withAlpha (0.85f));
+                g.setColour (lightDock ? Palette::yellowDk : Palette::yellow.withAlpha (0.85f));
                 g.drawRoundedRectangle (pf.reduced (0.5f), rad, 1.2f);
-                g.setColour (Palette::yellow);
+                g.setColour (lightDock ? Palette::yellowDk : Palette::yellow);
                 g.fillRoundedRectangle (pf.getCentreX() - 8.5f, pf.getCentreY() - 1.8f, 17.0f, 3.6f, 1.6f);
                 g.fillRoundedRectangle (pf.getCentreX() - 1.8f, pf.getCentreY() - 8.5f, 3.6f, 17.0f, 1.6f);
             }
             if (! fineResetRect.isEmpty())
             {
                 const auto rf = fineResetRect.toFloat();
-                g.setColour (Palette::bgTop.darker (0.35f).withAlpha (0.92f));
+                g.setColour (lightDock ? Palette::panel.brighter (0.04f) : Palette::bgTop.darker (0.35f).withAlpha (0.92f));
                 g.fillRoundedRectangle (rf, rad);
-                g.setColour (Palette::salmon.withAlpha (0.82f));
+                g.setColour (lightDock ? Palette::salmon.darker (0.12f) : Palette::salmon.withAlpha (0.82f));
                 g.drawRoundedRectangle (rf.reduced (0.5f), rad, 1.2f);
                 g.setColour (Palette::ink);
                 fitText (g, language->T ("初期値", "INIT"),
@@ -6212,6 +6228,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         }
         else
         {
+            const bool lightDock = (! nightTheme()) && Palette::panel.getPerceivedBrightness() > 0.55f;
            #if VOCALGZZIO_TRIAL
             const auto defaultHint = language->T ("体験版：60秒ごとに0.6秒だけ音量が下がります。中央の丸や4本のバーで声の温かさ・芯・明るさ・広がりを調整できます。操作部にカーソルを合わせると説明が表示されます。", "Trial: sound dips for 0.6s every 60s. Use the orb or four bars for warmth, focus, air and stereo space. Hover over a control for help.");
            #else
@@ -6230,11 +6247,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 const auto tf = fineTargetRect.toFloat();
                 const juce::String kName = targetK->label.getText().trim();
                 const juce::String kVal  = targetK->slider.getTextFromValue (targetK->slider.getValue()).trim();
-                g.setColour (Palette::bgTop.darker (0.42f).withAlpha (0.92f));
+                const auto tgtBg = lightDock ? Palette::panel.brighter (0.04f) : Palette::bgTop.darker (0.42f).withAlpha (0.92f);
+                g.setColour (tgtBg);
                 g.fillRoundedRectangle (tf, rad);
-                g.setColour (Palette::ice.withAlpha (0.85f));
+                g.setColour (lightDock ? Palette::ice.darker (0.14f) : Palette::ice.withAlpha (0.85f));
                 g.drawRoundedRectangle (tf.reduced (0.5f), rad, 1.3f);
-                g.setColour (Palette::ice);
+                g.setColour (Palette::accentOn (Palette::ice, tgtBg, 4.5f));
                 fitText (g, kName, fineTargetRect.withHeight (19).reduced (5, 0).translated (0, 1),
                          juce::Justification::centred, 14.0f, true);
                 g.setColour (Palette::ink);
@@ -6254,11 +6272,14 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                                    : cTrig   ? Palette::green
                                    : cAuto   ? Palette::ice
                                              : Palette::panelLn;
-                g.setColour (cOn ? pillCol.withAlpha (0.34f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f));
+                g.setColour (cOn ? (lightDock ? pillCol : pillCol.withAlpha (0.34f))
+                                 : (lightDock ? Palette::panel.brighter (0.04f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f)));
                 g.fillRoundedRectangle (cf, rad);
-                g.setColour (cOn ? pillCol : Palette::panelLn.withAlpha (0.75f));
+                g.setColour (cOn ? (lightDock ? pillCol.darker (0.28f) : pillCol)
+                                 : (lightDock ? Palette::panelLn.darker (0.18f) : Palette::panelLn.withAlpha (0.75f)));
                 g.drawRoundedRectangle (cf.reduced (0.5f), rad, cOn ? 1.8f : 1.1f);
-                g.setColour (cOn ? Palette::ink : Palette::inkSoft);
+                g.setColour (cOn ? (lightDock ? Palette::readableOn (pillCol) : Palette::ink)
+                                 : (lightDock ? Palette::ink : Palette::inkSoft));
                 const juce::String cTxt = cManual
                     ? language->T ("サビ演出:ON", "CHORUS:ON")
                     : cAuto
@@ -6282,13 +6303,15 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                         gzzio::horology_celestial::LiveSePadHorologyVisualizer::drawSePadEmblem (
                             g, sf.withWidth (juce::jmin (sf.getHeight(), 22.0f)).reduced (2.0f), s, true, 0.85f);
                     }
-                    g.setColour (sOn ? Palette::yellow.withAlpha (0.34f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f));
+                    g.setColour (sOn ? (lightDock ? Palette::yellow : Palette::yellow.withAlpha (0.34f))
+                                     : (lightDock ? Palette::panel.brighter (0.04f) : Palette::bgTop.darker (0.35f).withAlpha (0.88f)));
                     g.fillRoundedRectangle (sf, rad);
-                    g.setColour (sOn ? Palette::yellow : Palette::panelLn.withAlpha (0.70f));
+                    g.setColour (sOn ? (lightDock ? Palette::yellow.darker (0.28f) : Palette::yellow)
+                                     : (lightDock ? Palette::panelLn.darker (0.18f) : Palette::panelLn.withAlpha (0.70f)));
                     g.drawRoundedRectangle (sf.reduced (0.5f), rad, sOn ? 1.8f : 1.0f);
-                    g.setColour (sOn ? Palette::yellow : Palette::ink);
+                    g.setColour (sOn ? (lightDock ? Palette::readableOn (Palette::yellow) : Palette::yellow) : Palette::ink);
                     fitText (g, language->T (kSeShortJa[s], kSeShortEn[s]),
-                             sr.reduced (4, 0), juce::Justification::centred, 14.0f, sOn);
+                             sr.reduced (4, 0), juce::Justification::centred, 14.0f, sOn || lightDock);
                 }
 
                 const auto& cr = customSeRects[(size_t) s];
@@ -6297,16 +6320,18 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     const auto cf = cr.toFloat();
                     const bool loaded = processor.hasCustomSeLoaded (s);
                     const bool cOn    = (activeSe == 4 + s);
-                    const auto borderCol = cOn    ? Palette::yellow
-                                         : loaded ? Palette::ice.withAlpha (0.80f)
-                                                  : Palette::panelLn.withAlpha (0.55f);
-                    g.setColour (cOn ? Palette::yellow.withAlpha (0.34f)
-                                     : loaded ? Palette::ice.withAlpha (0.16f)
-                                              : Palette::bgTop.darker (0.40f).withAlpha (0.84f));
+                    const auto borderCol = cOn    ? (lightDock ? Palette::yellow.darker (0.28f) : Palette::yellow)
+                                         : loaded ? (lightDock ? Palette::ice.darker (0.18f) : Palette::ice.withAlpha (0.80f))
+                                                  : (lightDock ? Palette::panelLn.darker (0.14f) : Palette::panelLn.withAlpha (0.55f));
+                    g.setColour (cOn ? (lightDock ? Palette::yellow : Palette::yellow.withAlpha (0.34f))
+                                     : loaded ? (lightDock ? Palette::panel.interpolatedWith (Palette::ice, 0.18f) : Palette::ice.withAlpha (0.16f))
+                                              : (lightDock ? Palette::panel2.brighter (0.02f) : Palette::bgTop.darker (0.40f).withAlpha (0.84f)));
                     g.fillRoundedRectangle (cf, rad);
                     g.setColour (borderCol);
                     g.drawRoundedRectangle (cf.reduced (0.5f), rad, cOn ? 1.8f : 1.0f);
-                    g.setColour (cOn ? Palette::yellow : loaded ? Palette::ink : Palette::inkSoft);
+                    g.setColour (cOn ? (lightDock ? Palette::readableOn (Palette::yellow) : Palette::yellow)
+                                     : loaded ? Palette::ink
+                                              : (lightDock ? Palette::ink.withAlpha (0.84f) : Palette::inkSoft));
                     juce::String cLabel;
                     if (loaded)
                     {
@@ -6319,7 +6344,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     {
                         cLabel = language->T ("+音源 ", "+SE ") + juce::String (s + 1);
                     }
-                    fitText (g, cLabel, cr.reduced (4, 0), juce::Justification::centred, 14.0f, cOn || loaded);
+                    fitText (g, cLabel, cr.reduced (4, 0), juce::Justification::centred, 14.0f, cOn || loaded || lightDock);
                 }
             }
         }

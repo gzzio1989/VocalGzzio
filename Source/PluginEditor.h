@@ -60,16 +60,6 @@ namespace Palette
         return kModes[juce::jlimit (0, 4, idx)];
     }
 
-    // mode: 1 = yuru-kawa (soft pastel, light cards), else neutral (dark)
-    // v1.9.0: 下地の明るさに応じて必ず読める文字色を返す。
-    // 明るいアクセント(黄・ピンク)の上に淡い色を置いてしまい、
-    // ゆるかわ/自然モードで選択中の項目が読めなくなっていた対策。
-    inline juce::Colour readableOn (juce::Colour bg)
-    {
-        return bg.getPerceivedBrightness() > 0.55f ? juce::Colour (0xff2b2419)
-                                                   : juce::Colour (0xfff7f3ec);
-    }
-
     // v2.0.0: アクセント色をそのまま使うと下地によっては読めない(例: 明るいモードの
     // クリーム地に黄色の見出し)。WCAGのコントラスト比が4.5:1を超えるまで、下地が
     // 明るければ暗く・暗ければ明るく寄せる。届いていればそのままの色を返す。
@@ -88,10 +78,20 @@ namespace Palette
     inline juce::Colour accentOn (juce::Colour accent, juce::Colour bg, float minRatio = 4.5f)
     {
         juce::Colour c = accent;
-        const bool darkBg = wcagLum (bg) < 0.30f;
-        for (int i = 0; i < 14 && wcagContrast (c, bg) < minRatio; ++i)
-            c = darkBg ? c.brighter (0.16f) : c.darker (0.16f);
+        const bool darkBg = wcagLum (bg) < 0.179f;
+        for (int i = 0; i < 18 && wcagContrast (c, bg) < minRatio; ++i)
+            c = darkBg ? c.interpolatedWith (juce::Colours::white, 0.22f)
+                       : c.interpolatedWith (juce::Colours::black, 0.22f);
         return c;
+    }
+
+    // mode: 1 = yuru-kawa (soft pastel, light cards), else neutral (dark)
+    // v1.9.0 / v5.5.0: 下地のWCAG相対輝度に応じて必ず4.5:1以上で読める文字色を返す。
+    inline juce::Colour readableOn (juce::Colour bg)
+    {
+        const juce::Colour base = wcagLum (bg) > 0.179f ? juce::Colour (0xff2b2419)
+                                                        : juce::Colour (0xfff7f3ec);
+        return accentOn (base, bg, 4.5f);
     }
 
     inline void applyTheme (int mode)
@@ -1147,7 +1147,7 @@ public:
                 const float rad = (s_accessMode == 1 || s_accessMode == 3) ? 6.0f : (s_useKawaii ? rf.getHeight() * 0.48f : 5.5f);
                 const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
                 const int group = (int) parentSlider->getProperties().getWithDefault ("signalGroup", 2);
-                const bool isMidnightFlagship = (s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0);
+                const bool isMidnightFlagship = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0);
                 const juce::Colour acc = ! parentSlider->isEnabled() ? Palette::inkSoft
                                        : isMidnightFlagship
                                            ? ((group == 0 && parentSlider->getX() < 500) ? Palette::green
@@ -1426,7 +1426,8 @@ public:
         const float angle  = startAngle + pos * (endAngle - startAngle);
         const float ring   = juce::jmax (isHero ? 4.8f : 3.4f, radius * (isHero ? 0.082f : 0.068f));
         const int group = (int) sl.getProperties().getWithDefault ("signalGroup", 2);
-        const bool isMidnightFlagship = (s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0);
+        const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.52f;
+        const bool isMidnightFlagship = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0);
         const auto groupAccent = isMidnightFlagship
             ? ((group == 0 && sl.getX() < 500) ? Palette::green
              : (group == 1 || (group == 0 && sl.getX() >= 500)) ? Palette::yellow
@@ -2382,6 +2383,113 @@ public:
             return;
         }
 
+        if (lightPanel)
+        {
+            // 🌿 自然 (Botanical Nature) 等・明色テーマかつ s_knobStyle == 0 時：
+            //    漆黒のオブシディアンレンズを避け、木漏れ日と翡翠（ヒスイ）・白磁のナチュラル・ボタニカルダイヤルを描画
+            g.setColour (juce::Colours::black.withAlpha (0.18f));
+            g.fillEllipse (c.x - kr, c.y - kr + 2.6f, kr * 2.0f, kr * 2.0f);
+            if (isHero || isWorking)
+            {
+                const float auraR = kr * (isHero ? 1.24f : 1.15f);
+                const juce::Colour auraCol = groupAccent.interpolatedWith (Palette::yellow, 0.35f);
+                g.setGradientFill (juce::ColourGradient (auraCol.withAlpha (isHero ? 0.24f : 0.16f), c.x, c.y + kr * 0.12f,
+                                                         auraCol.withAlpha (0.0f),                   c.x + auraR, c.y + kr * 0.12f, true));
+                g.fillEllipse (c.x - auraR, c.y - auraR, auraR * 2.0f, auraR * 2.0f);
+            }
+
+            // 外周の白樺シャンパン＆セージ・ブラッシュドベゼル
+            {
+                juce::ColourGradient bezelGrad (Palette::panel.brighter (0.08f), c.x - kr * 0.70f, c.y - kr * 0.75f,
+                                                Palette::panelLn.darker (0.20f), c.x + kr * 0.70f, c.y + kr * 0.75f, false);
+                bezelGrad.addColour (0.50, Palette::panel2);
+                g.setGradientFill (bezelGrad);
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+
+                const int flutes = isHero ? 36 : 24;
+                for (int f = 0; f < flutes; ++f)
+                {
+                    const float fa = (float) f * juce::MathConstants<float>::twoPi / (float) flutes;
+                    const float r0 = kr * 0.86f, r1 = kr * 0.98f;
+                    g.setColour (Palette::inkSoft.withAlpha ((f % 2 == 0) ? 0.34f : 0.18f));
+                    g.drawLine (c.x + r0 * std::sin (fa), c.y - r0 * std::cos (fa),
+                                c.x + r1 * std::sin (fa), c.y - r1 * std::cos (fa), 0.9f);
+                }
+                g.setColour (Palette::panelLn.darker (0.24f));
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.5f : 1.2f);
+            }
+
+            // 内側の白磁＆翡翠ボタニカル・ドームレンズ
+            const float capR = kr * (isHero ? 0.84f : 0.85f);
+            {
+                juce::ColourGradient lensGrad (Palette::panel.brighter (0.06f), c.x, c.y - capR,
+                                               Palette::panel2.interpolatedWith (groupAccent, 0.22f), c.x, c.y + capR, false);
+                lensGrad.addColour (0.58, Palette::panel2.brighter (0.03f));
+                g.setGradientFill (lensGrad);
+                g.fillEllipse (c.x - capR, c.y - capR, capR * 2.0f, capR * 2.0f);
+
+                // 木漏れ日のボケ光とリーフ・フィラメント
+                const juce::Colour leafGlow = groupAccent.interpolatedWith (Palette::yellow, 0.35f);
+                g.setGradientFill (juce::ColourGradient (leafGlow.withAlpha (isWorking ? 0.34f : 0.20f), c.x, c.y + capR * 0.85f,
+                                                         leafGlow.withAlpha (0.0f),                      c.x, c.y, true));
+                g.fillEllipse (c.x - capR * 0.92f, c.y - capR * 0.92f, capR * 1.84f, capR * 1.84f);
+
+                const int numFilaments = isHero ? 14 : 10;
+                const float filAlpha = isWorking ? (0.34f + 0.22f * effInt) : 0.20f;
+                for (int f = 0; f < numFilaments; ++f)
+                {
+                    const float fa = angle * 0.35f + (float) f * juce::MathConstants<float>::twoPi / (float) numFilaments;
+                    const float rInF  = capR * 0.22f;
+                    const float rOutF = capR * ((f % 2 == 0) ? 0.70f : 0.52f);
+                    const juce::Colour fCol = (f % 2 == 0) ? groupAccent.darker (0.12f) : Palette::yellowDk;
+                    const float x0 = c.x + rInF  * std::sin (fa), y0 = c.y - rInF  * std::cos (fa);
+                    const float x1 = c.x + rOutF * std::sin (fa), y1 = c.y - rOutF * std::cos (fa);
+                    g.setGradientFill (juce::ColourGradient (fCol.withAlpha (filAlpha), x0, y0,
+                                                             fCol.withAlpha (0.0f),     x1, y1, false));
+                    g.drawLine (x0, y0, x1, y1, isHero ? 1.15f : 0.9f);
+                }
+
+                g.setColour (groupAccent.darker (0.15f).withAlpha (0.48f));
+                g.drawEllipse (c.x - capR, c.y - capR, capR * 2.0f, capR * 2.0f, 1.0f);
+            }
+
+            // 上部の白磁グロス反射
+            g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.68f), c.x, c.y - capR * 0.94f,
+                                                     juce::Colours::white.withAlpha (0.0f),  c.x, c.y - capR * 0.16f, false));
+            g.fillEllipse (c.x - capR * 0.74f, c.y - capR * 0.90f, capR * 1.48f, capR * 0.66f);
+
+            // 中心ハブ＆高視認ボタニカル指針
+            const float sinA = std::sin (angle), cosA = std::cos (angle);
+            const float pIn  = capR * 0.24f;
+            const float pOut = capR * 0.86f;
+            juce::Path pointer;
+            pointer.startNewSubPath (c.x + pIn  * sinA, c.y - pIn  * cosA);
+            pointer.lineTo          (c.x + pOut * sinA, c.y - pOut * cosA);
+            const juce::Colour needleCol = isWorking ? Palette::accentOn (groupAccent, Palette::panel, 4.5f) : Palette::ink;
+            g.setColour (Palette::ink.withAlpha (0.22f));
+            g.strokePath (pointer, juce::PathStrokeType (isHero ? 4.4f : 3.4f,
+                                                         juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour (needleCol);
+            g.strokePath (pointer, juce::PathStrokeType (isHero ? 2.6f : 2.1f,
+                                                         juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            const float tipX = c.x + (capR * 0.80f) * sinA;
+            const float tipY = c.y - (capR * 0.80f) * cosA;
+            const float tipR = isHero ? 3.0f : 2.2f;
+            g.setColour (groupAccent);
+            g.fillEllipse (tipX - tipR, tipY - tipR, tipR * 2.0f, tipR * 2.0f);
+            g.setColour (juce::Colours::white);
+            g.fillEllipse (tipX - tipR * 0.48f, tipY - tipR * 0.48f, tipR * 0.96f, tipR * 0.96f);
+
+            const float hubR = juce::jmax (2.6f, capR * 0.11f);
+            g.setColour (needleCol);
+            g.fillEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.85f));
+            g.drawEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f, 0.9f);
+            finishKnobStateOverlay();
+            return;
+        }
+
         // Standard / Midnight Lantern Bokeh (0) & Cyber Neon (4):
         // ★ フラッグシップ光学レンズ＆ダイヤモンド切削シャンパンゴールド・ダイヤル (Leica Noctilux / FabFilter Pro-Q 4 意匠)
         // 1. 背面のアンビエント玉ボケ・ドロップシャドウ＆純粋色度ハロー（黒濁りゼロの .withAlpha(0.0f) 減衰）
@@ -2729,10 +2837,15 @@ public:
         const auto* tb  = dynamic_cast<const juce::TextButton*> (&b);
         const bool  isPureSwitch = sw && ! isHoldTrigger
                                    && (tb == nullptr || tb->getButtonText().trim().isEmpty());
+        const bool  lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
+        const bool  lightSw    = (s_useKawaii || lightPanel);
+        const bool  isMidnightFlagship = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
 
         auto col = on ? b.findColour (juce::TextButton::buttonOnColourId) : bg;
         if (on && col.getFloatAlpha() < 0.85f)
             col = col.withAlpha (juce::jmax (0.85f, col.getFloatAlpha()));
+        else if (! on && col.getFloatAlpha() < 0.85f)
+            col = Palette::panel2.interpolatedWith (col.withAlpha (1.0f), juce::jlimit (0.18f, 0.42f, col.getFloatAlpha() * 1.35f));
         if (down) col = col.brighter (0.14f);
         else if (over) col = col.brighter (0.07f);
 
@@ -2743,7 +2856,7 @@ public:
             const float swRad = r.getHeight() * 0.5f;
             if (s_knobStyle != 5)
             {
-                g.setColour ((s_useKawaii ? Palette::panelLn : juce::Colours::black).withAlpha (on ? 0.30f : 0.18f));
+                g.setColour ((lightSw ? Palette::panelLn : juce::Colours::black).withAlpha (on ? 0.30f : 0.18f));
                 g.fillRoundedRectangle (r.translated (0.0f, down ? 0.5f : 1.6f), swRad);
             }
             if (s_knobStyle == 5)
@@ -2759,8 +2872,8 @@ public:
             }
             else
             {
-                const auto offTop = s_useKawaii ? Palette::track.darker (0.06f) : Palette::bgTop.darker (0.38f);
-                const auto offBot = s_useKawaii ? Palette::panel2.darker (0.04f) : Palette::panel.darker (0.18f);
+                const auto offTop = lightSw ? Palette::track.darker (0.06f) : Palette::bgTop.darker (0.38f);
+                const auto offBot = lightSw ? Palette::panel2.darker (0.04f) : Palette::panel.darker (0.18f);
                 g.setGradientFill (juce::ColourGradient (offTop, r.getX(), r.getY(),
                                                          offBot, r.getX(), r.getBottom(), false));
                 g.fillRoundedRectangle (r, swRad);
@@ -2768,6 +2881,8 @@ public:
 
             const juce::Colour swBorder = s_useKawaii
                 ? (on ? Palette::metalDark : ((s_knobStyle == 2) ? Palette::metalMid : Palette::panelLn.darker (0.12f)))
+                : lightPanel
+                ? (on ? col.darker (0.30f) : Palette::panelLn.darker (over ? 0.28f : 0.16f))
                 : (s_knobStyle == 6)
                 ? (on ? Palette::metalHi : Palette::metalMid.withAlpha (over ? 0.90f : 0.68f))
                 : (on ? col.darker (0.36f) : Palette::panelLn.brighter (over ? 0.18f : 0.0f));
@@ -2781,12 +2896,12 @@ public:
 
             if (s_knobStyle != 5)
             {
-                g.setColour (juce::Colours::black.withAlpha (0.26f));
+                g.setColour (juce::Colours::black.withAlpha (lightSw ? 0.18f : 0.26f));
                 g.fillEllipse (thumb.translated (0.0f, 1.1f));
             }
             if (on)
             {
-                const auto lampCol = (s_useKawaii || col.getPerceivedBrightness() < 0.72f)
+                const auto lampCol = (lightSw || col.getPerceivedBrightness() < 0.72f)
                                    ? juce::Colours::white
                                    : Palette::readableOn (col);
                 if (s_knobStyle != 5)
@@ -2807,12 +2922,12 @@ public:
             }
             else
             {
-                const auto knobFill = s_useKawaii ? juce::Colours::white.withAlpha (0.95f)
+                const auto knobFill = lightSw ? juce::Colours::white.withAlpha (0.96f)
                                     : (s_knobStyle == 6 ? Palette::mirrorTop.withAlpha (0.92f)
                                                         : Palette::ink.withAlpha (0.86f));
                 g.setColour (knobFill);
                 g.fillEllipse (thumb);
-                g.setColour ((s_useKawaii ? Palette::panelLn.darker (0.18f) : Palette::bgTop.darker (0.50f)).withAlpha (0.72f));
+                g.setColour ((lightSw ? Palette::panelLn.darker (0.22f) : Palette::bgTop.darker (0.50f)).withAlpha (0.76f));
                 g.drawEllipse (thumb.reduced (0.5f), 1.1f);
             }
             return;
@@ -2825,16 +2940,16 @@ public:
         }
         else if (isHoldTrigger)
         {
-            if (s_useKawaii)
+            if (lightSw)
             {
-                // ♥ Kawaii / V-Liver: クチュール・ローズゴールド＆ルビーハート比較ホールドカプセル
+                // ♥ Kawaii / V-Liver / 自然(明色): 明るい背景で黒浮きしない比較ホールドカプセル
                 g.setColour (Palette::salmon.withAlpha (0.24f));
                 g.fillRoundedRectangle (r.translated (0.0f, down ? 0.5f : 2.2f), rad);
                 g.setGradientFill (juce::ColourGradient (
                     down ? Palette::salmon.brighter (0.25f) : Palette::panel.brighter (0.04f), r.getX(), r.getY(),
                     down ? Palette::salmon.withAlpha (0.55f) : Palette::panel2, r.getX(), r.getBottom(), false));
                 g.fillRoundedRectangle (r, rad);
-                g.setColour (Palette::metalMid);
+                g.setColour (s_useKawaii ? Palette::metalMid : Palette::salmon.darker (0.15f));
                 g.drawRoundedRectangle (r, rad, down ? 2.2f : 1.6f);
                 // 左右の小さなハートチャーム飾り
                 for (float hx : { r.getX() + 12.0f, r.getRight() - 12.0f })
@@ -2907,12 +3022,11 @@ public:
                                                      juce::Colours::transparentWhite,                     r.getX(), r.getY() + r.getHeight() * 0.46f, false));
             g.fillRoundedRectangle (r.reduced (2.0f, 1.0f).withHeight (r.getHeight() * 0.44f), rad * 0.85f);
         }
-        else if (s_knobStyle == 0 && ! s_useKawaii)
+        else if (isMidnightFlagship)
         {
-            // ★ フラッグシップ・ミッドナイトサファイア＆ランタンジュエル・カプセル
-            //   「ベタ塗りの水色・緑色の四角いスタンプ」を完全撤廃！
+            // ★ フラッグシップ・ミッドナイトサファイア＆ランタンジュエル・カプセル (themeMode == 0「ふつう」専用)
             //   黄金CTA（うた自動・A/B）のみを純粋アンバー発光体とし、ONトグルやトリガーボタンは
-            //   深い宵闇サファイアガラスの内側からセクション別の花火ボケ光（左:シアンジェイド / 中央:黄金アンバー / 右:ローズコーラル）が滲み出る高級光学カプセルに統一。
+            //   深い宵闇サファイアガラスの内側から花火ボケ光が滲み出る高級光学カプセルに統一。
             const bool isGoldenHero = (col == Palette::yellow);
             juce::Colour themeCol = col.withAlpha (1.0f);
             if (s_accessMode == 0 && on && col == Palette::green && b.getParentWidth() >= 900)
@@ -2935,7 +3049,7 @@ public:
             else if (on)
             {
                 // ON状態のトグルスイッチ（入 / じどう学習 / EQ ON / リバーブ入切 等）：
-                // 派手なミントベタ塗りをやめ、深い宵闇インディゴガラス＋下辺ランタン逆光＋左端ジュエル光輪で表現
+                // 深い宵闇インディゴガラス＋下辺ランタン逆光＋左端ジュエル光輪で表現
                 const juce::Colour glowC = themeCol.interpolatedWith (Palette::yellow, 0.38f);
                 g.setColour (glowC.withAlpha (0.18f));
                 g.fillRoundedRectangle (r.expanded (1.2f, 1.0f), rad + 1.0f);
@@ -2973,23 +3087,29 @@ public:
         }
         else
         {
-            // 3D立体プッシュパッド＆ロッカーベゼル（Kawaii系はクチュール・エナメル＆ゴールド縁、ハード系は物理ストローク表現）
-            g.setColour (s_useKawaii ? Palette::panelLn.withAlpha (on ? 0.42f : 0.28f)
-                                     : juce::Colours::black.withAlpha (on ? 0.30f : 0.18f));
+            // 3D立体プッシュパッド＆ロッカーベゼル（自然・ゆるふわ・ライバー・ブランド・オーロラ・スタジオ・ネオン・色覚）
+            g.setColour (lightSw ? Palette::panelLn.withAlpha (on ? 0.42f : 0.28f)
+                                 : juce::Colours::black.withAlpha (on ? 0.30f : 0.18f));
             g.fillRoundedRectangle (r.translated (0.0f, down ? 0.5f : 2.2f), rad);
-            if (! down && ! s_useKawaii)
+            if (! down && ! lightSw)
             {
                 g.setColour (on ? col.darker (0.45f) : Palette::bgTop.darker (0.40f));
                 g.fillRoundedRectangle (r.withTrimmedTop (r.getHeight() * 0.55f).translated (0.0f, 1.2f), rad);
             }
-            g.setGradientFill (juce::ColourGradient (col.brighter (on ? 0.18f : 0.08f), r.getX(), r.getY(),
-                                                     col.darker   (on ? 0.14f : 0.08f), r.getX(), r.getBottom(), false));
+            const juce::Colour topFill = (! on && lightPanel && col == Palette::panel2)
+                                       ? Palette::panel.brighter (over ? 0.08f : 0.04f)
+                                       : col.brighter (on ? 0.14f : 0.06f);
+            const juce::Colour botFill = (! on && lightPanel && col == Palette::panel2)
+                                       ? Palette::panel2.darker (0.04f)
+                                       : col.darker (on ? 0.12f : 0.06f);
+            g.setGradientFill (juce::ColourGradient (topFill, r.getX(), r.getY(),
+                                                     botFill, r.getX(), r.getBottom(), false));
             g.fillRoundedRectangle (r, rad);
-            if (s_useKawaii)
+            if (lightSw)
             {
-                // エナメルボタン上部のツヤ・ハイライト帯（夜間ダークボタン時はソフトなガラス光沢に調整）
+                // エナメル・ボタニカルボタン上部のツヤ・ハイライト帯
                 const bool lightBtn = col.getPerceivedBrightness() > 0.55f;
-                const float topAlpha = lightBtn ? (on ? 0.42f : 0.72f) : (on ? 0.24f : 0.14f);
+                const float topAlpha = lightBtn ? (on ? 0.38f : 0.68f) : (on ? 0.24f : 0.14f);
                 g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (topAlpha), r.getX(), r.getY() + 1.0f,
                                                          juce::Colours::transparentWhite, r.getX(), r.getY() + r.getHeight() * 0.45f, false));
                 g.fillRoundedRectangle (r.reduced (2.0f, 1.0f).withHeight (r.getHeight() * 0.44f), rad * 0.85f);
@@ -3001,7 +3121,7 @@ public:
             }
         }
         juce::Colour effOnCol = col.withAlpha (1.0f);
-        if (s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0 && on && col == Palette::green && b.getParentWidth() >= 900)
+        if (isMidnightFlagship && s_accessMode == 0 && on && col == Palette::green && b.getParentWidth() >= 900)
         {
             effOnCol = (b.getX() < 400) ? Palette::green.interpolatedWith (Palette::yellow, 0.35f)
                      : (b.getX() < 880) ? Palette::yellow
@@ -3009,7 +3129,9 @@ public:
         }
         const juce::Colour borderCol = s_useKawaii
             ? (on ? Palette::metalDark : ((s_knobStyle == 2) ? Palette::metalMid : Palette::panelLn.darker (0.12f)))
-            : (s_knobStyle == 0)
+            : lightPanel
+            ? (on ? col.darker (0.28f) : Palette::panelLn.darker (over ? 0.28f : 0.16f))
+            : isMidnightFlagship
             ? (on ? effOnCol.interpolatedWith (Palette::metalHi, 0.42f).withAlpha (0.94f)
                   : (col != Palette::panel2
                       ? col.withAlpha (1.0f).interpolatedWith (Palette::metalHi, 0.35f).withAlpha (over ? 0.88f : 0.62f)
@@ -3018,7 +3140,7 @@ public:
             ? (on ? Palette::metalHi : Palette::metalMid.interpolatedWith (Palette::panelLn, 0.35f).withAlpha (over ? 0.92f : 0.72f))
             : (on ? col.darker (0.35f) : Palette::panelLn.brighter (over ? 0.18f : 0.0f));
         g.setColour (borderCol);
-        g.drawRoundedRectangle (r, rad, on ? 1.5f : 1.05f);
+        g.drawRoundedRectangle (r, rad, on ? 1.5f : 1.15f);
 
         if (! sw)
         {
@@ -3026,9 +3148,10 @@ public:
             if (s_knobStyle != 5 && r.getWidth() >= 48.0f)
             {
                 const float barW = juce::jmin (28.0f, r.getWidth() * 0.36f);
-                const juce::Colour pipeCol = (s_knobStyle == 0 && col != Palette::panel2 && col != Palette::yellow)
+                const juce::Colour pipeCol = (isMidnightFlagship && col != Palette::panel2 && col != Palette::yellow)
                     ? col.withAlpha (1.0f).interpolatedWith (Palette::metalHi, 0.38f)
-                    : (s_knobStyle == 6 || s_knobStyle == 0 ? Palette::yellow.interpolatedWith (Palette::metalHi, 0.45f) : Palette::inkSoft);
+                    : (s_knobStyle == 6 || isMidnightFlagship ? Palette::yellow.interpolatedWith (Palette::metalHi, 0.45f)
+                                                              : (lightPanel ? Palette::yellowDk.withAlpha (0.75f) : Palette::inkSoft));
                 g.setColour (pipeCol.withAlpha (over ? 0.92f : 0.68f));
                 g.fillRoundedRectangle (r.getCentreX() - barW * 0.5f, r.getBottom() - 3.2f, barW, 2.0f, 1.0f);
             }
@@ -3043,14 +3166,14 @@ public:
         const juce::Rectangle<float> slot (cx - slotW * 0.5f, cy - slotH * 0.5f, slotW, slotH);
 
         // スライドレールの彫り込み溝
-        if (s_useKawaii)
+        if (lightSw)
         {
-            g.setColour (on ? col.darker (0.28f).withAlpha (0.88f) : Palette::track.darker (0.06f).withAlpha (0.90f));
+            g.setColour (on ? col.darker (0.28f).withAlpha (0.88f) : Palette::track.darker (0.08f).withAlpha (0.92f));
             g.fillRoundedRectangle (slot, slotH * 0.5f);
-            g.setColour (on ? juce::Colours::white.withAlpha (0.75f) : Palette::panelLn.withAlpha (0.75f));
+            g.setColour (on ? juce::Colours::white.withAlpha (0.78f) : Palette::panelLn.darker (0.14f).withAlpha (0.82f));
             g.drawRoundedRectangle (slot, slotH * 0.5f, 1.1f);
         }
-        else if (s_knobStyle == 0)
+        else if (isMidnightFlagship)
         {
             g.setColour (on ? effOnCol.darker (0.35f).withAlpha (0.88f) : juce::Colour (0xff040814).withAlpha (0.88f));
             g.fillRoundedRectangle (slot, slotH * 0.5f);
@@ -3073,12 +3196,12 @@ public:
         const juce::Rectangle<float> thumb (thumbX, cy - thumbD * 0.5f, thumbD, thumbD);
         if (on)
         {
-            const auto lampCol = s_useKawaii        ? juce::Colours::white
-                               : (s_knobStyle == 0) ? Palette::metalHi.interpolatedWith (Palette::yellow, 0.45f)
-                                                    : Palette::readableOn (col);
+            const auto lampCol = lightSw             ? juce::Colours::white
+                               : isMidnightFlagship  ? Palette::metalHi.interpolatedWith (Palette::yellow, 0.45f)
+                                                     : Palette::readableOn (col);
             if (s_knobStyle != 5)
             {
-                g.setColour ((s_knobStyle == 0 ? effOnCol : lampCol).withAlpha (0.52f));
+                g.setColour ((isMidnightFlagship ? effOnCol : lampCol).withAlpha (0.52f));
                 g.fillEllipse (thumb.expanded (2.8f));
             }
             g.setColour (lampCol);
@@ -3092,11 +3215,11 @@ public:
         else
         {
             const auto offRim = (s_knobStyle == 6) ? Palette::metalHi.withAlpha (0.82f)
-                              : s_useKawaii        ? Palette::inkSoft.withAlpha (0.68f)
+                              : lightSw            ? Palette::inkSoft.withAlpha (0.72f)
                                                    : Palette::inkSoft.withAlpha (0.80f);
             g.setColour (offRim);
             g.fillEllipse (thumb);
-            g.setColour (s_useKawaii ? juce::Colours::white.withAlpha (0.90f)
+            g.setColour (lightSw ? juce::Colours::white.withAlpha (0.94f)
                        : (s_knobStyle == 6 ? Palette::mirrorTop.withAlpha (0.90f) : Palette::panel2.brighter (0.15f)));
             g.fillEllipse (thumb.reduced (1.6f));
             g.setColour (juce::Colours::white.withAlpha (0.65f));
@@ -3119,12 +3242,19 @@ public:
         const auto f = fitFont (getTextButtonFont (b, b.getHeight()),
                                 b.getButtonText(), area.getWidth());
         g.setFont (f);
+        const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
+        const bool isMidnightFlagship = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
         const auto onCol = b.findColour (juce::TextButton::buttonOnColourId);
+        const auto rawOffBg = b.findColour (juce::TextButton::buttonColourId);
+        const auto effOffBg = isMidnightFlagship ? juce::Colour (0xff071024)
+                            : (rawOffBg.getFloatAlpha() < 0.85f)
+                                ? Palette::panel2.interpolatedWith (rawOffBg.withAlpha (1.0f), juce::jlimit (0.18f, 0.42f, rawOffBg.getFloatAlpha() * 1.35f))
+                                : rawOffBg.withAlpha (1.0f);
         const auto txtCol = b.getToggleState()
-            ? ((s_knobStyle == 0 && ! s_useKawaii && onCol != Palette::yellow)
+            ? ((isMidnightFlagship && onCol != Palette::yellow)
                 ? Palette::ink
                 : Palette::readableOn (onCol))
-            : b.findColour (juce::TextButton::textColourOffId);
+            : Palette::accentOn (b.findColour (juce::TextButton::textColourOffId), effOffBg, 4.5f);
         g.setColour (txtCol.withMultipliedAlpha (b.isEnabled() ? 1.0f : 0.5f));
         g.drawFittedText (b.getButtonText(), area, juce::Justification::centred, 1, 0.92f);
     }
@@ -3410,7 +3540,9 @@ private:
 
     VocalGzzioProcessor& proc;
     juce::Rectangle<float> plot;         // inner plotting area (set in paint)
-    juce::Image gridImage;               // v1.5.0: cached static grid (rebuilt on resize)
+    juce::Image gridImage;               // v1.5.0: cached static grid (rebuilt on resize or theme switch)
+    int cachedGridTheme { -1 };
+    int cachedGridAccess { -1 };
 
     juce::dsp::FFT fft { 12 };           // 2^12 = 4096 = analyzerSize
     juce::dsp::WindowingFunction<float> window { (size_t) VocalGzzioProcessor::analyzerSize,
@@ -5943,6 +6075,8 @@ public:
     static const LegacyVersionSpec& getLegacyVersionSpec (int id) noexcept;
     void applyLegacyVersion (int versionId, bool keepEcoGate = true);
     void openLegacyVersionPopup (juce::Rectangle<int> anchorScreenBounds);
+    void openSizePopupForTest() { if (sizePopBtn.onClick) sizePopBtn.onClick(); }
+    void setDenoiseClearVisibleForTest (bool v) { dnClearButton.setVisible (v); resized(); }
     void requestMiniBarMode (bool enable);
     std::shared_ptr<tip::Language> getLanguage() const noexcept { return language; }
 

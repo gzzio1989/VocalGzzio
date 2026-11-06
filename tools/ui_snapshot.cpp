@@ -82,7 +82,20 @@ int main (int argc, char** argv)
         content.resized();
         if (argc > 13 && std::atoi (argv[13]) != 0)
         {
-            content.openLegacyVersionPopup ({ 724, 20, 64, 34 });
+            const int popMode = std::atoi (argv[13]);
+            if (popMode == 2 || popMode == 3)
+            {
+                content.setDenoiseClearVisibleForTest (true);
+                content.openSizePopupForTest();
+                if (popMode == 3)
+                    content.setKnobInnerArtOn (false);
+                content.setThemeMode (theme);
+                content.resized();
+            }
+            else
+            {
+                content.openLegacyVersionPopup ({ 724, 20, 64, 34 });
+            }
         }
         const float uiScale = (argc > 10 && std::atof (argv[10]) > 0.1) ? (float) std::atof (argv[10]) : 1.0f;
         auto picture = content.createComponentSnapshot (content.getLocalBounds(), true, uiScale);

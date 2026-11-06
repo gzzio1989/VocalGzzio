@@ -26,6 +26,7 @@ function(gz_configure_check name)
     target_compile_definitions(${name} PRIVATE _USE_MATH_DEFINES)
     if (MSVC)
         target_compile_options(${name} PRIVATE /utf-8 /EHsc)
+        target_link_options(${name} PRIVATE /STACK:8388608)
     endif()
     set_target_properties(${name} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
