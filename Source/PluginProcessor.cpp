@@ -1526,6 +1526,8 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         registerScienceSuite.prepare (sciSr);
         psychoClaritySuite.prepare (sciSr);
         masteringDeliverySuite.prepare (sciSr);
+        nextGenMasteringOrchestrator.prepare (sciSr);
+        humanCentricOrchestrator.prepare (sciSr, safeBlock);
     }
 
     // v5.5.0 伴奏コード追従スマートハモリ用 36ビン複素リーキーフェーザ係数事前計算（C3..B5, 4分の1間引き更新・RT確保ゼロ）

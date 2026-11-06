@@ -733,7 +733,7 @@ public:
 
     void drawComboBox (juce::Graphics& g, int width, int height, bool isButtonDown,
                        int /*buttonX*/, int /*buttonY*/, int /*buttonW*/, int /*buttonH*/,
-                       juce::ComboBox& box) override
+                       juce::ComboBox& /*box*/) override
     {
         auto r = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height).reduced (0.8f);
         const float rad = s_useKawaii ? r.getHeight() * 0.48f : 7.5f;

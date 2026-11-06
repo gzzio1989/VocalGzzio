@@ -5,6 +5,9 @@
 #include "HorologyInteractiveDeck.h"
 #include "HorologyCelestialVisualizerSuite.h"
 #include "HorologyGrandComplicationHud.h"
+#include "HorologyBiophilicAndHeartCoherenceUi.h"
+#include "HorologyKintsugiAndWabiSabiArtisanRenderer.h"
+#include "HorologyChronometerEscapementAndAcousticPendulumUi.h"
 
 namespace
 {

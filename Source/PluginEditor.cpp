@@ -2285,7 +2285,7 @@ static juce::String syncStandaloneAudioForCluster (VocalGzzioProcessor& processo
         // （体験版は設定ファイルを跨いで保持しないため、プロセス起動ごとに最初の1回だけ自動解除する）
         static bool s_sessionMuteUnblocked = false;
         const bool hasSavedAudioSetup = (holder->settings != nullptr && holder->settings->containsKey ("audioSetup"));
-        const bool hasMuteInitKey     = (holder->settings != nullptr && holder->settings->containsKey ("gz_audio_init_v541"));
+        [[maybe_unused]] const bool hasMuteInitKey = (holder->settings != nullptr && holder->settings->containsKey ("gz_audio_init_v541"));
        #if VOCALGZZIO_TRIAL
         const bool shouldAutoUnmute = ! s_sessionMuteUnblocked;
        #else
@@ -13619,23 +13619,27 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         const int  tab  = prefs != nullptr ? prefs->getIntValue ("ui_tab", 0) : 0;
         const bool rail = prefs != nullptr && prefs->getBoolValue ("ui_rail", false);
         int theme = prefs != nullptr ? prefs->getIntValue ("ui_theme", 0) : 0;
-        if (const char* tm = std::getenv ("GZ_THEME"))   // test hook: force a theme
-            theme = juce::String (tm).getIntValue();
+        const auto getTestEnv = [] (const char* name) -> juce::String
+        {
+            return juce::SystemStats::getEnvironmentVariable (name, {});
+        };
+        if (const auto tm = getTestEnv ("GZ_THEME"); tm.isNotEmpty())   // test hook: force a theme
+            theme = tm.getIntValue();
 
         int tabQ = tab, advQ = adv;
-        if (const char* tb = std::getenv ("GZ_TAB"))     // test hook: force right-column tab
-            tabQ = juce::String (tb).getIntValue();
-        if (const char* av = std::getenv ("GZ_ADV"))     // test hook: force advanced mode
-            advQ = juce::String (av).getIntValue();
+        if (const auto tb = getTestEnv ("GZ_TAB"); tb.isNotEmpty())     // test hook: force right-column tab
+            tabQ = tb.getIntValue();
+        if (const auto av = getTestEnv ("GZ_ADV"); av.isNotEmpty())     // test hook: force advanced mode
+            advQ = av.getIntValue();
         content.restoreUiState (advQ, tabQ, rail, theme);
-        if (std::getenv ("GZ_THEME") == nullptr && prefs != nullptr && prefs->containsKey ("ui_arch"))
+        if (getTestEnv ("GZ_THEME").isEmpty() && prefs != nullptr && prefs->containsKey ("ui_arch"))
             content.setOverviewLayoutMode (prefs->getIntValue ("ui_arch", 0), true);
-        if (const char* ar = std::getenv ("GZ_ARCH"))
-            content.setOverviewLayoutMode (juce::String (ar).getIntValue(), true);
+        if (const auto ar = getTestEnv ("GZ_ARCH"); ar.isNotEmpty())
+            content.setOverviewLayoutMode (ar.getIntValue(), true);
         if (prefs != nullptr && prefs->getBoolValue ("ui_lite", false))
             content.setLiteMode (true);
-        if (const char* lt = std::getenv ("GZ_LITE"))
-            content.setLiteMode (juce::String (lt).getIntValue() != 0);
+        if (const auto lt = getTestEnv ("GZ_LITE"); lt.isNotEmpty())
+            content.setLiteMode (lt.getIntValue() != 0);
         if (prefs != nullptr && prefs->containsKey ("ui_knob_art"))
             content.setKnobInnerArtOn (prefs->getBoolValue ("ui_knob_art", true));
         else if (p.apvts.state.hasProperty ("ui_knob_art"))
@@ -13653,8 +13657,8 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
             prefs->setValue ("ui_advanced", true);
             prefs->setValue ("ui_overview", true);
         }
-        if (const char* ss = std::getenv ("GZ_SEASON"))  // test hook: force a season (0-3)
-            content.forceSeason (juce::String (ss).getIntValue());
+        if (const auto ss = getTestEnv ("GZ_SEASON"); ss.isNotEmpty())  // test hook: force a season (0-3)
+            content.forceSeason (ss.getIntValue());
         int prefLegacyVer = (prefs != nullptr && prefs->containsKey ("ui_legacy_ver"))
                           ? prefs->getIntValue ("ui_legacy_ver", -1) : -1;
         // 旧14世代カタログ(1=v5.0.0..13=v1.0.0)で保存された環境設定を新19世代カタログ(6=v5.0.0..18=v1.0.0)へ自動移行
@@ -13663,8 +13667,8 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         if (prefs != nullptr && prefs->containsKey ("ui_legacy_eco"))
             p.setLegacyEcoGate (prefs->getIntValue ("ui_legacy_eco", 1) != 0);
 
-        if (const char* lv = std::getenv ("GZ_LEGACY_VER"))
-            content.applyLegacyVersion (juce::String (lv).getIntValue(), true);
+        if (const auto lv = getTestEnv ("GZ_LEGACY_VER"); lv.isNotEmpty())
+            content.applyLegacyVersion (lv.getIntValue(), true);
         else if (prefLegacyVer > 0)
             content.applyLegacyVersion (prefLegacyVer, true);
         else if (prefLegacyVer == 0 && p.getLegacyVersionId() > 0)
@@ -13688,8 +13692,8 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         startTimerHz (25); // v5.5.0: Windows Standalone 裏画面・全角かな無敵グローバルホットキー監視 (25Hz)
     }
 
-    if (const char* mb = std::getenv ("GZ_MINIBAR"))
-        if (juce::String (mb).getIntValue() != 0)
+    if (const auto mb = juce::SystemStats::getEnvironmentVariable ("GZ_MINIBAR", {}); mb.isNotEmpty())
+        if (mb.getIntValue() != 0)
             setMiniBarMode (true);
 }
 

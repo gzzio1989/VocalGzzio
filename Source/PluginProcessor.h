@@ -43,6 +43,7 @@ static constexpr int kRevTypeCount = kHeyaFirst + heya::kNumRooms;   // 13
 #include "PsychoacousticClarityEngine.h"// v5.5.0 チェビシェフT2/T3欠落基音再生・STI子音立ち上がり明瞭度・ハース前方定位ステージ
 #include "MasteringLoudnessAndDelivery.h"// v5.5.0 配信規格別ラウドネス最適化・ロッシーコーデック歪みガード・24bit F重みディザ
 #include "NextGenMasteringOrchestrator.h"// v5.5.0 4大スタジオライブSE物理合成＆次世代マスタリング・声道物理・複雑時計統合オーケストレータ
+#include "HumanCentricMasteringOrchestrator.h"// v5.5.0 安全性・軽量高音質・コード重複調停・人間の欲求と感性共鳴統合オーケストレータ
 
 //==============================================================================
 // v2.10.0 #77/#78 音源モード — 同じツマミが「見る場所」を持ち替える
@@ -2071,6 +2072,7 @@ private:
     vg::psychoacoustics::PsychoacousticClaritySuite psychoClaritySuite;
     vg::mastering_delivery::MasteringLoudnessAndDeliverySuite masteringDeliverySuite;
     gzzio::nextgen_orchestrator::NextGenMasteringOrchestrator nextGenMasteringOrchestrator;
+    vg::human_mastering::HumanCentricMasteringOrchestrator humanCentricOrchestrator;
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };
