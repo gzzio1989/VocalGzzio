@@ -11,7 +11,8 @@ set(gz_integration_tests
     dsp_host dsp_dnfade dsp_swish dsp_usemode dsp_usememo dsp_pick
     dsp_rates ui_fit ui_usemode ui_focus ui_load dsp_dnslow dsp_dndrift
     dsp_dngate dsp_dnrestore dsp_dnlearnrep dsp_heyawire dsp_stereo dsp_presets ui_overview ui_tuner ui_navigation
-    dsp_longrun_full dsp_v550_features dsp_crackle_stress dsp_mastering_pro_suite ui_horology_and_science_audit dsp_live_se_and_nextgen_audit dsp_human_resonance_and_safety_audit)
+    dsp_longrun_full dsp_v550_features dsp_crackle_stress dsp_mastering_pro_suite ui_horology_and_science_audit dsp_live_se_and_nextgen_audit dsp_human_resonance_and_safety_audit
+    dsp_supreme_safety_and_lightweight_audit dsp_supreme_dedup_and_human_emotion_audit ui_supreme_horology_and_accessibility_audit)
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dsp_dnquality.cpp")
     list(APPEND gz_integration_tests dsp_dnquality)
 endif()
