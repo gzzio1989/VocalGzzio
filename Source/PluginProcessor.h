@@ -46,6 +46,7 @@ static constexpr int kRevTypeCount = kHeyaFirst + heya::kNumRooms;   // 13
 #include "HumanCentricMasteringOrchestrator.h"// v5.5.0 安全性・軽量高音質・コード重複調停・人間の欲求と感性共鳴統合オーケストレータ
 #include "SupremeVocalMasterpieceOrchestrator.h"// v5.5.0 6大ピラー（安全性・超軽量・重複排除・人間本能共鳴・配信歌い手支援・複雑時計＆WCAG）統合オーケストレータ
 #include "SovereignVocalMasterpieceOrchestrator.h"// v5.5.0 Sovereign 7大ドメイン（無欠陥安全・超軽量・重複排除・感性共鳴・名機物理・配信支援・複雑時計＆WCAG）統合オーケストレータ
+#include "CelestialVocalMasterpieceOrchestrator.h"// v5.5.0 Celestial 7大ドメイン（無欠陥安全・超軽量・重複排除・感性共鳴・名機物理・配信支援・複雑時計＆WCAG）統合オーケストレータ
 
 //==============================================================================
 // v2.10.0 #77/#78 音源モード — 同じツマミが「見る場所」を持ち替える
@@ -2077,6 +2078,7 @@ private:
     vg::human_mastering::HumanCentricMasteringOrchestrator humanCentricOrchestrator;
     vg::supreme::SupremeVocalMasterpieceOrchestrator supremeMasterpieceOrchestrator;
     vg::sovereign::SovereignVocalMasterpieceOrchestrator sovereignMasterpieceOrchestrator;
+    vg::celestial::CelestialVocalMasterpieceOrchestrator celestialMasterpieceOrchestrator;
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };
