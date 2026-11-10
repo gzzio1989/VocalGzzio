@@ -42,7 +42,7 @@ VocalGzzioProcessor::VocalGzzioProcessor()
     if (gz::isTestDataIsolated())
     {
         legacyVersionId.store  (0,    std::memory_order_relaxed);
-        legacyVersionEra.store (550,  std::memory_order_relaxed);
+        legacyVersionEra.store (560,  std::memory_order_relaxed);
         legacyEcoGate.store    (true, std::memory_order_relaxed);
     }
    #endif
@@ -535,7 +535,7 @@ void VocalGzzioProcessor::applyTotonoe (juce::AudioBuffer<float>& buffer)
     harsh.process (ctx);
 
     const int eraNow = legacyEcoGate.load (std::memory_order_relaxed)
-                           ? legacyVersionEra.load (std::memory_order_relaxed) : 550;
+                           ? legacyVersionEra.load (std::memory_order_relaxed) : 560;
 
     // ---- v2.4.0 なめらか(動的レゾナンス抑制) ----
     // 「こもり」「キンキン」(固定EQ)のあと・コンプの前。コンプより前に刺さりを
@@ -1883,7 +1883,7 @@ void VocalGzzioProcessor::updateParameters()
     // ではなく ArrayCoefficients (確保なし) を使う。→ PluginProcessor.h の ACoefs 参照
     // v2.10.0 #77/#78 音源モードで中心を持ち替える（うたは今までと同じ数値）
     const int  eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                             ? legacyVersionEra.load (std::memory_order_relaxed) : 550;
+                             ? legacyVersionEra.load (std::memory_order_relaxed) : 560;
     const int  srcMode = (eraNow >= 210) ? (int) apvts.getRawParameterValue ("src_mode")->load() : 0;
     const auto prof    = sourceProfile (srcMode);
 
@@ -2202,7 +2202,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // 🕰️ 世代タイムマシン・省負荷ゲート: 旧バージョンが選ばれているときは、
     // その世代以降に追加されたDSPステージを丸ごと休止させて当時の軽快なCPU負荷を再現する。
     const int   eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                              ? legacyVersionEra.load (std::memory_order_relaxed) : 550;
+                              ? legacyVersionEra.load (std::memory_order_relaxed) : 560;
     const bool  crushOn = (eraNow >= 300) && (apvts.getRawParameterValue ("crush_on")->load() > 0.5f);
     const float crushCg = crushOn ? crushGuard : 0.0f;
 
@@ -8146,19 +8146,19 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
 
             if (auto* lv = xml.getChildByName ("LEGACY_VER"))
             {
-                static constexpr int kEraMap[19] = { 550, 541, 540, 530, 520, 510, 500, 490, 480, 460, 440, 433, 400, 310, 240, 200, 170, 130, 100 };
+                static constexpr int kEraMap[20] = { 560, 550, 541, 540, 530, 520, 510, 500, 490, 480, 460, 440, 433, 400, 310, 240, 200, 170, 130, 100 };
                 const int rawId     = lv->getIntAttribute ("id",  0);
-                int       loadedEra = juce::jlimit (100, 550, lv->getIntAttribute ("era", 550));
-                int       loadedId  = juce::jlimit (0, 18, rawId);
+                int       loadedEra = juce::jlimit (100, 560, lv->getIntAttribute ("era", 560));
+                int       loadedId  = juce::jlimit (0, 19, rawId);
                 if (rawId <= 0)
                 {
                     loadedId  = 0;
-                    loadedEra = 550; // 最新版(id=0)が選ばれていた場合は v5.5.0 (era=550) へ自然昇格
+                    loadedEra = 560; // 最新版(id=0)が選ばれていた場合は v5.6.0 (era=560) へ自然昇格
                 }
                 else if (lv->hasAttribute ("era"))
                 {
-                    // 旧構成(14世代)で保存されたプロジェクトも era 番号から現在の19世代IDへ正確にマッピングする
-                    for (int i = 1; i < 19; ++i)
+                    // 旧構成で保存されたプロジェクトも era 番号から現在の20世代IDへ正確にマッピングする
+                    for (int i = 1; i < 20; ++i)
                     {
                         if (kEraMap[i] == loadedEra)
                         {

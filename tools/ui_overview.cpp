@@ -1593,22 +1593,22 @@ int main()
                                "v5.5.0 setMiniBarMode(false) restores exact normal UI window dimensions");
                     }
 
-                    // (E) Full 19-Generation Legacy Version Recall (restoring v5.0.0 .. v5.4.1 back-numbers)
-                    check (VocalGzzioContent::kLegacyVersionCount == 19,
-                           "v5.5.0 Legacy Version Time Machine exposes all 19 generations (v1.0.0 - v5.5.0)");
-                    const char* expectedTags[7] = { "v5.5.0", "v5.4.1", "v5.4.0", "v5.3.0", "v5.2.0", "v5.1.0", "v5.0.0" };
-                    const int   expectedEras[7] = { 550,      541,      540,      530,      520,      510,      500 };
-                    for (int gi = 0; gi < 7; ++gi)
+                    // (E) Full 20-Generation Legacy Version Recall (restoring v5.0.0 .. v5.5.0 back-numbers)
+                    check (VocalGzzioContent::kLegacyVersionCount == 20,
+                           "v5.6.0 Legacy Version Time Machine exposes all 20 generations (v1.0.0 - v5.6.0)");
+                    const char* expectedTags[8] = { "v5.6.0", "v5.5.0", "v5.4.1", "v5.4.0", "v5.3.0", "v5.2.0", "v5.1.0", "v5.0.0" };
+                    const int   expectedEras[8] = { 560,      550,      541,      540,      530,      520,      510,      500 };
+                    for (int gi = 0; gi < 8; ++gi)
                     {
                         const auto& sp = VocalGzzioContent::getLegacyVersionSpec (gi);
                         check (juce::String (sp.verTag) == expectedTags[gi] && sp.era == expectedEras[gi],
-                               "v5.5.0 v5.x back-number slot matches expected version tag and DSP era");
+                               "v5.6.0 v5.x back-number slot matches expected version tag and DSP era");
                     }
-                    check (juce::String (VocalGzzioContent::getLegacyVersionSpec (18).verTag) == "v1.0.0"
-                           && VocalGzzioContent::getLegacyVersionSpec (18).era == 100,
-                           "v5.5.0 Legacy slot 18 preserves original v1.0.0 (era 100)");
+                    check (juce::String (VocalGzzioContent::getLegacyVersionSpec (19).verTag) == "v1.0.0"
+                           && VocalGzzioContent::getLegacyVersionSpec (19).era == 100,
+                           "v5.6.0 Legacy slot 19 preserves original v1.0.0 (era 100)");
 
-                    for (int testLegId : { 1, 3, 5, 6, 18, 0 })
+                    for (int testLegId : { 1, 2, 4, 6, 7, 19, 0 })
                     {
                         view.applyLegacyVersion (testLegId, true);
                         check (processor->getLegacyVersionId() == testLegId
