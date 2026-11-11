@@ -455,6 +455,18 @@ void VocalGzzioContent::mouseWheelMove (const juce::MouseEvent& e, const juce::M
         return;
     }
 
+    if (! jpopPolishPillRect.isEmpty() && jpopPolishPillRect.expanded (2, 4).contains (pt))
+    {
+        const int cur = processor.getJpopPolishMode();
+        const int next = (cur + (dy > 0.0f ? 1 : 2)) % 3;
+        processor.setJpopPolishMode (next);
+        overviewHint = language->T ("【✨ J-Pop 完パケ艶＆喉締めリリーフ】マウスホイールで「", "[J-Pop Vocal Polish & Strain Relief] Cycled to '")
+                     + processor.getJpopPolishModeName (language->english)
+                     + language->T ("」へ切り替えました。", "' via mouse wheel.");
+        repaint();
+        return;
+    }
+
     if (! argonBarRects[0].isEmpty())
     {
         const auto allBars = argonBarRects[0].getUnion (argonBarRects[3]).expanded (6, 4);
@@ -527,8 +539,8 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
     if (topBrandVerRect.contains (pt))
     {
         openLegacyVersionPopup (localAreaToGlobal (juce::Rectangle<int> (68, 32, 160, 24)));
-        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.6.0までの全20世代（v5.0.0〜v5.5.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
-                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 20 generations from v1.0.0 to v5.6.0 (including v5.0.0-v5.5.0) with era-specific zero-CPU sleep gating.");
+        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.7.0までの全21世代（v5.0.0〜v5.6.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
+                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 21 generations from v1.0.0 to v5.7.0 (including v5.0.0-v5.6.0) with era-specific zero-CPU sleep gating.");
         return true;
     }
 
@@ -670,25 +682,48 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
-    // 1c-4. 中央モニターヘッダの「◆ Mastering Prism (Auto / Inflator倍音 / Rear-Bus芯圧 / Prism極致)」ワンクリック切替ピル
+    // 1c-4. 中央モニターヘッダの「◆ Mastering Prism (Auto / Inflator倍音 / Rear-Bus芯圧 / Prism極致 / Grammy統合)」ワンクリック切替ピル
     if (! prismPillRect.isEmpty() && prismPillRect.expanded (2, 4).contains (pt))
     {
         processor.cycleMasteringPrismMode();
-        const int pm = processor.getMasteringPrismMode();
+        const int pm = juce::jlimit (0, 4, processor.getMasteringPrismMode());
         spawnInteractiveRipple ((float) pt.x, (float) pt.y, 77 + pm * 19);
-        static const char* const kPrismJa[4] = {
+        static const char* const kPrismJa[5] = {
             "【◆ Mastering Prism: Auto 連動】3Dオーブの位置と声量幅に合わせて、Oxford Inflator 4次多項式倍音・Rear-Bus 並列芯圧・動的耳痛ピーク抑制を自動最適化します。",
             "【◆ Mastering Prism: Inflator 濃密倍音 ON！】Paul Frindle 流 4次多項式トランスファ関数（P(1)=1）により、ピーク0dBFSを一切上げずにボーカルの中密感・倍音ラウドネスを濃密に引き上げます。",
             "【◆ Mastering Prism: Rear-Bus 芯圧 ON！】Andrew Scheps 流 All-Buttons-In 並列FETコンプ＆トランス倍音で、原音の自然なアタックを保ったまま伴奏に絶対埋もれない声の土台を支えます。",
-            "【◆ Mastering Prism: Prism 極致マスタリング ON！】動的レゾナンスSoothe（2.6〜5.4kHz耳痛除去）＋Rear-Bus並列芯圧＋Inflator 4次倍音密度＋4倍Hermite True-Peak保護をフル稼働します。"
+            "【◆ Mastering Prism: Prism 極致マスタリング ON！】動的レゾナンスSoothe（2.6〜5.4kHz耳痛除去）＋Rear-Bus並列芯圧＋Inflator 4次倍音密度＋4倍Hermite True-Peak保護をフル稼働します。",
+            "【◆ Mastering Prism: Grammy 統合コンソール ON！】Zavalishin TPT/ADAA マスタリングバスと3Dスペーシャル・コンソールを単一パスに統合し、歪み重複ゼロで商業メジャー級の音圧と空気感を実現します。"
         };
-        static const char* const kPrismEn[4] = {
+        static const char* const kPrismEn[5] = {
             "[MASTERING PRISM: AUTO] Automatically balances 4th-order Inflator harmonic density, Parallel Rear-Bus authority, and dynamic harshness soothing with the 3D Orb.",
             "[MASTERING PRISM: INFLATOR DENSITY ON!] Uses a 4th-order polynomial transfer curve (P(1)=1) to boost perceived vocal loudness and harmonic richness without raising peak ceiling.",
             "[MASTERING PRISM: REAR-BUS AUTHORITY ON!] Blends an Andrew Scheps-style fast FET parallel vocal rear-bus (165Hz-4.6kHz) underneath your dry transients for unshakeable mix weight.",
-            "[MASTERING PRISM: PRISM MAX ON!] Full 3-stage world-class vocal mastering chain: Dynamic Spectral Soothe + Parallel Rear-Bus Authority + 4th-Order Inflator Density + 4x True-Peak Guard."
+            "[MASTERING PRISM: PRISM MAX ON!] Full 3-stage world-class vocal mastering chain: Dynamic Spectral Soothe + Parallel Rear-Bus Authority + 4th-Order Inflator Density + 4x True-Peak Guard.",
+            "[MASTERING PRISM: GRAMMY UNIFIED CONSOLE ON!] Single-pass Zavalishin TPT/ADAA mastering bus & spatial console with zero redundant saturation stages."
         };
         overviewHint = language->T (kPrismJa[pm], kPrismEn[pm]);
+        repaint();
+        return true;
+    }
+
+    // 1c-5. カード1ヘッダの「✨ J-Pop 完パケ艶＆喉締めオートリリーフ」ワンクリック切替ピル
+    if (! jpopPolishPillRect.isEmpty() && jpopPolishPillRect.expanded (2, 4).contains (pt))
+    {
+        processor.cycleJpopPolishMode();
+        const int jm = juce::jlimit (0, 2, processor.getJpopPolishMode());
+        spawnInteractiveRipple ((float) pt.x, (float) pt.y, 131 + jm * 23);
+        static const char* const kJpopJa[3] = {
+            "【✨ 艶補正: OFF】J-Pop完パケ艶＆喉締めオートリリーフをオフにしました。クリックすると「✨艶: 歌枠自然」→「✨艶: 完パケ極」へ切り替えられます。",
+            "【✨ 艶: 歌枠自然 ON！】日本語ボーカル特有の1.08kHz鼻声イキミと3.88kHz高音喉締め痛覚が出た瞬間だけ優しく引き算し、母音発声中のみ2.95kHz抜け＆11.5kHzシルク艶を自然に添えます。",
+            "【✨ 艶: 完パケ極 ON！】J-Pop歌ってみた商業完パケ仕様！ハイトーン張り上げ時の3.88kHz耳痛共鳴と1.08kHz力みを強力に動的緩和しつつ、歯擦音を増やさず2.95kHzシンガーズ・フォルマント＆極上エアーを付与します。"
+        };
+        static const char* const kJpopEn[3] = {
+            "[VOCAL POLISH: OFF] Disabled J-Pop Auto Polish & Throat-Strain Relief. Click to switch to 'Natural Polish' or 'Master Polish'.",
+            "[VOCAL POLISH: NATURAL ON!] Dynamically relieves 1.08kHz nasal strain and 3.88kHz high-note harshness while lifting 2.95kHz focus & 11.5kHz silk air strictly on voiced vowels.",
+            "[VOCAL POLISH: MASTER ON!] Full J-Pop commercial vocal finish: deep dynamic relief at 1.08kHz/3.88kHz on belted high notes + zero-sibilance 2.95kHz Singer's Formant & 11.5kHz sheen."
+        };
+        overviewHint = language->T (kJpopJa[jm], kJpopEn[jm]);
         repaint();
         return true;
     }
@@ -706,8 +741,8 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
     if (! latBadgeArea.isEmpty() && latBadgeArea.expanded (2, 4).contains (pt))
     {
         openLegacyVersionPopup (localAreaToGlobal (latBadgeArea));
-        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.6.0までの全20世代（v5.0.0〜v5.5.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
-                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 20 generations from v1.0.0 to v5.6.0 (including v5.0.0-v5.5.0) with era-specific zero-CPU sleep gating.");
+        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.7.0までの全21世代（v5.0.0〜v5.6.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
+                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 21 generations from v1.0.0 to v5.7.0 (including v5.0.0-v5.6.0) with era-specific zero-CPU sleep gating.");
         return true;
     }
 
@@ -1406,8 +1441,8 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
                             "Simultaneously streams processed audio to external virtual cables (VB-CABLE / Yamaha SYNCROOM Driver) while on ASIO, and opens the OBS VST3 / Loopback connection guide.");
     if ((! latBadgeArea.isEmpty() && latBadgeArea.contains (pt))
         || juce::Rectangle<int> (20, 10, 212, 50).contains (pt))
-        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.6.0までの歴代世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
-                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any generation from v1.0.0 to v5.6.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
+        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.7.0までの歴代世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
+                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any generation from v1.0.0 to v5.7.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
     if (talkPillRect.contains (pt))
         return language->T ("【歌枠⇄雑談MC 瞬間切替】クリックすると歌設定（残響・エコー・ハモリ・広がり）を一切壊さず一時ミュートし、曲間のトークでもお風呂場にならないクリアなMC声へワンタッチで切り替えます。",
                             "[Singing / MC Talk Toggle] Non-destructively mutes reverb, echo, harmony, and stereo width for clean between-song MC talk while preserving 100% of your singing settings for instant return.");
@@ -1447,8 +1482,11 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
         return language->T ("【🎛 3軸直交プリセット・マトリクス（全60種）】クリックすると「①声質・発声・悩み補正（男女共通20種）× ②マイク・収録環境補正（20種）× ③音楽ジャンル・サブジャンル（アニソン4系統・ボカロ2系統・ロック3系統・バラード・R&B・ラップ・演歌・ASMR等20種）」を自由に組み合わせて呼び出せます。",
                             "[3-Axis Orthogonal Preset Matrix (60 Presets)] Click to combine Axis 1: Voice & Phonation (20) x Axis 2: Mic & Room (20) x Axis 3: Musical Genre & Sub-Genre (20).");
     if (! prismPillRect.isEmpty() && prismPillRect.contains (pt))
-        return language->T ("【◆ Mastering Prism（最先端マスタリング密度＆並列リアバス）】クリックまたはホイール回転で「Auto連動 ➔ Inflator濃密倍音（4次多項式倍音） ➔ Rear-Bus芯圧（並列FETコンプ） ➔ Prism極致（動的Soothe＋Rear-Bus＋Inflator）」を切り替えます。",
-                            "[Mastering Prism Engine] Click or scroll wheel to cycle: Auto Prism -> Inflator Density (4th-order harmonic loudness) -> Rear-Bus Authority (parallel FET weight) -> Prism MAX.");
+        return language->T ("【◆ Mastering Prism（最先端マスタリング密度＆統合コンソール）】クリックまたはホイール回転で「Auto連動 ➔ Inflator濃密倍音 ➔ Rear-Bus芯圧 ➔ Prism極致 ➔ Grammy統合コンソール」を切り替えます。",
+                            "[Mastering Prism Engine] Click or scroll wheel to cycle: Auto Prism -> Inflator Density -> Rear-Bus Authority -> Prism MAX -> Grammy Unified Console.");
+    if (! jpopPolishPillRect.isEmpty() && jpopPolishPillRect.contains (pt))
+        return language->T ("【✨ J-Pop 完パケ艶＆喉締めオートリリーフ】クリックまたはホイール回転で「艶補正: OFF ➔ ✨艶: 歌枠自然 ➔ ✨艶: 完パケ極」を切り替えます。1.08kHz鼻声イキミ＆3.88kHz高音耳痛を動的に引き算し、母音発声中のみ2.95kHz抜け＆11.5kHzシルク艶を添えます。",
+                            "[J-Pop Auto Polish & Throat-Strain Relief] Click or scroll wheel to cycle: OFF -> Natural Polish -> Master Polish. Dynamically relieves 1.08kHz/3.88kHz strain while boosting 2.95kHz focus & 11.5kHz silk air on voiced vowels.");
     for (size_t c = 0; c < coutureSwatchRects.size(); ++c)
         if (! coutureSwatchRects[c].isEmpty() && coutureSwatchRects[c].contains (pt))
             return language->T ("クチュール・コスメ5色のカラーバリエーション（01ロゼ／02アイシーラベンダー／03ノワールロリータ／04ティファニーミント／05ハニーピーチ）をワンタッチで切り替えます。",
@@ -1463,10 +1501,14 @@ void VocalGzzioContent::updateOverviewState()
     const bool learning = processor.isDenoiseLearning();
     const bool enabled = active ("mod_souji") && active ("dn_on");
     const int amount = juce::roundToInt (processor.apvts.getRawParameterValue ("denoise")->load());
-    const auto measured = learned ? language->T ("学習済", "Learned") : language->T ("自動推定", "Adaptive");
+    const auto measured = learned ? language->T ("学習済", "Learned") : language->T ("自動", "Auto");
+    const auto aiPat    = processor.getDenoisePatternBadge (language->english);
+    const float hClean  = processor.getDenoiseHarmonicCleanDb();
     const auto status = learning ? language->T ("測定中：声を出さないで", "Learning: stay quiet")
                       : ! enabled ? measured + language->T (" ／ ノイズ除去は切", " / Reduction OFF")
-                      : measured + language->T (" ／ 除去量 ", " / Amount ") + juce::String (amount) + "%";
+                      : measured + " " + aiPat + " " + juce::String (amount) + "%"
+                        + (hClean >= 0.6f ? (" (-" + juce::String (hClean, 1) + "dB)") : juce::String());
+    overviewNoiseStatus.setMinimumHorizontalScale (0.72f);
     if (overviewNoiseStatus.getText() != status)
         overviewNoiseStatus.setText (status, juce::dontSendNotification);
     if (dnClearButton.isVisible() != learned)
@@ -1648,6 +1690,7 @@ void VocalGzzioContent::resizedOverview()
     ioOutMonoRect = {};
     ioExprRect = {};
     prismPillRect = {};
+    jpopPolishPillRect = {};
     overviewUpdateRect = {};
     routePillRect = {};
     streamPillRect = {};
@@ -2088,6 +2131,14 @@ void VocalGzzioContent::resizedOverview()
         {
             prismPillRect = { coutureSwatchRects[0].getX() - 106, overviewMonitor.getY() + 9, 102, 26 };
         }
+    }
+
+    if (! isClassicV4 && (eraNow >= 570 || showAllKnobs)
+        && overviewCards[1].getWidth() >= (accessMode == 0 ? 480 : 560))
+    {
+        const auto& pwr1 = overviewSectionPower[1].getBounds();
+        const int jpW = (overviewCards[1].getWidth() >= 550) ? 124 : 108;
+        jpopPolishPillRect = { pwr1.getX() - jpW - 8, pwr1.getY() + 3, jpW, 28 };
     }
 
     if (! argonPadRect.isEmpty())
@@ -3612,13 +3663,14 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         }
     }
 
-    // ---- ◆ ワールドクラス・マスタリングプリズム (Mastering Prism) 4モード切替ピル描画（動的パス） ----
+    // ---- ◆ ワールドクラス・マスタリングプリズム (Mastering Prism) 5モード切替ピル描画（動的パス） ----
     if (! staticPass && ! prismPillRect.isEmpty() && g.clipRegionIntersects (prismPillRect.expanded (4)))
     {
         const auto prf = prismPillRect.toFloat();
         const float pRad = prf.getHeight() * 0.5f;
-        const int pm = processor.getMasteringPrismMode();
-        const juce::Colour pCol = (pm == 3) ? Palette::salmon
+        const int pm = juce::jlimit (0, 4, processor.getMasteringPrismMode());
+        const juce::Colour pCol = (pm == 4) ? Palette::blue
+                                : (pm == 3) ? Palette::salmon
                                 : (pm == 2) ? Palette::yellow
                                 : (pm == 1) ? Palette::ice
                                             : Palette::green;
@@ -3639,8 +3691,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         g.setColour (juce::Colours::white.withAlpha (0.90f));
         g.fillEllipse (gx - 1.5f, gy - 1.6f, 2.0f, 1.6f);
 
-        const char* pLabelJa[4] = { "Prism: 自動", "Inflator 倍音", "Rear-Bus 芯圧", "Prism 極致" };
-        const char* pLabelEn[4] = { "Prism: AUTO", "Inflator", "Rear-Bus", "Prism MAX" };
+        const char* pLabelJa[5] = { "Prism: 自動", "Inflator 倍音", "Rear-Bus 芯圧", "Prism 極致", "Grammy 統合" };
+        const char* pLabelEn[5] = { "Prism: AUTO", "Inflator", "Rear-Bus", "Prism MAX", "Grammy Con" };
         g.setColour (Palette::ink);
         fitText (g, language->T (pLabelJa[pm], pLabelEn[pm]),
                  prismPillRect.withTrimmedLeft (16).reduced (3, 0),
@@ -5746,7 +5798,9 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         {
             card (r, accents[i]);
 
-            const int pwrX = overviewSectionPower[(size_t) i].getX();
+            const int pwrX = (i == 1 && ! jpopPolishPillRect.isEmpty())
+                                 ? (jpopPolishPillRect.getX() - 6)
+                                 : overviewSectionPower[(size_t) i].getX();
             const int titleMaxW = juce::jmax (80, pwrX - (r.getX() + 32));
             auto titleR = juce::Rectangle<int> (r.getX() + 26, r.getY() + 8, titleMaxW, 34);
             g.setColour ((accessMode == 2) ? accents[i] : Palette::ink);
@@ -5768,6 +5822,44 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                          juce::Justification::centredLeft, 15.0f, false);
             }
             continue;
+        }
+
+        // ---- ✨ v5.7.0 J-Pop 完パケ艶＆喉締めオートリリーフ 切替ピル描画（動的パス・全19テーマWCAG高コントラスト） ----
+        if (i == 1 && ! jpopPolishPillRect.isEmpty() && g.clipRegionIntersects (jpopPolishPillRect.expanded (4)))
+        {
+            const auto jrf = jpopPolishPillRect.toFloat();
+            const float jRad = jrf.getHeight() * 0.5f;
+            const int jm = juce::jlimit (0, 2, processor.getJpopPolishMode());
+            const float reliefDb = processor.getJpopPolishReliefDb();
+            const juce::Colour jCol = (jm == 2) ? Palette::salmon
+                                    : (jm == 1) ? Palette::yellow
+                                                : Palette::panelLn;
+            if (! liteMode && jm > 0)
+            {
+                g.setColour (jCol.withAlpha (0.28f));
+                g.fillRoundedRectangle (jrf.translated (0.0f, 1.2f), jRad);
+            }
+            g.setGradientFill (juce::ColourGradient (Palette::panel2.brighter (0.08f), jrf.getX(), jrf.getY(),
+                                                     Palette::panel.darker (0.10f),   jrf.getX(), jrf.getBottom(), false));
+            g.fillRoundedRectangle (jrf, jRad);
+            g.setColour (jm > 0 ? jCol.withAlpha (0.92f) : Palette::panelLn.withAlpha (0.75f));
+            g.drawRoundedRectangle (jrf.reduced (0.6f), jRad, jm > 0 ? 1.7f : 1.1f);
+
+            const float gx = jrf.getX() + 9.0f, gy = jrf.getCentreY();
+            g.setColour (jm > 0 ? jCol : Palette::inkSoft);
+            g.fillEllipse (gx - 3.4f, gy - 3.4f, 6.8f, 6.8f);
+            if (jm > 0)
+            {
+                g.setColour (juce::Colours::white.withAlpha (0.90f));
+                g.fillEllipse (gx - 1.4f, gy - 1.4f, 1.8f, 1.5f);
+            }
+
+            const juce::String jTxt = (jm > 0 && reliefDb >= 0.4f)
+                ? (language->T ("艶 -", "Pol -") + juce::String (reliefDb, 1) + "dB")
+                : processor.getJpopPolishModeName (language->english);
+            g.setColour (Palette::ink);
+            fitText (g, jTxt, jpopPolishPillRect.withTrimmedLeft (15).reduced (3, 0),
+                     juce::Justification::centred, 12.5f, true);
         }
 
         // 各カード内の4つのツマミが「いま音を変えているか (effInt > 0.02f)」を集計

@@ -4009,7 +4009,12 @@ public:
         {
             g.setColour (Palette::ink);
             g.setFont (GzzioLnF::uiFont (13.5f, false));
-            g.drawFittedText (processor.getVoiceTargetSummary(), diagStatusRect, juce::Justification::centredLeft, 2);
+            const auto rawSummary = processor.getVoiceTargetSummary();
+            const juce::String diagTxt = (processor.getVocalKarteArchetype() > 0
+                                          && (rawSummary.isEmpty() || rawSummary.contains (juce::String::fromUTF8 ("未実行")) || rawSummary.contains ("5s")))
+                ? (processor.getVocalKarteHeadline (language->english) + " — " + processor.getVocalKarteRecipe (language->english))
+                : rawSummary;
+            g.drawFittedText (diagTxt, diagStatusRect, juce::Justification::centredLeft, 2);
 
             static const char* const kBandJa[4] = { "低域の厚み", "中域の声芯", "中高域の抜け", "高域の空気感" };
             static const char* const kBandEn[4] = { "Low Body",   "Mid Core",   "Presence",     "High Air"     };
@@ -6444,6 +6449,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         processor.setChorusBoostMode (false);
         processor.setAutoChorusMode (false);
         processor.setVocalExprMode (0);
+        processor.setJpopPolishMode (0);
+        processor.setMasteringPrismMode (0);
         processor.setOutputVolumePct (100.0f);
         outVolK.slider.setValue (100.0, juce::dontSendNotification);
         processor.setBgmUnmaskOn (false);
@@ -7169,8 +7176,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (sb);
                 }
 
-                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.5.0までの全19世代（v5.0.0〜v5.4.1を含む）をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
-                                                      "Select and recall any of the 19 generations from v1.0.0 to v5.5.0 including v5.0.0-v5.4.1 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
+                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.7.0までの全21世代（v5.0.0〜v5.6.0を含む）をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
+                                                      "Select and recall any of the 21 generations from v1.0.0 to v5.7.0 including v5.0.0-v5.6.0 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
                 legacyVerBtn.onClick = [this]
                 {
                     const auto anchor = ow.localAreaToGlobal (ow.sizePopBtn.getBounds());
@@ -7302,7 +7309,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     const auto& vSpec = VocalGzzioContent::getLegacyVersionSpec (legId);
                     legacyVerBtn.setButtonText (legId > 0
                         ? language->T ("🕰 歴代バージョン切替 (現在: ", "🕰 Legacy Version (Active: ") + vSpec.verTag + ")"
-                        : language->T ("🕰 歴代バージョン呼び出し (全20世代: v1.0〜v5.6)", "🕰 Recall Legacy Versions (All 20: v1.0-v5.6)"));
+                        : language->T ("🕰 歴代バージョン呼び出し (全21世代: v1.0〜v5.7)", "🕰 Recall Legacy Versions (All 21: v1.0-v5.7)"));
                     legacyVerBtn.setColour (juce::TextButton::buttonColourId,
                                             legId > 0
                                                 ? (lightTheme ? Palette::panel2.interpolatedWith (Palette::yellow, 0.35f) : Palette::yellow.withAlpha (0.28f))
@@ -8794,12 +8801,17 @@ void VocalGzzioContent::timerCallback()
         applyLegacyVersion (processor.getLegacyVersionId(), true);
     }
 
-    // v5.5.0 Smart Sleep: ウィンドウ最小化・背面非表示・ミニバー切替中はメインUIの描画＆マウス走査を完全休止（0% UI/GPU負荷）
-    if (! isShowing())
-        return;
-    if (auto* peer = getPeer())
-        if (peer->isMinimised())
+    // v5.7.0 Smart Sleep: ウィンドウ最小化・背面非表示・ミニバー切替中はUI描画＆マウス走査を完全休止（0% UI/GPU負荷）
+    // ※ただし「うた自動」や「10秒おまかせ」実行中・完了直後は最小化中でも音作り適用が止まらないよう状態遷移のみ通す
+    const bool autoBusyNow = (easyComboPhase != 0) || processor.isAutoSetupRunning() || (processor.getAutoSetupResult() == 100);
+    if (! autoBusyNow)
+    {
+        if (! isShowing())
             return;
+        if (auto* peer = getPeer())
+            if (peer->isMinimised())
+                return;
+    }
 
     const auto curMousePos = juce::Desktop::getInstance().getMainMouseSource().getScreenPosition().roundToInt();
     const bool mouseMoved = (curMousePos != lastHoverMousePos);
@@ -8849,6 +8861,8 @@ void VocalGzzioContent::timerCallback()
         }
         if (processor.isBgmPlaying() || processor.isWavRecording())
             repaint (stagePillRect);
+        if (! jpopPolishPillRect.isEmpty() && processor.getJpopPolishMode() > 0 && processor.getInputLevel() > 0.002f)
+            repaint (jpopPolishPillRect);
     }
     // v3.0「つぶさない」の数字は毎回変わるので、20Hz で描き直す。
     // ★これが無いと、OFF にした瞬間の数字が**消えずに残る**（実際に残った）。
@@ -8946,6 +8960,9 @@ void VocalGzzioContent::timerCallback()
                                         : language->dnlearn_noisy();
             if (res == 1)
             {
+                msg += language->T ("【AI識別: ", " [AI Pattern: ")
+                     + processor.getDenoisePatternBadge (language->english)
+                     + language->T ("】", "]");
                 if (processor.apvts.getRawParameterValue ("mod_souji")->load() < 0.5f
                     || processor.apvts.getRawParameterValue ("dn_on")->load() < 0.5f)
                     msg += language->T (" ノイズ除去は切れています。使うときは処理を入れてください。", " Noise reduction is bypassed. Enable it when you want to use the learned profile.");
@@ -12198,140 +12215,147 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionSpec (int id) noexcept
 {
     static constexpr LegacyVersionSpec kSpecs[kLegacyVersionCount] = {
-        { 0,  560, "v5.6.0",
-          "最新フラッグシップ（Celestial/Sovereign 7大領域・4大物理SE・全19テーマWCAG完全視認）",
-          "Current Flagship (Celestial/Sovereign 7-Domain Suite, Physical Live SE & 19-Theme WCAG)",
-          "最新の全機能（Celestial/Sovereign/Supreme統合マスタリング・声道物理・感性共鳴DSP、4大スタジオライブSE物理合成、全19テーマWCAG 4.5:1高コントラストUI、声量10割開放、Smart Sleep超軽量）をフル稼働します。",
-          "Full v5.6 flagship suite: Celestial/Sovereign/Supreme 7-domain mastering & vocal physics, 4 studio physical Live SE, 19-theme WCAG >=4.5:1 contrast UI, 100% Vocal Dynamics & Smart Sleep.",
+        { 0,  570, "v5.7.0",
+          "最新フラッグシップ（12種J-Pop声質カルテ・AI倍音同期ノイズ純化・完パケ艶リリーフ）",
+          "Current Flagship (12-Type J-Pop Vocal Karte, AI Harmonic Purifier & Auto Polish)",
+          "最新の全機能（無音免疫12帯域・12タイプJ-Pop声質カルテ『うた自動』、6種ノイズ指紋学習＆歌唱中ピッチ同期ハーモニック声抽出、✨完パケ艶＆喉締めオートリリーフ、単一パス統合コンソール＆超軽量Smart Sleep）をフル稼働します。",
+          "Full v5.7 flagship suite: 12-type J-Pop Vocal Karte Auto-Setup, 6-class AI Noise Fingerprint & Pitch-Sync Harmonic Voice Extractor, Auto Vocal Polish & Throat-Strain Relief, and ultra-light Smart Sleep.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 1,  550, "v5.5.0",
+        { 1,  560, "v5.6.0",
+          "統合マスタリング・4大スタジオ物理ライブSE＆全19テーマWCAG高視認UI",
+          "Unified Mastering, 4 Studio Physical Live SE & 19-Theme WCAG UI",
+          "4大スタジオライブSE物理合成（拍手・キラ・ドラム・ベル）、全19テーマWCAG 4.5:1高コントラストUI、声量10割開放、Smart Sleep超軽量エンジン世代です。v5.7の完パケ艶リリーフピルを休止します。",
+          "4 studio physical Live SE, 19-theme WCAG >=4.5:1 high-contrast UI, 100% Vocal Dynamics & Smart Sleep generation.",
+          "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
+
+        { 2,  550, "v5.5.0",
           "声量10割開放・Smart Sleep超軽量・配信ミニバー＆音ズレ補正",
           "Full Vocal Dynamics, Smart Sleep, Mini-Bar & Sync Offset",
           "声量10割ダイレクト開放、最終音量0〜250%無歪みゲイン、Smart Sleep超軽量エンジン、📌配信ミニバー、±300ms音ズレ補正、裏ホットキー、歌唱表現4種を搭載したv5.5世代です。",
           "v5.5 flagship suite: 100% Vocal Dynamics mode, 0-250% clean Output Volume, Smart Sleep ultra-light engine, Streaming Mini-Bar, +/-300ms Sync Offset & Global Hotkeys.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 2,  541, "v5.4.1",
+        { 3,  541, "v5.4.1",
           "カスタムSE 4枠ポン出し・1080pスリム総合画面＆配信安定化",
           "Custom 4-Slot SE Pads, 1080p Decluttered Overview & Stability",
           "自作音源（.wav/.mp3/.flac/.ogg/.aiff）をセットできるカスタムSE 4枠パッドと1080pノートPCでも重ならない整理済み総合画面世代。v5.5以降の配信ミニバー・音ズレ補正・歌唱表現4種を休止します。",
           "Custom 4-slot user SE pads and decluttered 1080p overview generation. Pauses v5.5+ Mini-Bar, Sync Offset, Tail Vibrato, Vowel Align & Mix Bridge.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 3,  540, "v5.4.0",
+        { 4,  540, "v5.4.0",
           "総合画面すっきり整理・自作音源SEパッド＆操作レスポンス高速化",
           "Decluttered Overview, Custom Audio SE Pads & Fast UI Response",
           "情報密度を見直して見やすく整理した総合画面と自作音源SEポン出しパッド世代。v5.5の後発歌唱表現DSP（語尾ビブラート・母音統一・発音グルーヴ・ミックス接続）は完全スリープします。",
           "Streamlined overview layout with custom user SE pads and cached backdrop rendering. Post-v5.4 vocal expression DSP sleeps at 0 CPU.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 4,  530, "v5.3.0",
+        { 5,  530, "v5.3.0",
           "アップワード空気感・ピッチスイートスポット＆歌い手返しモニター",
           "Upward Air Shimmer, Pitch Sweet-Spot & Singer Cue Monitor",
           "小声の息遣いを艶やかに持ち上げるアップワード空気感、心地よいピッチ補正スイートスポット、歌い手専用返しモニター世代。v5.4以降のカスタムSE枠・v5.5表現DSPを休止します。",
           "Upward Air shimmer, musical Pitch Sweet-Spot tuning, and Singer Cue Monitor generation. Pauses v5.4+ Custom SE slots and v5.5 expression DSP.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 5,  520, "v5.2.0",
+        { 6,  520, "v5.2.0",
           "部屋反響カット・ブレス整音・BGM歌抜け＆自動ボーカルライダー",
           "Room De-Reverb, Breath Tamer, BGM Unmask & Auto Vocal Rider",
           "宅録の部屋鳴りを抑える反響カット、ブレス整音、カラオケBGM帯域アンマスク＆BGM連動ボーカルライダー世代。v5.3以降のアップワード空気感・返しモニター以降を休止します。",
           "Room De-Reverb, Breath Control, BGM Spectral Unmasking & BGM-linked Vocal Rider generation. Pauses v5.3+ Upward Air & Singer Cue.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 6,  510, "v5.1.0",
+        { 7,  510, "v5.1.0",
           "4大名機マイクモデリング・サビ自動検知＆18種ハモリ拡張",
           "4 Legendary Studio Mic Models, Auto-Chorus & 18-Mode Harmony",
           "U87/C800G/SM7B/251の名機マイクモデリング、サビ自動検知ディレクター、18種ユニゾン＆ボイチェンクイックスタジオ世代。v5.2以降の部屋反響カット・BGM連動系を休止します。",
           "4 legendary studio mic models, Auto-Chorus Director, 18-mode harmony & Voice Changer Quick Studio. Pauses v5.2+ De-Reverb & BGM Unmask.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 7,  500, "v5.0.0",
+        { 8,  500, "v5.0.0",
           "星空・海5景・3軸60種パレット・タッチ対応・サビ盛＆ライブSE",
           "Sky/Sea 5 Vistas, 3-Axis 60-Preset Palette, Touch & Live SE",
           "星空・海5景テーマ、3軸直交プリセット60種、指上特大ルーペ、1クリックサビ盛り、4種ライブSE、実測IR残響世代。v5.1以降のマイクモデリング＆サビ自動検知を休止します。",
           "5 Sky/Sea themes, 60 orthogonal 3-axis presets, touch loupe, manual Chorus Boost, Live SE pads, and IR reverb. Pauses v5.1+ Mic Modeler & Auto-Chorus.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 8,  490, "v4.9.0",
+        { 9,  490, "v4.9.0",
           "星空・海・黄昏 5景コレクション＆天球ガラスオーブ",
           "Sky, Ocean & Dusk 5 Vistas & Celestial Glass Orb",
           "天球ガラスオーブ＆アストロラーベ金環ダイヤルと星空・深海5景テーマ世代。v5.0以降のサビブースト・ライブSEパッド・フッタードックを休止します。",
           "Celestial glass orb & astrolabe gold dials with 5 sky/ocean themes. Pauses v5.0+ Chorus Boost & Live SE dock.",
           "assets/styles-4.9.0.png", 0, true, 14, 0, 6 },
 
-        { 9,  480, "v4.8.0",
+        { 10, 480, "v4.8.0",
           "歌枠ステージスタジオ（BGM・完パケ録音・声質診断）",
           "Stage Studio (BGM Player, FullMix WAV Rec & AI Voice Target)",
           "ダーク・ティール Argon Cockpit 総合画面にBGMプレイヤー・30秒さかのぼり録音・5秒声質ターゲット診断を搭載した配信特化世代です。",
           "Dark teal Argon Cockpit overview with BGM player, 30s retroactive WAV recording, and 5s AI voice target diagnosis.",
           "interface-compatibility-4.8.0.png", 0, true, 0, 0, 0 },
 
-        { 10, 460, "v4.6.0",
+        { 11, 460, "v4.6.0",
           "Argon 2D声質重力オーブ＆4種類の総合画面構成",
           "Argon 2D Voice Gravity Orb & 4 Overview Architectures",
           "2D声質重力オーブ（倍音・声芯・空気・立体）と4種類の画面構成（コックピット/ライバー/ラック/クラシック）が確立された世代です。",
           "2D Voice Gravity Orb (Velvet/Focus/Silk/Halo) and 4 switchable overview architectures.",
           "overview-ja-4.6.0.png", 0, true, 0, 0, 0 },
 
-        { 11, 440, "v4.4.0",
+        { 12, 440, "v4.4.0",
           "クチュール・コスメ 5色＆Vライバーステージ",
           "Couture Cosmetics 5 Palettes & V-Liver Stage",
           "女性Vライバー・歌い手向けのクチュール5色パレットと宝石ダイヤル・12連マカロンリボンを搭載した華やかな総合画面世代です。",
           "Couture Cosmetics 5 color palettes, jewel dials, and 12-dial ribbon tailored for V-Livers and singers.",
           "assets/archive-ui/v4.4.0_liver_stage.png", 0, true, 5, 1, 2 },
 
-        { 12, 433, "v4.3.3",
+        { 13, 433, "v4.3.3",
           "3ステップ総合画面（オートミキサー＆実測部屋残響）",
           "3-Step Classic Overview (Auto-Mixer & Room IR Convolution)",
           "「1 整える・2 声をつくる・3 空間をつくる」の3カード総合画面と6種の部屋IR畳み込みリバーブ世代。Argon 4軸DSPは完全スリープします。",
           "Classic 3-card overview (Clean / Shape / Space) and 6 room IR spaces. Argon 4-axis DSP sleeps at 0 CPU.",
           "assets/archive-ui/v4.3.3_overview.png", 0, true, 0, 3, 10 },
 
-        { 13, 400, "v4.0.0",
+        { 14, 400, "v4.0.0",
           "初代オーバービュー総合画面＆1クリックととのえる",
           "First-Gen Overview Screen & 1-Click Auto-Setup",
           "総合画面が初めて登場した記念すべき v4.0 世代。上部に大型チューナー、下部に3カードを並べたクラシック構成で軽快に動作します。",
           "The original v4.0 Overview generation with large top tuner, 3-card layout, and lightweight DSP.",
           "assets/archive-ui/v4.2.0_overview.png", 0, true, 0, 3, 10 },
 
-        { 14, 310, "v3.1.0",
+        { 15, 310, "v3.1.0",
           "「音のとおり道」左列常設＆詳細3列スタジオ画面",
           "Signal Path Rail & 3-Column Studio Detail View",
           "左端に「音のとおり道」8モジュール列を常設した詳細3列レイアウト世代。「つぶさない」保護・自動ノイズ再学習・アコギピック抑制を搭載。",
           "3-column detail layout with the 8-module Signal Path Rail, Anti-Crush guard, and auto noise re-learn.",
           "assets/archive-ui/v4.3.3_detail.png", 1, true, 0, 0, 7 },
 
-        { 15, 240, "v2.4.0",
+        { 16, 240, "v2.4.0",
           "かんたん1列モード（10秒おまかせ設定＋よく使う7ツマミ）",
           "Easy 1-Row Mode (10s Auto-Setup + 7 Essential Knobs)",
           "初めてでも迷わず触れる「かんたんモード」世代。10秒おまかせ設定・大型チューナー・よく使う7ツマミだけに絞った超低負荷レイアウトです。",
           "Easy 1-row mode with 10s Auto-Setup, large pitch tuner, and 7 essential giant knobs.",
           "assets/archive-ui/v2.4.0_simple.png", 1, false, 0, 0, 7 },
 
-        { 16, 200, "v2.0.0",
+        { 17, 200, "v2.0.0",
           "エモート表現（息・エモ・サビリフト）＆伝統2列詳細画面",
           "Emote Expression (Breath/Emo/Chorus Lift) & 2-Column UI",
           "左列「音のとおり道」以前の伝統的な2列詳細画面。息・エモ・サビリフト・ピッチ補正・5人ユニゾンまでの構成で軽快に動作します。",
           "Classic 2-column detail UI with Breath/Emo/Chorus Lift, Auto-Tune, and 5-Voice Unison.",
           "assets/archive-ui/v1.9.0_standard.png", 1, true, 0, 0, 7 },
 
-        { 17, 170, "v1.7.0",
+        { 18, 170, "v1.7.0",
           "ゆるふわパステル＆機械式ギア2列画面",
           "Yuru-Kawa Pastel & Mechanical Gear 2-Column UI",
           "大人気の「ゆるふわ」パステル配色と機械式デュアルギアツマミ・右下のジュースサーバーが登場した2列世代。ピッチ補正・ユニゾン休止で超低負荷。",
           "Beloved Yuru-Kawa pastel theme with dual-gear knobs and corner dispenser in a 2-column layout. Very low CPU.",
           "assets/archive-ui/v1.7.0_yurufuwa.png", 1, true, 1, 1, 7 },
 
-        { 18, 130, "v1.3.0",
+        { 19, 130, "v1.3.0",
           "ダーク・ネイビー2列スタジオ＆スマート動的EQ",
           "Dark Navy 2-Column Studio & Smart Dynamic EQ",
           "ダーク・ネイビー配色と3バンド手動/自動スマート動的EQが確立された初期2列スタジオ世代。基本ストリップのみで極小CPU負荷で動作します。",
           "Early 2-column dark navy studio UI with 3-band Smart Dynamic EQ and core vocal strip at minimal CPU load.",
           "assets/archive-ui/v1.3.0_ui.png", 1, true, 20, 2, 9 },
 
-        { 19, 100, "v1.0.0",
+        { 20, 100, "v1.0.0",
           "初代 クリーム・フラット1列縦積み（原点・最軽量モード）",
           "Original Cream Flat 1-Column Stack (Origin & Ultra-Light)",
           "記念すべき初代 VocalGzzio v1.0.0！明るいクリーム背景・フラットリングダイヤル・基本18ツマミ縦積み構成。後発DSPを全休止し最軽量で動作します。",
@@ -12378,8 +12402,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     tuner.resized();
 
     const juce::String msg = (spec.id == 0)
-        ? language->T ("✨ 最新 v5.5.0（フル機能フラッグシップ・Smart Sleep超軽量エンジン）に戻しました。",
-                       "✨ Restored latest v5.5.0 (Full Flagship - Smart Sleep Ultra-Light Engine).")
+        ? language->T ("✨ 最新 v5.7.0（フル機能フラッグシップ・12種声質カルテ・AIノイズ純化・Smart Sleep超軽量エンジン）に戻しました。",
+                       "✨ Restored latest v5.7.0 (Full Flagship - 12-Type Vocal Karte, AI Purifier & Smart Sleep).")
         : (language->T ("🕰️ 歴代バージョン再現: ", "🕰️ Recalled Legacy Version: ")
            + juce::String (spec.verTag) + " — "
            + juce::String::fromUTF8 (language->english ? spec.titleEn : spec.titleJa)
@@ -12460,8 +12484,8 @@ public:
 
         g.setColour (kGold);
         g.setFont (GzzioLnF::uiFont (20.0f, true));
-        g.drawFittedText (language->T ("🕰️ 歴代バージョン呼び出し・世代タイムマシン (v1.0.0 〜 v5.6.0)",
-                                       "🕰️ Legacy Version Time Machine (v1.0.0 - v5.6.0)"),
+        g.drawFittedText (language->T ("🕰️ 歴代バージョン呼び出し・世代タイムマシン (v1.0.0 〜 v5.7.0)",
+                                       "🕰️ Legacy Version Time Machine (v1.0.0 - v5.7.0)"),
                           { hdr.getX() + 14, hdr.getY() + 2, 540, 24 },
                           juce::Justification::centredLeft, 1, 0.88f);
 
@@ -12493,7 +12517,7 @@ public:
                  ecoOn ? language->T ("🔋 世代別省負荷ゲート: ON", "🔋 Era Eco-Gate: ON")
                        : language->T ("🔋 世代別省負荷ゲート: OFF", "🔋 Era Eco-Gate: OFF"));
         drawBtn (latestBtnRect, kCyan, owner.processor.getLegacyVersionId() == 0,
-                 language->T ("✨ 最新 v5.6.0 へ", "✨ Latest v5.6.0"));
+                 language->T ("✨ 最新 v5.7.0 へ", "✨ Latest v5.7.0"));
         drawBtn (closeBtnRect, kSalmon, false,
                  language->T ("✕ 閉じる", "✕ Close"));
 
@@ -12591,7 +12615,7 @@ public:
                           + juce::String (insp.previewPng)
                           + (cachedPreview.isValid()
                              ? ("  (" + juce::String (cachedPreview.getWidth()) + "x" + juce::String (cachedPreview.getHeight())
-                                + language->T (" — 他の18世代は未読込でメモリ節約中)", " — Other 18 eras unloaded)"))
+                                + language->T (" — 他の20世代は未読込でメモリ節約中)", " — Other 20 eras unloaded)"))
                              : language->T (" (軽量ベクタープレビュー)", " (Lightweight Vector Preview)")),
                           { prevBox.getX() + 12, prevBox.getBottom() - 24, prevBox.getWidth() - 24, 20 },
                           juce::Justification::centredLeft, 1, 0.85f);

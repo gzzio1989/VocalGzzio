@@ -1593,22 +1593,22 @@ int main()
                                "v5.5.0 setMiniBarMode(false) restores exact normal UI window dimensions");
                     }
 
-                    // (E) Full 20-Generation Legacy Version Recall (restoring v5.0.0 .. v5.5.0 back-numbers)
-                    check (VocalGzzioContent::kLegacyVersionCount == 20,
-                           "v5.6.0 Legacy Version Time Machine exposes all 20 generations (v1.0.0 - v5.6.0)");
-                    const char* expectedTags[8] = { "v5.6.0", "v5.5.0", "v5.4.1", "v5.4.0", "v5.3.0", "v5.2.0", "v5.1.0", "v5.0.0" };
-                    const int   expectedEras[8] = { 560,      550,      541,      540,      530,      520,      510,      500 };
-                    for (int gi = 0; gi < 8; ++gi)
+                    // (E) Full 21-Generation Legacy Version Recall (restoring v5.0.0 .. v5.6.0 back-numbers)
+                    check (VocalGzzioContent::kLegacyVersionCount == 21,
+                           "v5.7.0 Legacy Version Time Machine exposes all 21 generations (v1.0.0 - v5.7.0)");
+                    const char* expectedTags[9] = { "v5.7.0", "v5.6.0", "v5.5.0", "v5.4.1", "v5.4.0", "v5.3.0", "v5.2.0", "v5.1.0", "v5.0.0" };
+                    const int   expectedEras[9] = { 570,      560,      550,      541,      540,      530,      520,      510,      500 };
+                    for (int gi = 0; gi < 9; ++gi)
                     {
                         const auto& sp = VocalGzzioContent::getLegacyVersionSpec (gi);
                         check (juce::String (sp.verTag) == expectedTags[gi] && sp.era == expectedEras[gi],
-                               "v5.6.0 v5.x back-number slot matches expected version tag and DSP era");
+                               "v5.7.0 v5.x back-number slot matches expected version tag and DSP era");
                     }
-                    check (juce::String (VocalGzzioContent::getLegacyVersionSpec (19).verTag) == "v1.0.0"
-                           && VocalGzzioContent::getLegacyVersionSpec (19).era == 100,
-                           "v5.6.0 Legacy slot 19 preserves original v1.0.0 (era 100)");
+                    check (juce::String (VocalGzzioContent::getLegacyVersionSpec (20).verTag) == "v1.0.0"
+                           && VocalGzzioContent::getLegacyVersionSpec (20).era == 100,
+                           "v5.7.0 Legacy slot 20 preserves original v1.0.0 (era 100)");
 
-                    for (int testLegId : { 1, 2, 4, 6, 7, 19, 0 })
+                    for (int testLegId : { 1, 2, 3, 5, 7, 8, 20, 0 })
                     {
                         view.applyLegacyVersion (testLegId, true);
                         check (processor->getLegacyVersionId() == testLegId
@@ -1739,10 +1739,46 @@ int main()
                         check (processor->getMasteringPrismMode() == 3, "v5.5.0 Clicking prismPillRect cycles Mastering Prism 2 -> 3 (Prism MAX)");
                         view.setThemeMode (3);
                         check (! containsJapanese (view.overviewHelpAt (prismPt)),
-                               "v5.5.0 prismPillRect hover help has zero Japanese in Brand English mode");
+                               "v5.7.0 prismPillRect hover help has zero Japanese in Brand English mode");
                         view.setThemeMode (0);
                         view.handleOverviewMouseDown (prismPt);
-                        check (processor->getMasteringPrismMode() == 0, "v5.5.0 Clicking prismPillRect cycles Mastering Prism 3 -> 0 (AUTO)");
+                        check (processor->getMasteringPrismMode() == 4, "v5.7.0 Clicking prismPillRect cycles Mastering Prism 3 -> 4 (Grammy Unified)");
+                        view.handleOverviewMouseDown (prismPt);
+                        check (processor->getMasteringPrismMode() == 0, "v5.7.0 Clicking prismPillRect cycles Mastering Prism 4 -> 0 (AUTO)");
+                    }
+
+                    // (I-2) v5.7.0 J-Pop Auto Vocal Polish & Throat-Strain Relief pill (jpopPolishPillRect)
+                    processor->setJpopPolishMode (0);
+                    juce::Point<int> polishPt (-1, -1);
+                    for (int py = 400; py < view.getHeight() - 120 && polishPt.x < 0; py += 4)
+                    {
+                        for (int px = 400; px < view.getWidth() - 400; px += 8)
+                        {
+                            if (view.overviewHelpAt ({ px, py }).contains ("J-Pop"))
+                            {
+                                polishPt = { px, py };
+                                break;
+                            }
+                        }
+                    }
+                    check (polishPt.x > 0, "v5.7.0 jpopPolishPillRect Auto Vocal Polish pill is reachable in Card 1 header");
+                    if (polishPt.x > 0)
+                    {
+                        view.handleOverviewMouseDown (polishPt);
+                        check (processor->getJpopPolishMode() == 1, "v5.7.0 Clicking jpopPolishPillRect cycles mode 0 -> 1 (Natural Polish)");
+                        view.handleOverviewMouseDown (polishPt);
+                        check (processor->getJpopPolishMode() == 2, "v5.7.0 Clicking jpopPolishPillRect cycles mode 1 -> 2 (Master Polish)");
+                        view.setThemeMode (3);
+                        check (! containsJapanese (view.overviewHelpAt (polishPt)),
+                               "v5.7.0 jpopPolishPillRect hover help has zero Japanese in Brand English mode");
+                        view.setThemeMode (0);
+                        view.handleOverviewMouseDown (polishPt);
+                        check (processor->getJpopPolishMode() == 0, "v5.7.0 Clicking jpopPolishPillRect cycles mode 2 -> 0 (OFF)");
+                        check (processor->getJpopPolishModeName (false).contains (juce::String::fromUTF8 ("艶補正")),
+                               "v5.7.0 getJpopPolishModeName(false) decodes UTF-8 Japanese cleanly without mojibake");
+                        check (processor->getJpopPolishModeName (true).startsWith ("Polish:")
+                               && ! containsJapanese (processor->getJpopPolishModeName (true)),
+                               "v5.7.0 getJpopPolishModeName(true) returns clean English label");
                     }
 
                     // Render Midnight Lantern Bokeh + Mastering Prism MAX showcase screenshot

@@ -42,7 +42,7 @@ VocalGzzioProcessor::VocalGzzioProcessor()
     if (gz::isTestDataIsolated())
     {
         legacyVersionId.store  (0,    std::memory_order_relaxed);
-        legacyVersionEra.store (560,  std::memory_order_relaxed);
+        legacyVersionEra.store (570,  std::memory_order_relaxed);
         legacyEcoGate.store    (true, std::memory_order_relaxed);
     }
    #endif
@@ -535,7 +535,7 @@ void VocalGzzioProcessor::applyTotonoe (juce::AudioBuffer<float>& buffer)
     harsh.process (ctx);
 
     const int eraNow = legacyEcoGate.load (std::memory_order_relaxed)
-                           ? legacyVersionEra.load (std::memory_order_relaxed) : 560;
+                           ? legacyVersionEra.load (std::memory_order_relaxed) : 570;
 
     // ---- v2.4.0 なめらか(動的レゾナンス抑制) ----
     // 「こもり」「キンキン」(固定EQ)のあと・コンプの前。コンプより前に刺さりを
@@ -1417,7 +1417,6 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         applauseCooldownSec = 0.0f;
     }
     {
-        nextGenMasteringOrchestrator.prepare (sampleRate);
         const double seSr = juce::jmax (8000.0, sampleRate);
         const int len0 = (int) std::lround (gzzio::studio_se::StudioLiveSoundEffectsEngine::getRecommendedDurationSeconds (0) * seSr); // 0: ♪拍手 (Studio Hall Applause & Formant Cheers)
         const int len1 = (int) std::lround (gzzio::studio_se::StudioLiveSoundEffectsEngine::getRecommendedDurationSeconds (1) * seSr); // 1: ✦キラ (Mustel Celesta + Harp + 36-Bar Mark Tree + Glass Harmonica)
@@ -1509,28 +1508,21 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     meterTruePeakRedDb.store (0.0f, std::memory_order_relaxed);
     meterVocalCrestDb.store (12.0f, std::memory_order_relaxed);
 
-    // 次世代進化⑩：Zavalishin TPT/ADAA マスタリング科学・Zwicker 16帯域バーク解析・純正律＆スタジオ音響スイート事前準備（ヒープ確保ゼロ）
+    // 次世代進化⑩ ＆ v5.7.0 統合軽量化：実稼働コアエンジンのみ事前準備（未使用15重複スイート排除・ヒープ確保ゼロ）
     {
         const double sciSr = juce::jmax (16000.0, sampleRate);
         masteringProEngine.prepare (sciSr);
         vocalScienceLab.prepare (sciSr, safeBlock);
         grammyChainRack.prepare (sciSr);
         spatialMasteringConsole.prepare (sciSr);
-        articulationPolishSuite.prepare (sciSr);
-        broadcastStreamGuard.prepare (sciSr);
-        pitchHarmonyScience.prepare (sciSr);
-        studioAcousticRoom.prepare (sciSr);
-        performanceCoachSuite.prepare (sciSr);
-        harmonicTapeSuite.prepare (sciSr);
-        intelligentMixGlue.prepare (sciSr);
-        registerScienceSuite.prepare (sciSr);
-        psychoClaritySuite.prepare (sciSr);
-        masteringDeliverySuite.prepare (sciSr);
-        nextGenMasteringOrchestrator.prepare (sciSr);
-        humanCentricOrchestrator.prepare (sciSr, safeBlock);
-        supremeMasterpieceOrchestrator.prepare (sciSr, (std::size_t) safeBlock);
-        sovereignMasterpieceOrchestrator.prepare (sciSr, (std::size_t) safeBlock);
-        celestialMasterpieceOrchestrator.prepare (sciSr, (std::size_t) safeBlock);
+        karteAnalyzer.prepare (sciSr);
+        aiNoisePurifier.prepare (sciSr);
+        if (dnLearned)
+            dnNoisePattern.store (aiNoisePurifier.classifyProfile (dnFloor), std::memory_order_relaxed);
+        else
+            dnNoisePattern.store (0, std::memory_order_relaxed);
+        jpopPolishEngine.prepare (sciSr);
+        dnSplitSleeping = false;
     }
 
     // v5.5.0 伴奏コード追従スマートハモリ用 36ビン複素リーキーフェーザ係数事前計算（C3..B5, 4分の1間引き更新・RT確保ゼロ）
@@ -1883,7 +1875,7 @@ void VocalGzzioProcessor::updateParameters()
     // ではなく ArrayCoefficients (確保なし) を使う。→ PluginProcessor.h の ACoefs 参照
     // v2.10.0 #77/#78 音源モードで中心を持ち替える（うたは今までと同じ数値）
     const int  eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                             ? legacyVersionEra.load (std::memory_order_relaxed) : 560;
+                             ? legacyVersionEra.load (std::memory_order_relaxed) : 570;
     const int  srcMode = (eraNow >= 210) ? (int) apvts.getRawParameterValue ("src_mode")->load() : 0;
     const auto prof    = sourceProfile (srcMode);
 
@@ -2202,7 +2194,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // 🕰️ 世代タイムマシン・省負荷ゲート: 旧バージョンが選ばれているときは、
     // その世代以降に追加されたDSPステージを丸ごと休止させて当時の軽快なCPU負荷を再現する。
     const int   eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                              ? legacyVersionEra.load (std::memory_order_relaxed) : 560;
+                              ? legacyVersionEra.load (std::memory_order_relaxed) : 570;
     const bool  crushOn = (eraNow >= 300) && (apvts.getRawParameterValue ("crush_on")->load() > 0.5f);
     const float crushCg = crushOn ? crushGuard : 0.0f;
 
@@ -2436,6 +2428,13 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     {
         for (int b = 0; b < 4; ++b) dnFloor[b] = dnFloorShared[b].load();
         dnLearned = dnLearnedShared.load();
+        if (dnLearned)
+            dnNoisePattern.store (aiNoisePurifier.classifyProfile (dnFloor), std::memory_order_relaxed);
+        else
+        {
+            aiNoisePurifier.reset();
+            dnNoisePattern.store (0, std::memory_order_relaxed);
+        }
     }
 
     // 学習の開始・やり直し・解除をブロック境界で反映する。
@@ -2457,6 +2456,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             dnLearnedShared.store (false);
             dnProfileValidation.store (0);
             dnClassifier.prepare (currentSampleRate);
+            aiNoisePurifier.reset();
+            dnNoisePattern.store (0, std::memory_order_relaxed);
             for (int b = 0; b < 4; ++b)
             {
                 dnFloor[b] = 1e-5f;
@@ -2855,9 +2856,12 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         }
     }
 
-    // ---- v1.4.0 AUTO SETUP: accumulate band energy of the raw voice for 5 s ----
+    // ---- v1.4.0 & v5.7.0 AUTO SETUP: 7バンド互換統計 ＋ 無音免疫12帯域×音声学カルテ解析 ----
     if (autoSetupCountdown.load() > 0 && asPrepared)
     {
+        if (karteNeedsReset.exchange (false, std::memory_order_relaxed))
+            karteAnalyzer.resetAccumulators();
+
         double sums[asBands] = {};
         float  pk = asPeak.load();
         for (int b = 0; b < asBands; ++b)
@@ -2882,6 +2886,17 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         for (int b = 0; b < asBands; ++b) asBandSum[b].store (asBandSum[b].load() + sums[b]);
         asSampleCount.store (asSampleCount.load() + numSamples);
         asPeak.store (pk);
+
+        // v5.7.0: 息継ぎ無音を自動除外する12帯域ファインスペクトル＋F0/H1-H2/HNR蓄積
+        {
+            const float* d0 = dryBuffer.getReadPointer (0);
+            const float* d1 = dryBuffer.getNumChannels() > 1 ? dryBuffer.getReadPointer (1) : nullptr;
+            const float floorHint = juce::jmax (dnFloor[1], dnFloor[2]);
+            karteAnalyzer.pushBlock (d0, d1, numSamples,
+                                     sharedVocalF0Hz.load (std::memory_order_relaxed),
+                                     sharedVocalF0Conf.load (std::memory_order_relaxed),
+                                     floorHint);
+        }
 
         // level + dynamics statistics (used by the sing mode, cheap adds)
         // FireFace UC 等の多入力インターフェースで Mic 2 (ch 1) だけにマイクを挿した
@@ -3013,9 +3028,30 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                                 apvts.getRawParameterValue ("denoise")->load() * 0.01f * srcDnScale);
         int learn = learnCountdown.load();
 
-        // 切替中にも分割フィルターの履歴を更新する。再び入れた瞬間に
-        // 前回の古い音が漏れたり、原音側の位相補償と食い違ったりしない。
+        // v5.7.0 Smart Sleep ＆ 位相整合保護:
+        //  おそうじモジュール自体が完全OFF(soujiRun == false)かつ手動学習中でもない間は、
+        //  毎ブロック4帯域コピー＋9基のLinkwitz-Rileyフィルタ通過を完全スリープしてCPU負荷を0にする。
+        //  おそうじがONに復帰した最初のブロック(ModuleChainクロスフェード開始点)でクリーンリセットして再開する。
+        const bool needDnSplit = soujiRun || (learn > 0);
+        if (! needDnSplit)
         {
+            dnSplitSleeping = true;
+            meterDN.store (meterDN.load() * 0.9f);
+            meterDnHarmonicCleanDb.store (0.0f, std::memory_order_relaxed);
+        }
+        else
+        {
+            if (dnSplitSleeping)
+            {
+                lrLP1.reset(); lrHP1.reset();
+                lrLP2.reset(); lrHP2.reset();
+                lrLP3.reset(); lrHP3.reset();
+                dnPhaseLow2.reset(); dnPhaseLow3.reset(); dnPhaseMid3.reset();
+                dnDryPhase1.reset(); dnDryPhase2.reset(); dnDryPhase3.reset();
+                aiNoisePurifier.reset();
+                dnSplitSleeping = false;
+            }
+
             // 直列分割では、下位帯域にも後段の位相回転を補わないと平坦に戻らない。
             bandBuf[0].makeCopyOf (buffer, true);
             bandBuf[1].makeCopyOf (buffer, true);
@@ -3058,19 +3094,24 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
 
         // おそうじを切っていても、明示的に始めた学習は最後まで測る。
         // 音を変えるかどうかと測定を分けないと、学習中表示が戻らなくなる。
-        if ((soujiRun && amount > 0.001f && dnOn) || learn > 0)
+        if (needDnSplit && ((soujiRun && amount > 0.001f && dnOn) || learn > 0))
         {
+            const bool v570AiPurify = (eraNow >= 570 && ! selfTestRunning.load (std::memory_order_relaxed));
+            const float curF0Hz     = sharedVocalF0Hz.load (std::memory_order_relaxed);
+            const float curF0Conf   = sharedVocalF0Conf.load (std::memory_order_relaxed);
+            dnNoisePattern.store (aiNoisePurifier.classifyProfile (dnFloor), std::memory_order_relaxed);
 
             const float maxAttenDb = dnOn ? 24.0f * amount : 0.0f;
             float attenSum = 0.0f;
+            bool anyHfOnsetInBlock = false;
 
             for (int n = 0; n < numSamples; ++n)
             {
+                const float inS0 = buffer.getSample (0, n);
+                const float inS1 = buffer.getSample (juce::jmin (1, numCh - 1), n);
                 // 音量の大小と関係なく、声・演奏の周期性と部屋の安定性を測る。
                 // 左右を足すと逆相の声が消えるので、判定は左右で独立する。
-                if (dnClassifier.push (buffer.getSample (0, n),
-                                       buffer.getSample (juce::jmin (1, numCh - 1), n),
-                                       dnEnv, true)
+                if (dnClassifier.push (inS0, inS1, dnEnv, true)
                     && learn > 0)
                 {
                     if (dnClassifier.isPeriodic()) ++dnLearnPeriodicFrames;
@@ -3080,14 +3121,11 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 // 母音が出たことだけを理由に高域の部屋ノイズを開放しない。
                 const bool hfOnset = dnEnv[3] > 2.2e-3f
                                   && dnEnv[3] > dnEnvSlow3 * 1.25f;
-                if (hfOnset) dnHfVoiceHold = dnHoldSamples;
+                if (hfOnset) { dnHfVoiceHold = dnHoldSamples; anyHfOnsetInBlock = true; }
                 else if (dnHfVoiceHold > 0) --dnHfVoiceHold;
                 // ---- v2.12.0 サフサフ対策(§6-1) ----
                 // 声の中心帯域(250-1200 / 1200-5000)が床から+12dB(×4)を超えたら
                 // 「声が出ている」。その間+80msは**全帯域を一斉に開く**。
-                // 未学習直後や低い保存床からの復帰中、dnClassifier がすでに「定常・非周期の
-                // 部屋ノイズ」と確認している間は、現在のノイズ床推定値(floorTarget)も
-                // 基準の下限に入れて「定常ノイズで voiceOpen がロックする」デッドロックを防ぐ。
                 const float vFloor1 = (dnClassifier.isStationary() && ! dnClassifier.isPeriodic())
                                     ? juce::jmax (dnFloor[1], dnClassifier.floorTarget (1))
                                     : dnFloor[1];
@@ -3102,11 +3140,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     dnVoiceHold = dnHoldSamples;
                 else if (dnVoiceHold > 0) --dnVoiceHold;
                 const bool voiceOpen = dnVoiceHold > 0;
-               #ifdef GZ_DNDEBUG
-                { static int dbg = 0; if ((dbg++ & 511) == 0)
-                    std::printf ("DBG env3=%.5f slow3=%.5f floor3=%.5f open=%d\n",
-                                 dnEnv[3], dnEnvSlow3, dnFloor[3], (int) voiceOpen); }
-               #endif
+                aiNoisePurifier.observeInputSample (inS0, inS1, voiceOpen);
+
+                // v5.7.0 ピアニッシモ語尾＆倍音テール保護ブリッジ:
+                // 歌い終わりの小さなロングトーンが vFloor*4 を下回っても、倍音周期性が続く間は語尾をチョップせず滑らかに通す
+                const float tailBridge = v570AiPurify
+                    ? gz::v570::AiVoicePurifierAndNoiseClassifier::computeHarmonicTailBridge01 (
+                          dnClassifier.isPeriodic(), curF0Conf,
+                          0.5f * (dnEnv[1] + dnEnv[2]), 0.5f * (vFloor1 + vFloor2))
+                    : 0.0f;
 
                 for (int b = 0; b < 4; ++b)
                 {
@@ -3116,34 +3158,23 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
 
                     dnEnv[b] += (pk > dnEnv[b] ? dnEnvAtk : dnEnvRel) * (pk - dnEnv[b]);
 
-                    // v3.0 包絡が「自由落下」しているかどうか。
-                    //  部屋鳴りなら波形の山が数ms毎に包絡へ届く（カウンタは即リセット）。
-                    //  ミュート・入力切替の直後は、山が来ないまま包絡だけが release で
-                    //  落ち続ける。それを30ms見たら「落下中」＝学びなおしを止める。
-                    //  （落下中の包絡を学ぶと、床がミュートのたびに少しずつ沈む）
                     if (pk < dnEnv[b] * 0.7f) { if (dnFallRun[b] <= dnFallMax) ++dnFallRun[b]; }
                     else                        dnFallRun[b] = 0;
 
-                    // v3.1 帯域3のゆっくり平均（喋りはじめのさ行検出の基準線）
                     if (b == 3)
                         dnEnvSlow3 += dnEnvSlowCoef * (dnEnv[3] - dnEnvSlow3);
 
                     if (learn > 0)
                     {
                         dnFloorLearn[b] = juce::jmax (dnFloorLearn[b], dnEnv[b]);
-                        // v2.10.0 中央値を取るための度数分布。16サンプルに1回で足りる
-                        // (包絡は 2ms/60ms で均してあるので、それより速くは動かない)。
                         if (dnHistDecim == 0)
                         {
                             const float db = juce::Decibels::gainToDecibels (dnEnv[b], -120.0f);
                             int idx = (int) std::lround (db) + 120;
                             dnHist[b][juce::jlimit (0, dnHistBins - 1, idx)] += 1;
-                            if (b == 3) ++dnHistCount;      // 最後の帯域で1回だけ数える
+                            if (b == 3) ++dnHistCount;
                         }
                     }
-                    // 未学習時および自動学習時は約0.5秒の定常・非周期音を確認してから床へ寄せる。
-                    // 保存された床が現在の定常ノイズより大幅に低い場合(dnFloor < target * 0.25)も
-                    // 速い時定数で追いつかせ、エキスパンダーが開きっぱなしになるのを防ぐ。
                     if ((! dnLearned || dnRelearn)
                         && dnClassifier.isStationary() && dnFallRun[b] <= dnFallMax)
                     {
@@ -3155,20 +3186,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     }
 
                     const float openThr = dnFloor[b] * 2.5f;   // ~+8 dB above floor
-
-                    // 高域は声の有無で二択に切り替えず、床からの余裕で連続的に減衰。
-                    // ノイズ包絡の中央値付近(dnFloor/1.4)では最大減衰(below≈1.0)がしっかり掛かり、
-                    // ノイズのランダムな小ピークで高速開放(dnOpenCoef)が誤発火しないようにする。
                     const bool protectBand = b == 3 ? dnHfVoiceHold > 0 : voiceOpen;
                     const float below = juce::jlimit (0.0f, 1.0f,
                                           (openThr - dnEnv[b]) / juce::jmax (openThr - dnFloor[b] * 0.5f, 1e-9f));
-                    // v4.6.0/v4.7.0 深層フロア抑制: 低〜中低域(b < 2: 0〜1200Hz)の包絡が学習床(dnFloor)以下に沈んでいる
-                    // 定常ノイズ区間では追加の深掘り減衰(最大+18dB)を滑らかに重ね、I/F固有の複合ノイズ(-68dBFS)を
-                    // 無音域まで沈める。中高域〜高域(b >= 2)は喋り出しのノイズ跳ね(サフサフ)を防ぐため従来カーブを維持する。
                     const float deepFloor = (b < 2)
                         ? juce::jlimit (0.0f, 1.0f, (dnFloor[b] * 1.25f - dnEnv[b]) / juce::jmax (dnFloor[b] * 0.50f, 1e-9f))
                         : 0.0f;
-                    const float attenDb = maxAttenDb * below + (dnOn ? 18.0f * amount * deepFloor : 0.0f);
+                    const float patW = v570AiPurify ? aiNoisePurifier.bandWeight (b) : 1.0f;
+                    const float rawAttenDb = (maxAttenDb * below + (dnOn ? 18.0f * amount * deepFloor : 0.0f)) * patW;
+                    const float attenDb = rawAttenDb * (1.0f - 0.72f * tailBridge);
                     const float targetGain = protectBand ? 1.0f
                         : juce::Decibels::decibelsToGain (-attenDb);
                     const bool bandHasSignal = dnEnv[b] > dnFloor[b] * 1.6f;
@@ -3184,11 +3210,28 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                             bandBuf[b].getSample (ch, n) * dnGain[b]);
                 }
 
-                // 帯域ごとに間引くと1024の倍数が帯域0に偏り、残り3帯域が保存されない。
                 if (dnLearned && dnRelearn && (++dnShareDecim & 0x3FF) == 0)
                     for (int b = 0; b < 4; ++b) dnFloorShared[b].store (dnFloor[b]);
 
                 if (learn > 0) { if (++dnHistDecim >= 16) dnHistDecim = 0; --learn; }
+            }
+
+            // v5.7.0 歌唱中も倍音の隙間ノイズだけを抜き出す「ピッチ同期ハーモニック・コム声抽出器」:
+            // 有声母音区間かつ背景ノイズ床が存在するとき、整数次倍音 k*F0 は 0.00 dB 無損失のまま通し、
+            // 倍音と倍音の隙間のサー音・ファン音だけをサブサンプル遅延コムで純化する。
+            if (v570AiPurify && soujiRun && dnOn && amount > 0.01f)
+            {
+                aiNoisePurifier.processHarmonicVoiceExtractor (
+                    bandBuf[1].getWritePointer (0), numCh > 1 ? bandBuf[1].getWritePointer (1) : nullptr,
+                    bandBuf[2].getWritePointer (0), numCh > 1 ? bandBuf[2].getWritePointer (1) : nullptr,
+                    bandBuf[3].getWritePointer (0), numCh > 1 ? bandBuf[3].getWritePointer (1) : nullptr,
+                    numSamples, numCh, curF0Hz, curF0Conf, amount, dnFloor, dnEnv,
+                    anyHfOnsetInBlock || (dnHfVoiceHold > 0));
+                meterDnHarmonicCleanDb.store (aiNoisePurifier.harmonicCleanDb(), std::memory_order_relaxed);
+            }
+            else
+            {
+                meterDnHarmonicCleanDb.store (0.0f, std::memory_order_relaxed);
             }
 
             if (learnCountdown.load() > 0)
@@ -3271,6 +3314,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                         dnLearnedShared.store (true);
                         dnProfileValidation.store (1);
                         dnLearnResult.store (1);
+                        dnNoisePattern.store (aiNoisePurifier.classifyProfile (dnFloor), std::memory_order_relaxed);
                         markStateDirty();                          // autosave the new profile
                     }
                 }
@@ -3545,13 +3589,20 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             atDetectedHz.store (0.0f); atCurrentCorrection.store (0.0f);
             if (meterOrn.load() != 0.0f) { meterOrn.store (0.0f); meterOrnKind.store (0); }
 
-            // v5.5.0 Smart Sleep: ピッチ系DSPが全OFFのときは、ボーカルチューナーが画面表示中(lease > 0)かつ有音時のみ軽量F0追跡を実行し、
-            // OBSプラグイン画面閉鎖時・最小化時・ミニバー時・ヘッドレス動作時の待機YIN負荷を完全0%にする
+            // v5.5.0 & v5.7.0 Smart Sleep: 無音時は待機YIN負荷を完全0%にしつつ、
+            // 有音時はチューナー表示中・うた自動測定中・AIピッチ同期デノイズ中・完パケ艶補正中に軽量F0追跡を供給する
             const int lease = vocalTunerLeaseSamples.load (std::memory_order_relaxed);
             if (lease > 0)
                 vocalTunerLeaseSamples.store (juce::jmax (0, lease - numSamples), std::memory_order_relaxed);
 
-            if (lease > 0 && rawTunerInput != nullptr && rawTunerEnergy >= 1.5e-6)
+            const bool needAuxPitch = (lease > 0)
+                || (autoSetupCountdown.load (std::memory_order_relaxed) > 0)
+                || (eraNow >= 570 && ! selfTestRunning.load (std::memory_order_relaxed)
+                    && (jpopPolishMode.load (std::memory_order_relaxed) > 0
+                        || (soujiRun && apvts.getRawParameterValue ("dn_on")->load() > 0.5f
+                            && apvts.getRawParameterValue ("denoise")->load() > 1.0f)));
+
+            if (needAuxPitch && rawTunerInput != nullptr && rawTunerEnergy >= 1.5e-6)
             {
                 const float tHz = tunerPitchDet.process (rawTunerInput, numSamples);
                 sharedVocalF0Hz.store (tHz, std::memory_order_relaxed);
@@ -5118,9 +5169,11 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // (voiceLatency は prepareToPlay でしか変わらないので、ここは読むだけで安全)
     // 分割フィルターを足し戻した音は振幅が平坦でも位相が回っている。
     // 元の波形と混ぜると250/1200/5000Hz付近で打ち消しが起こるため、
-    // 原音側にも同じ全域通過フィルターを通す。履歴はOFF中も進めておく。
-    dnDryPhaseBuffer.makeCopyOf (dryBuffer, true);
+    // おそうじ稼働中(soujiRun)は原音側にも同じ全域通過フィルターを通す。
+    // v5.7.0 Smart Sleep: おそうじモジュール自体が完全OFFのときはバッファコピーと3基のフィルタをスキップして軽量化する。
+    if (soujiRun)
     {
+        dnDryPhaseBuffer.makeCopyOf (dryBuffer, true);
         juce::dsp::AudioBlock<float> phaseBlock (dnDryPhaseBuffer);
         juce::dsp::ProcessContextReplacing<float> phaseCtx (phaseBlock);
         dnDryPhase1.process (phaseCtx);
@@ -5312,6 +5365,31 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 velvetDeHarshL.reset(); velvetDeHarshR.reset();
             }
 
+            // ---- v5.7.0 新機能：✨ J-Pop 完パケ艶＆喉締めオートリリーフ (Auto Vocal Polish) ----
+            // 1.08kHz 鼻づまり・イキミ帯域と 3.88kHz ハイトーン喉締め痛覚帯域の突出瞬間だけを動的引き算しつつ、
+            // 有声母音区間限定で 2.95kHz シンガーズ・フォルマントの抜けと 11.5kHz シルク艶を添える（サ行増加ゼロ）。
+            {
+                const int polMode = (eraNow >= 570 && ! liveTalkMode.load (std::memory_order_relaxed)
+                                     && ! selfTestRunning.load (std::memory_order_relaxed))
+                                        ? jpopPolishMode.load (std::memory_order_relaxed) : 0;
+                if (polMode > 0)
+                {
+                    jpopPolishEngine.processBlock (
+                        buffer.getWritePointer (0),
+                        numCh > 1 ? buffer.getWritePointer (1) : nullptr,
+                        numSamples, polMode,
+                        argonEngine.voicedRatioNow(),
+                        sharedVocalF0Hz.load (std::memory_order_relaxed));
+                    meterJpopPolishReliefDb.store (jpopPolishEngine.reliefDb(), std::memory_order_relaxed);
+                }
+                else
+                {
+                    jpopPolishEngine.processBlock (nullptr, nullptr, 0, 0, 0.0f, 0.0f);
+                    if (meterJpopPolishReliefDb.load (std::memory_order_relaxed) > 0.0f)
+                        meterJpopPolishReliefDb.store (0.0f, std::memory_order_relaxed);
+                }
+            }
+
             // ---- 次世代進化⑨：💎 ワールドクラス・マスタリングプリズム ＆ パラレルリアバス音圧エンジン ----
             // 1) Paul Frindle / Sonnox Oxford Inflator 式 4次多項式ハーモニック・インフレーター:
             //    f(x) = sign(x)*(A|x| + B*x^2 + C*|x|^3 - D*(x^2 - 2|x|^3 + x^4))
@@ -5472,33 +5550,16 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     const float prevRear = meterRearBusDb.load (std::memory_order_relaxed);
                     meterRearBusDb.store (prevRear + 0.25f * (maxRearBoostDb - prevRear), std::memory_order_relaxed);
 
-                    // Prism Mode 4 (Grammy Pro Console & Vocal Science Full Chain):
-                    // Zavalishin TPT / ADAA 2次 / Pultec EQP-1A / H3000 / Studer 30IPS / SSL Bus Glue / 4相FIR True-Peak
+                    // Prism Mode 4 (Grammy Pro Console Single-Pass Unified Chain):
+                    // v5.7.0 重複排除＆軽量化：旧版の8段重複サチュレータ・リミッタ多重直列掛けを廃止し、
+                    // Serban並列バス(MasteringProEngine)＋空間M/Sスカルプタ(SpatialMasteringConsole)の単一統合コンソールへ一本化
                     if (prismMode >= 4)
                     {
                         auto* wL = buffer.getWritePointer (0);
                         auto* wR = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
-                        const float detF0 = atDetectedHz.load (std::memory_order_relaxed);
-                        const bool isVoicedNow = (detF0 >= 65.0f && detF0 <= 1100.0f);
-
-                        masteringProEngine.setMacroMorphXY (0.78f, 0.74f);
-                        grammyChainRack.setChainMacroParameters (0.52f, 0.48f, 0.42f, 0.38f);
-                        spatialMasteringConsole.setConsoleParameters (0.48f, 0.42f, 0.45f, -0.3f);
-                        articulationPolishSuite.setPolishParameters (0.45f, 0.50f, 0.40f, 0.35f);
-
+                        masteringProEngine.setMacroMorphXY (0.68f, 0.64f);
+                        spatialMasteringConsole.setConsoleParameters (0.42f, 0.38f, 0.40f, -0.3f);
                         masteringProEngine.processStereoBlock (wL, wR, numSamples);
-                        grammyChainRack.processStereoBlock (wL, wR, numSamples);
-                        if (wR != nullptr)
-                        {
-                            for (int i = 0; i < numSamples; ++i)
-                            {
-                                harmonicTapeSuite.processSamplePair (wL[i], wR[i], 0.32f, 0.45f, 0.35f, 0.22f);
-                                intelligentMixGlue.processSamplePair (wL[i], wR[i], 0.45f, 0.40f, 0.38f);
-                                registerScienceSuite.processSamplePair (wL[i], wR[i], detF0, isVoicedNow, 0.50f, 0.45f, 0.40f);
-                                psychoClaritySuite.processSamplePair (wL[i], wR[i], 0.35f, 0.45f, 0.25f);
-                                masteringDeliverySuite.processSamplePair (wL[i], wR[i], 0.25f, 0.50f, false);
-                            }
-                        }
                         spatialMasteringConsole.processStereoBlock (wL, wR, numSamples);
                     }
                 }
@@ -7268,6 +7329,24 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
 // in the zero-latency core chain; nothing adds delay.
 juce::String VocalGzzioProcessor::getAutoVoiceProfileSummary (bool english) const
 {
+    const int arch = karteArchetype.load (std::memory_order_relaxed);
+    if (arch > 0)
+    {
+        const float f0Hz = karteMeanF0Hz.load (std::memory_order_relaxed);
+        if (english)
+        {
+            return juce::String (" [AI Karte: ")
+                 + juce::String::fromUTF8 (gz::v570::JPopVocalKarteAnalyzer::archetypeNameEn (arch))
+                 + " | ~" + juce::String (juce::roundToInt (f0Hz)) + "Hz | "
+                 + juce::String::fromUTF8 (gz::v570::JPopVocalKarteAnalyzer::archetypeRecipeEn (arch)) + "]";
+        }
+        return juce::String::fromUTF8 (" 【声質カルテ: ")
+             + juce::String::fromUTF8 (gz::v570::JPopVocalKarteAnalyzer::archetypeNameJa (arch))
+             + juce::String::fromUTF8 ("（平均 ") + juce::String (juce::roundToInt (f0Hz)) + juce::String::fromUTF8 ("Hz）— ")
+             + juce::String::fromUTF8 (gz::v570::JPopVocalKarteAnalyzer::archetypeRecipeJa (arch))
+             + juce::String::fromUTF8 ("】");
+    }
+
     const int reg  = juce::jlimit (0, 3, asVoiceRegIdx.load (std::memory_order_relaxed));
     const int phon = juce::jlimit (0, 4, asVoicePhonIdx.load (std::memory_order_relaxed));
     static const char* const regJa[4]  = { "ハイトーン・クリア", "ミッド・ナチュラル", "ローミッド・リッチ", "ディープ・チェスト" };
@@ -7312,14 +7391,32 @@ void VocalGzzioProcessor::applyAutoSetup()
     const double n64   = (double) juce::jmax ((int64_t) 1, asSampleCount.load());
     const float  rmsDb = (float) (10.0 * std::log10 (asSumSq.load() / n64 + 1e-12));
     const float  pkDb  = juce::Decibels::gainToDecibels (juce::jmax (asPeak.load(), 1e-6f));
-    const float  crest = pkDb - rmsDb;                       // transient-ness
     const int    bc    = juce::jmax (1, asBlockCount.load());
     const float  mDb   = (float) (asBlockDbSum.load() / bc);
     const float  varDb = (float) juce::jmax (0.0, asBlockDbSqSum.load() / bc - (double) mDb * mDb);
     const float  sdDb  = std::sqrt (varDb);                  // phrase-to-phrase dynamics
     const float  floorDb = asMinBlockDb.load();              // quietest moment ~ room noise
 
-    // v5.0: 多次元声質プロファイリング（声の重心 × 発声・ダイナミクス特性）
+    // v5.7.0 深層進化：無音・息継ぎを自動除外した12帯域×音声学(F0/H1-H2/HNR/シンガーズフォルマント/鼻声イキミ)カルテ診断
+    const bool isTalkSetup = (asMode.load() == 0);
+    const auto karte = karteAnalyzer.buildReport (rmsDb, sdDb, isTalkSetup);
+    karteArchetype.store     (karte.archetype,          std::memory_order_relaxed);
+    karteMeanF0Hz.store      (karte.meanF0Hz,           std::memory_order_relaxed);
+    karteSpanSemitones.store (karte.pitchSpanSemitones, std::memory_order_relaxed);
+    karteHnr01.store         (karte.hnr01,              std::memory_order_relaxed);
+    karteAxisScores[0].store (karte.scoreClarity01,     std::memory_order_relaxed);
+    karteAxisScores[1].store (karte.scoreWarmth01,      std::memory_order_relaxed);
+    karteAxisScores[2].store (karte.scoreBreathGloss01, std::memory_order_relaxed);
+    karteAxisScores[3].store (karte.scoreCorePower01,   std::memory_order_relaxed);
+    karteAxisScores[4].store (karte.scoreSmoothness01,  std::memory_order_relaxed);
+    karteAxisScores[5].store (karte.scoreExpressive01,  std::memory_order_relaxed);
+
+    // 息継ぎ無音で全体平均RMSが下がりすぎて過大ブーストになる不具合を根治（純粋発声区間のRMSを優先）
+    const float effectiveRmsDb = (karte.activeRmsDb > rmsDb + 1.0f) ? karte.activeRmsDb : rmsDb;
+    const float effectiveSdDb  = karte.activeDynSdDb;
+    const float crest          = pkDb - effectiveRmsDb;
+
+    // 多次元声質プロファイリング（既存互換4×5インデックス ＋ 新規12タイプ声質カルテ）
     const float lowShare = rumble + bodyLow + mudShare;
     const float brightDb = 10.0f * std::log10 (juce::jmax (1.0e-4f, highSum)
                          / juce::jmax (1.0e-4f, lowShare));
@@ -7335,75 +7432,119 @@ void VocalGzzioProcessor::applyAutoSetup()
     else if (delta < -1.8f || bodyLow > 0.26f) regIdx = 2;
 
     int phonIdx = 1; // 0:Whisper/Airy, 1:Natural, 2:Mix/Sustained, 3:Powerful Belt, 4:Fast/Edgy
-    if      (airShare > 0.32f && crest < 11.5f)        phonIdx = 0;
-    else if (crest > 15.2f && presShare > 0.42f)       phonIdx = 4;
-    else if (crest > 13.8f || sdDb > 5.5f)             phonIdx = 3;
-    else if (midE > 0.34f && sdDb < 4.2f)              phonIdx = 2;
+    if      (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::WhisperTransparent
+             || (airShare > 0.32f && crest < 11.5f))         phonIdx = 0;
+    else if (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::FastSyllableVocalo
+             || (crest > 15.2f && presShare > 0.42f))        phonIdx = 4;
+    else if (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::PowerfulBelting
+             || karte.archetype == gz::v570::JPopVocalKarteAnalyzer::HighPressureRock
+             || crest > 13.8f || effectiveSdDb > 5.5f)       phonIdx = 3;
+    else if (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::SilkyMixVoice
+             || (midE > 0.34f && effectiveSdDb < 4.2f))      phonIdx = 2;
 
     asVoiceRegIdx.store  (regIdx,  std::memory_order_relaxed);
     asVoicePhonIdx.store (phonIdx, std::memory_order_relaxed);
 
-    // ---- v5.0 SING mode: 多次元声質プロファイルに基づく適応型ボーカルチェーン構築 ----
-    if (asMode.load() == 1)
+    // ---- v5.7.0 SING mode: J-Pop学・歌ってみた・音声学に基づく12カルテ精密チェーン構築 ----
+    if (! isTalkSetup)
     {
-        // 1) level: aim the average at about -16 dBFS for streaming
-        setP ("makeup", juce::jlimit (0.0f, 12.0f, -16.0f - rmsDb));
+        // 1) level: 息継ぎ無音に惑わされない純粋歌唱レベルから -16 dBFS へ正確に整える
+        setP ("makeup", juce::jlimit (0.0f, 12.0f, -16.0f - effectiveRmsDb));
 
-        // 2) 発声タイプとクレストファクターに応じたコンプ＆自動音量揃え(ride_amt)
-        float c1 = crest > 15.0f ? 55.0f : crest > 11.0f ? 45.0f : 34.0f;
-        float c2 = crest > 15.0f ? 40.0f : crest > 11.0f ? 34.0f : 26.0f;
-        if (sdDb > 5.0f) c2 += 8.0f;                             // uneven phrases: more levelling
+        // 2) J-Pop 黄金則 1176(ピークキャッチ c1) + LA-2A(滑らかレベリング c2) 直列コンプ配分
+        float c1 = crest > 15.0f ? 54.0f : crest > 11.0f ? 44.0f : 32.0f;
+        float c2 = crest > 15.0f ? 42.0f : crest > 11.0f ? 35.0f : 28.0f;
+        if (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::WhisperTransparent)
+        {
+            // ウィスパー系は1176の速い潰しを控え、LA-2Aと上向きリフターで息の抑揚を生かす
+            c1 = juce::jmin (c1, 28.0f);
+            c2 = juce::jmax (c2, 38.0f);
+        }
+        else if (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::AcousticNatural)
+        {
+            c1 *= 0.85f;
+        }
+        if (effectiveSdDb > 4.8f) c2 += 8.0f;
         setP ("comp1", juce::jlimit (0.0f, 70.0f, c1));
         setP ("comp2", juce::jlimit (0.0f, 70.0f, c2));
 
-        const float atkMs = (phonIdx == 0) ? 13.0f : (phonIdx >= 3) ? 5.5f : 8.5f;
-        const float relMs = (phonIdx == 0) ? 190.0f : (phonIdx == 4) ? 95.0f : (phonIdx == 3) ? 115.0f : 145.0f;
+        const float atkMs = (phonIdx == 0) ? 14.0f : (phonIdx == 4) ? 4.5f : (phonIdx >= 3) ? 6.5f : 9.0f;
+        const float relMs = (phonIdx == 0) ? 195.0f : (phonIdx == 4) ? 88.0f : (phonIdx == 3) ? 112.0f : 145.0f;
         setP ("attack",  atkMs);
         setP ("release", relMs);
-        setP ("ride_amt", juce::jlimit (25.0f, 70.0f, 28.0f + sdDb * 5.5f));
+        setP ("ride_amt", juce::jlimit (25.0f, 72.0f, 28.0f + effectiveSdDb * 5.5f));
+        if (karte.recCrushGuard)
+            setP ("crush_on", 1.0f);
 
-        // 3) corrective + colour EQ from the spectral shares
-        setP ("lowcut", juce::jlimit (70.0f, 120.0f, 80.0f + rumble * 400.0f));
-        setP ("mud",   -juce::jlimit (0.0f, 8.0f, (mudRatio - 0.35f) * 22.0f));
-        setP ("harsh", -juce::jlimit (0.0f, 7.0f, (presShare - 0.4f) * 20.0f));
-        setP ("presence", juce::jlimit (0.5f, 4.0f, (0.30f - presShare) * 12.0f + 1.5f));
-        setP ("air",   juce::jlimit (1.0f, 6.0f, (0.28f - airShare) * 22.0f + 1.0f));
-        // 胴の鳴っている声(bodyLow>=0.17)には 0% = 何も足さない（dsp_autoset 整合）
+        // 3) 12帯域ファイン解析(400Hz箱鳴り・2.98kHzシンガーズフォルマント vs 4.1kHz外耳道痛覚)を融合した補正＆艶EQ
+        const float boxExtraCut = juce::jlimit (0.0f, 2.2f, (karte.boxinessExcessDb - 2.0f) * 0.45f);
+        const float harshExtraCut = juce::jlimit (0.0f, 2.4f, (-karte.singerFormantRatioDb - 1.5f) * 0.45f);
+        const float sfExtraLift   = juce::jlimit (-0.6f, 1.4f, (1.0f - karte.singerFormantRatioDb) * 0.25f);
+
+        setP ("lowcut", juce::jlimit (70.0f, 122.0f, 80.0f + rumble * 400.0f
+                                    + (karte.meanF0Hz >= 270.0f ? 10.0f : 0.0f)));
+        setP ("mud",   -juce::jlimit (0.0f, 8.5f, (mudRatio - 0.34f) * 21.0f + boxExtraCut));
+        setP ("harsh", -juce::jlimit (0.0f, 7.5f, (presShare - 0.40f) * 19.0f + harshExtraCut));
+        setP ("presence", juce::jlimit (0.5f, 4.5f, (0.30f - presShare) * 12.0f + 1.5f + sfExtraLift));
+        setP ("air",   juce::jlimit (1.0f, 6.5f, (0.28f - airShare) * 22.0f + 1.0f
+                                   + (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::HuskySmokyEmo ? -0.4f : 0.3f)));
+        // 胴の鳴っている声(bodyLow>=0.17)には 0% = 何も足さない（dsp_autoset 完全整合）
         setP ("drive", juce::jlimit (0.0f, 28.0f, (0.17f - bodyLow) * 280.0f));
 
-        // 4) 動的共振おさえ(res_amt) & スマートEQ自動連動
-        const float resTarget = juce::jlimit (20.0f, 62.0f,
-            22.0f + juce::jmax (0.0f, mudRatio - 0.32f) * 45.0f
-                  + juce::jmax (0.0f, presShare - 0.38f) * 55.0f);
+        // 4) 動的共振おさえ(res_amt) ＆ 鼻声イキミ(1.1kHz)/刺さり(3.9kHz)/箱鳴り(400Hz)への Smart Dynamic EQ 自動連動
+        const float resTarget = juce::jlimit (20.0f, 64.0f,
+            22.0f + juce::jmax (0.0f, mudRatio - 0.32f) * 44.0f
+                  + juce::jmax (0.0f, presShare - 0.38f) * 52.0f
+                  + juce::jmax (0.0f, karte.nasalIkimiExcessDb - 1.8f) * 3.2f);
         setP ("res_amt", resTarget);
-        if (mudRatio > 0.42f || presShare > 0.45f)
+        if (mudRatio > 0.40f || presShare > 0.44f || karte.nasalIkimiExcessDb > 2.2f || karte.boxinessExcessDb > 2.8f)
         {
             setP ("seq_on",     1.0f);
-            setP ("seq_amount", juce::jlimit (25.0f, 55.0f, 28.0f + (mudRatio + presShare - 0.75f) * 60.0f));
+            setP ("seq_mode",   0.0f);
+            setP ("seq_amount", juce::jlimit (24.0f, 58.0f,
+                28.0f + juce::jmax (0.0f, mudRatio + presShare - 0.74f) * 58.0f
+                      + juce::jmax (0.0f, karte.nasalIkimiExcessDb - 1.5f) * 3.5f));
         }
 
-        // 5) sibilance + noise + articulation
-        setP ("deess", juce::jlimit (20.0f, 65.0f, sibShare * 140.0f));
-        const float dn = floorDb > -50.0f ? 42.0f : floorDb > -65.0f ? 32.0f : 25.0f;
+        // 5) 日本語サ行ディエッサー ＋ AI環境ノイズ純化 ＋ 歌詞粒立ち
+        setP ("deess", juce::jlimit (20.0f, 68.0f, sibShare * 140.0f));
+        const float dn = floorDb > -50.0f ? 44.0f : floorDb > -65.0f ? 32.0f : 25.0f;
         setP ("denoise", dn);
         setP ("dn_relearn", 1.0f);
         setP ("hum_amt",  100.0f);
-        setP ("cons_amt", juce::jlimit (20.0f, 48.0f, 34.0f + (0.28f - presShare) * 35.0f));
+        setP ("cons_amt", juce::jlimit (20.0f, 52.0f, 34.0f + (0.28f - presShare) * 35.0f
+                                      + (phonIdx == 4 ? 8.0f : 0.0f)));
         setP ("br_amt",   (phonIdx == 0) ? 28.0f : juce::jlimit (8.0f, 24.0f, (0.26f - airShare) * 45.0f + 10.0f));
-        setP ("ring",     juce::jlimit (15.0f, 40.0f, 24.0f + (0.30f - presShare) * 40.0f));
+        setP ("ring",     juce::jlimit (15.0f, 44.0f, 24.0f + (0.30f - presShare) * 40.0f));
 
-        // 6) singing feel: sustain, pleasant space, and Argon Velvet Engine calibration
-        setP ("sustain", (phonIdx == 0 || phonIdx == 2) ? 35.0f : (phonIdx == 4) ? 20.0f : 30.0f);
-        setP ("width",   28.0f);
+        // 6) 余韻・空間 ＆ Argon Velvet 4軸 ＋ v5.2〜v5.7 専用表現モジュール自動キャリブレーション
+        setP ("sustain", (phonIdx == 0 || phonIdx == 2) ? 36.0f : (phonIdx == 4) ? 20.0f : 30.0f);
+        setP ("width",   (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::AcousticNatural) ? 22.0f : 28.0f);
         setP ("doubler", 0.0f);
         setP ("delay",   0.0f);
-        setP ("revsize", (regIdx == 0 || phonIdx == 0) ? 46.0f : 42.0f);
-        setP ("revmix",  (phonIdx == 4) ? 14.0f : 18.0f);
+        setP ("revsize", (regIdx == 0 || phonIdx == 0 || karte.archetype == gz::v570::JPopVocalKarteAnalyzer::DynamicBallad) ? 48.0f : 42.0f);
+        setP ("revmix",  (phonIdx == 4) ? 14.0f : (karte.archetype == gz::v570::JPopVocalKarteAnalyzer::DynamicBallad ? 21.0f : 18.0f));
         setP ("mix",     100.0f);
-        setP ("argon_velvet", juce::jlimit (18.0f, 68.0f, 34.0f + (0.17f - bodyLow) * 210.0f));
-        setP ("argon_focus",  juce::jlimit (22.0f, 66.0f, 38.0f + (0.30f - presShare) * 110.0f));
-        setP ("argon_silk",   juce::jlimit (20.0f, 74.0f, 36.0f + (0.28f - airShare) * 130.0f));
+        setP ("argon_velvet", juce::jlimit (18.0f, 70.0f, 34.0f + (0.17f - bodyLow) * 210.0f));
+        setP ("argon_focus",  juce::jlimit (22.0f, 68.0f, 38.0f + (0.30f - presShare) * 110.0f));
+        setP ("argon_silk",   juce::jlimit (20.0f, 76.0f, 36.0f + (0.28f - airShare) * 130.0f));
         setP ("argon_halo",   (phonIdx == 0 || phonIdx == 2) ? 42.0f : 36.0f);
+
+        const int finishEra = legacyEcoGate.load (std::memory_order_relaxed)
+                                  ? legacyVersionEra.load (std::memory_order_relaxed) : 570;
+        if (finishEra >= 570
+            && ! selfTestRunning.load (std::memory_order_relaxed))
+        {
+            breathControlOn.store  (karte.recBreathCtrl,     std::memory_order_relaxed);
+            upwardAirOn.store      (karte.recUpwardAir,      std::memory_order_relaxed);
+            pitchSweetSpotOn.store (karte.recPitchSweet,     std::memory_order_relaxed);
+            mixVoiceBridgeOn.store (karte.recMixBridge,      std::memory_order_relaxed);
+            vowelAlignOn.store     (karte.recVowelAlign,     std::memory_order_relaxed);
+            onsetGrooveOn.store    (karte.recOnsetGroove,    std::memory_order_relaxed);
+            roomDereverbOn.store   (karte.recRoomDereverb,   std::memory_order_relaxed);
+            jpopPolishMode.store   (karte.recJpopPolishMode, std::memory_order_relaxed);
+            markStateDirty();
+        }
 
         asBrightDb.store (delta);
         asSibPct.store (100.0f * sibShare);
@@ -7413,18 +7554,19 @@ void VocalGzzioProcessor::applyAutoSetup()
         return;
     }
 
-    // ---- TALK mode: 話し声・雑談・実況向けの適応型明瞭化 ----
-    setP ("lowcut", juce::jlimit (70.0f, 120.0f, 80.0f + rumble * 400.0f));
-    setP ("mud",   -juce::jlimit (0.0f, 8.0f, (mudRatio - 0.35f) * 22.0f));
+    // ---- TALK mode: 話し声・雑談・実況向けの無音免疫・明瞭化チェーン ----
+    setP ("lowcut", juce::jlimit (75.0f, 125.0f, 82.0f + rumble * 400.0f));
+    setP ("mud",   -juce::jlimit (0.0f, 8.5f, (mudRatio - 0.34f) * 22.0f
+                                + juce::jlimit (0.0f, 2.0f, (karte.boxinessExcessDb - 2.0f) * 0.4f)));
     setP ("harsh", -juce::jlimit (0.0f, 7.0f, (presShare - 0.4f) * 20.0f));
     setP ("deess",  juce::jlimit (0.0f, 70.0f, sibShare * 140.0f));
     setP ("air",    juce::jlimit (0.0f, 6.0f, (0.28f - airShare) * 22.0f));
     setP ("res_amt", juce::jlimit (20.0f, 58.0f, 24.0f + juce::jmax (0.0f, mudRatio - 0.32f) * 45.0f));
-    setP ("ride_amt", juce::jlimit (30.0f, 68.0f, 34.0f + sdDb * 5.0f));
+    setP ("ride_amt", juce::jlimit (30.0f, 68.0f, 34.0f + effectiveSdDb * 5.0f));
 
     setP ("denoise", juce::jlimit (0.0f, 45.0f, asPeak.load() < 0.2f ? 35.0f : 25.0f));
     setP ("hum_amt",  100.0f);
-    setP ("cons_amt", juce::jlimit (38.0f, 60.0f, 48.0f + (0.28f - presShare) * 30.0f));
+    setP ("cons_amt", juce::jlimit (38.0f, 62.0f, 48.0f + (0.28f - presShare) * 30.0f));
 
     setP ("revmix", 0.0f);
     setP ("delay",  0.0f);
@@ -7434,6 +7576,13 @@ void VocalGzzioProcessor::applyAutoSetup()
     setP ("argon_focus",  juce::jlimit (28.0f, 68.0f, 44.0f + (0.30f - presShare) * 100.0f));
     setP ("argon_silk",   juce::jlimit (14.0f, 54.0f, 24.0f + (0.28f - airShare) * 110.0f));
     setP ("argon_halo",   10.0f);
+    const int talkFinishEra = legacyEcoGate.load (std::memory_order_relaxed)
+                                  ? legacyVersionEra.load (std::memory_order_relaxed) : 570;
+    if (talkFinishEra >= 570
+        && ! selfTestRunning.load (std::memory_order_relaxed))
+    {
+        jpopPolishMode.store (0, std::memory_order_relaxed);
+    }
 
     int nearest = -1;
     asBrightDb.store (delta);
@@ -7963,6 +8112,8 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         s51->setAttribute ("vocalExprMode",   vocalExprMode.load (std::memory_order_relaxed));
         s51->setAttribute ("outVolPct",       (double) outputVolumePct.load (std::memory_order_relaxed));
         s51->setAttribute ("masterPrism",     masteringPrismMode.load (std::memory_order_relaxed));
+        s51->setAttribute ("jpopPolish",      jpopPolishMode.load (std::memory_order_relaxed));
+        s51->setAttribute ("karteArch",       karteArchetype.load (std::memory_order_relaxed));
         s51->setAttribute ("setlistCur",   currentSetlistIdx.load (std::memory_order_relaxed));
         const juce::ScopedLock sl (bgmMetaLock);
         if (snsAvatarClosedPath.isNotEmpty())
@@ -8146,19 +8297,19 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
 
             if (auto* lv = xml.getChildByName ("LEGACY_VER"))
             {
-                static constexpr int kEraMap[20] = { 560, 550, 541, 540, 530, 520, 510, 500, 490, 480, 460, 440, 433, 400, 310, 240, 200, 170, 130, 100 };
+                static constexpr int kEraMap[21] = { 570, 560, 550, 541, 540, 530, 520, 510, 500, 490, 480, 460, 440, 433, 400, 310, 240, 200, 170, 130, 100 };
                 const int rawId     = lv->getIntAttribute ("id",  0);
-                int       loadedEra = juce::jlimit (100, 560, lv->getIntAttribute ("era", 560));
-                int       loadedId  = juce::jlimit (0, 19, rawId);
+                int       loadedEra = juce::jlimit (100, 570, lv->getIntAttribute ("era", 570));
+                int       loadedId  = juce::jlimit (0, 20, rawId);
                 if (rawId <= 0)
                 {
                     loadedId  = 0;
-                    loadedEra = 560; // 最新版(id=0)が選ばれていた場合は v5.6.0 (era=560) へ自然昇格
+                    loadedEra = 570; // 最新版(id=0)が選ばれていた場合は v5.7.0 (era=570) へ自然昇格
                 }
                 else if (lv->hasAttribute ("era"))
                 {
-                    // 旧構成で保存されたプロジェクトも era 番号から現在の20世代IDへ正確にマッピングする
-                    for (int i = 1; i < 20; ++i)
+                    // 旧構成で保存されたプロジェクトも era 番号から現在の21世代IDへ正確にマッピングする
+                    for (int i = 1; i < 21; ++i)
                     {
                         if (kEraMap[i] == loadedEra)
                         {
@@ -8178,7 +8329,7 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
             else if (gz::isTestDataIsolated())
             {
                 legacyVersionId.store  (0,    std::memory_order_relaxed);
-                legacyVersionEra.store (550,  std::memory_order_relaxed);
+                legacyVersionEra.store (570,  std::memory_order_relaxed);
                 legacyEcoGate.store    (true, std::memory_order_relaxed);
             }
 
@@ -8222,7 +8373,9 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
                     ensureLiveSeBuilt (0);
                 vocalExprMode.store        (juce::jlimit (0, 2, s51->getIntAttribute ("vocalExprMode", 0)), std::memory_order_relaxed);
                 outputVolumePct.store      (juce::jlimit (0.0f, 250.0f, (float) s51->getDoubleAttribute ("outVolPct", 100.0)), std::memory_order_relaxed);
-                masteringPrismMode.store   (juce::jlimit (0, 3, s51->getIntAttribute ("masterPrism", 0)), std::memory_order_relaxed);
+                masteringPrismMode.store   (juce::jlimit (0, kNumMasteringPrismModes - 1, s51->getIntAttribute ("masterPrism", 0)), std::memory_order_relaxed);
+                jpopPolishMode.store       (juce::jlimit (0, 2, s51->getIntAttribute ("jpopPolish", 0)), std::memory_order_relaxed);
+                karteArchetype.store       (juce::jlimit (0, 12, s51->getIntAttribute ("karteArch", 0)), std::memory_order_relaxed);
                 currentSetlistIdx.store (s51->getIntAttribute ("setlistCur", -1), std::memory_order_relaxed);
                 {
                     const auto avClosed = s51->getStringAttribute ("snsAvatarClosed");
@@ -10029,22 +10182,57 @@ bool VocalGzzioProcessor::runVoiceTargetDiagnosis (int targetStyle)
     setP ("sustain",      sp.susPct);
 
     const char* voiceTypeTag = "中音域・ナチュラル型";
-    if      (userNorm[0] > 0.62f && userNorm[3] < 0.45f) voiceTypeTag = "中低音リッチ・チェスト優位型";
-    else if (userNorm[3] > 0.58f && userNorm[0] < 0.46f) voiceTypeTag = "ハイトーン・クリア＆ブレス型";
-    else if (userNorm[1] > 0.62f)                        voiceTypeTag = "声芯・ベルティング優位型";
-    else if (userNorm[0] > 0.58f && userNorm[1] < 0.48f) voiceTypeTag = "ウォーム・ソフト発声型";
+    if (measuredFromVoice && mono.size() >= 2048)
+    {
+        // v5.7.0: 5秒ターゲット診断でも12帯域・12タイプJ-Pop声質カルテ解析を実行し、カルテ統計とUI表示を同期更新
+        gz::v570::JPopVocalKarteAnalyzer localKarte;
+        localKarte.prepare (sr);
+        const float floorEst = juce::jmax (1.0e-5f, dnFloor[1] + dnFloor[2]);
+        for (size_t pos = 0; pos < mono.size(); pos += 512)
+        {
+            const int blk = (int) std::min<size_t> (512, mono.size() - pos);
+            localKarte.pushBlock (mono.data() + pos, nullptr, blk, 0.0f, 0.0f, floorEst);
+        }
+        const double meanSqAll = [&]() {
+            double s = 0.0;
+            for (float v : mono) s += (double) v * (double) v;
+            return s / (double) mono.size();
+        }();
+        const float fbRmsDb = (float) (10.0 * std::log10 (meanSqAll + 1.0e-12));
+        const auto kr = localKarte.buildReport (fbRmsDb, 3.2f, targetStyle == 3);
+        karteArchetype.store (kr.archetype, std::memory_order_relaxed);
+        karteMeanF0Hz.store (kr.meanF0Hz, std::memory_order_relaxed);
+        karteSpanSemitones.store (kr.pitchSpanSemitones, std::memory_order_relaxed);
+        karteHnr01.store (kr.hnr01, std::memory_order_relaxed);
+        karteAxisScores[0].store (kr.scoreClarity01,     std::memory_order_relaxed);
+        karteAxisScores[1].store (kr.scoreWarmth01,      std::memory_order_relaxed);
+        karteAxisScores[2].store (kr.scoreBreathGloss01, std::memory_order_relaxed);
+        karteAxisScores[3].store (kr.scoreCorePower01,   std::memory_order_relaxed);
+        karteAxisScores[4].store (kr.scoreSmoothness01,  std::memory_order_relaxed);
+        karteAxisScores[5].store (kr.scoreExpressive01,  std::memory_order_relaxed);
+        if (targetStyle != 3)
+            jpopPolishMode.store (kr.recJpopPolishMode, std::memory_order_relaxed);
+        voiceTypeTag = gz::v570::JPopVocalKarteAnalyzer::archetypeNameJa (kr.archetype);
+    }
+    else
+    {
+        if      (userNorm[0] > 0.62f && userNorm[3] < 0.45f) voiceTypeTag = "中低音リッチ・チェスト優位型";
+        else if (userNorm[3] > 0.58f && userNorm[0] < 0.46f) voiceTypeTag = "ハイトーン・クリア＆ブレス型";
+        else if (userNorm[1] > 0.62f)                        voiceTypeTag = "声芯・ベルティング優位型";
+        else if (userNorm[0] > 0.58f && userNorm[1] < 0.48f) voiceTypeTag = "ウォーム・ソフト発声型";
+    }
 
     {
         const juce::ScopedLock sl (bgmMetaLock);
         voiceTargetSummary = (measuredFromVoice
-            ? (juce::String::fromUTF8 ("声質解析 [") + juce::String::fromUTF8 (voiceTypeTag) + juce::String::fromUTF8 ("] → 「"))
+            ? (juce::String::fromUTF8 ("声質カルテ [") + juce::String::fromUTF8 (voiceTypeTag) + juce::String::fromUTF8 ("] → 「"))
             : juce::String::fromUTF8 ("標準プロファイルに基づき、「"))
             + juce::String::fromUTF8 (sp.name)
             + juce::String::fromUTF8 ("」へ4軸バランス（倍音 ") + juce::String ((int) outVelvet)
             + juce::String::fromUTF8 ("% / 声芯 ") + juce::String ((int) outFocus)
             + juce::String::fromUTF8 ("% / 空気 ") + juce::String ((int) outSilk)
             + juce::String::fromUTF8 ("% / 立体 ") + juce::String ((int) outHalo)
-            + juce::String::fromUTF8 ("%）とEQ・ダイナミクスを最適化しました。");
+            + juce::String::fromUTF8 ("%）とEQ・艶リリーフを最適化しました。");
     }
     markStateDirty();
     return true;

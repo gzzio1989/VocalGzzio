@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VocalGzzio 5.6.0 説明書・OBS配信連携ガイド・対応インターフェース一覧</title>
+<title>VocalGzzio 5.7.0 説明書・OBS配信連携ガイド・対応インターフェース一覧</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><nav><strong>VocalGzzio 5.6.0</strong><a href="index.html">紹介</a><a href="updates-5.5.0.md">更新情報</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a><a href="en.html">🌐 English</a></nav></header>
+<header><nav><strong>VocalGzzio 5.7.0</strong><a href="index.html">紹介</a><a href="updates-5.5.0.md">更新情報</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a><a href="en.html">🌐 English</a></nav></header>
 <main>
-<aside class="note" aria-label="配布状況"><strong>VocalGzzio 5.6.0（Celestial &amp; Sovereign 7-Domain Mastering, Physical Studio Live SE &amp; 19-Theme WCAG Edition）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も追加料金なしで両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
+<aside class="note" aria-label="配布状況"><strong>VocalGzzio 5.7.0（12-Type J-Pop Vocal Karte, AI Harmonic Voice Purifier &amp; Auto Vocal Polish Edition）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も追加料金なしで両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
 <h1>どんな機材でも、どんな裏画面配信でも。<br>歌枠から歌ってみた完パケまで超軽量1画面で。</h1>
 <p class="lead">総合画面で「仕上がり」や「🎯5秒AI声質診断」を選び、必要なところだけ調整します。CPU/UI負荷を40〜70%削減した「⚡Smart Sleep超軽量エンジン」、OBSや歌詞の隅に常駐できる「📌配信ミニバー（520×115px）」、カラオケ配信の音ズレを1ms単位で揃える「⏱️声⇄伴奏 音ズレ補正（±300ms）」、全角かな入力中でも誤爆しない「⌨️裏画面グローバルホットキー」、語尾ナチュラルビブラート・母音フォーム統一EQ・歌い出しグルーヴ・ミックス＆胸鳴り・自作音源カスタムSE 4枠・ささやき浮上＆ドルビーA倍音エアー・音程追従オートスイートスポット・骨伝導モニター補正・伴奏「声ポケット」自動掘り・ゼロ遅延部屋鳴り除去・原曲1クリック伴奏ボーカル除去・-14 LUFS自動音圧マスタリング＆完パケ同時書き出し・cluster/通話との完全共存まで完結します。</p>
 <nav aria-label="目次"><a href="#start">はじめる</a><a href="#obs-routing">OBS・配信連携ガイド</a><a href="#v55">v5.5 新機能</a><a href="#trial-vs-prod">体験版と製品版の違い・Q&amp;A</a><a href="#theme">風景テーマ・4種の表示スタイル</a><a href="#stage">伴奏・音ズレ補正・ホットキー</a><a href="#interfaces">対応インターフェース・音消え対策</a><a href="#argon">声の質感</a><a href="#level">音量・絶叫/咳ガード</a><a href="#noise">ノイズ</a><a href="#pitch">音程</a><a href="#space">残響・IR</a><a href="#install">導入</a></nav>
@@ -30,8 +30,11 @@
 <li><strong>方法③【オーディオIF内蔵ループバック連携】：</strong>YAMAHA AG03/AG06、Steinberg UR22C/IXO、MOTU M2/M4 等の本体ループバック機能で単体起動版の出力をそのまま配信に乗せられます（発振を0.35秒で検知するハウリング緊急遮断ガード内蔵）。</li>
 </ul>
 
-<h2 id="v55">v5.5.0 / v5.4 / v5.3 / v5.2 新機能：アプリ別カラオケ取込・コード追従ハモリ・SNS動画保存・Smart Sleep超軽量ミニバー</h2>
+<h2 id="v55">v5.7.0 / v5.6 / v5.5 新機能：12種J-Pop声質カルテ「うた自動」・AI倍音同期ノイズ純化・完パケ艶リリーフ・超軽量ミニバー</h2>
 <ul>
+<li><strong>🩺 無音免疫12帯域×音声学『12タイプJ-Pop声質カルテ』うた自動（v5.7.0深層再構築）：</strong>歌の合間の息継ぎや無音休符に惑わされず純粋な有声フレームのみを抽出し、12帯域ファインスペクトルと音声学指標（Sundberg 2.98kHzシンガーズ・フォルマント比、$H_1-H_2$ 声門開放率、HNRクリア度、1.12kHzイキミ度、400Hz箱鳴り度）から「透明ウィスパー系」「王道J-Popクリア」「ハイトーン・カワボ」「ハスキー・エモ声」「パワフル・ベルティング」「シルキー・ミックス」「ウォーム低音・イケボ」「ボカロ・高速譜割り」「ダイナミック・バラード」「アコースティック自然派」「宅録こもり補正」「ハイプレッシャー・ロック」の全12タイプを高精度に診断。EQ・2段コンプ・Argon 4軸だけでなく、ささやき浮上・ミックスブリッジ・部屋反響カット・完パケ艶リリーフまで一括自動処方します。</li>
+<li><strong>🧠 6種AIノイズ指紋学習 ＆ 歌唱中ピッチ同期ハーモニック声抽出（v5.7.0新搭載）：</strong>環境ノイズ指紋を6種類（静音／🌀空調ファン／⚡電源ハム／📻サー音ヒス／⌨️物音パルス／🏠複合騒音）に自動識別して雑音帯域だけを重点カット。さらに<strong>歌唱中も声の基本周期 $T_0$ に同期するラグランジュ3次補間ハーモニック・コム声抽出器</strong>が稼働し、声の倍音成分（$k f_0$）は 0.00 dB 無損失のまま倍音と倍音の隙間に潜むノイズだけを引き算します。歌い終わりのピアニッシモ語尾も周期性ブリッジがチョップせず守り抜きます。</li>
+<li><strong>✨ J-Pop 完パケ艶＆喉締めオートリリーフ（v5.7.0新搭載）：</strong>総合画面「02 声をつくる」ヘッダーのピル（<code>艶補正: OFF ⇄ ✨艶: 歌枠自然 ⇄ ✨艶: 完パケ極</code>）をクリックするだけで、日本語ボーカル特有の <code>1.08 kHz</code> 鼻声イキミとハイトーン時の <code>3.88 kHz</code> 喉締め・外耳道痛覚共鳴が出た瞬間だけ動的に引き算し、母音発声中のみ <code>2.95 kHz</code> 抜け＆ <code>11.5 kHz</code> シルクエアーを付与します（サ行の刺さりは一切増えません）。</li>
 <li><strong>🌐 アプリ指定で『アプリ別カラオケ音声取込』（Windows 10/11 単体起動版 — v5.5.0新搭載）：</strong>「🎵BGM・録音」内の「<strong>🌐アプリ音取込▼</strong>」から、Chrome / Edge（YouTubeカラオケ等）や音楽プレイヤーなど指定したアプリ1つだけの音声を仮想直接取り込めます（Discord通話音や自身のマイク出力は混ざりません）。取り込んだ音にもリアルタイムで「✨ボーカル除去」「キー変更（±6半音）」「伴奏コード追従ハモリ」「🕳️声ポケット自動掘り」を適用でき、既定では自分のヘッドホン側で二重再生（フランジング）を起こさず完パケ録音・配信出力へミックスします。</li>
 <li><strong>⚡ 声⇄伴奏「音ズレ」1クリック自動計測 ＆ ミリ秒補正（<code>-300 ms</code> 〜 <code>+300 ms</code> — v5.5.0新搭載）：</strong>「<strong>⚡自動計測</strong>」ボタンを押してヘッドホン片耳をマイクに近づけるだけで、ウッドブロック音から往復音響遅延＋DSP遅延を実測し、最適な補正値（ms）へ自動設定します。手動スライダー（プラス側でマイク出力遅延、マイナス側で伴奏出力遅延、<code>0ms</code>リセット付）での1ms微調整も可能です。</li>
 <li><strong>🎹 伴奏コード追従スマートハモリ（v5.5.0新搭載）：</strong>「声を変える（ハモリ）」内の「<strong>🎹伴奏コード追従スマートハモリ</strong>」をONにすると、伴奏のリアルタイム和音（<code>[C] [Fm] [E7]</code> 等）を36ビン複素フェーザで解析。J-POP定番の借用和音（<code>III7</code>・<code>IVm</code> 等）やラスサビ転調でも、不協和になるハモリ音をその瞬間のコード構成音へ自動スナップします。</li>

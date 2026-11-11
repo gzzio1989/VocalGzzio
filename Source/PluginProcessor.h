@@ -32,21 +32,8 @@ static constexpr int kRevTypeCount = kHeyaFirst + heya::kNumRooms;   // 13
 #include "VocalScienceLab.h"        // v5.5.0 Sundberg シンガーズフォルマント・Zwicker 16帯域バーク解析・無事故ガーディアン
 #include "GrammyVocalChainRack.h"   // v5.5.0 Pultec EQP-1A/MEQ-5・H3000 マイクロピッチ・微分トランジェント
 #include "SpatialMasteringConsole.h"// v5.5.0 エリプティック低域位相整合・動的M/Sスカルプター・4相FIRトゥルーピーク
-#include "VocalArticulationPolish.h"// v5.5.0 日本語モーラ母音F1/F2自動均一化・ベルベットブレス・近接効果スタビライザー
-#include "BroadcastStreamGuard.h"   // v5.5.0 適応格子ハウリング自動ノッチ・打鍵クリックブランカー・骨伝導バイノーラルキュー
-#include "PitchAndHarmonyScience.h" // v5.5.0 純正律ダイナミックマイクロチューニング・輪状甲状筋ビブラート・ビタビF0精錬
-#include "StudioAcousticRoomEngine.h"// v5.5.0 6帯域DRRゼロ遅延デリバーブ・U47/C800G/7B名機カプセル・8x8直交アダマールFDN
-#include "VocalistPerformanceCoach.h"// v5.5.0 21ビンセント精度ヒストグラム・生体ビブラート周期・F1/F2母音空間・スタジオ採点
-#include "HarmonicExciterAndTapeDeck.h"// v5.5.0 Jiles-Atherton 磁気ヒステリシス・30IPS ヘッドバンプ・Aphex 位相倍音・サブチェスト
-#include "IntelligentMixGlueEngine.h"// v5.5.0 SSL 4000G バスグルー・Weiss DS1式相対レベルディエッサー・グラミー基準スペクトル整合
-#include "DynamicFormantAndRegisterEngine.h"// v5.5.0 パッサージョ声区ブリッジ・1040Hz 鼻腔反共振ノッチ・HNR 声門閉鎖ポリッシャー
-#include "PsychoacousticClarityEngine.h"// v5.5.0 チェビシェフT2/T3欠落基音再生・STI子音立ち上がり明瞭度・ハース前方定位ステージ
-#include "MasteringLoudnessAndDelivery.h"// v5.5.0 配信規格別ラウドネス最適化・ロッシーコーデック歪みガード・24bit F重みディザ
-#include "NextGenMasteringOrchestrator.h"// v5.5.0 4大スタジオライブSE物理合成＆次世代マスタリング・声道物理・複雑時計統合オーケストレータ
-#include "HumanCentricMasteringOrchestrator.h"// v5.5.0 安全性・軽量高音質・コード重複調停・人間の欲求と感性共鳴統合オーケストレータ
-#include "SupremeVocalMasterpieceOrchestrator.h"// v5.5.0 6大ピラー（安全性・超軽量・重複排除・人間本能共鳴・配信歌い手支援・複雑時計＆WCAG）統合オーケストレータ
-#include "SovereignVocalMasterpieceOrchestrator.h"// v5.5.0 Sovereign 7大ドメイン（無欠陥安全・超軽量・重複排除・感性共鳴・名機物理・配信支援・複雑時計＆WCAG）統合オーケストレータ
-#include "CelestialVocalMasterpieceOrchestrator.h"// v5.5.0 Celestial 7大ドメイン（無欠陥安全・超軽量・重複排除・感性共鳴・名機物理・配信支援・複雑時計＆WCAG）統合オーケストレータ
+#include "StudioLiveSoundEffectsEngine.h" // 4大スタジオライブ効果音（拍手・キラ・ドラムロール・ベル）物理音響合成
+#include "VocalAiKarteAndPurifier.h"// v5.7.0 12タイプJ-Pop声質カルテ・AIノイズ指紋識別＆ピッチ同期声抽出・完パケ艶補正
 
 //==============================================================================
 // v2.10.0 #77/#78 音源モード — 同じツマミが「見る場所」を持ち替える
@@ -300,6 +287,7 @@ public:
         asBlockDbSqSum.store (0.0);
         asBlockCount.store (0);
         asMinBlockDb.store (0.0f);
+        karteNeedsReset.store (true, std::memory_order_relaxed);
         asTotalLen.store ((int) ((mode == 1 ? 8.0 : 5.0) * currentSampleRate));
         autoSetupCountdown.store (asTotalLen.load());
     }
@@ -1011,7 +999,8 @@ public:
     //   1:INFLATOR DENSITY (4次多項式ハーモニック・インフレーター — ピーク不変のまま中低レベル声密度を+3.8dB増幅)
     //   2:REAR-BUS AUTHORITY (Andrew Scheps流パラレル1176リアバス — 子音アタック100%無傷のまま胸声の芯を並列圧縮付加)
     //   3:MASTERING PRISM MAX (4次インフレーター＋パラレルリアバス＋動的スペクトル刺さり解消 Soothe)
-    static constexpr int kNumMasteringPrismModes = 4;
+    //   4:GRAMMY CONSOLE (TPT/ADAA Serban並列バス＋空間M/Sスカルプター単一統合コンソール)
+    static constexpr int kNumMasteringPrismModes = 5;
     int   getMasteringPrismMode() const noexcept { return masteringPrismMode.load (std::memory_order_relaxed); }
     void  setMasteringPrismMode (int m) noexcept
     {
@@ -1030,26 +1019,27 @@ public:
     float getVocalCrestFactorDb() const noexcept { return meterVocalCrestDb.load (std::memory_order_relaxed); }
     static const char* getMasteringPrismModeName (int m, bool english = false) noexcept
     {
-        switch (juce::jlimit (0, 3, m))
+        switch (juce::jlimit (0, kNumMasteringPrismModes - 1, m))
         {
             case 1:  return english ? "Inflator Density"   : "Inflator 濃密倍音";
             case 2:  return english ? "Rear-Bus Authority" : "Rear-Bus 芯圧";
             case 3:  return english ? "Prism MAX Master"   : "Prism 極致マスタリング";
+            case 4:  return english ? "Grammy Pro Console" : "Grammy 統合コンソール";
             default: return english ? "Auto Prism"         : "Auto プリズム連動";
         }
     }
 
     //== 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ==
-    // id: 0 = v5.6.0 最新版, 1..19 = 歴代メジャー＆V5世代（v1.0.0〜v5.5.0 全20世代）
+    // id: 0 = v5.7.0 最新版, 1..20 = 歴代メジャー＆V5世代（v1.0.0〜v5.6.0 全21世代）
     // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
     //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0),
-    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0), 560(v5.6.0)
+    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0), 560(v5.6.0), 570(v5.7.0)
     int   getLegacyVersionId() const noexcept  { return legacyVersionId.load (std::memory_order_relaxed); }
     int   getLegacyVersionEra() const noexcept { return legacyVersionEra.load (std::memory_order_relaxed); }
     void  setLegacyVersionState (int id, int era)
     {
-        legacyVersionId.store (juce::jlimit (0, 19, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 560, era), std::memory_order_relaxed);
+        legacyVersionId.store (juce::jlimit (0, 20, id), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 570, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState && isStandalone())
@@ -1084,12 +1074,67 @@ public:
     juce::File   getRecordingsDirectory() const;
     juce::String getLastSavedWavStatus() const { const juce::ScopedLock sl (bgmMetaLock); return lastSavedWavStatus; }
 
-    //== v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ==
+    //== v4.8.0 柱③ ＆ v5.7.0 深層進化：🎯 12タイプ J-Pop 声質カルテ診断 ＆ AIノイズ純化 ＆ 完パケ艶補正 ==
     bool  runVoiceTargetDiagnosis (int targetStyle);
     int   getLastVoiceTargetStyle() const noexcept { return lastVoiceTargetStyle.load (std::memory_order_relaxed); }
     juce::String getVoiceTargetSummary() const     { const juce::ScopedLock sl (bgmMetaLock); return voiceTargetSummary; }
     float getVoiceDiagUserBand (int b) const noexcept   { return (b >= 0 && b < 4) ? voiceDiagUserBands[b].load (std::memory_order_relaxed)   : 0.5f; }
     float getVoiceDiagTargetBand (int b) const noexcept { return (b >= 0 && b < 4) ? voiceDiagTargetBands[b].load (std::memory_order_relaxed) : 0.5f; }
+
+    // v5.7.0 12タイプ J-Pop 声質カルテ診断テレメトリ公開API
+    int   getVocalKarteArchetype() const noexcept     { return karteArchetype.load (std::memory_order_relaxed); }
+    float getVocalKarteMeanF0Hz() const noexcept      { return karteMeanF0Hz.load (std::memory_order_relaxed); }
+    float getVocalKarteSpanSemitones() const noexcept { return karteSpanSemitones.load (std::memory_order_relaxed); }
+    float getVocalKarteHnr01() const noexcept         { return karteHnr01.load (std::memory_order_relaxed); }
+    float getVocalKarteAxisScore (int axis) const noexcept
+    {
+        return (axis >= 0 && axis < 6) ? karteAxisScores[axis].load (std::memory_order_relaxed) : 0.5f;
+    }
+    juce::String getVocalKarteHeadline (bool english = false) const
+    {
+        const int arch = karteArchetype.load (std::memory_order_relaxed);
+        return juce::String::fromUTF8 (english ? gz::v570::JPopVocalKarteAnalyzer::archetypeNameEn (arch)
+                                               : gz::v570::JPopVocalKarteAnalyzer::archetypeNameJa (arch));
+    }
+    juce::String getVocalKarteRecipe (bool english = false) const
+    {
+        const int arch = karteArchetype.load (std::memory_order_relaxed);
+        return juce::String::fromUTF8 (english ? gz::v570::JPopVocalKarteAnalyzer::archetypeRecipeEn (arch)
+                                               : gz::v570::JPopVocalKarteAnalyzer::archetypeRecipeJa (arch));
+    }
+
+    // v5.7.0 AI ノイズパターン指紋識別 ＆ ピッチ同期ハーモニック声抽出テレメトリ公開API
+    int   getDenoiseNoisePattern() const noexcept     { return dnNoisePattern.load (std::memory_order_relaxed); }
+    float getDenoiseHarmonicCleanDb() const noexcept  { return meterDnHarmonicCleanDb.load (std::memory_order_relaxed); }
+    juce::String getDenoisePatternBadge (bool english = false) const
+    {
+        const int pat = dnNoisePattern.load (std::memory_order_relaxed);
+        const bool extracting = (meterDnHarmonicCleanDb.load (std::memory_order_relaxed) > 0.6f);
+        return juce::String::fromUTF8 (english ? gz::v570::AiVoicePurifierAndNoiseClassifier::patternBadgeEn (pat, extracting)
+                                               : gz::v570::AiVoicePurifierAndNoiseClassifier::patternBadgeJa (pat, extracting));
+    }
+
+    // v5.7.0 新機能：✨ J-Pop 完パケ艶＆喉締めオートリリーフ (0:OFF, 1:歌枠ナチュラル艶, 2:J-Pop完パケ極艶)
+    static constexpr int kNumJpopPolishModes = 3;
+    int   getJpopPolishMode() const noexcept { return jpopPolishMode.load (std::memory_order_relaxed); }
+    void  setJpopPolishMode (int mode) noexcept
+    {
+        jpopPolishMode.store (juce::jlimit (0, kNumJpopPolishModes - 1, mode), std::memory_order_relaxed);
+        if (mode <= 0)
+            meterJpopPolishReliefDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  cycleJpopPolishMode() noexcept     { setJpopPolishMode ((getJpopPolishMode() + 1) % kNumJpopPolishModes); }
+    float getJpopPolishReliefDb() const noexcept { return meterJpopPolishReliefDb.load (std::memory_order_relaxed); }
+    juce::String getJpopPolishModeName (bool english = false) const
+    {
+        switch (juce::jlimit (0, kNumJpopPolishModes - 1, getJpopPolishMode()))
+        {
+            case 1:  return juce::String::fromUTF8 (english ? "Polish: Natural" : "✨艶補正: 歌枠");
+            case 2:  return juce::String::fromUTF8 (english ? "Polish: J-Pop+"  : "✨艶補正: 完パケ");
+            default: return juce::String::fromUTF8 (english ? "Polish: OFF"     : "艶補正: OFF");
+        }
+    }
 
     //== v2.10.0 点検 =========================================================
     // ★ここから下はどれも音を作らない。音声スレッドからは呼ばない。
@@ -1801,7 +1846,7 @@ private:
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 560 };
+    std::atomic<int>   legacyVersionEra   { 570 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
@@ -2060,25 +2105,27 @@ private:
     float                         crestPeakEnv            { 0.0f }, crestRmsSqEnv   { 0.0f };
 
     // 次世代進化⑩：🔬 Zavalishin TPT/ADAA プロマスタリング・Zwicker 16帯域バーク解析・無事故ガーディアン統合スイート
-    gzzio::mastering::MasteringProEngine            masteringProEngine;
-    gzzio::science::VocalScienceLabSuite            vocalScienceLab;
-    gzzio::grammy_rack::GrammyVocalChainRack        grammyChainRack;
+    // v5.7.0 軽量化＆重複排除：未使用だった15個の重複オーケストレータ・スイート群を整理排除し、実稼働4コアエンジンのみ保持
+    gzzio::mastering::MasteringProEngine              masteringProEngine;
+    gzzio::science::VocalScienceLabSuite              vocalScienceLab;
+    gzzio::grammy_rack::GrammyVocalChainRack          grammyChainRack;
     gzzio::spatial_mastering::SpatialMasteringConsole spatialMasteringConsole;
-    gzzio::articulation::VocalArticulationPolishSuite articulationPolishSuite;
-    gzzio::stream_guard::BroadcastStreamGuardSuite  broadcastStreamGuard;
-    vg::pitch_science::PitchAndHarmonyScienceSuite  pitchHarmonyScience;
-    vg::studio_acoustics::StudioAcousticRoomSuite   studioAcousticRoom;
-    vg::performance_coach::VocalistPerformanceCoachSuite performanceCoachSuite;
-    vg::tape_and_harmonics::HarmonicExciterAndTapeSuite harmonicTapeSuite;
-    vg::mix_glue::IntelligentMixGlueSuite           intelligentMixGlue;
-    vg::register_science::DynamicFormantAndRegisterSuite registerScienceSuite;
-    vg::psychoacoustics::PsychoacousticClaritySuite psychoClaritySuite;
-    vg::mastering_delivery::MasteringLoudnessAndDeliverySuite masteringDeliverySuite;
-    gzzio::nextgen_orchestrator::NextGenMasteringOrchestrator nextGenMasteringOrchestrator;
-    vg::human_mastering::HumanCentricMasteringOrchestrator humanCentricOrchestrator;
-    vg::supreme::SupremeVocalMasterpieceOrchestrator supremeMasterpieceOrchestrator;
-    vg::sovereign::SovereignVocalMasterpieceOrchestrator sovereignMasterpieceOrchestrator;
-    vg::celestial::CelestialVocalMasterpieceOrchestrator celestialMasterpieceOrchestrator;
+
+    // ---- v5.7.0 深層進化：12タイプJ-Pop声質カルテ・AIノイズ指紋＆ピッチ同期声抽出・完パケ艶補正 ----
+    gz::v570::JPopVocalKarteAnalyzer                  karteAnalyzer;
+    std::atomic<bool>                                 karteNeedsReset { false };
+    gz::v570::AiVoicePurifierAndNoiseClassifier       aiNoisePurifier;
+    gz::v570::JPopAutoVocalPolishEngine               jpopPolishEngine;
+    bool                                              dnSplitSleeping { false };
+    std::atomic<int>                                  dnNoisePattern { 0 };
+    std::atomic<float>                                meterDnHarmonicCleanDb { 0.0f };
+    std::atomic<int>                                  karteArchetype { 0 };
+    std::atomic<float>                                karteMeanF0Hz { 220.0f };
+    std::atomic<float>                                karteSpanSemitones { 6.0f };
+    std::atomic<float>                                karteHnr01 { 0.70f };
+    std::atomic<float>                                karteAxisScores[6] { 0.65f, 0.55f, 0.50f, 0.60f, 0.65f, 0.55f };
+    std::atomic<int>                                  jpopPolishMode { 0 };
+    std::atomic<float>                                meterJpopPolishReliefDb { 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

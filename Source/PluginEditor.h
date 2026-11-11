@@ -6071,7 +6071,7 @@ public:
         int         ovLayout;       // overviewLayoutMode (0..3)
         int         knobStyle;      // GzzioLnF::s_knobStyle
     };
-    static constexpr int kLegacyVersionCount = 20;
+    static constexpr int kLegacyVersionCount = 21;
     static const LegacyVersionSpec& getLegacyVersionSpec (int id) noexcept;
     void applyLegacyVersion (int versionId, bool keepEcoGate = true);
     void openLegacyVersionPopup (juce::Rectangle<int> anchorScreenBounds);
@@ -6135,7 +6135,8 @@ private:
     juce::Rectangle<int> irOverviewRect;  // 🌊 IR残響 音響減衰カーブ表示＆外部IR(.wav/.aiff)ローダーカプセル
     juce::Rectangle<int> argonPadRect;
     juce::Rectangle<int> argonResetRect;  // ↺ タブレット・タッチ向け 2Dオーブ＆4軸バー 1タップ0%リセットピル
-    juce::Rectangle<int> prismPillRect;   // 💎 ワールドクラス・マスタリングプリズム (Auto / Inflator / Rear-Bus / Prism MAX) 1クリック切替ピル
+    juce::Rectangle<int> prismPillRect;   // 💎 ワールドクラス・マスタリングプリズム (Auto / Inflator / Rear-Bus / Prism MAX / Grammy統合) 1クリック切替ピル
+    juce::Rectangle<int> jpopPolishPillRect; // ✨ v5.7.0: J-Pop完パケ艶＆喉締めオートリリーフ 1クリック切替ピル
     std::array<juce::Rectangle<int>, 4> argonBarRects;
     std::array<juce::Rectangle<int>, 4> argonTargetRects;
     juce::Rectangle<int> levelBadgeRect;
