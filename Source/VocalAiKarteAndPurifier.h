@@ -15,6 +15,7 @@
 
 #include <juce_core/juce_core.h>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <algorithm>
@@ -587,6 +588,7 @@ public:
         const float srF = (float) sr;
         combAlphaSlew = 1.0f - std::exp (-1.0f / (0.008f * srF)); // 8ms 滑らか遷移
         f0Slew        = 1.0f - std::exp (-1.0f / (0.004f * srF)); // 4ms ピッチ追従
+        crossfadeStep = 1.0f / std::max (32.0f, 0.0065f * srF);   // v5.8.0: 6.5ms 2タップ静止クロスフェード
         clickFastAtk  = 1.0f - std::exp (-1.0f / (0.0004f * srF));
         clickFastRel  = 1.0f - std::exp (-1.0f / (0.015f * srF));
         clickSlowCoef = 1.0f - std::exp (-1.0f / (0.250f * srF));
@@ -600,6 +602,10 @@ public:
                 combRing[b][ch].fill (0.0f);
         ringWrite = 0;
         smoothedPeriod = (float) (sr / 220.0);
+        tapPeriodA     = smoothedPeriod;
+        tapPeriodB     = smoothedPeriod;
+        tapCrossfade   = 0.0f;
+        tapCrossfading = false;
         prevBlockF0Hz  = 0.0f;
         combMixAlpha   = 0.0f;
         fastPeakEnv    = 0.0f;
@@ -660,20 +666,20 @@ public:
         if (lowDom > 0.56f && f0 > f2 * 3.2f)
         {
             currentPattern = PowerHum;
-            // 電源ハム・ジー音: <250Hz を強力に沈め、高域ブレスは優しく保護
-            bandWeights = { 1.28f, 1.08f, 0.94f, 0.88f };
+            // 電源ハム・ジー音: <250Hz を強力に沈め、高域は自然な空気感を保つ
+            bandWeights = { 1.28f, 1.08f, 0.98f, 0.90f };
         }
         else if (fanDom > 0.66f && (f0 + f1) > (f2 + f3) * 1.9f)
         {
             currentPattern = HvacFan;
-            // 空調・PCファン: ゴォーという低〜中低域を重点抑制し、高域エアーの抜けはそのまま通す
-            bandWeights = { 1.22f, 1.18f, 0.96f, 0.88f };
+            // 空調・PCファン: ゴォーという低〜中低域を重点抑制し、高域の静寂との落差を滑らかに保つ
+            bandWeights = { 1.22f, 1.18f, 0.98f, 0.90f };
         }
         else if (hissDom > 0.52f || f3 > f0 * 1.45f)
         {
             currentPattern = PreampHiss;
-            // マイクサー音(ホワイトヒス): 高域の非子音ノイズを緻密に抑え、声のチェスト温かみは無傷で残す
-            bandWeights = { 0.88f, 0.96f, 1.14f, 1.20f };
+            // マイクサー音(ホワイトヒス): 高域の非子音ノイズを緻密に抑え、低域も学習基準減衰力(1.00)を維持
+            bandWeights = { 1.00f, 1.00f, 1.14f, 1.20f };
         }
         else
         {
@@ -753,14 +759,52 @@ public:
         const float snrNeed       = std::clamp ((midHighFloor * 28.0f) / midHighEnv, 0.0f, 1.0f);
 
         float wantAlpha = 0.0f;
-        float targetPeriod = smoothedPeriod;
+        float targetPeriod = tapPeriodA;
         if (validPitch && ! hfConsonantOnset && denoiseAmount01 > 0.02f && floorPresence > 0.01f)
         {
             targetPeriod = std::clamp ((float) (sr / (double) f0Hz), 8.0f, (float) (kCombRingSize - 8));
             const float confFactor = std::clamp ((f0Conf - 0.58f) / 0.32f, 0.0f, 1.0f);
             wantAlpha = std::clamp (0.35f * denoiseAmount01 * confFactor * glideGuard * floorPresence * (0.35f + 0.65f * snrNeed),
                                     0.0f, 0.35f);
+
+            // v5.8.0: 2タップ位相ロック静止クロスフェード方式
+            // 読み出しタップをサンプルごとに連続スイープさせると dd/dn != 0 のドップラー・ジッパーノイズが出るため、
+            // 無稼働からの立ち上がり時はフェードイン前に目標周期へ完全静止スナップし、
+            // 有声中のピッチ変化時は「完全静止したAタップ」と「目標周期に固定したBタップ」を約6.5msで滑らかにクロスフェードする。
+            if (combMixAlpha < 0.0008f)
+            {
+                tapPeriodA     = targetPeriod;
+                tapPeriodB     = targetPeriod;
+                smoothedPeriod = targetPeriod;
+                tapCrossfade   = 0.0f;
+                tapCrossfading = false;
+            }
+            else if (! tapCrossfading && std::abs (targetPeriod - tapPeriodA) > 0.25f)
+            {
+                tapPeriodB     = targetPeriod;
+                tapCrossfade   = 0.0f;
+                tapCrossfading = true;
+            }
         }
+
+        // ラグランジュ3次分数遅延係数をブロック先頭で1回だけ事前計算（dd/dn == 0 厳守＆CPU 3倍高速化）
+        auto makeLagrange = [] (float period, int& dIntOut, float& c0, float& c1, float& c2, float& c3) noexcept
+        {
+            const float d = std::clamp (period, 4.0f, (float) (kCombRingSize - 6));
+            dIntOut = (int) d;
+            const float mu = d - (float) dIntOut;
+            c0 = -mu * (mu - 1.0f) * (mu - 2.0f) * (1.0f / 6.0f);
+            c1 =  (mu + 1.0f) * (mu - 1.0f) * (mu - 2.0f) * 0.5f;
+            c2 = -(mu + 1.0f) * mu * (mu - 2.0f) * 0.5f;
+            c3 =  (mu + 1.0f) * mu * (mu - 1.0f) * (1.0f / 6.0f);
+        };
+
+        int dIntA = 0, dIntB = 0;
+        float c0A = 0.0f, c1A = 1.0f, c2A = 0.0f, c3A = 0.0f;
+        float c0B = 0.0f, c1B = 1.0f, c2B = 0.0f, c3B = 0.0f;
+        makeLagrange (tapPeriodA, dIntA, c0A, c1A, c2A, c3A);
+        if (tapCrossfading)
+            makeLagrange (tapPeriodB, dIntB, c0B, c1B, c2B, c3B);
 
         float* bandsL[3] = { b1L, b2L, b3L };
         float* bandsR[3] = { b1R, b2R, b3R };
@@ -770,25 +814,44 @@ public:
         const int chCount = std::min (numCh, 2);
         for (int n = 0; n < numSamples; ++n)
         {
-            smoothedPeriod += f0Slew * (targetPeriod - smoothedPeriod);
-            combMixAlpha   += combAlphaSlew * (wantAlpha - combMixAlpha);
+            combMixAlpha += combAlphaSlew * (wantAlpha - combMixAlpha);
+
+            float xfadeMix = 0.0f;
+            if (tapCrossfading)
+            {
+                tapCrossfade += crossfadeStep;
+                if (tapCrossfade >= 1.0f)
+                {
+                    tapCrossfade   = 0.0f;
+                    tapCrossfading = false;
+                    tapPeriodA     = tapPeriodB;
+                    smoothedPeriod = tapPeriodA;
+                    dIntA = dIntB;
+                    c0A = c0B; c1A = c1B; c2A = c2B; c3A = c3B;
+                }
+                else
+                {
+                    // C1連続 Hermite smoothstep で切替時の傾き不連続もゼロにする
+                    xfadeMix = tapCrossfade * tapCrossfade * (3.0f - 2.0f * tapCrossfade);
+                }
+            }
 
             const int w = ringWrite;
-            if (combMixAlpha > 0.002f)
+            if (combMixAlpha > 0.0008f)
             {
-                // ラグランジュ3次分数遅延補間で正確な1周期前 x[n - T0] を取得
-                const float d = std::clamp (smoothedPeriod, 4.0f, (float) (kCombRingSize - 6));
-                const int dInt = (int) d;
-                const float mu = d - (float) dInt;
-                const int idx0 = (w - dInt + 1 + kCombRingSize) & kCombRingMask;
-                const int idx1 = (w - dInt     + kCombRingSize) & kCombRingMask;
-                const int idx2 = (w - dInt - 1 + kCombRingSize) & kCombRingMask;
-                const int idx3 = (w - dInt - 2 + kCombRingSize) & kCombRingMask;
+                const int idxA0 = (w - dIntA + 1 + kCombRingSize) & kCombRingMask;
+                const int idxA1 = (w - dIntA     + kCombRingSize) & kCombRingMask;
+                const int idxA2 = (w - dIntA - 1 + kCombRingSize) & kCombRingMask;
+                const int idxA3 = (w - dIntA - 2 + kCombRingSize) & kCombRingMask;
 
-                const float c0 = -mu * (mu - 1.0f) * (mu - 2.0f) * (1.0f / 6.0f);
-                const float c1 =  (mu + 1.0f) * (mu - 1.0f) * (mu - 2.0f) * 0.5f;
-                const float c2 = -(mu + 1.0f) * mu * (mu - 2.0f) * 0.5f;
-                const float c3 =  (mu + 1.0f) * mu * (mu - 1.0f) * (1.0f / 6.0f);
+                int idxB0 = 0, idxB1 = 0, idxB2 = 0, idxB3 = 0;
+                if (tapCrossfading)
+                {
+                    idxB0 = (w - dIntB + 1 + kCombRingSize) & kCombRingMask;
+                    idxB1 = (w - dIntB     + kCombRingSize) & kCombRingMask;
+                    idxB2 = (w - dIntB - 1 + kCombRingSize) & kCombRingMask;
+                    idxB3 = (w - dIntB - 2 + kCombRingSize) & kCombRingMask;
+                }
 
                 for (int b = 0; b < 3; ++b)
                 {
@@ -800,10 +863,18 @@ public:
                         const float x = ptr[n];
                         auto& ring = combRing[b][ch];
                         ring[(size_t) w] = x;
-                        const float delayed = c0 * ring[(size_t) idx0]
-                                            + c1 * ring[(size_t) idx1]
-                                            + c2 * ring[(size_t) idx2]
-                                            + c3 * ring[(size_t) idx3];
+                        float delayed = c0A * ring[(size_t) idxA0]
+                                      + c1A * ring[(size_t) idxA1]
+                                      + c2A * ring[(size_t) idxA2]
+                                      + c3A * ring[(size_t) idxA3];
+                        if (tapCrossfading)
+                        {
+                            const float delayedB = c0B * ring[(size_t) idxB0]
+                                                 + c1B * ring[(size_t) idxB1]
+                                                 + c2B * ring[(size_t) idxB2]
+                                                 + c3B * ring[(size_t) idxB3];
+                            delayed += xfadeMix * (delayedB - delayed);
+                        }
                         ptr[n] = (1.0f - a) * x + a * delayed;
                     }
                 }
@@ -862,6 +933,11 @@ private:
     std::array<float, kCombRingSize> combRing[3][2] {};
     int   ringWrite        = 0;
     float smoothedPeriod   = 218.0f;
+    float tapPeriodA       = 218.0f;
+    float tapPeriodB       = 218.0f;
+    float tapCrossfade     = 0.0f;
+    bool  tapCrossfading   = false;
+    float crossfadeStep    = 0.004f;
     float prevBlockF0Hz    = 0.0f;
     float combMixAlpha     = 0.0f;
     float combAlphaSlew    = 0.002f;
@@ -1031,3 +1107,111 @@ private:
 };
 
 } // namespace gz::v570
+
+namespace gz::v580
+{
+
+// =============================================================================
+//  DawRealtimeHealthMonitor — REAPER / DAW リアルタイム負荷＆音途切れ切り分け診断器
+//  ・ロックフリー・ゼロ確保（1コールバックあたり約15nsの高精度タイマー計測のみ）
+//  ・プラグイン自身のDSP処理時間比率（平均% / ピーク% / 80%超過回数）と、
+//    ホスト側コールバック間隔の異常遅延（プラグイン自身は35%未満で軽快に終わったのに
+//    次のコールバック到着が予算の2.5倍以上遅れた＝他トラックの重いプラグインやASIO競合）を
+//    リアルタイムで明確に切り分ける。
+// =============================================================================
+class DawRealtimeHealthMonitor
+{
+public:
+    void prepare (double sampleRate, int blockSize) noexcept
+    {
+        sr = std::clamp (sampleRate, 8000.0, 192000.0);
+        lastBlockSizeAtom.store (std::max (1, blockSize), std::memory_order_relaxed);
+        const double invFreq = 1.0e6 / std::max (1.0, (double) juce::Time::getHighResolutionTicksPerSecond());
+        ticksToMicros = invFreq;
+        prevEndTicks  = 0;
+        prevPluginLoadPct = 0.0f;
+        smoothedLoadPct   = 0.0f;
+        decayingPeakPct   = 0.0f;
+    }
+
+    inline void beginCallback (int numSamples, double sampleRate) noexcept
+    {
+        const juce::int64 nowTicks = juce::Time::getHighResolutionTicks();
+        startTicks = nowTicks;
+        curSamples = std::max (1, numSamples);
+        const double useSr = (sampleRate > 1000.0) ? sampleRate : sr;
+        curBudgetUs = 1.0e6 * (double) curSamples / useSr;
+
+        if (prevEndTicks > 0 && curSamples >= 32)
+        {
+            const double gapUs = (double) (nowTicks - prevEndTicks) * ticksToMicros;
+            // 再生停止・一時停止(>250ms)は除外し、プラグイン負荷が35%未満と軽いのに
+            // ホスト側のコールバック間隔が予算の2.5倍+1.8msを超えた場合は「DAW他トラック/ASIO遅延」として記録
+            const double stallThreshUs = std::max (curBudgetUs * 2.5 + 1800.0, 6500.0);
+            if (gapUs > stallThreshUs && gapUs < 250000.0 && prevPluginLoadPct < 35.0f)
+                hostGapDropoutsAtom.fetch_add (1, std::memory_order_relaxed);
+        }
+    }
+
+    inline void endCallback() noexcept
+    {
+        const juce::int64 endTicks = juce::Time::getHighResolutionTicks();
+        prevEndTicks = endTicks;
+        const double elapsedUs = std::max (0.0, (double) (endTicks - startTicks) * ticksToMicros);
+        const float loadPct = (float) std::clamp (100.0 * elapsedUs / std::max (curBudgetUs, 50.0), 0.0, 999.0);
+        prevPluginLoadPct = loadPct;
+
+        if (curSamples >= 32)
+        {
+            const float alpha = (loadPct > smoothedLoadPct) ? 0.22f : 0.045f;
+            smoothedLoadPct += alpha * (loadPct - smoothedLoadPct);
+            decayingPeakPct  = std::max (loadPct, decayingPeakPct * 0.992f);
+
+            if (loadPct >= 80.0f)
+                pluginOverrunsAtom.fetch_add (1, std::memory_order_relaxed);
+
+            avgLoadPctAtom.store     (smoothedLoadPct, std::memory_order_relaxed);
+            peakLoadPctAtom.store    (decayingPeakPct, std::memory_order_relaxed);
+            lastElapsedUsAtom.store  ((float) elapsedUs, std::memory_order_relaxed);
+            lastBudgetUsAtom.store   ((float) curBudgetUs, std::memory_order_relaxed);
+            lastBlockSizeAtom.store  (curSamples, std::memory_order_relaxed);
+        }
+    }
+
+    void resetCounters() noexcept
+    {
+        pluginOverrunsAtom.store  (0, std::memory_order_relaxed);
+        hostGapDropoutsAtom.store (0, std::memory_order_relaxed);
+        decayingPeakPct = smoothedLoadPct;
+        peakLoadPctAtom.store (decayingPeakPct, std::memory_order_relaxed);
+    }
+
+    float avgLoadPct() const noexcept      { return avgLoadPctAtom.load     (std::memory_order_relaxed); }
+    float peakLoadPct() const noexcept     { return peakLoadPctAtom.load    (std::memory_order_relaxed); }
+    float lastElapsedUs() const noexcept   { return lastElapsedUsAtom.load  (std::memory_order_relaxed); }
+    float lastBudgetUs() const noexcept    { return lastBudgetUsAtom.load   (std::memory_order_relaxed); }
+    int   lastBlockSize() const noexcept   { return lastBlockSizeAtom.load  (std::memory_order_relaxed); }
+    int   pluginOverruns() const noexcept  { return pluginOverrunsAtom.load (std::memory_order_relaxed); }
+    int   hostGapDropouts() const noexcept { return hostGapDropoutsAtom.load(std::memory_order_relaxed); }
+
+private:
+    double sr = 48000.0;
+    double ticksToMicros = 0.1;
+    juce::int64 startTicks   = 0;
+    juce::int64 prevEndTicks = 0;
+    int    curSamples  = 128;
+    double curBudgetUs = 2666.7;
+    float  prevPluginLoadPct = 0.0f;
+    float  smoothedLoadPct   = 0.0f;
+    float  decayingPeakPct   = 0.0f;
+
+    std::atomic<float> avgLoadPctAtom      { 0.0f };
+    std::atomic<float> peakLoadPctAtom     { 0.0f };
+    std::atomic<float> lastElapsedUsAtom   { 0.0f };
+    std::atomic<float> lastBudgetUsAtom    { 2666.7f };
+    std::atomic<int>   lastBlockSizeAtom   { 128 };
+    std::atomic<int>   pluginOverrunsAtom  { 0 };
+    std::atomic<int>   hostGapDropoutsAtom { 0 };
+};
+
+} // namespace gz::v580

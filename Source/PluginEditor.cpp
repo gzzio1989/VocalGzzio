@@ -2021,11 +2021,40 @@ public:
             addAndMakeVisible (l);
         };
 
+        // ---- v5.8.0: REAPER / DAW リアルタイム負荷＆音途切れ切り分け診断 ----
+        head (dawTitle, language->T ("◆ REAPER / DAW リアルタイム負荷＆音途切れ切り分け診断",
+                                     "◆ REAPER / DAW Real-Time CPU & Dropout Diagnosis"));
+        dawStats.setColour (juce::Label::textColourId, Palette::inkSoft);
+        dawStats.setFont (GzzioLnF::uiFont (13.0f, false));
+        dawStats.setJustificationType (juce::Justification::topLeft);
+        addAndMakeVisible (dawStats);
+        dawEcoBtn.setClickingTogglesState (true);
+        dawEcoBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2);
+        dawEcoBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        dawEcoBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
+        dawEcoBtn.setColour (juce::TextButton::textColourOnId, Palette::readableOn (Palette::green));
+        dawEcoBtn.onClick = [this]
+        {
+            processor.setDawLiveEcoMode (dawEcoBtn.getToggleState());
+            refresh();
+        };
+        addAndMakeVisible (dawEcoBtn);
+        dawResetBtn.setButtonText (language->T ("カウンタ初期化", "Reset Counters"));
+        dawResetBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2);
+        dawResetBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
+        dawResetBtn.onClick = [this]
+        {
+            processor.resetDawHealthCounters();
+            refresh();
+        };
+        addAndMakeVisible (dawResetBtn);
+
         // ---- #73 ゼロ遅延の自己証明 ----
         head (stTitle, language->st_title());
         note (stNote,  language->st_note());
         stRun.setButtonText (language->st_run());
-        stRun.setColour (juce::TextButton::buttonColourId, Palette::green.withAlpha (0.18f));
+        stRun.setColour (juce::TextButton::buttonColourId, Palette::panel2);
+        stRun.setColour (juce::TextButton::textColourOffId, Palette::ink);
         stRun.onClick = [this] { processor.requestLatencySelfTest(); refresh(); };
         addAndMakeVisible (stRun);
         stResult.setColour (juce::Label::textColourId, Palette::ink);
@@ -2039,7 +2068,8 @@ public:
         rcName.setTextToShowWhenEmpty (juce::String ("..."), Palette::inkSoft);
         addAndMakeVisible (rcName);
         rcSave.setButtonText (language->rc_save());
-        rcSave.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.25f));
+        rcSave.setColour (juce::TextButton::buttonColourId, Palette::panel2);
+        rcSave.setColour (juce::TextButton::textColourOffId, Palette::ink);
         rcSave.onClick = [this]
         {
             const auto n = currentName();
@@ -2050,7 +2080,8 @@ public:
         };
         addAndMakeVisible (rcSave);
         rcLoad.setButtonText (language->rc_load());
-        rcLoad.setColour (juce::TextButton::buttonColourId, Palette::ice.withAlpha (0.25f));
+        rcLoad.setColour (juce::TextButton::buttonColourId, Palette::panel2);
+        rcLoad.setColour (juce::TextButton::textColourOffId, Palette::ink);
         rcLoad.onClick = [this]
         {
             if (auto xml = gz::checkup::Recall::fetch (currentName()))
@@ -2066,18 +2097,19 @@ public:
         head (rpTitle, language->rp_title());
         note (rpNote,  language->rp_note());
         rpSave.setButtonText (language->rp_save());
-        rpSave.setColour (juce::TextButton::buttonColourId, Palette::salmon.withAlpha (0.22f));
+        rpSave.setColour (juce::TextButton::buttonColourId, Palette::panel2);
+        rpSave.setColour (juce::TextButton::textColourOffId, Palette::ink);
         rpSave.onClick = [this] { exportReport(); };
         addAndMakeVisible (rpSave);
 
         // ---- #75 使われ方 ----
         head (usTitle, language->us_title());
         usBody.setColour (juce::Label::textColourId, Palette::inkSoft);
-        usBody.setFont (GzzioLnF::uiFont (14.0f, false));
+        usBody.setFont (GzzioLnF::uiFont (13.2f, false));
         usBody.setJustificationType (juce::Justification::topLeft);
         addAndMakeVisible (usBody);
 
-        setSize (560, 430);
+        setSize (580, 464);
         refresh();
         startTimerHz (4);
     }
@@ -2101,16 +2133,25 @@ public:
             return b.removeFromTop (bodyH);
         };
 
-        {   auto r = section (stTitle, 52);
-            auto row = r.removeFromTop (26);
+        {   auto r = section (dawTitle, 90);
+            auto row = r.removeFromTop (28);
+            dawEcoBtn.setBounds (row.removeFromLeft (310));
+            row.removeFromLeft (8);
+            dawResetBtn.setBounds (row.removeFromLeft (132));
+            r.removeFromTop (4);
+            dawStats.setBounds (r); }
+        b.removeFromTop (8);
+
+        {   auto r = section (stTitle, 48);
+            auto row = r.removeFromTop (25);
             stRun.setBounds (row.removeFromLeft (96));
             row.removeFromLeft (8);
             stResult.setBounds (row);
             stNote.setBounds (r); }
-        b.removeFromTop (10);
+        b.removeFromTop (8);
 
-        {   auto r = section (rcTitle, 60);
-            auto row = r.removeFromTop (26);
+        {   auto r = section (rcTitle, 56);
+            auto row = r.removeFromTop (25);
             rcName.setBounds (row.removeFromLeft (200));
             row.removeFromLeft (8);
             rcSave.setBounds (row.removeFromLeft (86));
@@ -2119,13 +2160,13 @@ public:
             row.removeFromLeft (8);
             rcState.setBounds (row);
             rcNote.setBounds (r); }
-        b.removeFromTop (10);
+        b.removeFromTop (8);
 
-        {   auto r = section (rpTitle, 52);
-            auto row = r.removeFromTop (26);
+        {   auto r = section (rpTitle, 48);
+            auto row = r.removeFromTop (25);
             rpSave.setBounds (row.removeFromLeft (160));
             rpNote.setBounds (r); }
-        b.removeFromTop (10);
+        b.removeFromTop (8);
 
         usTitle.setBounds (b.removeFromTop (20));
         usBody.setBounds (b);
@@ -2156,6 +2197,34 @@ private:
 
     void refresh()
     {
+        // --- REAPER / DAW リアルタイム負荷・音途切れ切り分け診断 ---
+        {
+            const bool ecoNow = processor.getDawLiveEcoMode();
+            dawEcoBtn.setToggleState (ecoNow, juce::dontSendNotification);
+            dawEcoBtn.setButtonText (ecoNow
+                ? language->T ("DAWライブ超低負荷モード: ON (稼働中)", "DAW Live Ultra-Low-CPU: ON")
+                : language->T ("DAWライブ超低負荷モード: OFF (クリックで軽量化)", "DAW Live Ultra-Low-CPU: OFF"));
+            const float avgPct = processor.getDawAvgCpuPct();
+            const float pkPct  = processor.getDawPeakCpuPct();
+            const uint32_t overruns = processor.getDawPluginOverruns();
+            const uint32_t hostDrops = processor.getDawHostDropouts();
+            const int cbN = processor.getDawLastBlockSamples();
+            const int cbSr = processor.getDawLastSampleRateHz();
+            juce::String diag;
+            diag << language->T ("プラグイン単体DSP負荷: 平均 ", "Plugin DSP Load: Mean ")
+                 << juce::String (avgPct, 1) << "% / "
+                 << language->T ("ピーク ", "Peak ") << juce::String (pkPct, 1) << "%  ("
+                 << juce::String (cbN) << " smp @ " << juce::String (cbSr) << " Hz)\n";
+            diag << language->T ("超過回数: VocalGzzio側 ", "Overruns: Plugin ")
+                 << juce::String ((int) overruns)
+                 << language->T ("回 ／ DAW・他トラック・ASIO側途切れ ", " / DAW-ASIO Host Dropouts ")
+                 << juce::String ((int) hostDrops) << language->T ("回\n", "\n");
+            diag << processor.getDawHealthSummary (language->english);
+            dawStats.setText (diag, juce::dontSendNotification);
+            dawStats.setColour (juce::Label::textColourId,
+                                (overruns > 0 || hostDrops > 0) ? Palette::salmon : Palette::inkSoft);
+        }
+
         // --- 自己証明の結果 ---
         const int declared = processor.addedLatencySamples();
         const double sr = processor.getSampleRate() > 0.0 ? processor.getSampleRate() : 48000.0;
@@ -2184,16 +2253,34 @@ private:
 
         // --- 使われ方 ---
         auto& u = processor.usage();
+        auto keyLabel = [this] (const juce::String& k) -> juce::String
+        {
+            if (k == "session")  return language->T ("低遅延",     "Low-Lat");
+            if (k == "prox")     return language->T ("きょり補正", "Proximity");
+            if (k == "hum")      return language->T ("ジー音除去", "Hum Cut");
+            if (k == "cons")     return language->T ("ことば明瞭", "Consonant");
+            if (k == "orn")      return language->T ("こぶし保護", "Ornament");
+            if (k == "autotune") return language->T ("音程補正",   "Pitch Fix");
+            if (k == "voicefx")  return language->T ("声質変換",   "Voice FX");
+            if (k == "harmony")  return language->T ("ハモリ",     "Harmony");
+            if (k == "smarteq")  return language->T ("スマートEQ", "Smart EQ");
+            if (k == "reverb")   return language->T ("リバーブ",   "Reverb");
+            return k;
+        };
         juce::String s;
-        s << "launches " << u.getLaunches() << "\n";
+        s << language->T ("起動回数: ", "Launches: ") << u.getLaunches() << language->T ("回", "");
         const auto keys = u.all().getAllKeys();
-        int shown = 0;
+        juce::StringArray items;
         for (const auto& k : keys)
         {
             const double sec = u.all()[k].getDoubleValue();
             if (sec < 30.0) continue;
-            s << k << "  " << juce::String (sec / 60.0, 1) << " min\n";
-            if (++shown >= 6) break;
+            items.add (keyLabel (k) + " " + juce::String (sec / 60.0, 1) + language->T ("分", "m"));
+            if (items.size() >= 6) break;
+        }
+        for (int i = 0; i < items.size(); ++i)
+        {
+            s << ((i % 3 == 0) ? "\n" : language->T (" ／ ", "  |  ")) << items[i];
         }
         usBody.setText (s, juce::dontSendNotification);
     }
@@ -2207,8 +2294,8 @@ private:
 
     VocalGzzioProcessor& processor;
     GzzioLnF lnf;
-    juce::Label stTitle, stNote, stResult, rcTitle, rcNote, rcState, rpTitle, rpNote, usTitle, usBody;
-    juce::TextButton stRun, rcSave, rcLoad, rpSave;
+    juce::Label dawTitle, dawStats, stTitle, stNote, stResult, rcTitle, rcNote, rcState, rpTitle, rpNote, usTitle, usBody;
+    juce::TextButton dawEcoBtn, dawResetBtn, stRun, rcSave, rcLoad, rpSave;
     juce::TextEditor rcName;
     std::unique_ptr<juce::FileChooser> chooser;
 };
@@ -3773,7 +3860,7 @@ public:
             addAndMakeVisible (sb);
         }
 
-        customSeMenuBtn.setButtonText (language->T ("カスタムSE ▾", "Custom SE ▾"));
+        customSeMenuBtn.setButtonText (language->T ("カスタムSE ▼", "Custom SE ▼"));
         customSeMenuBtn.setTooltip (language->T ("任意の音声ファイル（.wav / .mp3 / .flac / .ogg / .aiff）を4つのカスタムSEスロットへ割り当て・管理するメニューを開きます。",
                                                  "Open menu to load, replace, or clear your own audio files (.wav / .mp3 / .flac / .ogg / .aiff) in the 4 Custom SE slots."));
         customSeMenuBtn.onClick = [this] { openCustomSeMenu(); };
@@ -4875,11 +4962,11 @@ private:
             auto lbl = processor.getAppAudioLabel();
             if (lbl.length() > 8)
                 lbl = lbl.substring (0, 8) + "..";
-            appAudioBtn.setButtonText (lbl + " ▾");
+            appAudioBtn.setButtonText (lbl + " ▼");
         }
         else
         {
-            appAudioBtn.setButtonText (language->T ("アプリ音取込 ▾", "App Audio ▾"));
+            appAudioBtn.setButtonText (language->T ("アプリ音取込 ▼", "App Audio ▼"));
         }
 
         const bool playing = processor.isBgmPlaying();
@@ -4893,10 +4980,10 @@ private:
         const int slCount = processor.getSetlistCount();
         const int slIdx   = processor.getCurrentSetlistIndex();
         if (slCount > 0 && slIdx >= 0)
-            setlistMenuBtn.setButtonText ("[" + juce::String (slIdx + 1) + "/" + juce::String (slCount) + "] ▾");
+            setlistMenuBtn.setButtonText ("[" + juce::String (slIdx + 1) + "/" + juce::String (slCount) + "] ▼");
         else
             setlistMenuBtn.setButtonText (language->T ("セトリ(", "Setlist(")
-                                          + juce::String (slCount) + ") ▾");
+                                          + juce::String (slCount) + ") ▼");
 
         const bool vocCancel = processor.getBgmVocalCancel();
         vocalCancelBtn.setToggleState (vocCancel, juce::dontSendNotification);
@@ -4954,7 +5041,7 @@ private:
         }
         else
         {
-            snsVideoBtn.setButtonText (language->T ("SNS動画 ▾", "SNS Video ▾"));
+            snsVideoBtn.setButtonText (language->T ("SNS動画 ▼", "SNS Video ▼"));
         }
 
         const bool hasKarte = processor.getVocalKarteVoicedSeconds() >= 1.2f;
@@ -4962,11 +5049,11 @@ private:
         if (hasKarte)
         {
             vocalKarteBtn.setButtonText (juce::String (processor.getVocalKarteTotalScore(), 0)
-                                         + language->T ("点 [", "pt [") + processor.getVocalKarteRank() + "] ▾");
+                                         + language->T ("点 [", "pt [") + processor.getVocalKarteRank() + "] ▼");
         }
         else
         {
-            vocalKarteBtn.setButtonText (language->T ("声質カルテ ▾", "Vocal Karte ▾"));
+            vocalKarteBtn.setButtonText (language->T ("声質カルテ ▼", "Vocal Karte ▼"));
         }
 
         const bool autoMst = processor.getRecAutoMaster();
@@ -5080,7 +5167,7 @@ private:
         for (int i = 0; i < 4; ++i)
             seBtns[(size_t) i].setToggleState (activeSe == i, juce::dontSendNotification);
 
-        customSeMenuBtn.setButtonText (language->T ("カスタムSE ▾", "Custom SE ▾"));
+        customSeMenuBtn.setButtonText (language->T ("カスタムSE ▼", "Custom SE ▼"));
         for (int i = 0; i < 4; ++i)
         {
             auto& cb = customSeBtns[(size_t) i];
@@ -5160,11 +5247,11 @@ private:
         {
             detailFoldBtn.setButtonText (language->T ("詳細パラメータを展開 (", "Advanced Controls (")
                                          + juce::String (foldedActiveCount)
-                                         + language->T ("項目ON) ▾", " ON) ▾"));
+                                         + language->T ("項目ON) ▼", " ON) ▼"));
         }
         else
         {
-            detailFoldBtn.setButtonText (language->T ("詳細パラメータを展開 ▾", "Expand Advanced Controls ▾"));
+            detailFoldBtn.setButtonText (language->T ("詳細パラメータを展開 ▼", "Expand Advanced Controls ▼"));
         }
         miniBarLaunchBtn.setButtonText (language->T ("ミニバー表示", "Mini-Bar View"));
 
@@ -6824,7 +6911,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     {
         auto panel = std::make_unique<CheckupPanel> (processor, language);
         juce::CallOutBox::launchAsynchronously (std::move (panel),
-                                                checkupButton.getScreenBounds(), nullptr);
+                                                checkupButton.getBounds(), this);
     };
     addAndMakeVisible (checkupButton);
 
@@ -7059,7 +7146,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 };
                 addAndMakeVisible (showAllBtn);
 
-                liteBtn.setButtonText (language->T ("⚡ 軽量モード (省負荷)", "Lite mode (low GPU)"));
+                liteBtn.setButtonText (language->T ("軽量モード (省負荷)", "Lite mode (low GPU)"));
                 liteBtn.setTooltip (language->T ("4096点FFTスペクトラム描画・背景アニメ・半透明ガラス合成を休止し、3D配信ソフトや重いゲーム併用時のGPU/CPU負荷を極小化します（音声DSPの音質は100%そのまま維持されます）。", "Pauses 4096-pt FFT spectrum, background animations, and glass overdraw to minimize GPU/CPU usage while keeping 100% full audio DSP quality."));
                 liteBtn.setClickingTogglesState (true);
                 liteBtn.setToggleState (ow.isLiteMode(), juce::dontSendNotification);
@@ -7070,9 +7157,9 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 };
                 addAndMakeVisible (liteBtn);
 
-                knobArtBtn.setButtonText (language->T ("🎨 ノブ内の装飾デザイン (宝石・歯車・模様)", "🎨 Knob Inner Artwork (Gems & Gears)"));
-                knobArtBtn.setTooltip (language->T ("ツマミ（ノブ）内側の宝石・パール・ハート・歯車・ジュース等の装飾アートワーク表示をON/OFFします。OFFにすると現在位置の指針が見やすいすっきりしたフラットキャップになります。",
-                                                    "Toggles decorative artwork (jewels, pearls, gears, juice) inside rotary knobs. Turn OFF for a clean flat cap with a high-visibility pointer."));
+                knobArtBtn.setButtonText (language->T ("装飾アート表示 (背景ボケ・宝石・歯車・ゆるふわ)", "Decorative Art (Bokeh, Gems, Gears & Kawaii)"));
+                knobArtBtn.setTooltip (language->T ("背景の花火ボケ・宝石・時計ムーブメント歯車・ゆるふわ装飾アートワーク表示をON/OFFします。既定のOFFでは視認性と統一感を最優先したモダン・プロスタジオ画面になります。",
+                                                    "Toggles decorative artwork (bokeh, jewels, watch gears, kawaii ornaments). Keep OFF for a clean, cohesive modern pro-studio interface."));
                 knobArtBtn.setClickingTogglesState (true);
                 knobArtBtn.setToggleState (ow.isKnobInnerArtOn(), juce::dontSendNotification);
                 knobArtBtn.onClick = [this]
@@ -7082,7 +7169,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 };
                 addAndMakeVisible (knobArtBtn);
 
-                updCheckBtn.setButtonText (language->T ("🔄 起動時に更新を確認", "🔄 Check Updates at Startup"));
+                updCheckBtn.setButtonText (language->T ("起動時に更新を確認", "Check Updates at Startup"));
                 updCheckBtn.setTooltip (language->T ("起動時に1回だけ別プロセス分離方式でGitHubの最新リリースを確認します。DAW（Cubase等）内部に通信スレッドを一切残さないため、DAW終了時に固まる心配はありません。",
                                                      "Checks GitHub Releases once at startup via an isolated detached OS process (zero DLL threads or handles, never blocks Cubase/DAW shutdown)."));
                 updCheckBtn.setClickingTogglesState (true);
@@ -7123,8 +7210,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (b);
                 }
 
-                // ---- 💄 クチュール・コスメ 5色ワンタッチ切替パレット ----
-                labCouture.setText (language->T ("💄 ライバー・コスメ配色 (ワンタッチ切替)", "💄 Couture Cosmetics Colorways (1-Click)"),
+                // ---- ◆ クチュール・コスメ 5色ワンタッチ切替パレット ----
+                labCouture.setText (language->T ("◆ ライバー・コスメ配色 (ワンタッチ切替)", "◆ Couture Cosmetics Colorways (1-Click)"),
                                     juce::dontSendNotification);
                 labCouture.getProperties().set ("fontH", 15.5);
                 labCouture.getProperties().set ("bold", true);
@@ -7141,8 +7228,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (cb);
                 }
 
-                // ---- 🌌🌊 星空・海・朝焼け・晩秋コレクション 5色ワンタッチ切替パレット ----
-                labOcean.setText (language->T ("🌌 星空・海・朝焼け・晩秋コレクション (ワンタッチ切替)", "🌌 Galaxy, Sea, Dawn & Autumn Collection (1-Click)"),
+                // ---- ◆ 星空・海・朝焼け・晩秋コレクション 5色ワンタッチ切替パレット ----
+                labOcean.setText (language->T ("◆ 星空・海・朝焼け・晩秋コレクション (ワンタッチ切替)", "◆ Galaxy, Sea, Dawn & Autumn Collection (1-Click)"),
                                   juce::dontSendNotification);
                 labOcean.getProperties().set ("fontH", 15.5);
                 labOcean.getProperties().set ("bold", true);
@@ -7165,8 +7252,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                 labStyle.getProperties().set ("fontH", 15.5);
                 labStyle.getProperties().set ("bold", true);
                 addAndMakeVisible (labStyle);
-                static const char* const kStyleJa[4] = { "標準デザイン", "◉ くっきり大文字", "★ かんたん3ステップ", "● マット・具体表記" };
-                static const char* const kStyleEn[4] = { "Standard",     "◉ High Contrast",  "★ 3-Step Guide",      "● Matte & Concrete" };
+                static const char* const kStyleJa[4] = { "標準デザイン", "◉ くっきり大",    "★ 3ステップ",    "● マット表記" };
+                static const char* const kStyleEn[4] = { "Standard",     "◉ High Contrast", "★ 3-Step Guide", "● Matte Flat" };
                 for (int a = 0; a < 4; ++a)
                 {
                     auto* sb = styleBtns.add (new juce::TextButton (language->T (kStyleJa[a], kStyleEn[a])));
@@ -7176,8 +7263,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (sb);
                 }
 
-                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.7.0までの全21世代（v5.0.0〜v5.6.0を含む）をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
-                                                      "Select and recall any of the 21 generations from v1.0.0 to v5.7.0 including v5.0.0-v5.6.0 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
+                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.8.0までの全22世代（v5.0.0〜v5.7.0を含む）をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
+                                                      "Select and recall any of the 22 generations from v1.0.0 to v5.8.0 including v5.0.0-v5.7.0 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
                 legacyVerBtn.onClick = [this]
                 {
                     const auto anchor = ow.localAreaToGlobal (ow.sizePopBtn.getBounds());
@@ -7211,20 +7298,21 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
             // (ゆるふわの席は押すたび ひる<->よる で名前が変わる)
             void refresh()
             {
+                const auto themeOnCol = ow.isKnobInnerArtOn() ? Palette::yellow : Palette::blue;
                 for (int i = 0; i < themeBtns.size(); ++i)
                 {
                     auto* b = themeBtns[i];
                     b->setButtonText (ow.themeArmName (i));
                     b->setToggleState (ow.themeArmSelected (i), juce::dontSendNotification);
                     b->setColour (juce::TextButton::buttonColourId,   Palette::panel2);
-                    b->setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
+                    b->setColour (juce::TextButton::buttonOnColourId, themeOnCol);
                     b->setColour (juce::TextButton::textColourOffId,  Palette::ink);
-                    b->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::yellow));
+                    b->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (themeOnCol));
                 }
                 static const char* const kCoutureJa[5] = { "01 ロゼ", "02 氷紫", "03 黒薔薇", "04 ミント", "05 白桃" };
                 static const char* const kCoutureEn[5] = { "01 Rose", "02 Lilac", "03 Noir", "04 Mint", "05 Peach" };
                 static const juce::uint32 kCoutureAccent[5] = {
-                    0xffdc567e, 0xff7b6ee8, 0xffef5c96, 0xff26a48c, 0xffe67834
+                    0xffc83264, 0xff6644c8, 0xffc83268, 0xff157d6a, 0xffc24d18
                 };
                 for (int c = 0; c < coutureBtns.size(); ++c)
                 {
@@ -7238,14 +7326,14 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     cb->setColour (juce::TextButton::textColourOffId,  Palette::ink);
                     cb->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (swCol));
                 }
-                labCouture.setText (language->T ("💄 ライバー・コスメ配色 (ワンタッチ切替)", "💄 Couture Cosmetics Colorways (1-Click)"),
+                labCouture.setText (language->T ("◆ ライバー・コスメ配色 (ワンタッチ切替)", "◆ Couture Cosmetics Colorways (1-Click)"),
                                     juce::dontSendNotification);
                 labCouture.setColour (juce::Label::textColourId, Palette::ink);
 
                 static const char* const kOceanJa[5] = { "01 銀河", "02 碧海", "03 朝焼", "04 晩秋", "05 蒼劇" };
                 static const char* const kOceanEn[5] = { "01 Galaxy", "02 Aqua", "03 Dawn", "04 Autumn", "05 Opera" };
                 static const juce::uint32 kOceanAccent[5] = {
-                    0xffc084fc, 0xff00f5d4, 0xffff9e44, 0xffef4444, 0xff3b82f6
+                    0xff7246c0, 0xff0d7a6c, 0xffb85210, 0xffbe3430, 0xff1f5ec4
                 };
                 for (int c = 0; c < oceanBtns.size(); ++c)
                 {
@@ -7259,13 +7347,13 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     ob->setColour (juce::TextButton::textColourOffId,  Palette::ink);
                     ob->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (swCol));
                 }
-                labOcean.setText (language->T ("🌌 星空・海・朝焼け・晩秋コレクション (ワンタッチ切替)", "🌌 Galaxy, Sea, Dawn & Autumn Collection (1-Click)"),
+                labOcean.setText (language->T ("◆ 星空・海・朝焼け・晩秋コレクション (ワンタッチ切替)", "◆ Galaxy, Sea, Dawn & Autumn Collection (1-Click)"),
                                   juce::dontSendNotification);
                 labOcean.setColour (juce::Label::textColourId, Palette::ink);
 
                 const bool lightTheme = Palette::panel.getPerceivedBrightness() > 0.55f;
-                static const char* const kStyleJa[4] = { "標準デザイン", "◉ くっきり大文字", "★ かんたん3ステップ", "● マット・具体表記" };
-                static const char* const kStyleEn[4] = { "Standard",     "◉ High Contrast",  "★ 3-Step Guide",      "● Matte & Concrete" };
+                static const char* const kStyleJa[4] = { "標準デザイン", "◉ くっきり大",    "★ 3ステップ",    "● マット表記" };
+                static const char* const kStyleEn[4] = { "Standard",     "◉ High Contrast", "★ 3-Step Guide", "● Matte Flat" };
                 const juce::Colour styleCols[4] = { lightTheme ? Palette::green : Palette::blue, Palette::yellow, Palette::blue, Palette::green };
                 for (int a = 0; a < styleBtns.size(); ++a)
                 {
@@ -7289,36 +7377,35 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     tb->setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::green));
                 }
                 liteBtn.setToggleState (ow.isLiteMode(), juce::dontSendNotification);
-                knobArtBtn.setButtonText (language->T ("🎨 ノブ内の装飾デザイン (宝石・歯車・模様)", "🎨 Knob Inner Artwork (Gems & Gears)"));
+                knobArtBtn.setButtonText (language->T ("装飾アート表示 (背景ボケ・宝石・歯車・ゆるふわ)", "Decorative Art (Bokeh, Gems, Gears & Kawaii)"));
                 knobArtBtn.setToggleState (ow.isKnobInnerArtOn(), juce::dontSendNotification);
-                updCheckBtn.setButtonText (language->T ("🔄 起動時に更新を確認", "🔄 Check Updates at Startup"));
+                updCheckBtn.setButtonText (language->T ("起動時に更新を確認", "Check Updates at Startup"));
                 updCheckBtn.setToggleState (ow.isAutoUpdateCheckOn(), juce::dontSendNotification);
                 {
                     const auto& foundTag = ow.getLatestUpdateTag();
                     updNowBtn.setButtonText (foundTag.isNotEmpty()
-                        ? (juce::String::fromUTF8 ("🆙 ") + foundTag + language->T (" を入手", " Get"))
+                        ? (juce::String::fromUTF8 ("NEW ") + foundTag + language->T (" を入手", " Get"))
                         : language->T ("今すぐ確認", "Check Now"));
                     updNowBtn.setColour (juce::TextButton::buttonColourId,
                                          foundTag.isNotEmpty()
-                                             ? (lightTheme ? Palette::panel2.interpolatedWith (Palette::yellow, 0.38f) : Palette::yellow.withAlpha (0.32f))
-                                             : (lightTheme ? Palette::panel2.interpolatedWith (Palette::blue, 0.24f)   : Palette::blue.withAlpha (0.20f)));
+                                             ? (lightTheme ? Palette::panel2.interpolatedWith (Palette::yellow, 0.32f) : Palette::yellow.withAlpha (0.28f))
+                                             : Palette::panel2);
                     updNowBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 }
                 {
                     const int legId = ow.processor.getLegacyVersionId();
                     const auto& vSpec = VocalGzzioContent::getLegacyVersionSpec (legId);
                     legacyVerBtn.setButtonText (legId > 0
-                        ? language->T ("🕰 歴代バージョン切替 (現在: ", "🕰 Legacy Version (Active: ") + vSpec.verTag + ")"
-                        : language->T ("🕰 歴代バージョン呼び出し (全21世代: v1.0〜v5.7)", "🕰 Recall Legacy Versions (All 21: v1.0-v5.7)"));
+                        ? language->T ("▶ 歴代バージョン切替 (現在: ", "▶ Legacy Version (Active: ") + vSpec.verTag + ")"
+                        : language->T ("▶ 歴代バージョン呼び出し (全22世代: v1.0〜v5.8)", "▶ Recall Legacy Versions (All 22: v1.0-v5.8)"));
                     legacyVerBtn.setColour (juce::TextButton::buttonColourId,
                                             legId > 0
-                                                ? (lightTheme ? Palette::panel2.interpolatedWith (Palette::yellow, 0.35f) : Palette::yellow.withAlpha (0.28f))
+                                                ? (lightTheme ? Palette::panel2.interpolatedWith (Palette::yellow, 0.30f) : Palette::yellow.withAlpha (0.25f))
                                                 : Palette::panel2);
                     legacyVerBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 }
-                manualBtn.setButtonText (language->T ("📖 取扱説明書・OBS/DAW配線ガイドを開く", "📖 Open User Manual & Routing Guide"));
-                manualBtn.setColour (juce::TextButton::buttonColourId,
-                                     lightTheme ? Palette::panel2.interpolatedWith (Palette::blue, 0.24f) : Palette::blue.withAlpha (0.22f));
+                manualBtn.setButtonText (language->T ("▶ 取扱説明書・OBS/DAW配線ガイドを開く", "▶ Open User Manual & Routing Guide"));
+                manualBtn.setColour (juce::TextButton::buttonColourId, Palette::panel2);
                 manualBtn.setColour (juce::TextButton::textColourOffId, Palette::ink);
                 for (auto* s : { &bigFont, &bigZoom })
                 {
@@ -7565,7 +7652,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                                           "Opens the latest release download page (GitHub Releases)."));
     addChildComponent (updateNotice);
 
-    knobInnerArtOn = (bool) processor.apvts.state.getProperty ("ui_knob_art", true);
+    knobInnerArtOn = (bool) processor.apvts.state.getProperty ("ui_decor_art_v580", false);
     GzzioLnF::setKnobInnerArt (knobInnerArtOn);
 
     refreshPresetDisplays();
@@ -7623,9 +7710,11 @@ void VocalGzzioContent::setKnobInnerArtOn (bool on)
 {
     knobInnerArtOn = on;
     GzzioLnF::setKnobInnerArt (on);
-    processor.apvts.state.setProperty ("ui_knob_art", on, nullptr);
+    processor.apvts.state.setProperty ("ui_decor_art_v580", on, nullptr);
     if (onUiStateChange)
-        onUiStateChange ("ui_knob_art", on ? 1 : 0);
+        onUiStateChange ("ui_decor_art_v580", on ? 1 : 0);
+    applyThemeToKnobs();
+    refreshOverviewText();
     overviewBackdropKey.w = 0;
     repaint();
 }
@@ -8195,7 +8284,7 @@ void VocalGzzioContent::updateTabVisibility()
     applyUseModeMask();
 
     // 🕰️ 歴代バージョン再現時（era < 500 かつ ぜんぶ表示OFF）：その世代に存在しなかった後発ツマミ・ボタンを隠す
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 550;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
     if (eraNow < 500 && ! showAllKnobs && ! isOverview())
     {
         auto hideK = [] (Knob& k) { k.slider.setVisible (false); k.label.setVisible (false); };
@@ -8294,7 +8383,7 @@ void VocalGzzioContent::applyModeVisibility()
 void VocalGzzioContent::applyKnobVisibility()
 {
     restoreOverviewVisibility();
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 550;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
     // v2.4.0 かんたんモードは「よく使う7ツマミ」だけ。残りは丸ごと隠す。
     auto showKnob = [] (Knob& k, bool v) { k.slider.setVisible (v); k.label.setVisible (v); };
     showKnob (outVolK, false); // outVolK はモダン総合画面専用（詳細・かんたん画面は makeupK を使用）
@@ -9464,9 +9553,8 @@ void VocalGzzioContent::loadPreset()
 void VocalGzzioContent::paint (juce::Graphics& g)
 {
     if (isOverview()) { paintOverview (g); return; }
-    // v1.7.0: select the embedded rounded font for THIS instance's paint (uiFont is
-    // static & shared, so set it per-paint to stay correct with multiple instances).
-    GzzioLnF::setUseKawaiiFont (pastelTheme());
+    // v1.7.0 / v5.8.0: select the embedded rounded font only when decorative art is ON.
+    GzzioLnF::setUseKawaiiFont (knobInnerArtOn && pastelTheme());
 
     // v1.7.0: themed backdrop first. Yuru-kawa paints its own static background
     // (mint gradient + bokeh + mascot); when it does, we skip the neutral one so
@@ -9477,8 +9565,8 @@ void VocalGzzioContent::paint (juce::Graphics& g)
                                                  Palette::bgBot, 0, (float) getHeight(), false));
         g.fillRect (getLocalBounds());
 
-        // 標準画面には静かな面の奥行きと宵祭ランタン光学ボケを加える。
-        if (themeMode == 0 && (accessMode == 0 || accessMode == 2))
+        // 装飾アートON時のみ宵祭ランタン光学ボケを加える（標準スタジオモード時はフラット＆クリーン）
+        if (themeMode == 0 && knobInnerArtOn && (accessMode == 0 || accessMode == 2))
         {
             g.setGradientFill (juce::ColourGradient (Palette::green.withAlpha (0.06f),
                 0.0f, (float) getHeight(), juce::Colours::transparentBlack,
@@ -9490,7 +9578,7 @@ void VocalGzzioContent::paint (juce::Graphics& g)
         }
     }
 
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 550;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
     const bool isV10 = (eraNow == 100 && ! showAllKnobs);
     const bool isV13 = (eraNow == 130 && ! showAllKnobs);
 
@@ -9535,16 +9623,28 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     }
     else
     {
-        if (themeMode == 0 && eraNow >= 300)
+        if ((! knobInnerArtOn || themeMode == 0) && eraNow >= 300)
         {
             const juce::Rectangle<float> mark (12.0f, 12.0f, 54.0f, 54.0f);
-            g.setColour (Palette::yellow);
-            g.fillRoundedRectangle (mark, 13.0f);
-            g.setColour (Palette::bgBot);
+            const auto markCol = (! knobInnerArtOn && themeMode != 3) ? Palette::blue : Palette::yellow;
+            if (! knobInnerArtOn)
+            {
+                g.setColour (markCol.withAlpha (0.15f));
+                g.fillRoundedRectangle (mark, 10.0f);
+                g.setColour (markCol.withAlpha (0.78f));
+                g.drawRoundedRectangle (mark.reduced (0.6f), 10.0f, 1.2f);
+                g.setColour (markCol);
+            }
+            else
+            {
+                g.setColour (markCol);
+                g.fillRoundedRectangle (mark, 13.0f);
+                g.setColour (Palette::bgBot);
+            }
             const float heights[] = { 13.0f, 26.0f, 36.0f, 21.0f, 10.0f };
             for (int i = 0; i < 5; ++i)
                 g.fillRoundedRectangle (mark.getX() + 11.5f + i * 6.8f,
-                    mark.getCentreY() - heights[i] * 0.5f, 3.8f, heights[i], 1.8f);
+                    mark.getCentreY() - heights[i] * 0.5f, 3.6f, heights[i], 1.8f);
         }
         else if (kawaiiMascot.isValid() || mascot.isValid())
         {
@@ -9641,14 +9741,16 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     if (! heroArea.isEmpty())
     {
         auto r = heroArea.toFloat();
-        const float heroA = (accessMode == 1 || accessMode == 3) ? 1.0f
+        const float heroA = (! knobInnerArtOn || accessMode == 1 || accessMode == 3) ? 0.98f
                           : oceanStarTheme() ? 0.52f
                           : (themeMode == 2 || themeMode == 4 || themeMode == 5 || themeMode == 6) ? 0.82f
                           : 0.94f;
-        g.setColour (Palette::panel2.withMultipliedAlpha (heroA));
-        g.fillRoundedRectangle (r, 14.0f);
-        g.setColour (oceanStarTheme() && (accessMode == 0 || accessMode == 2) ? Palette::metalMid.withAlpha (0.78f) : Palette::yellow.withAlpha (0.55f));
-        g.drawRoundedRectangle (r.reduced (0.6f), 14.0f, 1.4f);
+        const float heroRad = knobInnerArtOn ? 14.0f : 10.0f;
+        g.setColour ((! knobInnerArtOn ? Palette::panel : Palette::panel2).withMultipliedAlpha (heroA));
+        g.fillRoundedRectangle (r, heroRad);
+        g.setColour (! knobInnerArtOn ? Palette::panelLn
+                   : (oceanStarTheme() && (accessMode == 0 || accessMode == 2) ? Palette::metalMid.withAlpha (0.78f) : Palette::yellow.withAlpha (0.55f)));
+        g.drawRoundedRectangle (r.reduced (0.5f), heroRad, knobInnerArtOn ? 1.4f : 1.0f);
         // v2.0.0: 明るいモードでは黄がクリーム地に溶けていたので読める濃さへ寄せる
         g.setColour (Palette::accentOn (Palette::yellow, Palette::panel2));
         // v2.12.0: 118px 固定の見出しで「おまか…」になっていた。fitText で受ける。
@@ -9712,15 +9814,16 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     {
         if (area.isEmpty()) return;      // v2.4.0 かんたんモードで使わないパネル
         auto r = area.toFloat();
-        const float panelA = (accessMode == 1 || accessMode == 3) ? 1.0f
+        const float panelA = (! knobInnerArtOn || accessMode == 1 || accessMode == 3) ? 0.98f
                            : oceanStarTheme() ? 0.42f
                            : (themeMode == 2 || themeMode == 4 || themeMode == 5 || themeMode == 6) ? 0.78f
                            : (themeMode == 9 ? 0.90f : 1.0f);
-        if (oceanStarTheme() && (accessMode == 0 || accessMode == 2))
+        const float pRad = knobInnerArtOn ? 14.0f : 10.0f;
+        if (knobInnerArtOn && oceanStarTheme() && (accessMode == 0 || accessMode == 2))
         {
             g.setGradientFill (juce::ColourGradient (Palette::panel.withMultipliedAlpha (panelA), r.getX(), r.getY(),
                                                      Palette::mirrorBot.withMultipliedAlpha (panelA * 0.92f), r.getX(), r.getBottom(), false));
-            g.fillRoundedRectangle (r, 14.0f);
+            g.fillRoundedRectangle (r, pRad);
 
             // 詳細画面でも各パネル内部に世界観モチーフを描く
             {
@@ -9744,35 +9847,35 @@ void VocalGzzioContent::paint (juce::Graphics& g)
             g.setColour (Palette::metalHi.withAlpha (0.42f));
             g.drawRoundedRectangle (r.reduced (3.4f), 11.5f, 1.0f);
             g.setColour (Palette::metalMid.withAlpha (0.78f));
-            g.drawRoundedRectangle (r.reduced (0.5f), 14.0f, 1.35f);
+            g.drawRoundedRectangle (r.reduced (0.5f), pRad, 1.35f);
         }
-        else if (liverTheme() && (accessMode == 0 || accessMode == 2))
+        else if (knobInnerArtOn && liverTheme() && (accessMode == 0 || accessMode == 2))
         {
             g.setGradientFill (juce::ColourGradient (Palette::panel.withMultipliedAlpha (0.92f), r.getX(), r.getY(),
                                                      Palette::mirrorBot.withMultipliedAlpha (0.94f), r.getX(), r.getBottom(), false));
-            g.fillRoundedRectangle (r, 14.0f);
+            g.fillRoundedRectangle (r, pRad);
             g.setColour (Palette::metalHi.withAlpha (0.55f));
             g.drawRoundedRectangle (r.reduced (3.2f), 11.5f, 1.0f);
             g.setColour (Palette::metalMid.withAlpha (0.85f));
-            g.drawRoundedRectangle (r.reduced (0.5f), 14.0f, 1.4f);
+            g.drawRoundedRectangle (r.reduced (0.5f), pRad, 1.4f);
         }
         else
         {
             g.setColour (Palette::panel.withMultipliedAlpha (panelA));
-            g.fillRoundedRectangle (r, 14.0f);
+            g.fillRoundedRectangle (r, pRad);
             if (accessMode == 0 || accessMode == 2)
             {
-                g.setColour (juce::Colours::white.withAlpha (0.04f));   // top elevation highlight
+                g.setColour (juce::Colours::white.withAlpha (0.03f));   // top elevation highlight
                 g.fillRect (r.reduced (10.0f, 0.0f).withHeight (1.0f).translated (0.0f, 1.0f));
             }
             g.setColour ((accessMode == 1) ? Palette::yellow : Palette::panelLn);
-            g.drawRoundedRectangle (r.reduced (0.5f), 14.0f, (accessMode == 1) ? 2.2f : 1.2f);
+            g.drawRoundedRectangle (r.reduced (0.5f), pRad, (accessMode == 1) ? 2.2f : 1.0f);
         }
         if (title.isNotEmpty())
         {
-            g.setColour (Palette::yellow);                       // butter section chip
+            g.setColour (knobInnerArtOn ? Palette::yellow : Palette::blue);   // clean studio section chip
             g.fillRoundedRectangle ((float) area.getX() + 14.0f, (float) area.getY() + 8.0f,
-                                    4.0f, 12.0f, 2.0f);
+                                    3.5f, 13.0f, 1.75f);
             g.setColour (Palette::ink);
             fitText (g, title, area.withTrimmedLeft (24).withWidth (164).withHeight (22).translated (0, 3),
                      juce::Justification::centredLeft, 13.5f, true);
@@ -10142,12 +10245,13 @@ void VocalGzzioContent::paint (juce::Graphics& g)
     }
     }   // end of advanced-only panels (v2.4.0)
 
-    drawJuiceServer (g);   // v1.7.0 corner juice dispenser (yuru-kawa only)
+    if (knobInnerArtOn || eraNow < 300)
+        drawJuiceServer (g);   // v1.7.0 corner juice dispenser (yuru-kawa / decorative mode only)
 
     // v1.7.0 yuru-kawa: puniguji as a BIG, translucent ("see-through") hero in the
     // bottom-right. Large presence, but low opacity so the controls under it stay
-    // usable and readable.
-    if (pastelTheme() && kawaiiMascot.isValid())
+    // usable and readable. (クリーンスタジオ既定モードでは非表示)
+    if ((knobInnerArtOn || eraNow < 300) && pastelTheme() && kawaiiMascot.isValid())
     {
         const float mh = 500.0f;
         const float mw = mh * (float) kawaiiMascot.getWidth() / (float) kawaiiMascot.getHeight();
@@ -11245,11 +11349,12 @@ void VocalGzzioContent::applyThemeToKnobs()
     if (auto* l = dynamic_cast<GzzioLnF*> (&getLookAndFeel()))
     {
         l->setThemeArc (Palette::ice);
-        l->setUseKawaiiFont (pastelTheme());   // rounded font in yuru & V-Liver modes
+        l->setUseKawaiiFont (knobInnerArtOn && pastelTheme());   // rounded font only when decorative art is ON
         const int legId = processor.getLegacyVersionId();
         const int kStyle = liteMode           ? 5   // ⚡ 軽量モード: 超高速フラットベクターダイヤル
                          : (legId > 0)        ? getLegacyVersionSpec (legId).knobStyle
                          : themeMode == 19    ? 5   // 🕰️ 初代 v1.0.0 クリーム・フラット
+                         : ! knobInnerArtOn   ? 0   // ★ モダン・プロスタジオクリーンノブ（既定）
                          : juiceTheme()       ? 1
                          : liverTheme()       ? 2   // V-Liver (Couture Cosmetics) jewel/star dial
                          : oceanStarTheme()   ? 6   // 🌌🌊 星空・海・黄昏コレクション: 天球ガラスオーブ＆アストロラーベ金環ダイヤル
@@ -11260,8 +11365,9 @@ void VocalGzzioContent::applyThemeToKnobs()
     }
 
     // ★ テーマ切替時に、コンストラクタで固定されていた全ボタンの配色も現在の Palette で一斉更新する
-    //   （これが抜けていたため、うた自動の蛍光ライム色やトーク自動の暗緑色がライバー・ゆるふわ画面に残っていた）
+    //   標準プロスタジオモード(!knobInnerArtOn)では 60-30-10 色階層（主役CTA=アンバー、選択状態=ブルー/グリーン、通常=マットパネル）に統一し、虹色の乱立を防止
     const bool lightTheme = Palette::panel.getPerceivedBrightness() > 0.55f;
+    const bool cleanStudio = ! knobInnerArtOn;
     for (auto* ch : getChildren())
     {
         if (auto* btn = dynamic_cast<juce::TextButton*> (ch))
@@ -11273,22 +11379,26 @@ void VocalGzzioContent::applyThemeToKnobs()
         }
     }
 
+    const auto sceneOnCol = cleanStudio ? Palette::blue : Palette::yellow;
     songSetupButton.setColour (juce::TextButton::buttonColourId,  Palette::yellow);
     songSetupButton.setColour (juce::TextButton::textColourOffId, Palette::readableOn (Palette::yellow));
-    autoSetupButton.setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::ice.withAlpha (0.22f));
+    autoSetupButton.setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::ice.withAlpha (0.22f));
     autoSetupButton.setColour (juce::TextButton::textColourOffId, Palette::ink);
-    checkupButton  .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::ice.withAlpha (0.20f));
+    checkupButton  .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::ice.withAlpha (0.20f));
     checkupButton  .setColour (juce::TextButton::textColourOffId, Palette::ink);
-    resetButton    .setColour (juce::TextButton::buttonColourId,  Palette::salmon);
-    resetButton    .setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    resetButton    .setColour (juce::TextButton::buttonColourId,  cleanStudio ? Palette::panel2 : Palette::salmon);
+    resetButton    .setColour (juce::TextButton::textColourOffId, cleanStudio ? Palette::ink    : juce::Colours::white);
     abA            .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
     abA            .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::yellow));
     abB            .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
     abB            .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::yellow));
-    sceneSolo      .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
-    sceneTalk      .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
-    sceneBand      .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
-    learnButton    .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::green.withAlpha (0.18f));
+    sceneSolo      .setColour (juce::TextButton::buttonOnColourId, sceneOnCol);
+    sceneSolo      .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (sceneOnCol));
+    sceneTalk      .setColour (juce::TextButton::buttonOnColourId, sceneOnCol);
+    sceneTalk      .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (sceneOnCol));
+    sceneBand      .setColour (juce::TextButton::buttonOnColourId, sceneOnCol);
+    sceneBand      .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (sceneOnCol));
+    learnButton    .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::green.withAlpha (0.18f));
     learnButton    .setColour (juce::TextButton::textColourOffId, Palette::ink);
     relearnBtn     .setColour (juce::TextButton::buttonOnColourId, Palette::green);
     crushBtn       .setColour (juce::TextButton::buttonOnColourId, Palette::green);
@@ -11296,18 +11406,18 @@ void VocalGzzioContent::applyThemeToKnobs()
     sessionButton  .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::green));
     reverbPower    .setColour (juce::TextButton::buttonOnColourId, Palette::green);
     atOnButton     .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
-    jnOnButton     .setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
-    vcOnButton     .setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+    jnOnButton     .setColour (juce::TextButton::buttonOnColourId, cleanStudio ? Palette::blue : Palette::yellow);
+    vcOnButton     .setColour (juce::TextButton::buttonOnColourId, cleanStudio ? Palette::ice  : Palette::salmon);
     tabEqButton    .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
     tabFxButton    .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
-    tempoFitButton .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
-    keyScaleButton .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::ice.withAlpha (0.18f));
-    analyzeButton  .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
-    midiButton     .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::green.withAlpha (0.18f));
-    routeButton    .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.20f));
-    stageButton    .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::yellow.withAlpha (0.22f));
-    streamButton   .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::salmon.withAlpha (0.18f));
-    tapButton      .setColour (juce::TextButton::buttonColourId,  lightTheme ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
+    tempoFitButton .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
+    keyScaleButton .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::ice.withAlpha (0.18f));
+    analyzeButton  .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
+    midiButton     .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::green.withAlpha (0.18f));
+    routeButton    .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::blue.withAlpha (0.20f));
+    stageButton    .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::yellow.withAlpha (0.22f));
+    streamButton   .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::salmon.withAlpha (0.18f));
+    tapButton      .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
     for (auto& power : overviewSectionPower)
     {
         power.setColour (juce::TextButton::buttonOnColourId, Palette::green);
@@ -11658,9 +11768,9 @@ void VocalGzzioContent::setThemeMode (int m)
     // テーマ選択に連動して画面配置アーキテクチャ自体も最適化する（手動固定していない場合）
     if (! overviewLayoutManual)
     {
-        overviewLayoutMode = (liverTheme() || themeMode == 1 || themeMode == 8) ? 1  // V-Liver Stage
-                           : (themeMode == 9)                                   ? 2  // Studio Rack
-                                                                                : 0; // Argon Cockpit
+        overviewLayoutMode = (liverTheme() || (knobInnerArtOn && (themeMode == 1 || themeMode == 8))) ? 1  // V-Liver Stage
+                           : (themeMode == 9)                                                         ? 2  // Studio Rack
+                                                                                                      : 0; // Studio Cockpit
     }
 
     Palette::applyTheme (themeMode);             // 7=色覚CUD もそのまま 1:1
@@ -12215,147 +12325,154 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionSpec (int id) noexcept
 {
     static constexpr LegacyVersionSpec kSpecs[kLegacyVersionCount] = {
-        { 0,  570, "v5.7.0",
-          "最新フラッグシップ（12種J-Pop声質カルテ・AI倍音同期ノイズ純化・完パケ艶リリーフ）",
-          "Current Flagship (12-Type J-Pop Vocal Karte, AI Harmonic Purifier & Auto Polish)",
-          "最新の全機能（無音免疫12帯域・12タイプJ-Pop声質カルテ『うた自動』、6種ノイズ指紋学習＆歌唱中ピッチ同期ハーモニック声抽出、✨完パケ艶＆喉締めオートリリーフ、単一パス統合コンソール＆超軽量Smart Sleep）をフル稼働します。",
-          "Full v5.7 flagship suite: 12-type J-Pop Vocal Karte Auto-Setup, 6-class AI Noise Fingerprint & Pitch-Sync Harmonic Voice Extractor, Auto Vocal Polish & Throat-Strain Relief, and ultra-light Smart Sleep.",
+        { 0,  580, "v5.8.0",
+          "最新フラッグシップ（プロスタジオUI刷新・REAPER低負荷＆音途切れ切り分け診断）",
+          "Current Flagship (Pro Studio UI Redesign & REAPER Dropout Diagnosis)",
+          "最新の全機能（プロスタジオ品質モダンUI＆高視認配色、REAPER/DAWリアルタイム音途切れ切り分け診断＆⚡DAWライブ超低負荷モード、2タップ位相ロック倍音純化、2.67ms高速ピッチ解析、12種声質カルテ）をフル稼働します。",
+          "Full v5.8 flagship suite: Modern Pro-Studio UI & WCAG color palette, Real-time DAW vs Plugin dropout diagnosis & Live Ultra-Low-CPU Mode, Dual-Tap Harmonic Purifier, and 12-Type Vocal Karte.",
+          "assets/styles-5.0.0.png", 0, true, 0, 0, 0 },
+
+        { 1,  570, "v5.7.0",
+          "12種J-Pop声質カルテ・AI倍音同期ノイズ純化・完パケ艶リリーフ",
+          "12-Type J-Pop Vocal Karte, AI Harmonic Purifier & Auto Polish",
+          "無音免疫12帯域・12タイプJ-Pop声質カルテ『うた自動』、6種ノイズ指紋学習＆歌唱中ピッチ同期ハーモニック声抽出、✨完パケ艶＆喉締めオートリリーフを搭載したv5.7世代です。",
+          "v5.7 suite: 12-type J-Pop Vocal Karte Auto-Setup, 6-class AI Noise Fingerprint & Pitch-Sync Harmonic Voice Extractor, and Auto Vocal Polish & Throat-Strain Relief.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 1,  560, "v5.6.0",
+        { 2,  560, "v5.6.0",
           "統合マスタリング・4大スタジオ物理ライブSE＆全19テーマWCAG高視認UI",
           "Unified Mastering, 4 Studio Physical Live SE & 19-Theme WCAG UI",
           "4大スタジオライブSE物理合成（拍手・キラ・ドラム・ベル）、全19テーマWCAG 4.5:1高コントラストUI、声量10割開放、Smart Sleep超軽量エンジン世代です。v5.7の完パケ艶リリーフピルを休止します。",
           "4 studio physical Live SE, 19-theme WCAG >=4.5:1 high-contrast UI, 100% Vocal Dynamics & Smart Sleep generation.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 2,  550, "v5.5.0",
+        { 3,  550, "v5.5.0",
           "声量10割開放・Smart Sleep超軽量・配信ミニバー＆音ズレ補正",
           "Full Vocal Dynamics, Smart Sleep, Mini-Bar & Sync Offset",
           "声量10割ダイレクト開放、最終音量0〜250%無歪みゲイン、Smart Sleep超軽量エンジン、📌配信ミニバー、±300ms音ズレ補正、裏ホットキー、歌唱表現4種を搭載したv5.5世代です。",
           "v5.5 flagship suite: 100% Vocal Dynamics mode, 0-250% clean Output Volume, Smart Sleep ultra-light engine, Streaming Mini-Bar, +/-300ms Sync Offset & Global Hotkeys.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 3,  541, "v5.4.1",
+        { 4,  541, "v5.4.1",
           "カスタムSE 4枠ポン出し・1080pスリム総合画面＆配信安定化",
           "Custom 4-Slot SE Pads, 1080p Decluttered Overview & Stability",
           "自作音源（.wav/.mp3/.flac/.ogg/.aiff）をセットできるカスタムSE 4枠パッドと1080pノートPCでも重ならない整理済み総合画面世代。v5.5以降の配信ミニバー・音ズレ補正・歌唱表現4種を休止します。",
           "Custom 4-slot user SE pads and decluttered 1080p overview generation. Pauses v5.5+ Mini-Bar, Sync Offset, Tail Vibrato, Vowel Align & Mix Bridge.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 4,  540, "v5.4.0",
+        { 5,  540, "v5.4.0",
           "総合画面すっきり整理・自作音源SEパッド＆操作レスポンス高速化",
           "Decluttered Overview, Custom Audio SE Pads & Fast UI Response",
           "情報密度を見直して見やすく整理した総合画面と自作音源SEポン出しパッド世代。v5.5の後発歌唱表現DSP（語尾ビブラート・母音統一・発音グルーヴ・ミックス接続）は完全スリープします。",
           "Streamlined overview layout with custom user SE pads and cached backdrop rendering. Post-v5.4 vocal expression DSP sleeps at 0 CPU.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 5,  530, "v5.3.0",
+        { 6,  530, "v5.3.0",
           "アップワード空気感・ピッチスイートスポット＆歌い手返しモニター",
           "Upward Air Shimmer, Pitch Sweet-Spot & Singer Cue Monitor",
           "小声の息遣いを艶やかに持ち上げるアップワード空気感、心地よいピッチ補正スイートスポット、歌い手専用返しモニター世代。v5.4以降のカスタムSE枠・v5.5表現DSPを休止します。",
           "Upward Air shimmer, musical Pitch Sweet-Spot tuning, and Singer Cue Monitor generation. Pauses v5.4+ Custom SE slots and v5.5 expression DSP.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 6,  520, "v5.2.0",
+        { 7,  520, "v5.2.0",
           "部屋反響カット・ブレス整音・BGM歌抜け＆自動ボーカルライダー",
           "Room De-Reverb, Breath Tamer, BGM Unmask & Auto Vocal Rider",
           "宅録の部屋鳴りを抑える反響カット、ブレス整音、カラオケBGM帯域アンマスク＆BGM連動ボーカルライダー世代。v5.3以降のアップワード空気感・返しモニター以降を休止します。",
           "Room De-Reverb, Breath Control, BGM Spectral Unmasking & BGM-linked Vocal Rider generation. Pauses v5.3+ Upward Air & Singer Cue.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 7,  510, "v5.1.0",
+        { 8,  510, "v5.1.0",
           "4大名機マイクモデリング・サビ自動検知＆18種ハモリ拡張",
           "4 Legendary Studio Mic Models, Auto-Chorus & 18-Mode Harmony",
           "U87/C800G/SM7B/251の名機マイクモデリング、サビ自動検知ディレクター、18種ユニゾン＆ボイチェンクイックスタジオ世代。v5.2以降の部屋反響カット・BGM連動系を休止します。",
           "4 legendary studio mic models, Auto-Chorus Director, 18-mode harmony & Voice Changer Quick Studio. Pauses v5.2+ De-Reverb & BGM Unmask.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 8,  500, "v5.0.0",
+        { 9,  500, "v5.0.0",
           "星空・海5景・3軸60種パレット・タッチ対応・サビ盛＆ライブSE",
           "Sky/Sea 5 Vistas, 3-Axis 60-Preset Palette, Touch & Live SE",
           "星空・海5景テーマ、3軸直交プリセット60種、指上特大ルーペ、1クリックサビ盛り、4種ライブSE、実測IR残響世代。v5.1以降のマイクモデリング＆サビ自動検知を休止します。",
           "5 Sky/Sea themes, 60 orthogonal 3-axis presets, touch loupe, manual Chorus Boost, Live SE pads, and IR reverb. Pauses v5.1+ Mic Modeler & Auto-Chorus.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 9,  490, "v4.9.0",
+        { 10, 490, "v4.9.0",
           "星空・海・黄昏 5景コレクション＆天球ガラスオーブ",
           "Sky, Ocean & Dusk 5 Vistas & Celestial Glass Orb",
           "天球ガラスオーブ＆アストロラーベ金環ダイヤルと星空・深海5景テーマ世代。v5.0以降のサビブースト・ライブSEパッド・フッタードックを休止します。",
           "Celestial glass orb & astrolabe gold dials with 5 sky/ocean themes. Pauses v5.0+ Chorus Boost & Live SE dock.",
           "assets/styles-4.9.0.png", 0, true, 14, 0, 6 },
 
-        { 10, 480, "v4.8.0",
+        { 11, 480, "v4.8.0",
           "歌枠ステージスタジオ（BGM・完パケ録音・声質診断）",
           "Stage Studio (BGM Player, FullMix WAV Rec & AI Voice Target)",
           "ダーク・ティール Argon Cockpit 総合画面にBGMプレイヤー・30秒さかのぼり録音・5秒声質ターゲット診断を搭載した配信特化世代です。",
           "Dark teal Argon Cockpit overview with BGM player, 30s retroactive WAV recording, and 5s AI voice target diagnosis.",
           "interface-compatibility-4.8.0.png", 0, true, 0, 0, 0 },
 
-        { 11, 460, "v4.6.0",
+        { 12, 460, "v4.6.0",
           "Argon 2D声質重力オーブ＆4種類の総合画面構成",
           "Argon 2D Voice Gravity Orb & 4 Overview Architectures",
           "2D声質重力オーブ（倍音・声芯・空気・立体）と4種類の画面構成（コックピット/ライバー/ラック/クラシック）が確立された世代です。",
           "2D Voice Gravity Orb (Velvet/Focus/Silk/Halo) and 4 switchable overview architectures.",
           "overview-ja-4.6.0.png", 0, true, 0, 0, 0 },
 
-        { 12, 440, "v4.4.0",
+        { 13, 440, "v4.4.0",
           "クチュール・コスメ 5色＆Vライバーステージ",
           "Couture Cosmetics 5 Palettes & V-Liver Stage",
           "女性Vライバー・歌い手向けのクチュール5色パレットと宝石ダイヤル・12連マカロンリボンを搭載した華やかな総合画面世代です。",
           "Couture Cosmetics 5 color palettes, jewel dials, and 12-dial ribbon tailored for V-Livers and singers.",
           "assets/archive-ui/v4.4.0_liver_stage.png", 0, true, 5, 1, 2 },
 
-        { 13, 433, "v4.3.3",
+        { 14, 433, "v4.3.3",
           "3ステップ総合画面（オートミキサー＆実測部屋残響）",
           "3-Step Classic Overview (Auto-Mixer & Room IR Convolution)",
           "「1 整える・2 声をつくる・3 空間をつくる」の3カード総合画面と6種の部屋IR畳み込みリバーブ世代。Argon 4軸DSPは完全スリープします。",
           "Classic 3-card overview (Clean / Shape / Space) and 6 room IR spaces. Argon 4-axis DSP sleeps at 0 CPU.",
           "assets/archive-ui/v4.3.3_overview.png", 0, true, 0, 3, 10 },
 
-        { 14, 400, "v4.0.0",
+        { 15, 400, "v4.0.0",
           "初代オーバービュー総合画面＆1クリックととのえる",
           "First-Gen Overview Screen & 1-Click Auto-Setup",
           "総合画面が初めて登場した記念すべき v4.0 世代。上部に大型チューナー、下部に3カードを並べたクラシック構成で軽快に動作します。",
           "The original v4.0 Overview generation with large top tuner, 3-card layout, and lightweight DSP.",
           "assets/archive-ui/v4.2.0_overview.png", 0, true, 0, 3, 10 },
 
-        { 15, 310, "v3.1.0",
+        { 16, 310, "v3.1.0",
           "「音のとおり道」左列常設＆詳細3列スタジオ画面",
           "Signal Path Rail & 3-Column Studio Detail View",
           "左端に「音のとおり道」8モジュール列を常設した詳細3列レイアウト世代。「つぶさない」保護・自動ノイズ再学習・アコギピック抑制を搭載。",
           "3-column detail layout with the 8-module Signal Path Rail, Anti-Crush guard, and auto noise re-learn.",
           "assets/archive-ui/v4.3.3_detail.png", 1, true, 0, 0, 7 },
 
-        { 16, 240, "v2.4.0",
+        { 17, 240, "v2.4.0",
           "かんたん1列モード（10秒おまかせ設定＋よく使う7ツマミ）",
           "Easy 1-Row Mode (10s Auto-Setup + 7 Essential Knobs)",
           "初めてでも迷わず触れる「かんたんモード」世代。10秒おまかせ設定・大型チューナー・よく使う7ツマミだけに絞った超低負荷レイアウトです。",
           "Easy 1-row mode with 10s Auto-Setup, large pitch tuner, and 7 essential giant knobs.",
           "assets/archive-ui/v2.4.0_simple.png", 1, false, 0, 0, 7 },
 
-        { 17, 200, "v2.0.0",
+        { 18, 200, "v2.0.0",
           "エモート表現（息・エモ・サビリフト）＆伝統2列詳細画面",
           "Emote Expression (Breath/Emo/Chorus Lift) & 2-Column UI",
           "左列「音のとおり道」以前の伝統的な2列詳細画面。息・エモ・サビリフト・ピッチ補正・5人ユニゾンまでの構成で軽快に動作します。",
           "Classic 2-column detail UI with Breath/Emo/Chorus Lift, Auto-Tune, and 5-Voice Unison.",
           "assets/archive-ui/v1.9.0_standard.png", 1, true, 0, 0, 7 },
 
-        { 18, 170, "v1.7.0",
+        { 19, 170, "v1.7.0",
           "ゆるふわパステル＆機械式ギア2列画面",
           "Yuru-Kawa Pastel & Mechanical Gear 2-Column UI",
           "大人気の「ゆるふわ」パステル配色と機械式デュアルギアツマミ・右下のジュースサーバーが登場した2列世代。ピッチ補正・ユニゾン休止で超低負荷。",
           "Beloved Yuru-Kawa pastel theme with dual-gear knobs and corner dispenser in a 2-column layout. Very low CPU.",
           "assets/archive-ui/v1.7.0_yurufuwa.png", 1, true, 1, 1, 7 },
 
-        { 19, 130, "v1.3.0",
+        { 20, 130, "v1.3.0",
           "ダーク・ネイビー2列スタジオ＆スマート動的EQ",
           "Dark Navy 2-Column Studio & Smart Dynamic EQ",
           "ダーク・ネイビー配色と3バンド手動/自動スマート動的EQが確立された初期2列スタジオ世代。基本ストリップのみで極小CPU負荷で動作します。",
           "Early 2-column dark navy studio UI with 3-band Smart Dynamic EQ and core vocal strip at minimal CPU load.",
           "assets/archive-ui/v1.3.0_ui.png", 1, true, 20, 2, 9 },
 
-        { 20, 100, "v1.0.0",
+        { 21, 100, "v1.0.0",
           "初代 クリーム・フラット1列縦積み（原点・最軽量モード）",
           "Original Cream Flat 1-Column Stack (Origin & Ultra-Light)",
           "記念すべき初代 VocalGzzio v1.0.0！明るいクリーム背景・フラットリングダイヤル・基本18ツマミ縦積み構成。後発DSPを全休止し最軽量で動作します。",
@@ -12384,7 +12501,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     if (spec.pageMode != 0)
         setAdvanced (spec.advMode);
 
-    // 2. 世代固有のテーマと総合画面アーキテクチャを適用
+    // 2. 世代固有のテーマと総合画面アーキテクチャを適用（最新v5.8.0復帰時はクリーンスタジオモードに戻し、装飾世代再現時は当時の装飾を再現）
+    setKnobInnerArtOn (spec.id >= 1 && spec.id <= 13 && (spec.knobStyle == 2 || spec.knobStyle == 6));
     setThemeMode (spec.themeId);
     setOverviewLayoutMode (spec.ovLayout, spec.id > 0);
     applyThemeToKnobs();
@@ -12402,8 +12520,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     tuner.resized();
 
     const juce::String msg = (spec.id == 0)
-        ? language->T ("✨ 最新 v5.7.0（フル機能フラッグシップ・12種声質カルテ・AIノイズ純化・Smart Sleep超軽量エンジン）に戻しました。",
-                       "✨ Restored latest v5.7.0 (Full Flagship - 12-Type Vocal Karte, AI Purifier & Smart Sleep).")
+        ? language->T ("✨ 最新 v5.8.0（プロスタジオUI・REAPER低負荷＆途切れ診断・2タップ倍音純化エンジン）に戻しました。",
+                       "✨ Restored latest v5.8.0 (Pro-Studio UI, REAPER Dropout Diagnosis & Dual-Tap Purifier).")
         : (language->T ("🕰️ 歴代バージョン再現: ", "🕰️ Recalled Legacy Version: ")
            + juce::String (spec.verTag) + " — "
            + juce::String::fromUTF8 (language->english ? spec.titleEn : spec.titleJa)
@@ -12432,7 +12550,7 @@ public:
                                      ownerContent.processor.getLegacyVersionId()))
     {
         setComponentID ("legacyVersionPopup");
-        setSize (1260, 652);
+        setSize (1260, 668);
         loadPreviewOnDemand (inspectedId);
     }
 
@@ -12484,8 +12602,8 @@ public:
 
         g.setColour (kGold);
         g.setFont (GzzioLnF::uiFont (20.0f, true));
-        g.drawFittedText (language->T ("🕰️ 歴代バージョン呼び出し・世代タイムマシン (v1.0.0 〜 v5.7.0)",
-                                       "🕰️ Legacy Version Time Machine (v1.0.0 - v5.7.0)"),
+        g.drawFittedText (language->T ("🕰️ 歴代バージョン呼び出し・世代タイムマシン (v1.0.0 〜 v5.8.0)",
+                                       "🕰️ Legacy Version Time Machine (v1.0.0 - v5.8.0)"),
                           { hdr.getX() + 14, hdr.getY() + 2, 540, 24 },
                           juce::Justification::centredLeft, 1, 0.88f);
 
@@ -12517,15 +12635,15 @@ public:
                  ecoOn ? language->T ("🔋 世代別省負荷ゲート: ON", "🔋 Era Eco-Gate: ON")
                        : language->T ("🔋 世代別省負荷ゲート: OFF", "🔋 Era Eco-Gate: OFF"));
         drawBtn (latestBtnRect, kCyan, owner.processor.getLegacyVersionId() == 0,
-                 language->T ("✨ 最新 v5.7.0 へ", "✨ Latest v5.7.0"));
+                 language->T ("✨ 最新 v5.8.0 へ", "✨ Latest v5.8.0"));
         drawBtn (closeBtnRect, kSalmon, false,
                  language->T ("✕ 閉じる", "✕ Close"));
 
-        // ---- 2. 左カラム：全19世代カード一覧（3列×7段、オンデマンド選択） ----
+        // ---- 2. 左カラム：全22世代カード一覧（3列×8段、オンデマンド選択） ----
         const int leftX = 16, leftY = 68, leftW = 616;
         const int colW  = (leftW - 16) / 3;
-        const int rowH  = 74;
-        const int gapY  = 6;
+        const int rowH  = 67;
+        const int gapY  = 5;
         const int activeId = owner.processor.getLegacyVersionId();
 
         for (int i = 0; i < VocalGzzioContent::kLegacyVersionCount; ++i)
@@ -12574,10 +12692,10 @@ public:
 
             // 世代タイトル
             g.setColour (kInk);
-            g.setFont (GzzioLnF::uiFont (13.2f, true));
+            g.setFont (GzzioLnF::uiFont (12.8f, true));
             g.drawFittedText (juce::String::fromUTF8 (language->english ? sp.titleEn : sp.titleJa),
-                              { cardR.getX() + 8, cardR.getY() + 33, cardR.getWidth() - 16, 35 },
-                              juce::Justification::centredLeft, 2, 0.86f);
+                              { cardR.getX() + 8, cardR.getY() + 31, cardR.getWidth() - 16, 32 },
+                              juce::Justification::centredLeft, 2, 0.85f);
         }
 
         // ---- 3. 右カラム：オンデマンド1枚プレビュー ＆ 世代別スリープDSP内訳・決定ドック ----
@@ -12615,7 +12733,7 @@ public:
                           + juce::String (insp.previewPng)
                           + (cachedPreview.isValid()
                              ? ("  (" + juce::String (cachedPreview.getWidth()) + "x" + juce::String (cachedPreview.getHeight())
-                                + language->T (" — 他の20世代は未読込でメモリ節約中)", " — Other 20 eras unloaded)"))
+                                + language->T (" — 他の21世代は未読込でメモリ節約中)", " — Other 21 eras unloaded)"))
                              : language->T (" (軽量ベクタープレビュー)", " (Lightweight Vector Preview)")),
                           { prevBox.getX() + 12, prevBox.getBottom() - 24, prevBox.getWidth() - 24, 20 },
                           juce::Justification::centredLeft, 1, 0.85f);
@@ -13499,7 +13617,7 @@ public:
         auto hdr = inner.removeFromTop (14);
         g.setColour (Palette::ink);
         g.setFont (GzzioLnF::uiFont (12.5f, true));
-        g.drawText ("VocalGzzio 5.5", hdr.withWidth (96), juce::Justification::centredLeft, false);
+        g.drawText ("VocalGzzio 5.8", hdr.withWidth (96), juce::Justification::centredLeft, false);
 
         const int syncMs = processor.getSyncOffsetMs();
         if (syncMs != 0)
@@ -13681,7 +13799,7 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         {
             prefs->setValue (key, val);
             if (key.startsWith ("ui_legacy") || key == "ui_theme" || key == "ui_overview"
-                || key == "ui_advanced" || key == "ui_arch" || key == "ui_knob_art" || key == "ui_update_check")
+                || key == "ui_advanced" || key == "ui_arch" || key == "ui_decor_art_v580" || key == "ui_update_check")
                 prefs->saveIfNeeded();
         }
     };
@@ -13716,10 +13834,19 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
             content.setLiteMode (true);
         if (const auto lt = getTestEnv ("GZ_LITE"); lt.isNotEmpty())
             content.setLiteMode (lt.getIntValue() != 0);
-        if (prefs != nullptr && prefs->containsKey ("ui_knob_art"))
-            content.setKnobInnerArtOn (prefs->getBoolValue ("ui_knob_art", true));
-        else if (p.apvts.state.hasProperty ("ui_knob_art"))
-            content.setKnobInnerArtOn ((bool) p.apvts.state.getProperty ("ui_knob_art", true));
+        // v5.8.0: 既存ユーザー環境でもアップデート直後に新プロスタジオUI（装飾OFF）が有効になるよう1回限り移行
+        if (prefs != nullptr && ! prefs->getBoolValue ("ui_clean_studio_v580", false))
+        {
+            prefs->setValue ("ui_clean_studio_v580", true);
+            prefs->setValue ("ui_decor_art_v580", 0);
+            prefs->saveIfNeeded();
+        }
+        if (prefs != nullptr && prefs->containsKey ("ui_decor_art_v580"))
+            content.setKnobInnerArtOn (prefs->getBoolValue ("ui_decor_art_v580", false));
+        else if (p.apvts.state.hasProperty ("ui_decor_art_v580"))
+            content.setKnobInnerArtOn ((bool) p.apvts.state.getProperty ("ui_decor_art_v580", false));
+        else
+            content.setKnobInnerArtOn (false);
         if (prefs != nullptr && prefs->containsKey ("ui_update_check"))
             content.setAutoUpdateCheckOn (prefs->getBoolValue ("ui_update_check", true));
         else if (p.apvts.state.hasProperty ("ui_update_check"))

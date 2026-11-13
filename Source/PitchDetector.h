@@ -35,7 +35,9 @@ class PitchDetector
 public:
     // fMin/fMax bound the search (vocal range). The integration window covers
     // one longest period, so ~2 periods of fMin are buffered before a reading.
-    void prepare (double sampleRate, float fMin = 65.0f, float fMax = 1000.0f, float hopSec = 0.0010f)
+    // v5.8.0: 約2.67ms ホップ（48kHzで128サンプル=375Hz完全整数分割・256ブロック完全整合、44.1kHzで147サンプル=300Hz完全整数分割）により、
+    // 長時間連続稼働の完全な位相・時間不変性を100%維持したまま、128サンプル ASIO コールバックでの3重YINバーストを1回固定へ解消する。
+    void prepare (double sampleRate, float fMin = 65.0f, float fMax = 1000.0f, float hopSec = 0.00266667f)
     {
         fsIn  = (float) sampleRate;
         decim = (int) std::lround (sampleRate / 22050.0); if (decim < 1) decim = 1;
@@ -57,7 +59,14 @@ public:
         const float pole = std::exp (-2.0f * kPi * fc / fsIn);
         lpA = pole; lpB = 1.0f - pole;
 
-        hopIn = (int) (fsIn * std::max (0.0005f, hopSec)); if (hopIn < 16) hopIn = 16;
+        const long srInt = std::lround (sampleRate);
+        if (std::abs (hopSec - 0.00266667f) < 1.0e-4f && srInt > 0 && (srInt % 375L) == 0)
+            hopIn = (int) (srInt / 375L);   // 48kHz->128, 96kHz->256
+        else if (std::abs (hopSec - 0.00266667f) < 1.0e-4f && srInt > 0 && (srInt % 300L) == 0)
+            hopIn = (int) (srInt / 300L);   // 44.1kHz->147, 88.2kHz->294
+        else
+            hopIn = (int) std::lround (sampleRate * (double) std::max (0.0005f, hopSec));
+        if (hopIn < 16) hopIn = 16;
         reset();
     }
 

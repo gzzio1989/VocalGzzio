@@ -534,13 +534,46 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+    // 0b-3. 追加遅延＆DAWリアルタイム負荷・音途切れ切り分けピル クリックで「⚡ DAWライブ超低負荷モード」をワンタッチ切替
+    if (! latBadgeArea.isEmpty() && latBadgeArea.expanded (2, 3).contains (pt))
+    {
+        if (processor.getLegacyVersionId() > 0)
+        {
+            openLegacyVersionPopup (localAreaToGlobal (latBadgeArea));
+            overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.8.0までの全22世代を選択して画面配置・配色・DSP構成を瞬時に再現します。",
+                                        "[LEGACY VERSION TIME MACHINE] Select and recall any of the 22 generations from v1.0.0 to v5.8.0 with era-specific zero-CPU sleep gating.");
+            return true;
+        }
+        processor.toggleDawLiveEcoMode();
+        const bool ecoNow = processor.getDawLiveEcoMode();
+        const float dspPeak = processor.getDawPeakCpuPct();
+        const uint32_t hostDrops = processor.getDawHostDropouts();
+        const uint32_t plugOvers = processor.getDawPluginOverruns();
+        if (ecoNow)
+        {
+            overviewHint = language->T ("【⚡ DAWライブ超低負荷モード: ON】ピッチ解析ホップ・倍音抽出・ダイナミック装飾をライブ録音向けに最軽量化しました（ピーク負荷 ",
+                                        "[DAW LIVE ULTRA-LOW-CPU MODE: ON] Minimized live singing CPU load for zero-crackle DAW monitoring (Peak DSP ")
+                         + juce::String (dspPeak, 0) + "% / DAW途切れ " + juce::String ((int) hostDrops) + "回 / プラグイン超過 " + juce::String ((int) plugOvers) + "回)。";
+            if (language->english)
+                overviewHint = "[DAW LIVE ULTRA-LOW-CPU MODE: ON] Minimized live singing CPU load for zero-crackle DAW monitoring (Peak DSP "
+                             + juce::String (dspPeak, 0) + "% / Host Dropouts " + juce::String ((int) hostDrops) + " / Plugin Overruns " + juce::String ((int) plugOvers) + ").";
+        }
+        else
+        {
+            overviewHint = language->T ("【⚡ DAWライブ超低負荷モード: OFF】通常のフルスタジオ品質に戻しました（詳細画面「状態確認」でREAPER等の音途切れ原因を切り分け診断できます）。",
+                                        "[DAW LIVE ULTRA-LOW-CPU MODE: OFF] Restored full studio quality (open Checkup in All Controls for detailed DAW vs Plugin dropout diagnosis).");
+        }
+        repaint();
+        return true;
+    }
+
     // 0c. 左上ブランド＆バージョン表示欄 ({ 20, 10, 212, 50 }) クリックで「🕰 歴代バージョン呼び出し（世代タイムマシン）」を開く
     const juce::Rectangle<int> topBrandVerRect (20, 10, 212, 50);
     if (topBrandVerRect.contains (pt))
     {
         openLegacyVersionPopup (localAreaToGlobal (juce::Rectangle<int> (68, 32, 160, 24)));
-        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.7.0までの全21世代（v5.0.0〜v5.6.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
-                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 21 generations from v1.0.0 to v5.7.0 (including v5.0.0-v5.6.0) with era-specific zero-CPU sleep gating.");
+        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.8.0までの全22世代（v5.0.0〜v5.7.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
+                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 22 generations from v1.0.0 to v5.8.0 (including v5.0.0-v5.7.0) with era-specific zero-CPU sleep gating.");
         return true;
     }
 
@@ -737,12 +770,12 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
-    // 1d-1b. ヘッダの「🕰 歴代バージョン呼び出し・世代タイムマシン (v5.5.0▼ / 遅延)」ピル
+    // 1d-1b. ヘッダの「🕰 歴代バージョン呼び出し・世代タイムマシン (v5.8.0▼ / 遅延)」ピル
     if (! latBadgeArea.isEmpty() && latBadgeArea.expanded (2, 4).contains (pt))
     {
         openLegacyVersionPopup (localAreaToGlobal (latBadgeArea));
-        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.7.0までの全21世代（v5.0.0〜v5.6.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
-                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 21 generations from v1.0.0 to v5.7.0 (including v5.0.0-v5.6.0) with era-specific zero-CPU sleep gating.");
+        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.8.0までの全22世代（v5.0.0〜v5.7.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
+                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 22 generations from v1.0.0 to v5.8.0 (including v5.0.0-v5.7.0) with era-specific zero-CPU sleep gating.");
         return true;
     }
 
@@ -1322,7 +1355,7 @@ void VocalGzzioContent::updateOverviewVisibility()
     }
 
     // 🕰️ v4.0.0 / v4.3.3 初代・3ステップ総合画面再現 (v4.2.0_overview.png / v4.3.3_overview.png 完全一致)
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 550;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
     const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
     outVolK.slider.setVisible (! isClassicV4);
     outVolK.label .setVisible (! isClassicV4);
@@ -1439,10 +1472,12 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
     if (streamPillRect.contains (pt))
         return language->T ("ASIOで自分の声を聴きながら外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）へ処理後の声を同時に流すほか、OBS標準VST3直接読込・オーディオIF内蔵ループバックの連携ガイドを開きます。",
                             "Simultaneously streams processed audio to external virtual cables (VB-CABLE / Yamaha SYNCROOM Driver) while on ASIO, and opens the OBS VST3 / Loopback connection guide.");
-    if ((! latBadgeArea.isEmpty() && latBadgeArea.contains (pt))
-        || juce::Rectangle<int> (20, 10, 212, 50).contains (pt))
-        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.7.0までの歴代世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
-                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any generation from v1.0.0 to v5.7.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
+    if (! latBadgeArea.isEmpty() && latBadgeArea.contains (pt))
+        return language->T ("【⚡ DAWリアルタイム負荷＆音途切れ診断・超低負荷モード】VocalGzzio単体のDSP負荷（%）とDAW/ASIO側のバッファ途切れをリアルタイム監視します。クリックするとREAPER等での録音・複数トラック同時アーム時に最適な「⚡DAWライブ超低負荷モード」をワンタッチ切替します。",
+                            "[DAW REAL-TIME CPU & DROPOUT MONITOR / LIVE ECO] Monitors VocalGzzio DSP peak load (%) vs DAW/ASIO host buffer dropouts. Click to toggle DAW Live Ultra-Low-CPU Mode for multi-track low-buffer recording.");
+    if (juce::Rectangle<int> (20, 10, 212, 50).contains (pt))
+        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.8.0までの全22世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
+                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any of the 22 generations from v1.0.0 to v5.8.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
     if (talkPillRect.contains (pt))
         return language->T ("【歌枠⇄雑談MC 瞬間切替】クリックすると歌設定（残響・エコー・ハモリ・広がり）を一切壊さず一時ミュートし、曲間のトークでもお風呂場にならないクリアなMC声へワンタッチで切り替えます。",
                             "[Singing / MC Talk Toggle] Non-destructively mutes reverb, echo, harmony, and stereo width for clean between-song MC talk while preserving 100% of your singing settings for instant return.");
@@ -1608,8 +1643,8 @@ void VocalGzzioContent::refreshOverviewText()
                                                "While singing or speaking, press to reduce output boost using the current peak. It cannot go below 0 dB and never boosts quiet audio. Lower input gain if clipping remains."));
     reverbPower.setColour (juce::TextButton::buttonOnColourId, Palette::green);
     atOnButton.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
-    jnOnButton.setColour (juce::TextButton::buttonOnColourId, Palette::yellow);
-    vcOnButton.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+    jnOnButton.setColour (juce::TextButton::buttonOnColourId, knobInnerArtOn ? Palette::yellow : Palette::blue);
+    vcOnButton.setColour (juce::TextButton::buttonOnColourId, knobInnerArtOn ? Palette::salmon : Palette::ice);
     for (auto& power : overviewSectionPower) power.setColour (juce::TextButton::buttonOnColourId, Palette::green);
     tuningPopBtn.setButtonText (language->T ("チューナー", "Tuner"));
     sessionButton.setButtonText (language->T ("低遅延モード", "Low latency"));
@@ -1712,7 +1747,7 @@ void VocalGzzioContent::resizedOverview()
     for (auto& r : archPillRects) r = {};
     litePillRect = {};
 
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 550;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
     const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
     Knob* const outKnob = isClassicV4 ? &makeupK : &outVolK;
     if (latestUpdateTag.isNotEmpty())
@@ -2108,8 +2143,10 @@ void VocalGzzioContent::resizedOverview()
         }
     }
 
-    if ((accessMode == 0 || accessMode == 2) && (liverTheme() || oceanStarTheme() || themeMode == 2 || themeMode == 4
-        || (overviewLayoutMode == 1 && themeMode != 1 && themeMode != 8 && themeMode != 9)))
+    if ((accessMode == 0 || accessMode == 2)
+        && (liverTheme() || oceanStarTheme()
+            || (knobInnerArtOn && (themeMode == 2 || themeMode == 4
+                                   || (overviewLayoutMode == 1 && themeMode != 1 && themeMode != 8 && themeMode != 9)))))
     {
         const int swW = (overviewMonitor.getWidth() < 460) ? 44 : (overviewMonitor.getWidth() < 640 ? 52 : 58);
         const int swGap = 4;
@@ -2386,7 +2423,7 @@ void VocalGzzioContent::openCustomSeSlotMenu (int slotIndex, juce::Rectangle<int
 
 void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
 {
-    GzzioLnF::setUseKawaiiFont (pastelTheme() && (accessMode == 0 || accessMode == 2));
+    GzzioLnF::setUseKawaiiFont (knobInnerArtOn && pastelTheme() && (accessMode == 0 || accessMode == 2));
 
     // 軽量モード(liteMode)または◉くっきり大文字(1)・●マット具体表記(3)時は背景の細かい模様を止め、★かんたん3ステップ(2)では選択テーマの世界観背景をそのまま描く
     if (liteMode || accessMode == 3)
@@ -2411,9 +2448,9 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
                                                      Palette::bgBot, 0.0f, fh, false));
             g.fillRect (getLocalBounds());
 
-            if (themeMode == 0)
+            if (themeMode == 0 && knobInnerArtOn)
             {
-                // ★ Midnight Forest Canopy & Warm Lantern Firework Bokeh Atmosphere (リファレンス画像の情緒的ボケ光粒・綿毛状花火クラスタ・宵闇の森と黄金ランタン逆光)
+                // ★ Midnight Forest Canopy & Warm Lantern Firework Bokeh Atmosphere (装飾アートON時のみ表示)
                 // 1. 中央上部〜中景に広がる深いミッドナイト・セルリアン夜空の天窓（.withAlpha(0.0f) で黒濁りゼロ）
                 const juce::Colour skyBlue (0xff1c4ea8);
                 g.setGradientFill (juce::ColourGradient (skyBlue.withAlpha (0.42f), fw * 0.48f, fh * 0.14f,
@@ -2586,6 +2623,13 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
                     g.drawEllipse (fgX - fgR * 0.75f, fgY - fgR * 0.75f, fgR * 1.5f, fgR * 1.5f, 1.5f);
                 }
             }
+            else if (themeMode == 0)
+            {
+                // Clean Pro-Studio Dark Slate: ノイズや玉ボケを一切排した上品なスタジオ・アンビエント微光
+                g.setGradientFill (juce::ColourGradient (Palette::blue.withAlpha (0.055f), fw * 0.50f, fh * 0.08f,
+                                                         Palette::blue.withAlpha (0.0f),   fw * 0.50f, fh * 0.72f, true));
+                g.fillRect (getLocalBounds());
+            }
         }
     }
 
@@ -2596,30 +2640,41 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
         fitText (g, value, r, just, juce::jmax (14.0f, height), bold);
     };
 
-    // ---- 2段コマンドデッキ・コンソールバー（通常モード時は立体ガラスデッキ＆イルミネーションラインを描画） ----
+    // ---- 2段コマンドデッキ・コンソールバー（標準モード時はフラット＆モダンなスタジオバー、装飾ON時は立体ガラスデッキ） ----
     if (! liteMode)
     {
         const bool lightDeck = Palette::panel.getPerceivedBrightness() > 0.55f;
-        const float deckAlpha = (accessMode == 1 || accessMode == 3) ? 1.0f
+        const float deckAlpha = (! knobInnerArtOn || accessMode == 1 || accessMode == 3) ? 0.98f
                               : (themeMode == 0) ? 0.58f
                               : (nightTheme() ? 0.78f : (lightDeck ? 0.94f : 0.66f));
+        const float deckRad = knobInnerArtOn ? 14.0f : 10.0f;
         const juce::Rectangle<float> topDeck (16.0f, 9.0f, (float) getWidth() - 32.0f, 52.0f);
         const juce::Rectangle<float> botDeck (16.0f, 65.0f, (float) getWidth() - 32.0f, 52.0f);
         for (const auto& d : { topDeck, botDeck })
         {
+            if (! knobInnerArtOn)
+            {
+                g.setColour (lightDeck ? Palette::panelLn.withAlpha (0.18f) : juce::Colours::black.withAlpha (0.20f));
+                g.fillRoundedRectangle (d.translated (0.0f, 1.5f), deckRad);
+                g.setColour (Palette::panel.withMultipliedAlpha (deckAlpha));
+                g.fillRoundedRectangle (d, deckRad);
+                g.setColour (Palette::panelLn);
+                g.drawRoundedRectangle (d.reduced (0.5f), deckRad, 1.0f);
+                continue;
+            }
             g.setColour (lightDeck ? Palette::metalDark.withAlpha (0.16f) : juce::Colours::black.withAlpha (nightTheme() ? 0.34f : 0.08f));
-            g.fillRoundedRectangle (d.translated (0.0f, 2.5f), 14.0f);
+            g.fillRoundedRectangle (d.translated (0.0f, 2.5f), deckRad);
             const auto dTop = lightDeck ? Palette::panel.brighter (0.03f) : Palette::panel2.brighter (0.08f).withMultipliedAlpha (deckAlpha);
             const auto dBot = lightDeck ? Palette::panel2.interpolatedWith (Palette::panel, 0.42f) : Palette::bgTop.darker (0.12f).withMultipliedAlpha (deckAlpha + 0.08f);
             g.setGradientFill (juce::ColourGradient (dTop, d.getX(), d.getY(), dBot, d.getX(), d.getBottom(), false));
-            g.fillRoundedRectangle (d, 14.0f);
+            g.fillRoundedRectangle (d, deckRad);
             g.setColour (juce::Colours::white.withAlpha (nightTheme() ? 0.22f : 0.82f));
             g.drawHorizontalLine (juce::roundToInt (d.getY() + 1.2f), d.getX() + 14.0f, d.getRight() - 14.0f);
             g.setColour (liverTheme()      ? Palette::metalMid
                        : (themeMode == 0)  ? Palette::metalMid.interpolatedWith (Palette::panelLn, 0.35f).withAlpha (0.78f)
                        : lightDeck         ? Palette::panelLn.darker (0.08f)
                                            : Palette::panelLn.withAlpha (0.90f));
-            g.drawRoundedRectangle (d.reduced (0.6f), 14.0f, (lightDeck || liverTheme() || themeMode == 0) ? 1.35f : 1.1f);
+            g.drawRoundedRectangle (d.reduced (0.6f), deckRad, (lightDeck || liverTheme() || themeMode == 0) ? 1.35f : 1.1f);
             if (themeMode == 0)
             {
                 g.setColour (Palette::metalHi.withAlpha (0.20f));
@@ -2627,51 +2682,70 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
             }
         }
 
-        // 3D発光ブランド・エンブレムバッジ
+        // ブランド・エンブレムバッジ（標準スタジオUIでは端正なスペクトラム紋章、装飾ON時のみハート・ケーキ意匠）
         const juce::Rectangle<float> badge (24.0f, 16.0f, 38.0f, 38.0f);
-        const bool badgeLiver = liverTheme() || (overviewLayoutMode == 1 && pastelTheme());
-        const bool badgeYuru  = (themeMode == 1 || themeMode == 8);
-        const auto badgeCol   = badgeLiver ? Palette::salmon : Palette::yellow;
-        g.setColour (badgeLiver ? Palette::metalMid.withAlpha (0.65f) : badgeCol.withAlpha (0.32f));
-        g.fillRoundedRectangle (badge.expanded (2.5f), badgeLiver || badgeYuru ? 16.0f : 12.5f);
-        g.setGradientFill (juce::ColourGradient (badgeCol.brighter (0.22f), badge.getX(), badge.getY(),
-                                                 badgeLiver ? Palette::salmon.darker (0.32f) : Palette::yellowDk,
-                                                 badge.getRight(), badge.getBottom(), false));
-        g.fillRoundedRectangle (badge, badgeLiver || badgeYuru ? 14.0f : 11.0f);
-        g.setColour (badgeLiver ? Palette::metalHi : juce::Colours::white.withAlpha (0.78f));
-        g.drawRoundedRectangle (badge.reduced (1.0f), badgeLiver || badgeYuru ? 13.0f : 10.0f, 1.5f);
-        if (badgeLiver)
+        const bool badgeLiver = knobInnerArtOn && (liverTheme() || (overviewLayoutMode == 1 && pastelTheme()));
+        const bool badgeYuru  = knobInnerArtOn && (themeMode == 1 || themeMode == 8);
+        const auto badgeCol   = badgeLiver ? Palette::salmon
+                              : (! knobInnerArtOn && themeMode != 3) ? Palette::blue
+                                                                     : Palette::yellow;
+        if (! knobInnerArtOn)
         {
-            const float hx = badge.getCentreX(), hy = badge.getCentreY() + 1.5f, hs = 11.2f;
-            juce::Path hp;
-            hp.startNewSubPath (hx, hy + hs * 0.58f);
-            hp.cubicTo (hx - hs * 1.10f, hy - hs * 0.10f, hx - hs * 0.58f, hy - hs * 0.92f, hx, hy - hs * 0.28f);
-            hp.cubicTo (hx + hs * 0.58f, hy - hs * 0.92f, hx + hs * 1.10f, hy - hs * 0.10f, hx, hy + hs * 0.58f);
-            hp.closeSubPath();
-            g.setColour (juce::Colours::white.withAlpha (0.96f));
-            g.fillPath (hp);
-            g.setColour (Palette::metalHi);
-            g.strokePath (hp, juce::PathStrokeType (1.2f));
-            g.fillEllipse (hx - 2.3f, hy - hs * 0.88f, 4.6f, 4.6f);
-        }
-        else if (badgeYuru)
-        {
-            const float mx = badge.getCentreX(), my = badge.getCentreY() + 2.0f;
-            g.setColour (juce::Colour (0xfffffdf8));
-            g.fillRoundedRectangle (mx - 11.0f, my - 6.5f, 22.0f, 6.0f, 3.0f);
-            g.fillRoundedRectangle (mx - 11.0f, my + 1.5f, 22.0f, 5.5f, 2.8f);
-            g.setColour (Palette::salmon);
-            g.fillRoundedRectangle (mx - 12.0f, my - 1.5f, 24.0f, 3.5f, 1.7f);
-            g.fillEllipse (mx - 3.5f, my - 11.5f, 7.0f, 7.0f);
+            g.setColour (badgeCol.withAlpha (0.16f));
+            g.fillRoundedRectangle (badge, 9.0f);
+            g.setColour (badgeCol.withAlpha (0.78f));
+            g.drawRoundedRectangle (badge.reduced (0.6f), 9.0f, 1.2f);
+            const float bars[] = { 9.0f, 18.0f, 25.0f, 15.0f, 20.0f };
+            g.setColour (badgeCol);
+            for (int i = 0; i < 5; ++i)
+            {
+                const float bx = 29.8f + (float) i * 5.6f;
+                g.fillRoundedRectangle (bx, 35.0f - bars[i] * 0.5f, 2.8f, bars[i], 1.4f);
+            }
         }
         else
         {
-            const float bars[] = { 10.0f, 20.0f, 28.0f, 16.0f, 22.0f };
-            g.setColour (Palette::readableOn (Palette::yellow));
-            for (int i = 0; i < 5; ++i)
+            g.setColour (badgeLiver ? Palette::metalMid.withAlpha (0.65f) : badgeCol.withAlpha (0.32f));
+            g.fillRoundedRectangle (badge.expanded (2.5f), badgeLiver || badgeYuru ? 16.0f : 12.5f);
+            g.setGradientFill (juce::ColourGradient (badgeCol.brighter (0.22f), badge.getX(), badge.getY(),
+                                                     badgeLiver ? Palette::salmon.darker (0.32f) : Palette::yellowDk,
+                                                     badge.getRight(), badge.getBottom(), false));
+            g.fillRoundedRectangle (badge, badgeLiver || badgeYuru ? 14.0f : 11.0f);
+            g.setColour (badgeLiver ? Palette::metalHi : juce::Colours::white.withAlpha (0.78f));
+            g.drawRoundedRectangle (badge.reduced (1.0f), badgeLiver || badgeYuru ? 13.0f : 10.0f, 1.5f);
+            if (badgeLiver)
             {
-                const float bx = 29.5f + (float) i * 5.8f;
-                g.fillRoundedRectangle (bx, 35.0f - bars[i] * 0.5f, 3.0f, bars[i], 1.5f);
+                const float hx = badge.getCentreX(), hy = badge.getCentreY() + 1.5f, hs = 11.2f;
+                juce::Path hp;
+                hp.startNewSubPath (hx, hy + hs * 0.58f);
+                hp.cubicTo (hx - hs * 1.10f, hy - hs * 0.10f, hx - hs * 0.58f, hy - hs * 0.92f, hx, hy - hs * 0.28f);
+                hp.cubicTo (hx + hs * 1.10f, hy - hs * 0.10f, hx + hs * 0.58f, hy - hs * 0.92f, hx, hy - hs * 0.28f);
+                hp.closeSubPath();
+                g.setColour (juce::Colours::white.withAlpha (0.96f));
+                g.fillPath (hp);
+                g.setColour (Palette::metalHi);
+                g.strokePath (hp, juce::PathStrokeType (1.2f));
+                g.fillEllipse (hx - 2.3f, hy - hs * 0.88f, 4.6f, 4.6f);
+            }
+            else if (badgeYuru)
+            {
+                const float mx = badge.getCentreX(), my = badge.getCentreY() + 2.0f;
+                g.setColour (juce::Colour (0xfffffdf8));
+                g.fillRoundedRectangle (mx - 11.0f, my - 6.5f, 22.0f, 6.0f, 3.0f);
+                g.fillRoundedRectangle (mx - 11.0f, my + 1.5f, 22.0f, 5.5f, 2.8f);
+                g.setColour (Palette::salmon);
+                g.fillRoundedRectangle (mx - 12.0f, my - 1.5f, 24.0f, 3.5f, 1.7f);
+                g.fillEllipse (mx - 3.5f, my - 11.5f, 7.0f, 7.0f);
+            }
+            else
+            {
+                const float bars[] = { 10.0f, 20.0f, 28.0f, 16.0f, 22.0f };
+                g.setColour (Palette::readableOn (Palette::yellow));
+                for (int i = 0; i < 5; ++i)
+                {
+                    const float bx = 29.5f + (float) i * 5.8f;
+                    g.fillRoundedRectangle (bx, 35.0f - bars[i] * 0.5f, 3.0f, bars[i], 1.5f);
+                }
             }
         }
     }
@@ -2709,7 +2783,7 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
 
 void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 {
-    GzzioLnF::setUseKawaiiFont (pastelTheme() && (accessMode == 0 || accessMode == 2));
+    GzzioLnF::setUseKawaiiFont (knobInnerArtOn && pastelTheme() && (accessMode == 0 || accessMode == 2));
 
     auto runPass = [&] (juce::Graphics& g, bool staticPass)
     {
@@ -2737,8 +2811,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         g.drawRoundedRectangle (vf.reduced (0.5f), 6.5f, 1.2f);
         g.setColour (Palette::accentOn (isLeg ? vCol : Palette::ink, Palette::panel));
         const juce::String vLabel = isLeg
-            ? (juce::String (vSpec.verTag) + juce::String::fromUTF8 (" ▾ ") + language->T ("世代再現", "Legacy"))
-            : (juce::String ("v") + JucePlugin_VersionString + juce::String::fromUTF8 (" ▾ ") + language->T ("歴代切替", "Versions"));
+            ? (juce::String (vSpec.verTag) + juce::String::fromUTF8 (" ▼ ") + language->T ("世代再現", "Legacy"))
+            : (juce::String ("v") + JucePlugin_VersionString + juce::String::fromUTF8 (" ▼ ") + language->T ("歴代切替", "Versions"));
         fitText (g, vLabel, verR.reduced (5, 1), juce::Justification::centred, 15.5f, true);
 
         if (! overviewUpdateRect.isEmpty())
@@ -2762,7 +2836,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             if (ri.isEmpty() || ! g.clipRegionIntersects (ri.expanded (3))) return;
             const auto r = ri.toFloat();
             const bool lightHdr = (! nightTheme()) && (pastelTheme() || Palette::panel.getPerceivedBrightness() > 0.55f);
-            const float pillRad = pastelTheme() ? r.getHeight() * 0.5f : 6.5f;
+            const float pillRad = (knobInnerArtOn && pastelTheme()) ? r.getHeight() * 0.5f : 6.0f;
             if (liteMode)
             {
                 g.setColour (active ? col.withAlpha (0.35f) : Palette::panel2);
@@ -2770,14 +2844,27 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
             else if (lightHdr)
             {
+                if (! knobInnerArtOn)
+                {
+                    // モダン・ライトスタジオ・フラットマットヘッダピル（白グロス反射なし・高視認純白/濃紺文字）
+                    const auto topC = active ? col.brighter (0.04f) : Palette::panel2.brighter (0.02f);
+                    const auto botC = active ? col.darker   (0.06f) : Palette::panel2.darker   (0.03f);
+                    g.setGradientFill (juce::ColourGradient (topC, r.getX(), r.getY(), botC, r.getX(), r.getBottom(), false));
+                    g.fillRoundedRectangle (r, pillRad);
+                    g.setColour (active ? col.darker (0.24f) : Palette::panelLn.darker (0.12f));
+                    g.drawRoundedRectangle (r.reduced (0.5f), pillRad, active ? 1.4f : 1.0f);
+                    g.setColour (active ? Palette::readableOn (col) : Palette::ink);
+                    fitText (g, label, ri.reduced (2, 0), juce::Justification::centred, 13.5f, active);
+                    return;
+                }
                 // クチュール・エナメル＆ボタニカル明色・ヘッダーピル
                 g.setColour (Palette::panelLn.withAlpha (active ? 0.38f : 0.24f));
                 g.fillRoundedRectangle (r.translated (0.0f, 1.8f), pillRad);
-                const auto topC = active ? col.brighter (0.12f) : Palette::panel.brighter (0.04f);
+                const auto topC = active ? col.brighter (0.06f) : Palette::panel.brighter (0.04f);
                 const auto botC = active ? col.darker (0.08f)   : Palette::panel2;
                 g.setGradientFill (juce::ColourGradient (topC, r.getX(), r.getY(), botC, r.getX(), r.getBottom(), false));
                 g.fillRoundedRectangle (r, pillRad);
-                g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (active ? 0.45f : 0.72f), r.getX(), r.getY() + 1.0f,
+                g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (active ? 0.18f : 0.65f), r.getX(), r.getY() + 1.0f,
                                                          juce::Colours::transparentWhite, r.getX(), r.getY() + r.getHeight() * 0.45f, false));
                 g.fillRoundedRectangle (r.reduced (2.0f, 1.0f).withHeight (r.getHeight() * 0.44f), pillRad * 0.85f);
                 const juce::Colour goldBorder = liverTheme() ? Palette::metalMid : Palette::panelLn.darker (0.18f);
@@ -2916,7 +3003,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         }
     }
 
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 550;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
     const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
     if (! staticPass && g.clipRegionIntersects ({ 0, 0, getWidth(), 124 }))
     {
@@ -2941,30 +3028,60 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         {
             const int legId = processor.getLegacyVersionId();
             const bool isLeg = (legId > 0);
-            const auto& vSpec = getLegacyVersionSpec (legId);
             const auto lb = latBadgeArea.toFloat();
-            const auto bCol = isLeg ? Palette::yellow : Palette::ice;
-            g.setColour (isLeg ? bCol.withAlpha (0.22f) : Palette::panel2.withAlpha (0.52f));
-            g.fillRoundedRectangle (lb, 7.0f);
-            g.setColour (isLeg ? bCol.withAlpha (0.85f) : Palette::panelLn.withAlpha (0.65f));
-            g.drawRoundedRectangle (lb.reduced (0.5f), 7.0f, isLeg ? 1.4f : 1.0f);
+            if (isLeg)
+            {
+                const auto& vSpec = getLegacyVersionSpec (legId);
+                const auto bCol = Palette::yellow;
+                g.setColour (bCol.withAlpha (0.20f));
+                g.fillRoundedRectangle (lb, 6.0f);
+                g.setColour (bCol.withAlpha (0.85f));
+                g.drawRoundedRectangle (lb.reduced (0.5f), 6.0f, 1.3f);
+                g.setColour (Palette::ink);
+                fitText (g, juce::String (vSpec.verTag) + juce::String::fromUTF8 (" ▼"),
+                         { latBadgeArea.getX() + 2, latBadgeArea.getY() + 2, latBadgeArea.getWidth() - 4, 16 },
+                         juce::Justification::centred, 11.5f, true);
+                g.setColour (Palette::inkSoft);
+                fitText (g, juce::String (processor.getLegacyEcoGate() ? "ECO " : "") + juce::String (latencyMs, 1) + "ms",
+                         { latBadgeArea.getX() + 2, latBadgeArea.getY() + 17, latBadgeArea.getWidth() - 4, 15 },
+                         juce::Justification::centred, 10.5f, true);
+            }
+            else
+            {
+                const bool ecoNow = processor.getDawLiveEcoMode();
+                const float dspPct = processor.getDawPeakCpuPct();
+                const uint32_t drops = processor.getDawHostDropouts() + processor.getDawPluginOverruns();
+                const auto bCol = (drops > 0 || dspPct >= 65.0f) ? Palette::salmon
+                                : ecoNow                         ? Palette::green
+                                : (dspPct >= 35.0f)              ? Palette::yellow
+                                                                 : Palette::blue;
+                g.setColour ((ecoNow || drops > 0) ? bCol.withAlpha (0.16f) : Palette::panel2);
+                g.fillRoundedRectangle (lb, 6.0f);
+                g.setColour ((ecoNow || drops > 0) ? bCol.withAlpha (0.82f) : Palette::panelLn);
+                g.drawRoundedRectangle (lb.reduced (0.5f), 6.0f, (ecoNow || drops > 0) ? 1.3f : 1.0f);
 
-            g.setColour (isLeg ? bCol : Palette::ink);
-            const juce::String topVerTxt = juce::String (vSpec.verTag) + juce::String::fromUTF8 (" ▾");
-            fitText (g, topVerTxt,
-                     { latBadgeArea.getX() + 2, latBadgeArea.getY() + 2, latBadgeArea.getWidth() - 4, 16 },
-                     juce::Justification::centred, 11.5f, true);
+                g.setColour ((ecoNow || drops > 0) ? Palette::ink : Palette::ink);
+                const juce::String topTxt = ecoNow
+                    ? language->T ("⚡超低負荷", "⚡LIVE ECO")
+                    : ("DSP " + juce::String (juce::jlimit (0, 99, juce::roundToInt (dspPct))) + "%");
+                fitText (g, topTxt,
+                         { latBadgeArea.getX() + 2, latBadgeArea.getY() + 2, latBadgeArea.getWidth() - 4, 16 },
+                         juce::Justification::centred, 11.0f, true);
 
-            g.setColour (Palette::inkSoft);
-           #if VOCALGZZIO_TRIAL
-            fitText (g, language->T ("体験 ", "TR ") + juce::String (latencyMs, 1) + "ms",
-                     { latBadgeArea.getX() + 2, latBadgeArea.getY() + 17, latBadgeArea.getWidth() - 4, 15 },
-                     juce::Justification::centred, 10.5f, true);
-           #else
-            fitText (g, juce::String (liteMode || (isLeg && processor.getLegacyEcoGate()) ? "ECO " : "") + juce::String (latencyMs, 1) + "ms",
-                     { latBadgeArea.getX() + 2, latBadgeArea.getY() + 17, latBadgeArea.getWidth() - 4, 15 },
-                     juce::Justification::centred, 10.5f, isLeg || liteMode);
-           #endif
+                g.setColour (drops > 0 ? Palette::salmon : (ecoNow ? Palette::green : Palette::inkSoft));
+               #if VOCALGZZIO_TRIAL
+                const juce::String botTxt = (drops > 0)
+                    ? language->T ("⚠途切検知", "⚠DROPOUT")
+                    : (language->T ("体験 ", "TR ") + juce::String (latencyMs, 1) + "ms");
+               #else
+                const juce::String botTxt = (drops > 0)
+                    ? language->T ("⚠途切検知", "⚠DROPOUT")
+                    : ((liteMode ? "ECO " : "+") + juce::String (latencyMs, 1) + "ms");
+               #endif
+                fitText (g, botTxt,
+                         { latBadgeArea.getX() + 2, latBadgeArea.getY() + 17, latBadgeArea.getWidth() - 4, 15 },
+                         juce::Justification::centred, 10.2f, drops > 0 || ecoNow || liteMode);
+            }
         }
 
         if (isClassicV4)
@@ -2975,27 +3092,27 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         {
             const juce::Rectangle<int> pb (24, 72, 86, 40);
             const bool has3Axis = (voiceBox.getSelectedId() > 0 || micBox.getSelectedId() > 0 || eqPresetBox.getSelectedId() > 0);
-            g.setColour (has3Axis ? Palette::ice.withAlpha (0.20f) : Palette::panel2.withAlpha (0.55f));
-            g.fillRoundedRectangle (pb.toFloat(), 8.0f);
-            g.setColour (has3Axis ? Palette::ice.withAlpha (0.75f) : Palette::panelLn.withAlpha (0.65f));
-            g.drawRoundedRectangle (pb.toFloat().reduced (0.5f), 8.0f, 1.0f);
+            g.setColour (has3Axis ? Palette::blue.withAlpha (0.16f) : Palette::panel2);
+            g.fillRoundedRectangle (pb.toFloat(), 6.0f);
+            g.setColour (has3Axis ? Palette::blue.withAlpha (0.78f) : Palette::panelLn);
+            g.drawRoundedRectangle (pb.toFloat().reduced (0.5f), 6.0f, 1.0f);
             text (language->T ("仕上がり", "FINISH"), { 26, 73, 82, 20 }, 14.5f, Palette::ink, true, juce::Justification::centred);
-            text (language->T ("3軸 ▾", "3D ▾"),      { 26, 91, 82, 18 }, 11.5f, has3Axis ? Palette::ice : Palette::inkSoft, true, juce::Justification::centred);
+            text (language->T ("3軸 ▼", "3D ▼"),      { 26, 91, 82, 18 }, 11.5f, has3Axis ? Palette::blue : Palette::inkSoft, true, juce::Justification::centred);
         }
     }
 
-    // テーマ風景が透けて見えるよう、風景テーマは半透明ガラス調、Midnight Lantern Bokeh時は濁りのない深紺サファイア・クリスタル下地(0.88f)にする
-    const float cardAlpha = (liteMode || accessMode == 1 || accessMode == 3) ? 1.0f
+    // 標準スタジオモード(!knobInnerArtOn)では濁りのないソリッド・マットカード(0.98f)、装飾アートON時のみ風景半透明ガラス調
+    const float cardAlpha = (! knobInnerArtOn || liteMode || accessMode == 1 || accessMode == 3) ? 0.98f
                           : (themeMode == 0) ? 0.88f
                           : oceanStarTheme() ? 0.38f
                           : liverTheme() ? 0.96f
                           : (themeMode == 2 || themeMode == 4 || themeMode == 6) ? 0.86f
                           : (themeMode == 1 || themeMode == 8 || themeMode == 9) ? 0.94f : 1.0f;
 
-    // ★ マルチペルソナ・デザイン造形判定（かっこいいSF系／Vライバーキラキラ系／ゆるふわカフェ系／星空・海・ボタニカル天球系／名機スタジオ系）
-    const bool isYuruStyle   = (themeMode == 1 || themeMode == 8);
-    const bool isLiverStyle  = liverTheme() || (overviewLayoutMode == 1 && ! isYuruStyle && themeMode != 9 && ! oceanStarTheme());
-    const bool isNatureAura  = (themeMode == 2 || themeMode == 3 || themeMode == 4 || oceanStarTheme());
+    // ★ マルチペルソナ・デザイン造形判定（標準時は端正なプロスタジオ造形、装飾ON時のみキラキラ・ゆるふわ造形）
+    const bool isYuruStyle   = knobInnerArtOn && (themeMode == 1 || themeMode == 8);
+    const bool isLiverStyle  = knobInnerArtOn && (liverTheme() || (overviewLayoutMode == 1 && ! isYuruStyle && themeMode != 9 && ! oceanStarTheme()));
+    const bool isNatureAura  = knobInnerArtOn && (themeMode == 2 || themeMode == 3 || themeMode == 4 || oceanStarTheme());
     const bool isStudioStyle = (themeMode == 9) || (overviewLayoutMode == 2 && ! isLiverStyle && ! isYuruStyle && ! oceanStarTheme());
     const bool isSciFiStyle  = ! (isLiverStyle || isYuruStyle || isNatureAura || isStudioStyle) && (overviewLayoutMode == 0);
 
@@ -3085,6 +3202,31 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (accent);
                 g.fillRoundedRectangle (rf.getX() + 14.0f, rf.getY() + 13.0f, 4.0f, 20.0f, 2.0f);
             }
+            return;
+        }
+
+        if (! knobInnerArtOn)
+        {
+            // Clean Pro-Studio Card: FabFilter / Linear 級のフラットで静謐なモダンスタジオ・カード（花火綿毛・時計歯車・宝石ラグなし）
+            const bool lightCard = Palette::panel.getPerceivedBrightness() > 0.55f;
+            const float rad = 10.0f;
+            g.setColour (lightCard ? Palette::panelLn.withAlpha (0.20f) : juce::Colours::black.withAlpha (0.24f));
+            g.fillRoundedRectangle (rf.translated (0.0f, 2.0f), rad);
+            g.setColour (Palette::panel.withMultipliedAlpha (cardAlpha));
+            g.fillRoundedRectangle (rf, rad);
+
+            {
+                juce::Path hdrClip;
+                hdrClip.addRoundedRectangle (rf.getX(), rf.getY(), rf.getWidth(), 45.0f, rad, rad, true, true, false, false);
+                g.setColour (Palette::panel2.withAlpha (lightCard ? 0.72f : 0.65f));
+                g.fillPath (hdrClip);
+            }
+
+            g.setColour (Palette::panelLn);
+            g.drawLine (rf.getX() + 12.0f, rf.getY() + 45.0f, rf.getRight() - 12.0f, rf.getY() + 45.0f, 1.0f);
+            g.drawRoundedRectangle (rf.reduced (0.5f), rad, 1.0f);
+            g.setColour (accent);
+            g.fillRoundedRectangle (rf.getX() + 13.0f, rf.getY() + 13.5f, 3.5f, 18.0f, 1.75f);
             return;
         }
 
@@ -3569,12 +3711,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             ? language->T ("● 2軸パラメータ座標パッド (X:倍音/高域 ・ Y:近接/空間幅) ＆ 周波数特性", "● 2D PARAMETER MATRIX & FREQUENCY RESPONSE")
             : (overviewLayoutMode == 3)
             ? language->T ("音の輪郭", "SPECTRUM")
-            : isLiverStyle
+            : (isLiverStyle && knobInnerArtOn)
             ? (hasSwatches ? language->T ("♥ クチュール・パクト", "COUTURE COMPACT")
                            : language->T ("♥ クチュール・クッションパクト ＆ 歌声ステージRTA", "COUTURE CUSHION COMPACT & STAGE RTA"))
-            : isYuruStyle
+            : (isYuruStyle && knobInnerArtOn)
             ? language->T ("★ パティスリー・ガラスドーム ＆ 歌声カフェRTA", "PATISSERIE GLASS DOME & SPECTRUM")
-            : oceanStarTheme()
+            : (oceanStarTheme() && knobInnerArtOn)
             ? (overviewLayoutMode == 2
                 ? (themeMode == 14 ? language->T ("🌌 銀河天球", "GALAXY ORB")
                  : themeMode == 15 ? language->T ("🌊 碧海水球", "AQUA ORB")
@@ -3586,10 +3728,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                  : themeMode == 16 ? language->T ("🌅 朝焼けの暁天球", "RADIANT DAWN SUNRISE ORB")
                  : themeMode == 17 ? language->T ("🍁 晩秋と初雪の水鏡", "AUTUMN & FIRST SNOW MIRROR")
                                    : language->T ("👑 蒼海オペラ天球", "GRAND OPERA SAPPHIRE ORB")))
-            : (themeMode == 2)
+            : (themeMode == 2 && knobInnerArtOn)
             ? (hasSwatches ? language->T ("✦ 四季の水紋オーブ", "WATER ORB")
                            : language->T ("✦ 四季の水紋オーブ ＆ 音の輪郭モニター", "BOTANICAL WATER ORB & SPECTRUM"))
-            : (themeMode == 4)
+            : (themeMode == 4 && knobInnerArtOn)
             ? (hasSwatches ? language->T ("✦ 星屑天球儀", "ASTROLABE")
                            : language->T ("✦ 星屑プラネタリウム天球儀 ＆ 輪郭モニター", "CELESTIAL ASTROLABE & SPECTRUM"))
             : isStudioStyle
@@ -4190,14 +4332,15 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         }
         else
         {
-            const auto rimAccent = (oceanStarTheme() || themeMode == 0) ? Palette::metalHi
+            const auto rimAccent = ! knobInnerArtOn ? Palette::blue
+                                 : (oceanStarTheme() || themeMode == 0) ? Palette::metalHi
                                  : (isStudioStyle || themeMode == 3) ? Palette::yellow : Palette::ice;
             if (staticPass)
             {
                 // =========================================================================
                 // 🌿✦🎛★ PERSONA C / D / E: 静的ソケット・ベゼル・36目盛り・球面ジオラマ下地
                 // =========================================================================
-                if (themeMode == 0)
+                if (themeMode == 0 && knobInnerArtOn)
                 {
                     // ★ 3D天球の四角い囲い枠を撤廃し、背後のボケ光彩の上に直接アストロラーベ天球リングを浮遊させる
                     const juce::Colour orbAura = Palette::yellow.interpolatedWith (Palette::salmon, 0.35f);
@@ -4217,16 +4360,20 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 }
                 else
                 {
-                    const auto deckBgTop = oceanStarTheme() ? Palette::mirrorTop.withAlpha (0.34f)
+                    const bool lightPad = Palette::panel.getPerceivedBrightness() > 0.55f;
+                    const auto deckBgTop = ! knobInnerArtOn ? (lightPad ? Palette::panel2 : Palette::bgBot)
+                                         : oceanStarTheme() ? Palette::mirrorTop.withAlpha (0.34f)
                                          : pastelTheme()    ? Palette::panel2.darker (0.04f) : Palette::bgTop.darker (0.48f);
-                    const auto deckBgBot = oceanStarTheme() ? Palette::mirrorBot.withAlpha (0.44f)
+                    const auto deckBgBot = ! knobInnerArtOn ? (lightPad ? Palette::panel2.darker (0.04f) : Palette::bgBot.darker (0.15f))
+                                         : oceanStarTheme() ? Palette::mirrorBot.withAlpha (0.44f)
                                          : pastelTheme()    ? Palette::panel.darker  (0.08f) : Palette::panel.darker (0.30f);
                     g.setGradientFill (juce::ColourGradient (deckBgTop, padF.getX(), padF.getY(),
                                                              deckBgBot, padF.getRight(), padF.getBottom(), false));
-                    g.fillRoundedRectangle (padF, 14.0f);
-                    g.setColour (oceanStarTheme() ? Palette::metalMid.withAlpha (0.72f)
+                    g.fillRoundedRectangle (padF, knobInnerArtOn ? 14.0f : 9.0f);
+                    g.setColour (! knobInnerArtOn ? Palette::panelLn
+                               : oceanStarTheme() ? Palette::metalMid.withAlpha (0.72f)
                                : isStudioStyle    ? Palette::yellow.withAlpha (0.55f) : Palette::panelLn.withAlpha (0.65f));
-                    g.drawRoundedRectangle (padF.reduced (0.5f), 14.0f, 1.25f);
+                    g.drawRoundedRectangle (padF.reduced (0.5f), knobInnerArtOn ? 14.0f : 9.0f, 1.0f);
                 }
 
                 for (int q = 0; q < 4; ++q)
@@ -4235,13 +4382,18 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     juce::Path orbitArc;
                     orbitArc.addCentredArc (cx, cy, socketR + 6.5f, socketR + 6.5f, 0.0f,
                                             qa - 0.34f, qa + 0.34f, true);
-                    g.setColour (rimAccent.withAlpha (0.55f));
-                    g.strokePath (orbitArc, juce::PathStrokeType (1.5f));
+                    g.setColour (rimAccent.withAlpha (knobInnerArtOn ? 0.55f : 0.28f));
+                    g.strokePath (orbitArc, juce::PathStrokeType (knobInnerArtOn ? 1.5f : 1.1f));
                 }
 
-                g.setColour (juce::Colours::black.withAlpha (pastelTheme() ? 0.18f : 0.55f));
+                g.setColour (juce::Colours::black.withAlpha (Palette::panel.getPerceivedBrightness() > 0.55f ? 0.10f : 0.36f));
                 g.fillEllipse (cx - socketR - 2.0f, cy - socketR + 2.0f, (socketR + 2.0f) * 2.0f, (socketR + 2.0f) * 2.0f);
-                if (oceanStarTheme() || themeMode == 0)
+                if (! knobInnerArtOn)
+                {
+                    g.setGradientFill (juce::ColourGradient (Palette::panel2.brighter (0.06f), cx - socketR, cy - socketR,
+                                                             Palette::track,                   cx + socketR, cy + socketR, false));
+                }
+                else if (oceanStarTheme() || themeMode == 0)
                 {
                     g.setGradientFill (juce::ColourGradient (Palette::metalHi,   cx - socketR, cy - socketR,
                                                              Palette::metalDark, cx + socketR, cy + socketR, false));
@@ -4257,10 +4409,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                                                              Palette::bgTop.darker (pastelTheme() ? 0.15f : 0.50f), cx + socketR, cy + socketR, false));
                 }
                 g.fillEllipse (cx - socketR, cy - socketR, socketR * 2.0f, socketR * 2.0f);
-                g.setColour (rimAccent.withAlpha (0.68f));
-                g.drawEllipse (cx - socketR, cy - socketR, socketR * 2.0f, socketR * 2.0f, 1.5f);
+                g.setColour (knobInnerArtOn ? rimAccent.withAlpha (0.68f) : Palette::panelLn);
+                g.drawEllipse (cx - socketR, cy - socketR, socketR * 2.0f, socketR * 2.0f, 1.2f);
 
-                if (isNatureAura || themeMode == 0)
+                if (knobInnerArtOn && (isNatureAura || themeMode == 0))
                 {
                     drawSparkle4 (cx, cy - socketR - 1.0f, 5.5f, Palette::yellow);
                     drawSparkle4 (cx, cy + socketR + 1.0f, 5.5f, Palette::blue);
@@ -4273,13 +4425,16 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 juce::Graphics::ScopedSaveState clipState (g);
                 g.reduceClipRegion (sphereClip);
 
-                const auto spTop = (themeMode == 15) ? juce::Colour (0xff00f5d4)
+                const bool lightSphere = (! knobInnerArtOn) && Palette::panel.getPerceivedBrightness() > 0.55f;
+                const auto spTop = ! knobInnerArtOn ? (lightSphere ? Palette::panel : Palette::panel2.brighter (0.08f))
+                                 : (themeMode == 15) ? juce::Colour (0xff00f5d4)
                                  : (themeMode == 0 || themeMode == 14) ? juce::Colour (0xff12285c)
                                  : oceanStarTheme()  ? Palette::mirrorTop.brighter (0.18f)
                                  : (themeMode == 2)  ? juce::Colour (0xffe8f6ee)
                                  : isStudioStyle     ? juce::Colour (0xff2c2419)
                                                      : Palette::panel2.brighter (0.20f);
-                const auto spBot = (themeMode == 15) ? juce::Colour (0xff023e8a)
+                const auto spBot = ! knobInnerArtOn ? (lightSphere ? Palette::panel2.darker (0.06f) : Palette::bgBot.darker (0.22f))
+                                 : (themeMode == 15) ? juce::Colour (0xff023e8a)
                                  : (themeMode == 0 || themeMode == 14) ? juce::Colour (0xff040714)
                                  : oceanStarTheme()  ? Palette::mirrorBot.darker (0.25f)
                                  : (themeMode == 2)  ? juce::Colour (0xffb8dec8)
@@ -4290,7 +4445,13 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     spBot, cx + ballR * 0.85f, cy + ballR * 0.85f, true));
                 g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
 
-                if (themeMode == 0 || themeMode == 14)
+                if (! knobInnerArtOn)
+                {
+                    g.setGradientFill (juce::ColourGradient (Palette::blue.withAlpha (lightSphere ? 0.14f : 0.18f), cx, cy,
+                                                             Palette::blue.withAlpha (0.0f), cx + ballR * 0.85f, cy, true));
+                    g.fillEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f);
+                }
+                else if (themeMode == 0 || themeMode == 14)
                 {
                     // ★ 球体内部の宵闇ランタン花火コア＆タンポポ状「花火の光の綿毛」＆マルチカラー玉ボケ（純粋深紺コントラスト）
                     const juce::Colour orbAmber (0xffffaa2b), orbCream (0xfffff8d8);
@@ -4419,7 +4580,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     g.drawLine (cx - ballR * 0.7f, cy + ballR * 0.7f, cx + ballR * 0.7f, cy - ballR * 0.7f, 0.9f);
                 }
 
-                if (themeMode != 0 && themeMode != 14)
+                if (knobInnerArtOn && themeMode != 0 && themeMode != 14)
                 {
                     g.setGradientFill (juce::ColourGradient (Palette::salmon.withAlpha (0.28f), cx - ballR * 0.7f, cy,
                                                              Palette::salmon.withAlpha (0.0f),  cx + ballR * 0.2f, cy, true));
@@ -4440,7 +4601,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 if (! isNatureAura)
                 {
                     const float brAngles[4] = { juce::MathConstants<float>::pi, -juce::MathConstants<float>::halfPi, 0.0f, juce::MathConstants<float>::halfPi };
-                    const juce::Colour brCols[4] = { Palette::salmon, Palette::yellow, Palette::ice, Palette::blue };
+                    const juce::Colour brCols[4] = {
+                        knobInnerArtOn ? Palette::salmon : Palette::green,
+                        knobInnerArtOn ? Palette::yellow : Palette::blue,
+                        Palette::ice,
+                        Palette::blue
+                    };
                     const float brVals[4] = { vVal, fVal, sVal, hVal };
                     for (int b = 0; b < 4; ++b)
                     {
@@ -4449,8 +4615,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                         bearing.addCentredArc (cx, cy, socketR + 1.5f, socketR + 1.5f, 0.0f,
                                                ba - 0.24f + juce::MathConstants<float>::halfPi,
                                                ba + 0.24f + juce::MathConstants<float>::halfPi, true);
-                        g.setColour (brCols[b].withAlpha (0.38f + 0.55f * (brVals[b] * 0.01f)));
-                        g.strokePath (bearing, juce::PathStrokeType (3.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                        g.setColour (brCols[b].withAlpha ((knobInnerArtOn ? 0.38f : 0.24f) + 0.50f * (brVals[b] * 0.01f)));
+                        g.strokePath (bearing, juce::PathStrokeType (knobInnerArtOn ? 3.6f : 2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
                     }
                 }
 
@@ -4522,8 +4688,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                             }
                             else penDown = false;
                         }
-                        g.setColour (isPrime ? Palette::salmon.withAlpha (0.62f) : meshCol.withAlpha (0.24f));
-                        g.strokePath (lonPath, juce::PathStrokeType (isPrime ? 1.8f : 1.0f));
+                        g.setColour ((isPrime ? (knobInnerArtOn ? Palette::salmon : Palette::blue) : meshCol).withAlpha (isPrime ? (knobInnerArtOn ? 0.62f : 0.45f) : 0.20f));
+                        g.strokePath (lonPath, juce::PathStrokeType (isPrime ? 1.5f : 0.9f));
                     }
 
                     // ★ 球体中心 (cx, cy) から操作極 (ox, oy) へ伸びる「コメット・テイル（彗星軌道・水流ストリーム）」
@@ -4534,10 +4700,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                         juce::Path cometArc;
                         cometArc.startNewSubPath (cx, cy);
                         cometArc.quadraticTo (ctrlX, ctrlY, ox, oy);
-                        g.setColour (Palette::ice.withAlpha (0.35f));
-                        g.strokePath (cometArc, juce::PathStrokeType (4.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-                        g.setColour (Palette::yellow.withAlpha (0.85f));
-                        g.strokePath (cometArc, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                        g.setColour (Palette::ice.withAlpha (knobInnerArtOn ? 0.35f : 0.24f));
+                        g.strokePath (cometArc, juce::PathStrokeType (knobInnerArtOn ? 4.5f : 3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                        g.setColour ((knobInnerArtOn ? Palette::yellow : Palette::blue).withAlpha (0.82f));
+                        g.strokePath (cometArc, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
                         for (int tn = 1; tn <= 5; ++tn)
                         {
                             const float tt = (float) tn / 6.0f;
@@ -4553,7 +4719,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     // 球面上の操作極 (ox, oy) を囲む3Dエネルギー・レティクル＆浮遊玉ボケ衛星
                     const float inLv = juce::jlimit (0.0f, 1.0f, processor.getInputLevel() * 3.5f);
                     const float pulseR = 14.0f + (vAct + fAct + sAct + hAct + inLv) * 10.0f;
-                    if (themeMode == 0 || themeMode == 14)
+                    if (knobInnerArtOn && (themeMode == 0 || themeMode == 14))
                     {
                         // 3D空間内を浮遊して操作極に追従する4色のボケ光球サテライト
                         const float satVals[4] = { vVal, fVal, sVal, hVal };
@@ -4574,12 +4740,14 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                             g.fillEllipse (sx - 2.2f, sy - 2.2f, 4.4f, 4.4f);
                         }
                     }
-                    g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (0.58f), ox, oy,
-                                                             Palette::yellow.withAlpha (0.0f),  ox + pulseR * 1.8f, oy, true));
+                    const auto retCol = knobInnerArtOn ? Palette::yellow : Palette::blue;
+                    const auto ringCol = knobInnerArtOn ? Palette::salmon : Palette::ice;
+                    g.setGradientFill (juce::ColourGradient (retCol.withAlpha (knobInnerArtOn ? 0.58f : 0.34f), ox, oy,
+                                                             retCol.withAlpha (0.0f),  ox + pulseR * 1.8f, oy, true));
                     g.fillEllipse (ox - pulseR * 1.8f, oy - pulseR * 1.8f, pulseR * 3.6f, pulseR * 3.6f);
 
-                    g.setColour (Palette::salmon.withAlpha (0.68f));
-                    g.drawEllipse (ox - pulseR, oy - pulseR, pulseR * 2.0f, pulseR * 2.0f, 1.6f);
+                    g.setColour (ringCol.withAlpha (0.68f));
+                    g.drawEllipse (ox - pulseR, oy - pulseR, pulseR * 2.0f, pulseR * 2.0f, 1.5f);
                     if (isNatureAura)
                     {
                         g.setColour (Palette::ice.withAlpha (0.35f));
@@ -4587,31 +4755,31 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     }
 
                     // 球面上の3Dポインター・ホットスポット核
-                    g.setGradientFill (juce::ColourGradient (Palette::yellow.brighter (0.40f), ox - 4.0f, oy - 4.0f,
-                                                             Palette::yellowDk,                ox + 6.0f, oy + 7.0f, true));
-                    g.fillEllipse (ox - 10.0f, oy - 10.0f, 20.0f, 20.0f);
+                    g.setGradientFill (juce::ColourGradient (retCol.brighter (0.30f), ox - 4.0f, oy - 4.0f,
+                                                             retCol.darker (0.28f),   ox + 6.0f, oy + 7.0f, true));
+                    g.fillEllipse (ox - 8.5f, oy - 8.5f, 17.0f, 17.0f);
                     g.setColour (Palette::ink);
-                    g.drawEllipse (ox - 10.0f, oy - 10.0f, 20.0f, 20.0f, 2.0f);
+                    g.drawEllipse (ox - 8.5f, oy - 8.5f, 17.0f, 17.0f, 1.6f);
                     if (isNatureAura)
                         drawSparkle4 (ox, oy, 8.5f, juce::Colours::white);
                     else
                     {
                         g.setColour (juce::Colours::white.withAlpha (0.90f));
-                        g.fillEllipse (ox - 5.0f, oy - 5.0f, 4.2f, 3.2f);
+                        g.fillEllipse (ox - 4.2f, oy - 4.2f, 3.6f, 2.8f);
                     }
 
-                    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (themeMode == 0 ? 0.16f : 0.28f), cx - ballR * 0.25f, cy - ballR * 0.92f,
-                                                             juce::Colours::transparentWhite, cx - ballR * 0.10f, cy - ballR * (themeMode == 0 ? 0.42f : 0.05f), false));
-                    g.fillEllipse (cx - ballR * 0.74f, cy - ballR * 0.92f, ballR * 1.48f, ballR * (themeMode == 0 ? 0.50f : 0.88f));
+                    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (! knobInnerArtOn ? 0.08f : (themeMode == 0 ? 0.16f : 0.28f)), cx - ballR * 0.25f, cy - ballR * 0.92f,
+                                                             juce::Colours::transparentWhite, cx - ballR * 0.10f, cy - ballR * (! knobInnerArtOn ? 0.48f : (themeMode == 0 ? 0.42f : 0.05f)), false));
+                    g.fillEllipse (cx - ballR * 0.74f, cy - ballR * 0.92f, ballR * 1.48f, ballR * (! knobInnerArtOn ? 0.44f : (themeMode == 0 ? 0.50f : 0.88f)));
 
-                    g.setColour (juce::Colours::black.withAlpha (pastelTheme() ? 0.16f : 0.48f));
-                    g.drawEllipse (cx - ballR + 1.0f, cy - ballR + 1.0f, (ballR - 1.0f) * 2.0f, (ballR - 1.0f) * 2.0f, 3.2f);
+                    g.setColour (juce::Colours::black.withAlpha (Palette::panel.getPerceivedBrightness() > 0.55f ? 0.12f : 0.36f));
+                    g.drawEllipse (cx - ballR + 1.0f, cy - ballR + 1.0f, (ballR - 1.0f) * 2.0f, (ballR - 1.0f) * 2.0f, 2.4f);
                 }
 
-                g.setColour (rimAccent.withAlpha (0.82f));
-                g.drawEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f, 1.6f);
+                g.setColour ((! knobInnerArtOn ? Palette::panelLn : rimAccent).withAlpha (0.82f));
+                g.drawEllipse (cx - ballR, cy - ballR, ballR * 2.0f, ballR * 2.0f, 1.4f);
 
-                // ★ ライブ・マスタリングプリズム HUD ステータス表示（四角い枠線を廃止し、透過ガラス上に上品に浮かぶテレメトリ表記）
+                // ★ ライブ・マスタリングプリズム HUD ステータス表示
                 if (argonPadRect.getHeight() >= 170)
                 {
                     const float densDb = processor.getMasteringDensityDb() + processor.getRearBusAuthorityDb();
@@ -4623,11 +4791,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     const juce::Rectangle<int> hudRect (argonPadRect.getX() + 18,
                                                         (int) (cy + ballR - 23.0f),
                                                         argonPadRect.getWidth() - 36, 17);
-                    const juce::Colour hudBg = (themeMode == 2) ? Palette::panel : juce::Colour (0xff040816);
-                    g.setGradientFill (juce::ColourGradient (hudBg.withAlpha (themeMode == 2 ? 0.86f : 0.64f), (float) hudRect.getCentreX(), (float) hudRect.getCentreY(),
-                                                             hudBg.withAlpha (0.0f),                           (float) hudRect.getRight(),   (float) hudRect.getCentreY(), true));
+                    const bool lightHud = (! knobInnerArtOn && Palette::panel.getPerceivedBrightness() > 0.55f) || (themeMode == 2);
+                    const juce::Colour hudBg = ! knobInnerArtOn ? Palette::panel2 : (lightHud ? Palette::panel : juce::Colour (0xff040816));
+                    g.setGradientFill (juce::ColourGradient (hudBg.withAlpha (lightHud ? 0.88f : 0.74f), (float) hudRect.getCentreX(), (float) hudRect.getCentreY(),
+                                                             hudBg.withAlpha (0.0f),                     (float) hudRect.getRight(),   (float) hudRect.getCentreY(), true));
                     g.fillRoundedRectangle (hudRect.toFloat(), 8.5f);
-                    g.setColour ((themeMode == 2) ? Palette::ink : Palette::metalHi);
+                    g.setColour ((! knobInnerArtOn || lightHud) ? Palette::ink : Palette::metalHi);
                     fitText (g, hudTxt, hudRect.reduced (6, 0), juce::Justification::centred, 11.2f, true);
                 }
             }
@@ -4672,18 +4841,26 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
     if (! staticPass && ! argonBarRects[0].isEmpty() && g.clipRegionIntersects (argonBarRects[0].getUnion (argonBarRects[3]).expanded (8)))
     {
         const float vals[4] = { vVal, fVal, sVal, hVal };
-        const char* barJa[4] = { "倍音 VELVET", "声芯 FOCUS", "空気 SILK",  "立体 HALO" };
-        const char* barEn[4] = { "VELVET",      "FOCUS",      "SILK AIR",   "3D HALO" };
-        const juce::Colour barCols[4] = { Palette::salmon, Palette::yellow, Palette::ice, Palette::blue };
-        const bool kawaiiBars = (isLiverStyle || isYuruStyle);
+        const char* barJaFull[4]  = { "倍音 VELVET", "声芯 FOCUS", "空気 SILK", "立体 HALO" };
+        const char* barJaShort[4] = { "倍音",        "声芯",       "空気",      "立体"      };
+        const char* barEnFull[4]  = { "VELVET",      "FOCUS",      "SILK AIR",  "3D HALO"   };
+        const char* barEnShort[4] = { "VELV",        "FOC",        "SILK",      "HALO"      };
+        const juce::Colour barCols[4] = {
+            knobInnerArtOn ? Palette::salmon : Palette::green,
+            knobInnerArtOn ? Palette::yellow : Palette::blue,
+            Palette::ice,
+            Palette::blue
+        };
+        const bool kawaiiBars = knobInnerArtOn && (isLiverStyle || isYuruStyle);
 
         for (int b = 0; b < 4; ++b)
         {
             const auto r = argonBarRects[(size_t) b];
             if (r.isEmpty()) continue;
             const auto rf = r.toFloat();
+            const bool compactBar = (r.getWidth() < 168);
             const float norm = juce::jlimit (0.0f, 1.0f, vals[b] * 0.01f);
-            const float barRad = kawaiiBars ? rf.getHeight() * 0.5f : 6.5f;
+            const float barRad = kawaiiBars ? rf.getHeight() * 0.5f : 6.0f;
 
             if (liteMode)
             {
@@ -4694,6 +4871,38 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     g.setColour (barCols[b].withAlpha (0.55f));
                     g.fillRoundedRectangle (r.withWidth (juce::jmax (6, juce::roundToInt (r.getWidth() * norm))).toFloat(), barRad);
                 }
+            }
+            else if (! knobInnerArtOn)
+            {
+                // ★ モダン・プロスタジオ・クリーン水平メーターバー（装飾アートOFF時：宝石球体やキャンディ反射のない端正なスタジオバー）
+                const bool lightBar = Palette::panel.getPerceivedBrightness() > 0.52f;
+                g.setColour (lightBar ? Palette::panel2 : Palette::panel2.withAlpha (0.85f));
+                g.fillRoundedRectangle (rf, barRad);
+
+                const float dotX = rf.getX() + 7.0f, dotY = rf.getCentreY();
+                g.setColour (barCols[b]);
+                g.fillEllipse (dotX - 2.4f, dotY - 2.4f, 4.8f, 4.8f);
+
+                const float lblW = compactBar ? 42.0f : juce::jmin (90.0f, rf.getWidth() * 0.43f);
+                const float pctW = compactBar ? 40.0f : 46.0f;
+                const float trkX = rf.getX() + lblW + 3.0f;
+                const float trkW = juce::jmax (18.0f, rf.getWidth() - lblW - pctW - 6.0f);
+                const juce::Rectangle<float> trkRect (trkX, rf.getY() + 6.0f, trkW, juce::jmax (6.0f, rf.getHeight() - 12.0f));
+                const float trkRad = trkRect.getHeight() * 0.5f;
+
+                g.setColour (lightBar ? Palette::track.darker (0.10f) : Palette::track);
+                g.fillRoundedRectangle (trkRect, trkRad);
+                if (norm > 0.005f)
+                {
+                    const float fillW = juce::jmax (trkRad * 2.0f, trkW * norm);
+                    g.setColour (barCols[b].withAlpha (lightBar ? 0.88f : 0.85f));
+                    g.fillRoundedRectangle ({ trkX, trkRect.getY(), juce::jmin (trkW, fillW), trkRect.getHeight() }, trkRad);
+                }
+                const float thumbX = trkX + trkRad + norm * juce::jmax (0.0f, trkW - trkRad * 2.0f);
+                g.setColour (lightBar ? juce::Colours::white : Palette::ink);
+                g.fillEllipse (thumbX - 3.6f, trkRect.getCentreY() - 3.6f, 7.2f, 7.2f);
+                g.setColour (barCols[b].darker (lightBar ? 0.15f : 0.0f));
+                g.drawEllipse (thumbX - 3.6f, trkRect.getCentreY() - 3.6f, 7.2f, 7.2f, 1.3f);
             }
             else if (kawaiiBars)
             {
@@ -4814,7 +5023,13 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.fillEllipse (thumbX - thumbR * 0.45f, thumbY - thumbR * 0.45f, thumbR * 0.9f, thumbR * 0.9f);
             }
 
-            if (themeMode != 0)
+            if (! knobInnerArtOn)
+            {
+                const bool lightBar = Palette::panel.getPerceivedBrightness() > 0.52f;
+                g.setColour (lightBar ? Palette::panelLn.darker (0.08f) : Palette::panelLn);
+                g.drawRoundedRectangle (rf.reduced (0.5f), barRad, 1.0f);
+            }
+            else if (themeMode != 0)
             {
                 g.setColour (kawaiiBars ? Palette::metalMid : (oceanStarTheme() ? Palette::metalMid.interpolatedWith (barCols[b], 0.45f).withAlpha (0.82f) : barCols[b].withAlpha (0.88f)));
                 g.drawRoundedRectangle (rf.reduced (0.5f), barRad, 1.3f);
@@ -4826,13 +5041,18 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
             g.setColour (Palette::ink);
             const int lblRectW = kawaiiBars ? (r.getWidth() - 52)
+                               : compactBar ? 44
                                             : juce::roundToInt (juce::jmin (92.0f, rf.getWidth() * 0.44f));
-            fitText (g, juce::String::fromUTF8 (language->english ? barEn[b] : barJa[b]),
-                     r.withWidth (lblRectW).withTrimmedLeft (kawaiiBars ? 12 : 14).reduced (2, 1),
+            const char* barTxt = language->english
+                               ? (compactBar ? barEnShort[b] : barEnFull[b])
+                               : (compactBar ? barJaShort[b] : barJaFull[b]);
+            fitText (g, juce::String::fromUTF8 (barTxt),
+                     r.withWidth (lblRectW).withTrimmedLeft (kawaiiBars ? 12 : 13).reduced (1, 1),
                      juce::Justification::centredLeft, 13.0f, true);
+            const int pctBoxW = compactBar ? 40 : 46;
             fitText (g, juce::String (juce::roundToInt (vals[b])) + "%",
-                     r.withTrimmedLeft (r.getWidth() - 46).reduced (4, 1),
-                     juce::Justification::centredRight, 13.5f, true);
+                     r.withTrimmedLeft (r.getWidth() - pctBoxW).reduced (4, 1),
+                     juce::Justification::centredRight, compactBar ? 12.8f : 13.5f, true);
         }
     }
 
@@ -4949,12 +5169,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         const bool outMonoActive = processor.getOutputMonoMode();
         const bool shortIo = (ioInMonoRect.getWidth() < 90);
         const char* inJaFull[5]  = { "入力:自動モノ", "入力:IN1モノ", "入力:IN2モノ", "入力:1+2モノ", "入力:ステレオ" };
-        const char* inJaShort[5] = { "入:自動",       "入:IN1",       "入:IN2",       "入:1+2",       "入:ステ"       };
+        const char* inJaShort[5] = { "入:自動",       "入:IN1",       "入:IN2",       "入:1+2",       "入:2ch"        };
         const char* inEn[5]      = { "IN:AUTO-M",     "IN:1-MONO",    "IN:2-MONO",    "IN:1+2-M",     "IN:STEREO"     };
         const juce::String inTxt = juce::String::fromUTF8 (language->english ? inEn[rMode] : (shortIo ? inJaShort[rMode] : inJaFull[rMode]));
         const juce::String outTxt = outMonoActive
             ? (shortIo ? language->T ("出:モノ", "OUT:M") : language->T ("出力:モノラル", "OUT:MONO"))
-            : (shortIo ? language->T ("出:ステ", "OUT:S") : language->T ("出力:ステレオ", "OUT:STEREO"));
+            : (shortIo ? language->T ("出:2ch",  "OUT:2ch") : language->T ("出力:ステレオ", "OUT:STEREO"));
         drawIoPill (ioInMonoRect,  inMonoActive,  Palette::green, inTxt);
         drawIoPill (ioOutMonoRect, outMonoActive, Palette::blue,  outTxt);
 
@@ -5159,12 +5379,12 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 if (zh >= 36)
                 {
                     const juce::String statusGuide = (outDb <= -56.0f)
-                        ? language->T ("声を出すと現在の音量が適正ゾーンか表示されます", "Sing or speak to check your volume zone")
+                        ? language->T ("声を出すと音量ゾーンを判定します", "Sing to check level zone")
                         : inLoud
-                            ? language->T ("少し大きめです：「最終音量」を100%方向へ下げると安定します", "Slightly hot: lower Volume % toward 100%")
+                            ? language->T ("やや大きめ：最終音量%を下げます", "Hot: lower Volume %")
                             : inGood
-                                ? language->T ("◎ 適正な出力レベルです（さらに上げたい場合は最終音量%へ）", "◎ Optimal vocal level (Use Volume % for clean boost)")
-                                : language->T ("少し小さめです：「入力音量」または「最終音量%」を上げてください", "Quiet signal: raise Input or Volume %");
+                                ? language->T ("◎ 適正な出力レベルです", "◎ Optimal vocal level")
+                                : language->T ("やや小さめ：最終音量%を上げます", "Quiet: raise Volume %");
                     g.setColour (inLoud ? Palette::salmon : (inGood ? Palette::accentOn (Palette::green, Palette::panel) : Palette::inkSoft));
                     fitText (g, statusGuide, zr.withTrimmedTop (18), juce::Justification::centredLeft, 12.0f, inGood || inLoud);
                 }
@@ -5749,16 +5969,18 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
     const char* namesJaStep[]     = { "STEP 1 雑音を消す",   "STEP 2 声を揃える",   "STEP 3 残響を足す" };
     const char* namesJaConcrete[] = { "01 雑音・不要帯域除去", "02 音量均一・周波数", "03 残響・空間幅" };
     const char* namesEn[]         = { "01 CLEAN",            "02 CHARACTER",        "03 SPACE" };
-    // Midnight Lantern Bokeh時は参考写真の3色構成（左:ジェイドシアン, 中央:ゴールデンアンバーランタン, 右:トワイライトローズコーラル）に完全調和
+    // 標準スタジオUI(!knobInnerArtOn)は緑・青・シアン系の統一感ある3アクセント、装飾ON時はランタン3色
     const juce::Colour accents[] = {
         Palette::green,
-        (themeMode == 0 || (isLiverStyle && (accessMode == 0 || accessMode == 2))) ? Palette::yellow : Palette::blue,
-        (themeMode == 0) ? Palette::salmon
-                         : ((isLiverStyle && (accessMode == 0 || accessMode == 2)) ? Palette::blue : Palette::yellow)
+        ! knobInnerArtOn ? Palette::blue
+                         : ((themeMode == 0 || (isLiverStyle && (accessMode == 0 || accessMode == 2))) ? Palette::yellow : Palette::blue),
+        ! knobInnerArtOn ? Palette::ice
+                         : ((themeMode == 0) ? Palette::salmon
+                                             : ((isLiverStyle && (accessMode == 0 || accessMode == 2)) ? Palette::blue : Palette::yellow))
     };
 
-    // ★ Red Dot 仕様: セクションカード間を結ぶ「オプティカル信号フロー・ライトパイプ (01 ➔ 02 ➔ 03)」
-    if (staticPass && ! liteMode && accessMode != 3)
+    // ★ セクションカード間を結ぶ「オプティカル信号フロー・ライトパイプ」（装飾アートON時のみ表示）
+    if (staticPass && knobInnerArtOn && ! liteMode && accessMode != 3)
     {
         auto drawBridge = [&] (const juce::Rectangle<int>& cL, const juce::Rectangle<int>& cR, juce::Colour colL, juce::Colour colR)
         {
@@ -5998,7 +6220,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
             else
             {
-                const bool softPedestal = (isLiverStyle || isYuruStyle || pastelTheme());
+                const bool softPedestal = knobInnerArtOn && (isLiverStyle || isYuruStyle || pastelTheme());
                 if (i == 0 || i == 2)
                 {
                     auto body = r.reduced (14).withTrimmedTop (122);
@@ -6007,7 +6229,36 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     body.removeFromLeft (6);
                     const bool heroOn = (kEff[0] > 0.02f);
 
-                    if (softPedestal)
+                    if (! knobInnerArtOn)
+                    {
+                        // Clean Pro-Studio Pedestal: 光輪や24本スパークル針を排し、端正な円形リセスと細い仕切り線のみで整列
+                        const float hcx = heroRect.getCentreX(), hcy = heroRect.getCentreY() - 6.0f;
+                        const float hRad = juce::jmin (heroRect.getWidth(), heroRect.getHeight()) * 0.42f;
+                        g.setColour (Palette::panel2.withAlpha (0.55f));
+                        g.fillEllipse (hcx - hRad, hcy - hRad, hRad * 2.0f, hRad * 2.0f);
+                        g.setColour (heroOn ? accents[i].withAlpha (0.55f) : Palette::panelLn);
+                        g.drawEllipse (hcx - hRad, hcy - hRad, hRad * 2.0f, hRad * 2.0f, 1.0f);
+
+                        const float divX = heroRect.getRight() + 3.0f;
+                        g.setColour (Palette::panelLn.withAlpha (0.75f));
+                        g.drawLine (divX, heroRect.getY() + 10.0f, divX, heroRect.getBottom() - 10.0f, 1.0f);
+
+                        const int satH = body.getHeight() / 3;
+                        for (int s = 0; s < 3; ++s)
+                        {
+                            const bool satOn = (kEff[s + 1] > 0.02f);
+                            const auto satR = juce::Rectangle<int> (body.getX(), body.getY() + s * satH, body.getWidth(), satH).reduced (2, 2).toFloat();
+                            if (s > 0)
+                            {
+                                const float lineY = (float) (body.getY() + s * satH);
+                                g.setColour (Palette::panelLn.withAlpha (0.65f));
+                                g.drawLine (satR.getX() + 6.0f, lineY, satR.getRight() - 6.0f, lineY, 1.0f);
+                            }
+                            g.setColour (satOn ? accents[i] : Palette::panelLn);
+                            g.fillRoundedRectangle (satR.getX() + 2.5f, satR.getCentreY() - 8.0f, 2.5f, 16.0f, 1.25f);
+                        }
+                    }
+                    else if (softPedestal)
                     {
                         // ♥🍰 プレストチーク・サテンクッション台座＆貴金属リム（効いている時は華やかに発光）
                         g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (heroOn ? (0.26f + 0.16f * kEff[0]) : 0.08f), heroRect.getX(), heroRect.getY(),
@@ -6102,21 +6353,42 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 }
                 else if (i == 1)
                 {
-                    // 中央下 Card 1: 四角い個別ボックスを撤廃し、4連ノブを結ぶ黄金＆シアンの天球コンジット軌道と円形ハローで浮かび上がらせる
+                    // 中央下 Card 1: 4連ノブ整列（標準スタジオUI時は端正なヘアライン仕切りのみ、装飾ON時は天球コンジット軌道）
                     auto body = r.reduced (12).withTrimmedTop (122);
                     const int wHero = body.getWidth() * 27 / 100;
                     const int wSub  = (body.getWidth() - wHero * 2) / 2;
                     const int ws[4] = { wHero, wSub, wHero, wSub };
                     const bool isH[4] = { true, false, true, false };
                     int cx = body.getX();
-                    g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.0f), (float) body.getX() + 18.0f, (float) (body.getCentreY() + 8),
-                                                             Palette::yellow.withAlpha (0.38f), (float) body.getCentreX(), (float) (body.getCentreY() + 8), false));
-                    g.drawHorizontalLine (body.getCentreY() + 8, (float) body.getX() + 18.0f, (float) body.getRight() - 18.0f);
+                    if (knobInnerArtOn)
+                    {
+                        g.setGradientFill (juce::ColourGradient (accents[i].withAlpha (0.0f), (float) body.getX() + 18.0f, (float) (body.getCentreY() + 8),
+                                                                 Palette::yellow.withAlpha (0.38f), (float) body.getCentreX(), (float) (body.getCentreY() + 8), false));
+                        g.drawHorizontalLine (body.getCentreY() + 8, (float) body.getX() + 18.0f, (float) body.getRight() - 18.0f);
+                    }
                     for (int kIdx = 0; kIdx < 4; ++kIdx)
                     {
                         const bool kOn = (kEff[kIdx] > 0.02f);
                         const auto hr = juce::Rectangle<int> (cx, body.getY(), ws[kIdx], body.getHeight()).reduced (3, 2).toFloat();
-                        if (softPedestal)
+                        if (! knobInnerArtOn)
+                        {
+                            if (isH[kIdx])
+                            {
+                                const float kcx = hr.getCentreX(), kcy = hr.getCentreY() - 4.0f;
+                                const float kRad = juce::jmin (hr.getWidth(), hr.getHeight()) * 0.41f;
+                                g.setColour (Palette::panel2.withAlpha (0.50f));
+                                g.fillEllipse (kcx - kRad, kcy - kRad, kRad * 2.0f, kRad * 2.0f);
+                                g.setColour (kOn ? accents[i].withAlpha (0.55f) : Palette::panelLn);
+                                g.drawEllipse (kcx - kRad, kcy - kRad, kRad * 2.0f, kRad * 2.0f, 1.0f);
+                            }
+                            if (kIdx > 0)
+                            {
+                                const float vx = (float) cx;
+                                g.setColour (Palette::panelLn.withAlpha (0.65f));
+                                g.drawLine (vx, hr.getY() + 16.0f, vx, hr.getBottom() - 16.0f, 1.0f);
+                            }
+                        }
+                        else if (softPedestal)
                         {
                             if (isH[kIdx])
                             {
@@ -6154,8 +6426,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             }
         }
 
-        // ♥ V-LIVER STAGE 配置では下段12連コスメパレットの背後に貴金属の五線譜とカメオ装飾＋効いているノブのオーラハローを添える
-        if (overviewLayoutMode == 1 && ! liteMode && (accessMode == 0 || accessMode == 2))
+        // ♥ V-LIVER STAGE 配置では装飾アートON時のみ背後に貴金属の五線譜とカメオ装飾＋効いているノブのオーラハローを添える
+        if (knobInnerArtOn && overviewLayoutMode == 1 && ! liteMode && (accessMode == 0 || accessMode == 2))
         {
             g.setColour ((isLiverStyle ? Palette::metalMid : accents[i]).withAlpha (0.22f));
             const int staffY = r.getY() + 190;
@@ -6184,7 +6456,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     drawSparkle4 (nx + 24.0f, (float) staffY + 42.0f, 4.8f, Palette::metalMid.withAlpha (kOn ? 0.80f : 0.45f));
             }
         }
-        else if (overviewLayoutMode >= 2 && ! liteMode && (accessMode == 0 || accessMode == 2))
+        else if (knobInnerArtOn && overviewLayoutMode >= 2 && ! liteMode && (accessMode == 0 || accessMode == 2))
         {
             for (int n = 0; n < 4; ++n)
             {
@@ -6202,8 +6474,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 
     }
 
-    // パステル・ライバーテーマではぷにぐじマスコットとジュースサーバーも総合画面に優しく添える（軽量モード時は省略）
-    if (! liteMode)
+    // パステル・ライバーテーマではぷにぐじマスコットとジュースサーバーも総合画面に優しく添える（装飾アートON時のみ）
+    if (! liteMode && knobInnerArtOn)
     {
         if (staticPass && pastelTheme() && kawaiiMascot.isValid())
         {

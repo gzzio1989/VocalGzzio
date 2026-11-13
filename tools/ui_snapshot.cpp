@@ -92,6 +92,11 @@ int main (int argc, char** argv)
                 content.setThemeMode (theme);
                 content.resized();
             }
+            else if (popMode == 4)
+            {
+                content.openCheckupPopupForTest();
+                content.resized();
+            }
             else
             {
                 content.openLegacyVersionPopup ({ 724, 20, 64, 34 });

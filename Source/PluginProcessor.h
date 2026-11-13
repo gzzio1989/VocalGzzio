@@ -1030,16 +1030,16 @@ public:
     }
 
     //== 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ==
-    // id: 0 = v5.7.0 最新版, 1..20 = 歴代メジャー＆V5世代（v1.0.0〜v5.6.0 全21世代）
+    // id: 0 = v5.8.0 最新版, 1..21 = 歴代メジャー＆V5世代（v1.0.0〜v5.7.0 全22世代）
     // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
     //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0),
-    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0), 560(v5.6.0), 570(v5.7.0)
+    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0), 560(v5.6.0), 570(v5.7.0), 580(v5.8.0)
     int   getLegacyVersionId() const noexcept  { return legacyVersionId.load (std::memory_order_relaxed); }
     int   getLegacyVersionEra() const noexcept { return legacyVersionEra.load (std::memory_order_relaxed); }
     void  setLegacyVersionState (int id, int era)
     {
-        legacyVersionId.store (juce::jlimit (0, 20, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 570, era), std::memory_order_relaxed);
+        legacyVersionId.store (juce::jlimit (0, 21, id), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 580, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState && isStandalone())
@@ -1134,6 +1134,56 @@ public:
             case 2:  return juce::String::fromUTF8 (english ? "Polish: J-Pop+"  : "✨艶補正: 完パケ");
             default: return juce::String::fromUTF8 (english ? "Polish: OFF"     : "艶補正: OFF");
         }
+    }
+
+    // v5.8.0 新機能：📊 REAPER / DAW リアルタイム負荷＆音途切れ切り分け診断 ＋ ⚡ DAWライブ超低負荷モード
+    float getDawCpuLoadPct() const noexcept       { return dawHealth.avgLoadPct(); }
+    float getDawAvgCpuPct() const noexcept        { return dawHealth.avgLoadPct(); }
+    float getDawPeakLoadPct() const noexcept      { return dawHealth.peakLoadPct(); }
+    float getDawPeakCpuPct() const noexcept       { return dawHealth.peakLoadPct(); }
+    float getDawLastElapsedUs() const noexcept    { return dawHealth.lastElapsedUs(); }
+    float getDawBudgetUs() const noexcept         { return dawHealth.lastBudgetUs(); }
+    int   getDawLastBlockSize() const noexcept    { return dawHealth.lastBlockSize(); }
+    int   getDawLastBlockSamples() const noexcept { return dawHealth.lastBlockSize(); }
+    int   getDawLastSampleRateHz() const noexcept
+    {
+        const double sr = currentSampleRate > 1000.0 ? currentSampleRate : (getSampleRate() > 1000.0 ? getSampleRate() : 48000.0);
+        return juce::roundToInt (sr);
+    }
+    uint32_t getDawPluginOverruns() const noexcept { return (uint32_t) juce::jmax (0, dawHealth.pluginOverruns()); }
+    uint32_t getDawHostDropouts() const noexcept   { return (uint32_t) juce::jmax (0, dawHealth.hostGapDropouts()); }
+    void  resetDawHealthCounters() noexcept       { dawHealth.resetCounters(); }
+    bool  getDawLiveEcoMode() const noexcept      { return dawLiveEcoMode.load (std::memory_order_relaxed); }
+    void  setDawLiveEcoMode (bool on) noexcept
+    {
+        dawLiveEcoMode.store (on, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleDawLiveEcoMode() noexcept         { setDawLiveEcoMode (! getDawLiveEcoMode()); }
+    juce::String getDawHealthSummary (bool english = false) const
+    {
+        const uint32_t overruns  = getDawPluginOverruns();
+        const uint32_t hostDrops = getDawHostDropouts();
+        const bool     ecoNow    = getDawLiveEcoMode();
+        if (hostDrops > 0 && overruns == 0)
+        {
+            return english
+                ? juce::String ("Diagnosis: Plugin DSP finished well inside budget; dropouts originate on DAW/ASIO side (other Record-Armed tracks disabling Anticipative FX or SR mismatch).")
+                : juce::String::fromUTF8 ("切り分け判定: VocalGzzio単体は予算内で軽快に完走しています。他トラックの同時録音アーム（Anticipative FX無効化）や曲/ASIOの周波数不一致によるDAW側の途切れです。");
+        }
+        if (overruns > 0)
+        {
+            return english
+                ? juce::String (ecoNow ? "Diagnosis: Short ASIO buffer spike detected; Ultra-Low-CPU Mode is active (consider 256 smp ASIO buffer if spikes continue)."
+                                       : "Diagnosis: Short ASIO callback spike detected; turn ON 'DAW Live Ultra-Low-CPU Mode' above or use 256 smp buffer.")
+                : juce::String::fromUTF8 (ecoNow ? "切り分け判定: 極小ASIOバッファで瞬間負荷が高まっています（超低負荷モード稼働中・必要に応じてASIOバッファ256smp推奨）。"
+                                                 : "切り分け判定: 極小バッファで瞬間負荷が発生しました。上の「⚡ DAWライブ超低負荷モード」をONにしてください。");
+        }
+        return english
+            ? juce::String (ecoNow ? "Diagnosis: Zero dropouts — running smoothly in DAW Live Ultra-Low-CPU Mode."
+                                   : "Diagnosis: Zero dropouts — real-time audio callback is running cleanly within budget.")
+            : juce::String::fromUTF8 (ecoNow ? "切り分け判定: 音途切れゼロで安定稼働中（⚡ DAWライブ超低負荷モード有効）。"
+                                             : "切り分け判定: 音途切れ・予算超過ともにゼロで安定稼働中です。");
     }
 
     //== v2.10.0 点検 =========================================================
@@ -1442,8 +1492,9 @@ private:
     // v3.1 母音中の高域抑えは「下げるのは速く・戻すのはゆっくり」
     float dnHfDuckCoef = 0.0f;      // τ≈0.08秒（下げる向きだけ）
     bool  dnLearned = false;
-    // ---- v2.12.0 サフサフ対策(§6-1): 声が出たら全帯域を一斉に開けて保持 ----
+    // ---- v2.12.0 / v5.8.0 サフサフ対策: 声が出ている帯域だけを正確に保護し、声のない中高域の部屋ノイズ開放を防ぐ ----
     int   dnVoiceHold = 0, dnHoldSamples = 0;
+    int   dnMid2VoiceHold = 0;     // 1.2-5kHz 帯域そのものに倍音/子音があるときだけ開放保持
     int   dnHfVoiceHold = 0;       // 高域そのものが立ち上がった場合だけ子音を保護
     float dnFastOpen = 0.0f;
     // ---- v2.12.0 張り保護(§6-2): いつもの声量 vs いまの声量 ----
@@ -1846,7 +1897,7 @@ private:
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 570 };
+    std::atomic<int>   legacyVersionEra   { 580 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
@@ -2126,6 +2177,26 @@ private:
     std::atomic<float>                                karteAxisScores[6] { 0.65f, 0.55f, 0.50f, 0.60f, 0.65f, 0.55f };
     std::atomic<int>                                  jpopPolishMode { 0 };
     std::atomic<float>                                meterJpopPolishReliefDb { 0.0f };
+
+    // ---- v5.8.0 REAPER / DAW リアルタイム負荷切り分け診断 ＆ 静的EQ係数ダーティキャッシュ ----
+    gz::v580::DawRealtimeHealthMonitor                dawHealth;
+    bool                                              dawHealthInSplit { false };
+    std::atomic<bool>                                 dawLiveEcoMode { false };
+    double                                            paramCacheSr { 0.0 };
+    int                                               paramCacheSrcMode { -999 };
+    int                                               paramCacheEra { -999 };
+    float                                             paramCacheLowcut { -999.0f };
+    float                                             paramCacheMud { -999.0f };
+    float                                             paramCacheHarsh { -999.0f };
+    float                                             paramCachePres { -999.0f };
+    float                                             paramCacheAir { -999.0f };
+    int                                               paramCacheRevType { -999 };
+    float                                             paramCacheRevSize { -999.0f };
+    float                                             paramCacheRevMix { -999.0f };
+    int                                               paramCacheMegaType { -999 };
+    float                                             paramCacheMegaAmt { -999.0f };
+    bool                                              paramCacheChoOn { false };
+    float                                             paramCacheChoAmt { -999.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };

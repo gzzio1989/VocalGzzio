@@ -86,84 +86,80 @@ namespace Palette
     }
 
     // mode: 1 = yuru-kawa (soft pastel, light cards), else neutral (dark)
-    // v1.9.0 / v5.5.0: 下地のWCAG相対輝度に応じて必ず4.5:1以上で読める文字色を返す。
+    // v1.9.0 / v5.8.0: 下地のWCAG相対輝度に応じて必ず4.5:1以上で読めるニュートラルなスタジオ白／濃紺黒を返す。
     inline juce::Colour readableOn (juce::Colour bg)
     {
-        const juce::Colour base = wcagLum (bg) > 0.179f ? juce::Colour (0xff2b2419)
-                                                        : juce::Colour (0xfff7f3ec);
+        const juce::Colour base = wcagLum (bg) > 0.179f ? juce::Colour (0xff0d131c)
+                                                        : juce::Colour (0xffffffff);
         return accentOn (base, bg, 4.5f);
     }
 
     inline void applyTheme (int mode)
     {
         currentTheme = mode;
-        // デフォルトのクチュール金具・鏡面色（各モードで上書き）
-        metalHi   = juce::Colour (0xffffe6d4);
-        metalMid  = juce::Colour (0xffd4967a);
-        metalDark = juce::Colour (0xff8c523c);
-        mirrorTop = juce::Colour (0xffde7da2);
-        mirrorBot = juce::Colour (0xff4f1830);
+        // デフォルトのスタジオ金具・鏡面色（ニュートラルなブラッシュド・チタンスレート。各モードで必要に応じ上書き）
+        metalHi   = juce::Colour (0xffe2e8f0);
+        metalMid  = juce::Colour (0xff64748b);
+        metalDark = juce::Colour (0xff334155);
+        mirrorTop = juce::Colour (0xff243042);
+        mirrorBot = juce::Colour (0xff0f141d);
 
-        if (mode == 1)   // ゆるふわ (Salon de Thé): 焦がしキャラメル＆バニラカスタード＆フランボワーズのパティスリー配色
+        if (mode == 1)   // ゆるふわ (Daylight Soft Studio): 清潔でモダンなエアリー・ライトスタジオ配色
         {
-            bgTop    = juce::Colour (0xfff6e7d8);   // ミルクティー＆ビスケット
-            bgBot    = juce::Colour (0xffebd5c0);   // ベイクド・フィナンシェ
-            panel    = juce::Colour (0xfffff8f0);   // マスカルポーネ・クリーム下地
-            panel2   = juce::Colour (0xfff6dfc8);   // キャラメル・スポンジファンデーション
-            panelLn  = juce::Colour (0xffcca482);   // アンティーク・キャラメルゴールド枠
-            ink      = juce::Colour (0xff422a1e);   // 深煎りエスプレッソ文字
-            inkSoft  = juce::Colour (0xff7c5947);   // シナモンモカ副文字
-            yellow   = juce::Colour (0xffe08a38);   // キャラメルハニー主アクセント
-            yellowDk = juce::Colour (0xffbf6e22);
-            green    = juce::Colour (0xff5ca678);   // ピスタチオ・マカロン
-            salmon   = juce::Colour (0xffe25d78);   // フランボワーズ・ベリー
-            blue     = juce::Colour (0xff768cd4);   // ブルーベリー・タルト
-            ice      = juce::Colour (0xff6db592);   // ミント・グラッセ
-            track    = juce::Colour (0xffe5cbb4);   // カフェラテ・トラック溝
-            badge    = juce::Colour (0xfffffbf6);
-            metalHi   = juce::Colour (0xfffff0d8);
-            metalMid  = juce::Colour (0xffc89468);
-            metalDark = juce::Colour (0xff825232);
+            bgTop    = juce::Colour (0xfff4f6fa);   // エアリー・アラバスター上端
+            bgBot    = juce::Colour (0xffebeef5);   // ソフト・クールミスト下端
+            panel    = juce::Colour (0xffffffff);   // ピュア・スタジオホワイトカード
+            panel2   = juce::Colour (0xffeef2f8);   // クール・スレートティント操作面
+            panelLn  = juce::Colour (0xffcfd8e6);   // 繊細な1pxクールグレー境界線
+            ink      = juce::Colour (0xff1b2432);   // ディープ・インクネイビー文字 (15.5:1)
+            inkSoft  = juce::Colour (0xff505e73);   // スレート・セカンダリ文字 (WCAG AA >5.6:1)
+            yellow   = juce::Colour (0xffb0550c);   // リッチ・アンバー主CTA (白文字 5.0:1 & 白地 5.0:1 両立)
+            yellowDk = juce::Colour (0xff8f4306);
+            green    = juce::Colour (0xff0f7b66);   // ディープ・ティールミント (白文字 5.2:1)
+            salmon   = juce::Colour (0xffc83750);   // クリスプ・コーラルローズ (白文字 5.1:1)
+            blue     = juce::Colour (0xff265ec2);   // スタジオ・アズールブルー (白文字 6.1:1)
+            ice      = juce::Colour (0xff1372a3);   // ディープ・スカイシアン (白文字 5.3:1)
+            track    = juce::Colour (0xffdfe6f0);   // ニュートラル・ライトトラック溝
+            badge    = juce::Colour (0xffffffff);
+            metalHi   = juce::Colour (0xffffffff);
+            metalMid  = juce::Colour (0xff94a3b8);
+            metalDark = juce::Colour (0xff475569);
         }
-        else if (mode == 8)   // v2.11.0 ゆるふわ・よる: 夜でも目が痛くならない暗いパステル
+        else if (mode == 8)   // v2.11.0 ゆるふわ・よる: 夜でも目が痛くならない落ち着いたダuskスレート
         {
-            // 「ふつう(0)」の青灰ダークとは別物。ゆるふわの暖かさを残したまま
-            // 明度だけ落とした「月あかりの子ども部屋」。差し色は昼より彩度を
-            // 落としてある(暗い下地では同じ彩度でも眩しく感じるため)。
-            // 文字色のコントラストは全ペア 5.9:1 以上で実測ずみ(WCAG AA)。
-            bgTop    = juce::Colour (0xff221d2e);   // 夕闇のインディゴ
-            bgBot    = juce::Colour (0xff15111f);
-            panel    = juce::Colour (0xff2b2439);   // 暗いプラムのカード
-            panel2   = juce::Colour (0xff342a45);   // ひとつ上の面(ヒーロー帯)
-            panelLn  = juce::Colour (0xff4a3f60);
-            ink      = juce::Colour (0xfff2ece1);   // 月あかりのクリーム(暖色寄り)
-            inkSoft  = juce::Colour (0xffb3a8bd);
-            yellow   = juce::Colour (0xfff0d38a);   // 昼より落とした月バター
-            yellowDk = juce::Colour (0xffd9b96a);
-            green    = juce::Colour (0xff86d9bd);
-            salmon   = juce::Colour (0xfff0a1b4);
-            blue     = juce::Colour (0xffa7bdf0);
-            ice      = juce::Colour (0xff8fdccb);
-            track    = juce::Colour (0xff3a3049);
-            badge    = juce::Colour (0xfff6f1ea);
+            bgTop    = juce::Colour (0xff1c1d2a);
+            bgBot    = juce::Colour (0xff12131c);
+            panel    = juce::Colour (0xff242636);
+            panel2   = juce::Colour (0xff2d3044);
+            panelLn  = juce::Colour (0xff434763);
+            ink      = juce::Colour (0xfff2f0f7);
+            inkSoft  = juce::Colour (0xffadaec4);
+            yellow   = juce::Colour (0xffe8c26b);
+            yellowDk = juce::Colour (0xffc9a24b);
+            green    = juce::Colour (0xff5ecfb1);
+            salmon   = juce::Colour (0xffeb8a9e);
+            blue     = juce::Colour (0xff89a8f0);
+            ice      = juce::Colour (0xff76cde0);
+            track    = juce::Colour (0xff363950);
+            badge    = juce::Colour (0xfff2f0f7);
         }
-        else if (mode == 2)   // 自然（四季・癒し）: 明るい緑/土のやすらぎ配色
+        else if (mode == 2)   // 自然（ボタニカル・セージ＆リネン）: 目に優しい高コントラスト・ナチュラルスタジオ配色
         {
-            bgTop    = juce::Colour (0xffdfeee4);
-            bgBot    = juce::Colour (0xffeef2e2);
-            panel    = juce::Colour (0xfff6faf2);
-            panel2   = juce::Colour (0xffe8f0e2);
-            panelLn  = juce::Colour (0xffcdd9c4);
-            ink      = juce::Colour (0xff3a4a38);
-            inkSoft  = juce::Colour (0xff7c8a76);
-            yellow   = juce::Colour (0xffe6b34a);
-            yellowDk = juce::Colour (0xffcf9a33);
-            green    = juce::Colour (0xff5aa86a);
-            salmon   = juce::Colour (0xffe98f7a);
-            blue     = juce::Colour (0xff7bafd0);
-            ice      = juce::Colour (0xff5aa86a);
-            track    = juce::Colour (0xffdde7d5);
-            badge    = juce::Colour (0xfffbfef8);
+            bgTop    = juce::Colour (0xffedf3ee);
+            bgBot    = juce::Colour (0xffe4ede6);
+            panel    = juce::Colour (0xfffbfdfb);
+            panel2   = juce::Colour (0xffeaf1ec);
+            panelLn  = juce::Colour (0xffc3d3c8);
+            ink      = juce::Colour (0xff1c2b22);   // ディープ・フォレストインク (14.4:1)
+            inkSoft  = juce::Colour (0xff485c50);   // ボタニカル・スレート (WCAG AA >5.8:1)
+            yellow   = juce::Colour (0xff9c5e10);   // ウォーム・オークアンバー (白文字 5.1:1)
+            yellowDk = juce::Colour (0xff7e4a0a);
+            green    = juce::Colour (0xff1f784e);   // ボタニカル・フォレストグリーン (白文字 5.5:1)
+            salmon   = juce::Colour (0xffbc473b);   // テラコッタ・コーラル (白文字 5.1:1)
+            blue     = juce::Colour (0xff29688c);   // レイク・スレートブルー (白文字 6.1:1)
+            ice      = juce::Colour (0xff1f7362);   // ユーカリ・ティール (白文字 5.7:1)
+            track    = juce::Colour (0xffd7e3db);
+            badge    = juce::Colour (0xfffbfdfb);
         }
         else if (mode == 3)   // ブランド: ダークなレザー・ラグジュアリー（金の差し色）
         {
@@ -211,13 +207,13 @@ namespace Palette
             panel2   = juce::Colour (0xfff8d5e2);   // プレスト・サテンチーク内面
             panelLn  = juce::Colour (0xffd496a8);   // シャンパン・ローズゴールド縁
             ink      = juce::Colour (0xff3b1828);   // ディープ・ベリーカカオ（アイライナー黒茶）
-            inkSoft  = juce::Colour (0xff7c485e);   // モーヴ・トープ
-            yellow   = juce::Colour (0xffe44d7e);   // クチュール・ルビーローズ主アクセント
-            yellowDk = juce::Colour (0xffc23262);
-            green    = juce::Colour (0xffe06e68);   // コーラル・ピーチチーク（01区画＆ONスイッチ）
-            salmon   = juce::Colour (0xffe8456e);   // ベリー・リップティント（03区画）
-            blue     = juce::Colour (0xffa85ca6);   // アメジスト・モーヴシャドウ（02区画）
-            ice      = juce::Colour (0xffdc7692);   // ローズシャンパン・ハイライター
+            inkSoft  = juce::Colour (0xff6e3b50);   // モーヴ・トープ (WCAG AA >=4.8:1)
+            yellow   = juce::Colour (0xffc83264);   // クチュール・ルビーローズ主アクセント (白文字 5.1:1)
+            yellowDk = juce::Colour (0xffa6224e);
+            green    = juce::Colour (0xffba4248);   // ローズ・テラコッタチーク (白文字 5.3:1)
+            salmon   = juce::Colour (0xffcc2e58);   // ベリー・リップティント (白文字 5.1:1)
+            blue     = juce::Colour (0xff8c448e);   // アメジスト・モーヴシャドウ (白文字 6.3:1)
+            ice      = juce::Colour (0xffb8466e);   // ローズクォーツ・ディープ (白文字 5.1:1)
             track    = juce::Colour (0xffebc0d2);   // フェイスパウダー・ローズ溝
             badge    = juce::Colour (0xfffff6f9);
             metalHi   = juce::Colour (0xffffe6d4);  // シャンパン・ローズゴールド
@@ -235,12 +231,12 @@ namespace Palette
             panelLn  = juce::Colour (0xff9ea4cc);   // プラチナ・スターリングシルバー枠
             ink      = juce::Colour (0xff1e1a3a);   // ミッドナイト・ネイビーバイオレット文字
             inkSoft  = juce::Colour (0xff56507c);   // ライラック・スレート副文字
-            yellow   = juce::Colour (0xff7654d8);   // クリスタル・アイリス主アクセント
-            yellowDk = juce::Colour (0xff5838b8);
-            green    = juce::Colour (0xff468ed8);   // アイスサファイア・プリズム（01区画＆ONスイッチ）
-            salmon   = juce::Colour (0xffd04a96);   // クール・フューシャベリー（03区画）
-            blue     = juce::Colour (0xff8456d2);   // ロイヤル・アメジストシャドウ（02区画）
-            ice      = juce::Colour (0xff5298e6);   // ダイヤモンド・ブルーシマー
+            yellow   = juce::Colour (0xff6644c8);   // クリスタル・アイリス主アクセント (白文字 6.5:1)
+            yellowDk = juce::Colour (0xff4e2ea8);
+            green    = juce::Colour (0xff296fc0);   // アイスサファイア・プリズム (白文字 5.1:1)
+            salmon   = juce::Colour (0xffba3682);   // クール・フューシャベリー (白文字 5.3:1)
+            blue     = juce::Colour (0xff7246c0);   // ロイヤル・アメジストシャドウ (白文字 6.3:1)
+            ice      = juce::Colour (0xff266ebe);   // ダイヤモンド・サファイア (白文字 5.2:1)
             track    = juce::Colour (0xffcecaec);   // ラベンダーパウダー溝
             badge    = juce::Colour (0xfffaf9ff);
             metalHi   = juce::Colour (0xfff6f9ff);  // プラチナ・スターリングシルバー（銀金具）
@@ -280,13 +276,13 @@ namespace Palette
             panel2   = juce::Colour (0xffd4efe6);   // プレスト・セラドンミントパウダー
             panelLn  = juce::Colour (0xff7ebcae);   // ミント・シャンパンゴールド枠
             ink      = juce::Colour (0xff143630);   // ディープ・フォレストティール文字
-            inkSoft  = juce::Colour (0xff447268);   // セージ・ティール副文字
-            yellow   = juce::Colour (0xff209882);   // ロイヤル・エメラルドミント主アクセント
-            yellowDk = juce::Colour (0xff147664);
-            green    = juce::Colour (0xff26a48c);   // マカロン・ミントグリーン（01区画＆ONスイッチ）
-            salmon   = juce::Colour (0xffe05e78);   // カメリア・コーラルローズ差し色（03区画）
-            blue     = juce::Colour (0xff328cb8);   // アクアマリン・ラグーンビジュー（02区画）
-            ice      = juce::Colour (0xff30b09a);   // パール・アクアハイライター
+            inkSoft  = juce::Colour (0xff38635a);   // セージ・ティール副文字 (WCAG AA >=5.2:1)
+            yellow   = juce::Colour (0xff137a68);   // ロイヤル・エメラルドミント主アクセント (白文字 5.2:1)
+            yellowDk = juce::Colour (0xff0d5e50);
+            green    = juce::Colour (0xff157d6a);   // ディープ・セラドンミント (白文字 5.0:1)
+            salmon   = juce::Colour (0xffc6405c);   // カメリア・コーラルローズ差し色 (白文字 4.9:1)
+            blue     = juce::Colour (0xff1f6f98);   // アクアマリン・ラグーンビジュー (白文字 5.5:1)
+            ice      = juce::Colour (0xff167c72);   // パール・ディープアクア (白文字 5.0:1)
             track    = juce::Colour (0xffbae0d4);   // ミントパウダー溝
             badge    = juce::Colour (0xfff7fefa);
             metalHi   = juce::Colour (0xfffff2d6);  // シャンパン・イエローゴールド金具
@@ -303,13 +299,13 @@ namespace Palette
             panel2   = juce::Colour (0xfffce0c8);   // プレスト・アプリコットコーラルチーク
             panelLn  = juce::Colour (0xffdca076);   // ハニー・イエローゴールド枠
             ink      = juce::Colour (0xff401e12);   // ロースト・カカオブラウン文字
-            inkSoft  = juce::Colour (0xff804e3a);   // シナモン・ピーチ副文字
-            yellow   = juce::Colour (0xffe46434);   // 完熟アプリコット・コーラル主アクセント
-            yellowDk = juce::Colour (0xffc04a1e);
-            green    = juce::Colour (0xffe67834);   // フレッシュ・マンゴーオレンジ（01区画＆ONスイッチ）
-            salmon   = juce::Colour (0xffea5446);   // ジューシー・白桃コーラルティント（03区画）
-            blue     = juce::Colour (0xffc65864);   // テラコッタ・フィグローズ（02区画）
-            ice      = juce::Colour (0xffe4844a);   // ハニーシャンパン・グロウ
+            inkSoft  = juce::Colour (0xff6e402e);   // シナモン・ピーチ副文字 (WCAG AA >=5.3:1)
+            yellow   = juce::Colour (0xffc24d18);   // 完熟アプリコット・アンバー主アクセント (白文字 4.8:1)
+            yellowDk = juce::Colour (0xff9e3a0e);
+            green    = juce::Colour (0xffba5516);   // リッチ・マンゴーテラコッタ (白文字 4.8:1)
+            salmon   = juce::Colour (0xffc83c30);   // ジューシー・ディープコーラルティント (白文字 5.1:1)
+            blue     = juce::Colour (0xffad4250);   // テラコッタ・フィグローズ (白文字 5.7:1)
+            ice      = juce::Colour (0xffb25318);   // ハニーアンバー・グロウ (白文字 5.0:1)
             track    = juce::Colour (0xfff0cab0);   // ピーチパウダー溝
             badge    = juce::Colour (0xfffffaf5);
             metalHi   = juce::Colour (0xfffff4d0);  // 24K ハニー・イエローゴールド金具
@@ -318,41 +314,41 @@ namespace Palette
             mirrorTop = juce::Colour (0xffea8458);  // サンセット・パパラチア鏡面
             mirrorBot = juce::Colour (0xff4a1a0c);
         }
-        else if (mode == 6)   // ネオン (Cyber Neon): 配信・ゲーミング向け サイバーネオン配色
+        else if (mode == 6)   // ネオン (Broadcast Dark): 洗練された配信・放送スタジオダーク配色
         {
-            bgTop    = juce::Colour (0xff0b0c18);
-            bgBot    = juce::Colour (0xff05060c);
-            panel    = juce::Colour (0xff121528);
-            panel2   = juce::Colour (0xff191d36);
-            panelLn  = juce::Colour (0xff313b68);
-            ink      = juce::Colour (0xffeef6ff);
-            inkSoft  = juce::Colour (0xff8ea2c8);
-            yellow   = juce::Colour (0xff00f0ff);   // サイバーシアン主アクセント
-            yellowDk = juce::Colour (0xff00bdd0);
-            green    = juce::Colour (0xff00ff9d);   // ネオンミント
-            salmon   = juce::Colour (0xffff2a85);   // ネオンマゼンタ
-            blue     = juce::Colour (0xffa855f7);   // エレクトリックバイオレット
+            bgTop    = juce::Colour (0xff0d101b);
+            bgBot    = juce::Colour (0xff080a12);
+            panel    = juce::Colour (0xff141929);
+            panel2   = juce::Colour (0xff1c2338);
+            panelLn  = juce::Colour (0xff2f3b5c);
+            ink      = juce::Colour (0xffeef4ff);
+            inkSoft  = juce::Colour (0xff94a6c8);
+            yellow   = juce::Colour (0xff22d3ee);   // 洗練されたブロードキャスト・シアン主CTA
+            yellowDk = juce::Colour (0xff0891b2);
+            green    = juce::Colour (0xff34d399);   // クリア・エメラルドミント
+            salmon   = juce::Colour (0xfff472b6);   // ソフト・マゼンタローズ
+            blue     = juce::Colour (0xff818cf8);   // インディゴ・バイオレット
             ice      = juce::Colour (0xff38bdf8);
-            track    = juce::Colour (0xff23294a);
-            badge    = juce::Colour (0xffeef6ff);
+            track    = juce::Colour (0xff252e48);
+            badge    = juce::Colour (0xffeef4ff);
         }
-        else if (mode == 9)   // スタジオ (Studio Pro): プロミュージシャン・エンジニア向け アナログコンソール配色
+        else if (mode == 9)   // スタジオ (Studio Pro): モダン・マスタリングコンソール・グラファイト配色
         {
-            bgTop    = juce::Colour (0xff191715);
-            bgBot    = juce::Colour (0xff100e0c);
-            panel    = juce::Colour (0xff24201d);
-            panel2   = juce::Colour (0xff2e2925);
-            panelLn  = juce::Colour (0xff4c433b);
-            ink      = juce::Colour (0xfff4ece1);   // ウォームシルク刻印文字
-            inkSoft  = juce::Colour (0xffb2a596);
-            yellow   = juce::Colour (0xffe8a948);   // VUメーター・アンバーブラス
-            yellowDk = juce::Colour (0xffc6882c);
-            green    = juce::Colour (0xff64b878);   // コンソールシグナルグリーン
-            salmon   = juce::Colour (0xffe0634e);   // ピークインジケータ・バーミリオン
-            blue     = juce::Colour (0xff6299b8);   // Neve/API スチールブルー
-            ice      = juce::Colour (0xffdfa44e);
-            track    = juce::Colour (0xff3a332d);
-            badge    = juce::Colour (0xfff4ece1);
+            bgTop    = juce::Colour (0xff16171a);
+            bgBot    = juce::Colour (0xff101114);
+            panel    = juce::Colour (0xff1e2025);
+            panel2   = juce::Colour (0xff272a31);
+            panelLn  = juce::Colour (0xff3c414c);
+            ink      = juce::Colour (0xfff1f3f5);   // シルク・ニュートラルホワイト刻印文字
+            inkSoft  = juce::Colour (0xff9da5b4);
+            yellow   = juce::Colour (0xffe5a646);   // VUメーター・ウォームアンバー
+            yellowDk = juce::Colour (0xffc2852a);
+            green    = juce::Colour (0xff4ade80);   // コンソールシグナルグリーン
+            salmon   = juce::Colour (0xffef6b62);   // ピークインジケータ・バーミリオン
+            blue     = juce::Colour (0xff60a5fa);   // スタジオ・スチールブルー
+            ice      = juce::Colour (0xff7dd3fc);
+            track    = juce::Colour (0xff31353f);
+            badge    = juce::Colour (0xfff1f3f5);
         }
         else if (mode == 7)   // 色覚サポート: Okabe-Ito カラーユニバーサル配色 (高コントラスト)
         {
@@ -495,7 +491,7 @@ namespace Palette
             panel2   = juce::Colour (0xfff3efe4);
             panelLn  = juce::Colour (0xffddd6c7);
             ink      = juce::Colour (0xff263b54);
-            inkSoft  = juce::Colour (0xff5a6d82);
+            inkSoft  = juce::Colour (0xff4b5d72);
             yellow   = juce::Colour (0xffdac438);
             yellowDk = juce::Colour (0xffb8a224);
             green    = juce::Colour (0xff62a888);
@@ -525,27 +521,27 @@ namespace Palette
         }
         else
         {
-            // 既定テーマ (mode == 0): 宵闇のミッドナイト・インディゴと温かなアンバー・ローズ・セルリアン玉ボケ配色
-            bgTop    = juce::Colour (0xff060a1c);   // 深いミッドナイト・インディゴ夜空
-            bgBot    = juce::Colour (0xff03060f);   // 森陰のディープ・キャノピーシャドウ
-            panel    = juce::Colour (0xff081024);   // 宵闇を透かすミッドナイト・サファイアガラス
-            panel2   = juce::Colour (0xff0f1a36);   // 柔らかな玉ボケ光を宿すトワイライト・インディゴ面
-            panelLn  = juce::Colour (0xff2c406e);   // 繊細なインディゴ・シャンパン枠
-            ink      = juce::Colour (0xfffff7eb);   // 灯火のウォーム・シャンパンアイボリー文字
-            inkSoft  = juce::Colour (0xffb8c8e2);   // 穏やかなスターライト・シルバーブルー副文字
-            yellow   = juce::Colour (0xffffb84d);   // 祝祭のランタン・アンバーゴールド（主アクセント）
-            yellowDk = juce::Colour (0xffcc8628);
-            green    = juce::Colour (0xff38d9bf);   // バイオルミネセンス・シアンジェイド（01 クリーン）
-            salmon   = juce::Colour (0xffff708e);   // トワイライト・ローズコーラル玉ボケ（03 空間）
-            blue     = juce::Colour (0xff58b8ff);   // 澄んだ夜空のセルリアン・シアン玉ボケ（02 声キャラ）
-            ice      = juce::Colour (0xff64dcff);   // スカイ・シアンボケの煌めき
-            track    = juce::Colour (0xff152242);
-            badge    = juce::Colour (0xfffff7eb);
-            metalHi   = juce::Colour (0xffffefd0);
-            metalMid  = juce::Colour (0xffe8a64c);
-            metalDark = juce::Colour (0xff6e4218);
-            mirrorTop = juce::Colour (0xff182c5e);
-            mirrorBot = juce::Colour (0xff050916);
+            // 既定テーマ (mode == 0): モダン・プロスタジオ・スレートグラファイト配色 (FabFilter / Soothe2 / Linear 系の静謐な色秩序)
+            bgTop    = juce::Colour (0xff11151c);   // ディープ・スタジオカーボン上端
+            bgBot    = juce::Colour (0xff0b0e14);   // オブシディアン・スタジオベース下端
+            panel    = juce::Colour (0xff171c26);   // マット・エレベーテッドカード面
+            panel2   = juce::Colour (0xff1f2633);   // コントロール・ヘッダ面
+            panelLn  = juce::Colour (0xff2e384a);   // 精密な1pxスレート境界線
+            ink      = juce::Colour (0xffedf2f8);   // クリスプ・スタジオホワイト文字 (14.5:1)
+            inkSoft  = juce::Colour (0xff9aa7ba);   // 落ち着いたクールグレー副文字 (6.8:1)
+            yellow   = juce::Colour (0xffe5a445);   // リファインド・ウォームアンバー（主CTA専用）
+            yellowDk = juce::Colour (0xffc08228);
+            green    = juce::Colour (0xff2dd4bf);   // 静謐なアコースティック・ミントティール（整音）
+            salmon   = juce::Colour (0xfff07178);   // ソフト・スタジオコーラル（警告・ミュート専用）
+            blue     = juce::Colour (0xff58a6ff);   // クリスプ・スタジオアズール（声質・ダイナミクス）
+            ice      = juce::Colour (0xff67d4f4);   // ソフト・スカイシアン（空間・空気感）
+            track    = juce::Colour (0xff262f3f);   // ニュートラル・リセストトラック溝
+            badge    = juce::Colour (0xffedf2f8);
+            metalHi   = juce::Colour (0xffe2e8f0);
+            metalMid  = juce::Colour (0xff64748b);
+            metalDark = juce::Colour (0xff334155);
+            mirrorTop = juce::Colour (0xff243042);
+            mirrorBot = juce::Colour (0xff0f141d);
         }
     }
 
@@ -739,14 +735,17 @@ public:
         const float rad = s_useKawaii ? r.getHeight() * 0.48f : 7.5f;
         const bool lightTheme = Palette::panel2.getPerceivedBrightness() > 0.55f;
 
-        if (s_knobStyle >= 7)
+        if (! s_knobInnerArt || s_knobStyle >= 7)
         {
-            // 🕰 歴代タイムマシン (v1.0.0〜v4.3.3): ジュエル装飾なしのフラット／クリーンなクラシックセレクター
-            const float legacyRad = (s_knobStyle == 8 || s_knobStyle == 9) ? 5.0f : 6.0f;
-            g.setColour (isButtonDown ? Palette::panel2.darker (0.06f) : Palette::panel2);
-            g.fillRoundedRectangle (r, legacyRad);
+            // ★ クリーン・スタジオセレクター（既定）＆歴代タイムマシン：
+            //   黄色い宝石メダリオンや過剰なグロス反射を排した、端正な1px枠＋ミニマルシェブロン描画
+            const float cleanRad = (s_knobStyle == 8 || s_knobStyle == 9) ? 5.0f : 6.0f;
+            const auto fillCol = isButtonDown ? Palette::panel2.darker (0.06f)
+                                              : (lightTheme ? Palette::panel.interpolatedWith (Palette::panel2, 0.55f) : Palette::panel2);
+            g.setColour (fillCol);
+            g.fillRoundedRectangle (r, cleanRad);
             g.setColour (Palette::panelLn);
-            g.drawRoundedRectangle (r, legacyRad, 1.2f);
+            g.drawRoundedRectangle (r, cleanRad, 1.0f);
 
             const float bx = r.getRight() - 14.0f;
             const float by = r.getCentreY();
@@ -755,7 +754,7 @@ public:
             chev.lineTo          (bx,        by + 2.2f);
             chev.lineTo          (bx + 4.0f, by - 1.8f);
             g.setColour (Palette::inkSoft);
-            g.strokePath (chev, juce::PathStrokeType (1.7f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.strokePath (chev, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
             return;
         }
 
@@ -1427,22 +1426,27 @@ public:
         const float ring   = juce::jmax (isHero ? 4.8f : 3.4f, radius * (isHero ? 0.082f : 0.068f));
         const int group = (int) sl.getProperties().getWithDefault ("signalGroup", 2);
         const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.52f;
-        const bool isMidnightFlagship = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0);
+        const bool isMidnightFlagship = (s_knobInnerArt && ! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0);
         const auto groupAccent = isMidnightFlagship
             ? ((group == 0 && sl.getX() < 500) ? Palette::green
              : (group == 1 || (group == 0 && sl.getX() >= 500)) ? Palette::yellow
                           : Palette::salmon.interpolatedWith (Palette::yellow, 0.35f))
-            : (group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc);
+            : (! s_knobInnerArt
+                ? (group == 0 ? Palette::green : group == 1 ? Palette::blue : Palette::ice)
+                : (group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc));
 
         float effInt = 0.0f;
         int   effDir = 1;
         juce::String effTagJa, effTagEn;
         queryKnobEffect (sl, pos, effInt, effDir, effTagJa, effTagEn);
         const bool isWorking = sl.isEnabled() && (effInt > 0.02f);
-        const juce::Colour dirTint = isMidnightFlagship
-            ? (group == 0 ? Palette::yellow : (group == 1 ? Palette::salmon : Palette::yellow))
-            : ((effDir < 0) ? Palette::ice : Palette::yellow);
+        const juce::Colour dirTint = ! s_knobInnerArt
+            ? groupAccent
+            : (isMidnightFlagship
+                ? (group == 0 ? Palette::yellow : (group == 1 ? Palette::salmon : Palette::yellow))
+                : ((effDir < 0) ? Palette::ice : Palette::yellow));
         const auto accent = ! sl.isEnabled() ? Palette::inkSoft
+                          : ! s_knobInnerArt ? (isWorking ? groupAccent : Palette::inkSoft)
                           : isWorking        ? groupAccent.interpolatedWith (dirTint, 0.32f * effInt).brighter (0.16f * effInt)
                           : (s_accessMode == 2) ? groupAccent.interpolatedWith (Palette::inkSoft, 0.52f).withAlpha (0.58f)
                                                 : groupAccent.interpolatedWith (Palette::metalHi, 0.25f).withAlpha (0.92f);
@@ -1728,6 +1732,80 @@ public:
                 }
                 return;
             }
+        }
+
+        // ★ モダン・プロスタジオ・クリーンダイヤル (!s_knobInnerArt 既定モード):
+        //   FabFilter / Soothe2 / Linear の設計原則に基づき、待機ノブの色汚染や過剰な花火・光輪を排し、
+        //   ニュートラルな溝＋単色セクションアーク＋マット文字盤＋高視認指針だけで「今効いているノブ」を一目で伝える。
+        if (! s_knobInnerArt)
+        {
+            for (float tNorm : { 0.0f, 0.5f, 1.0f })
+            {
+                const float a = startAngle + (endAngle - startAngle) * tNorm;
+                const float rIn  = radius + 3.4f;
+                const float rOut = radius + (isHero ? 7.2f : 6.0f);
+                g.setColour (lightPanel ? Palette::inkSoft.withAlpha (0.48f) : Palette::panelLn.withAlpha (0.72f));
+                g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
+                            c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), 1.35f);
+            }
+
+            juce::Path track;
+            track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+            g.setColour (lightPanel ? Palette::track.darker (0.14f) : Palette::track);
+            g.strokePath (track, juce::PathStrokeType (ring, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            if (isWorking)
+            {
+                juce::Path value;
+                value.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                g.setColour (groupAccent.withAlpha (0.15f + 0.10f * effInt));
+                g.strokePath (value, juce::PathStrokeType (ring * 2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.setColour (groupAccent);
+                g.strokePath (value, juce::PathStrokeType (ring * 1.06f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+                const float tipX = c.x + radius * std::sin (angle), tipY = c.y - radius * std::cos (angle);
+                g.setColour (lightPanel ? juce::Colours::white : groupAccent.brighter (0.35f));
+                g.fillEllipse (tipX - ring * 0.48f, tipY - ring * 0.48f, ring * 0.96f, ring * 0.96f);
+            }
+
+            const float kr = radius - ring - (isHero ? 3.8f : 3.0f);
+            if (kr >= 5.0f)
+            {
+                g.setColour (juce::Colours::black.withAlpha (lightPanel ? 0.11f : 0.22f));
+                g.fillEllipse (c.x - kr, c.y - kr + 1.6f, kr * 2.0f, kr * 2.0f);
+
+                const auto capTop = lightPanel ? Palette::panel2.brighter (0.02f) : Palette::panel2.brighter (0.06f);
+                const auto capBot = lightPanel ? Palette::panel2.darker   (0.09f) : Palette::panel.darker  (0.08f);
+                g.setGradientFill (juce::ColourGradient (capTop, c.x, c.y - kr, capBot, c.x, c.y + kr, false));
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+
+                g.setColour (isWorking ? groupAccent.withAlpha (0.82f)
+                                       : (lightPanel ? Palette::panelLn.darker (0.24f) : Palette::panelLn));
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.6f : 1.3f);
+
+                const float sinA = std::sin (angle), cosA = std::cos (angle);
+                const float pIn  = kr * 0.22f;
+                const float pOut = kr * 0.82f;
+                const auto needleCol = isWorking
+                    ? Palette::ink
+                    : (lightPanel ? Palette::inkSoft.darker (0.18f) : Palette::inkSoft)
+                          .withAlpha (s_accessMode == 2 ? 0.50f : 0.90f);
+                g.setColour (needleCol);
+                g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA,
+                            c.x + pOut * sinA, c.y - pOut * cosA,
+                            juce::jmax (2.4f, kr * 0.082f));
+
+                const float hubR = juce::jmax (2.1f, kr * 0.085f);
+                g.setColour (isWorking ? groupAccent : (lightPanel ? Palette::panelLn.darker (0.26f) : Palette::panelLn));
+                g.fillEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f);
+
+                if (! isWorking && s_accessMode == 2)
+                {
+                    g.setColour ((lightPanel ? Palette::panel2 : Palette::bgBot).withAlpha (0.38f));
+                    g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                }
+            }
+            return;
         }
 
         // ★ アクティブ音響コロナ (Active Sonic Corona):
@@ -2823,14 +2901,16 @@ public:
 
     static float lampWidthFor (const juce::Button& b) noexcept
     {
-        return b.getClickingTogglesState() ? kLampBox : 0.0f;
+        if (! b.getClickingTogglesState())
+            return 0.0f;
+        return s_knobInnerArt ? kLampBox : 13.0f;
     }
 
     void drawButtonBackground (juce::Graphics& g, juce::Button& b, const juce::Colour& bg,
                                bool over, bool down) override
     {
         auto r = b.getLocalBounds().toFloat().reduced (0.5f);
-        const float rad = s_useKawaii ? r.getHeight() * 0.5f : 7.5f;
+        const float rad = (s_knobInnerArt && s_useKawaii) ? r.getHeight() * 0.5f : (! s_knobInnerArt ? 6.0f : 7.5f);
         const bool  on  = b.getToggleState();
         const bool  sw  = b.getClickingTogglesState();
         const bool  isHoldTrigger = (b.getComponentID() == "compareOriginal");
@@ -2838,8 +2918,8 @@ public:
         const bool  isPureSwitch = sw && ! isHoldTrigger
                                    && (tb == nullptr || tb->getButtonText().trim().isEmpty());
         const bool  lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
-        const bool  lightSw    = (s_useKawaii || lightPanel);
-        const bool  isMidnightFlagship = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
+        const bool  lightSw    = ((s_knobInnerArt && s_useKawaii) || lightPanel);
+        const bool  isMidnightFlagship = (s_knobInnerArt && ! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
 
         auto col = on ? b.findColour (juce::TextButton::buttonOnColourId) : bg;
         if (on && col.getFloatAlpha() < 0.85f)
@@ -2901,23 +2981,17 @@ public:
             }
             if (on)
             {
-                const auto lampCol = (lightSw || col.getPerceivedBrightness() < 0.72f)
-                                   ? juce::Colours::white
-                                   : Palette::readableOn (col);
-                if (s_knobStyle != 5)
+                if (s_knobStyle != 5 && s_knobInnerArt)
                 {
-                    g.setColour (lampCol.withAlpha (0.32f));
-                    g.fillEllipse (thumb.expanded (2.0f));
+                    g.setColour (juce::Colours::white.withAlpha (0.28f));
+                    g.fillEllipse (thumb.expanded (1.8f));
                 }
-                g.setColour (lampCol);
+                g.setColour (juce::Colours::white);
                 g.fillEllipse (thumb);
                 if (s_knobStyle != 5)
                 {
-                    g.setColour (col.darker (0.22f).withAlpha (0.35f));
-                    g.drawEllipse (thumb.reduced (0.6f), 1.1f);
-                    g.setColour (juce::Colours::white.withAlpha (0.92f));
-                    g.fillEllipse (thumb.getX() + thumbD * 0.22f, thumb.getY() + thumbD * 0.16f,
-                                   thumbD * 0.34f, thumbD * 0.34f);
+                    g.setColour (col.darker (0.28f).withAlpha (0.42f));
+                    g.drawEllipse (thumb.reduced (0.5f), 1.0f);
                 }
             }
             else
@@ -2936,6 +3010,27 @@ public:
         if (s_knobStyle == 5)
         {
             g.setColour (col);
+            g.fillRoundedRectangle (r, rad);
+        }
+        else if (! s_knobInnerArt)
+        {
+            // ★ モダン・プロスタジオ・フラットマットボタン (!s_knobInnerArt 既定モード):
+            //   ハート飾り・>>><<<シェブロン・プラスチック反射グロス・下辺ライトパイプを排し、端正な1px境界と明確なON/OFF対比に統一
+            if (isHoldTrigger)
+            {
+                const auto holdFill = down ? Palette::yellow.withAlpha (lightPanel ? 0.22f : 0.28f)
+                                           : (over ? Palette::panel2.brighter (0.06f) : Palette::panel2);
+                g.setColour (holdFill);
+                g.fillRoundedRectangle (r, rad);
+                g.setColour (down ? Palette::yellow : Palette::panelLn.brighter (over ? 0.20f : 0.08f));
+                g.drawRoundedRectangle (r, rad, down ? 1.6f : 1.1f);
+                return;
+            }
+            const auto baseFill = (! on && lightPanel && col == Palette::panel2)
+                                ? Palette::panel2.brighter (over ? 0.04f : 0.0f)
+                                : col;
+            g.setGradientFill (juce::ColourGradient (baseFill.brighter (on ? 0.05f : 0.02f), r.getX(), r.getY(),
+                                                     baseFill.darker   (on ? 0.06f : 0.02f), r.getX(), r.getBottom(), false));
             g.fillRoundedRectangle (r, rad);
         }
         else if (isHoldTrigger)
@@ -3144,8 +3239,8 @@ public:
 
         if (! sw)
         {
-            // ★ 押すだけのトリガーパッドには下辺センターにマイクロ・ライトパイプバーを添えて「押すボタン」を表現
-            if (s_knobStyle != 5 && r.getWidth() >= 48.0f)
+            // ★ 装飾モード時のみ押すだけのトリガーパッドにマイクロ・ライトパイプバーを添える
+            if (s_knobInnerArt && s_knobStyle != 5 && r.getWidth() >= 48.0f)
             {
                 const float barW = juce::jmin (28.0f, r.getWidth() * 0.36f);
                 const juce::Colour pipeCol = (isMidnightFlagship && col != Palette::panel2 && col != Palette::yellow)
@@ -3154,6 +3249,25 @@ public:
                                                               : (lightPanel ? Palette::yellowDk.withAlpha (0.75f) : Palette::inkSoft));
                 g.setColour (pipeCol.withAlpha (over ? 0.92f : 0.68f));
                 g.fillRoundedRectangle (r.getCentreX() - barW * 0.5f, r.getBottom() - 3.2f, barW, 2.0f, 1.0f);
+            }
+            return;
+        }
+
+        if (! s_knobInnerArt)
+        {
+            // ★ モダン・プロスタジオ LEDインジケーター（ON=塗りつぶし丸、OFF=端正な中抜きリングで省スペースかつ色覚多様性にも配慮）
+            const float cx = r.getX() + 8.0f;
+            const float cy = r.getCentreY();
+            const float dotR = 3.1f;
+            if (on)
+            {
+                g.setColour (Palette::readableOn (col));
+                g.fillEllipse (cx - dotR, cy - dotR, dotR * 2.0f, dotR * 2.0f);
+            }
+            else
+            {
+                g.setColour (Palette::inkSoft.withAlpha (0.68f));
+                g.drawEllipse (cx - dotR + 0.4f, cy - dotR + 0.4f, (dotR - 0.4f) * 2.0f, (dotR - 0.4f) * 2.0f, 1.25f);
             }
             return;
         }
@@ -3243,7 +3357,7 @@ public:
                                 b.getButtonText(), area.getWidth());
         g.setFont (f);
         const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
-        const bool isMidnightFlagship = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
+        const bool isMidnightFlagship = (s_knobInnerArt && ! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
         const auto onCol = b.findColour (juce::TextButton::buttonOnColourId);
         const auto rawOffBg = b.findColour (juce::TextButton::buttonColourId);
         const auto effOffBg = isMidnightFlagship ? juce::Colour (0xff071024)
@@ -3308,6 +3422,8 @@ public:
         tl.draw (g, bounds.reduced ((float) tipPad).withTrimmedTop (2.0f));
     }
 
+    static bool isKnobInnerArtEnabled() noexcept { return s_knobInnerArt; }
+
 private:
     float fontScale { 1.0f };
     static constexpr int tipPad = 10;
@@ -3317,7 +3433,7 @@ private:
     static bool s_useKawaii;
     static int  s_knobStyle;                   // 0=standard, 1=juice, 2=liver, 3=studio, 4=neon
     inline static int  s_accessMode   = 0;     // 0=標準デザイン, 1=◉くっきり大文字, 2=★かんたん3ステップ, 3=●マット・具体表記
-    inline static bool s_knobInnerArt = true;  // v5.5.0: ノブ内部の装飾デザイン（宝石・歯車・模様）ON/OFF
+    inline static bool s_knobInnerArt = false; // v5.8.0: 既定はクリーンなモダン・プロスタジオ表示（ONで装飾アート有効）
     static float s_juicePhase;                 // juice bubble/wobble animation phase
 };
 
@@ -3774,6 +3890,7 @@ public:
     // returns true if a themed background was painted (caller then skips its own)
     bool paint (juce::Graphics& g)
     {
+        if (! GzzioLnF::isKnobInnerArtEnabled()) return false; // クリーンスタジオ既定時はクマ・額縁・丘などの装飾背景を描かない
         if (mode == 1) { paintYuruKawa  (g); return true; }
         if (mode == 8) { paintYuruNight (g); return true; }   // v2.11.0 ゆるふわ・よる
         if (mode == 2) { paintNature    (g); return true; }
@@ -4052,10 +4169,10 @@ public:
     // ---- 春 ----
     void paintSpring (juce::Graphics& g, juce::Rectangle<float> r)
     {
-        g.setGradientFill ({ juce::Colour (0xffffd9e6), r.getCentreX(), r.getY(),
-                             juce::Colour (0xfffff6ea), r.getCentreX(), r.getBottom(), false });
+        g.setGradientFill ({ juce::Colour (0xffe8f2eb), r.getCentreX(), r.getY(),
+                             juce::Colour (0xfff4f8f2), r.getCentreX(), r.getBottom(), false });
         g.fillRect (r);
-        g.setColour (juce::Colour (0x4c9ed49e));
+        g.setColour (juce::Colour (0x337bb68a));
         g.fillEllipse (r.getX()-140, r.getBottom()-72, r.getWidth()*0.85f, 170);
         g.fillEllipse (r.getCentreX()-40, r.getBottom()-58, r.getWidth()*0.85f, 160);
     }
@@ -4630,37 +4747,35 @@ public:
                                      juce::jmax (1, area.getHeight()), true);
             juce::Graphics cg (neonCache);
             auto rz = r.withZeroOrigin();
-            cg.setGradientFill (juce::ColourGradient (juce::Colour (0xff070812), 0.0f, 0.0f,
-                                                      juce::Colour (0xff120924), 0.0f, rz.getBottom(), false));
+            cg.setGradientFill (juce::ColourGradient (juce::Colour (0xff0b0e18), 0.0f, 0.0f,
+                                                      juce::Colour (0xff0e1222), 0.0f, rz.getBottom(), false));
             cg.fillRect (rz);
 
-            // サイバーネオングロー（左上シアン・右下マゼンタ）
+            // 控えめなブロードキャスト・アンビエントグロー
             const float maxD = juce::jmax (rz.getWidth(), rz.getHeight());
-            cg.setGradientFill (juce::ColourGradient (juce::Colour (0x2a00f0ff), rz.getWidth() * 0.18f, rz.getHeight() * 0.20f,
-                                                      juce::Colour (0x0000f0ff), rz.getWidth() * 0.18f + maxD * 0.45f, rz.getHeight() * 0.20f, true));
+            cg.setGradientFill (juce::ColourGradient (juce::Colour (0x1422d3ee), rz.getWidth() * 0.18f, rz.getHeight() * 0.20f,
+                                                      juce::Colour (0x0022d3ee), rz.getWidth() * 0.18f + maxD * 0.45f, rz.getHeight() * 0.20f, true));
             cg.fillRect (rz);
-            cg.setGradientFill (juce::ColourGradient (juce::Colour (0x2aff2a85), rz.getWidth() * 0.82f, rz.getHeight() * 0.78f,
-                                                      juce::Colour (0x00ff2a85), rz.getWidth() * 0.82f + maxD * 0.45f, rz.getHeight() * 0.78f, true));
+            cg.setGradientFill (juce::ColourGradient (juce::Colour (0x12818cf8), rz.getWidth() * 0.82f, rz.getHeight() * 0.78f,
+                                                      juce::Colour (0x00818cf8), rz.getWidth() * 0.82f + maxD * 0.45f, rz.getHeight() * 0.78f, true));
             cg.fillRect (rz);
 
-            // パースペクティブ・ネオングリッド（下部地平線）
-            const float horizon = rz.getHeight() * 0.68f;
-            cg.setColour (juce::Colour (0x2400f0ff));
+            // 視認性を邪魔しない繊細な下部グリッド
+            const float horizon = rz.getHeight() * 0.72f;
+            cg.setColour (juce::Colour (0x1222d3ee));
             for (int i = -10; i <= 10; ++i)
             {
                 const float xTop = rz.getCentreX() + (float) i * (rz.getWidth() * 0.032f);
                 const float xBot = rz.getCentreX() + (float) i * (rz.getWidth() * 0.12f);
-                cg.drawLine (xTop, horizon, xBot, rz.getBottom(), 1.2f);
+                cg.drawLine (xTop, horizon, xBot, rz.getBottom(), 1.0f);
             }
-            for (int j = 0; j <= 7; ++j)
+            for (int j = 0; j <= 6; ++j)
             {
-                const float t = (float) j / 7.0f;
+                const float t = (float) j / 6.0f;
                 const float y = horizon + (rz.getBottom() - horizon) * (t * t);
-                cg.setColour (juce::Colour (0xfffe2a85).withAlpha (0.08f + 0.16f * t));
+                cg.setColour (juce::Colour (0xff818cf8).withAlpha (0.04f + 0.07f * t));
                 cg.drawHorizontalLine (juce::roundToInt (y), 0.0f, rz.getRight());
             }
-            cg.setColour (juce::Colour (0xff00f0ff).withAlpha (0.30f));
-            cg.drawHorizontalLine (68, 14.0f, rz.getRight() - 14.0f);
         }
         g.drawImageAt (neonCache, area.getX(), area.getY());
     }
@@ -5508,6 +5623,7 @@ public:
     // ---- 前景: パネルの上に大きく透過配置 ----
     void paintForeground (juce::Graphics& g)
     {
+        if (! GzzioLnF::isKnobInnerArtEnabled()) return; // クリーンスタジオ既定時は前景の透かし模様・粒子オーバーレイを描かない
         auto r = area.toFloat();
         if (mode == 2)
         {
@@ -6014,7 +6130,7 @@ public:
     bool liverTheme()     const { return Palette::isCoutureTheme (themeMode); }
     bool oceanStarTheme() const { return Palette::isOceanStarTheme (themeMode); }
     bool pastelTheme()    const { return themeMode == 1 || themeMode == 8 || liverTheme(); }
-    bool juiceTheme()     const { return ! liteMode && (accessMode == 0 || accessMode == 2) && (themeMode == 1 || themeMode == 8); }
+    bool juiceTheme()     const { return knobInnerArtOn && ! liteMode && (accessMode == 0 || accessMode == 2) && (themeMode == 1 || themeMode == 8); }
     bool nightTheme()     const { return themeMode == 8 || themeMode == 11 || oceanStarTheme(); }   // ゆるふわ・よる / ノワール・ロリータ / 星空・海・黄昏
     void  setAdvanced (bool a) { advancedMode = a; applyModeVisibility(); if (onUiStateChange) onUiStateChange ("ui_advanced", a ? 1 : 0); }
     VocalTuner& getTuner() { return tuner; }
@@ -6071,11 +6187,12 @@ public:
         int         ovLayout;       // overviewLayoutMode (0..3)
         int         knobStyle;      // GzzioLnF::s_knobStyle
     };
-    static constexpr int kLegacyVersionCount = 21;
+    static constexpr int kLegacyVersionCount = 22;
     static const LegacyVersionSpec& getLegacyVersionSpec (int id) noexcept;
     void applyLegacyVersion (int versionId, bool keepEcoGate = true);
     void openLegacyVersionPopup (juce::Rectangle<int> anchorScreenBounds);
     void openSizePopupForTest() { if (sizePopBtn.onClick) sizePopBtn.onClick(); }
+    void openCheckupPopupForTest() { if (checkupButton.onClick) checkupButton.onClick(); }
     void setDenoiseClearVisibleForTest (bool v) { dnClearButton.setVisible (v); resized(); }
     void requestMiniBarMode (bool enable);
     std::shared_ptr<tip::Language> getLanguage() const noexcept { return language; }
@@ -6182,7 +6299,7 @@ private:
         int w { 0 }, h { 0 };
         int themeMode { -1 }, layoutMode { -1 }, accessMode { -1 };
         int legacyVerId { -1 };
-        bool liteMode { false }, english { false }, knobInnerArt { true };
+        bool liteMode { false }, english { false }, knobInnerArt { false };
         bool s0 { false }, s1 { false }, s2 { false };
         bool operator== (const OverviewBackdropKey& o) const noexcept
         {
@@ -6495,7 +6612,7 @@ private:
     // update notice (GitHub Releases check, display only)
     juce::HyperlinkButton updateNotice { juce::String(),
         juce::URL ("https://github.com/gzzio1989/VocalGzzio/releases/latest") };
-    bool knobInnerArtOn { true };
+    bool knobInnerArtOn { false };
     bool autoUpdateCheckOn { true };
     juce::String latestUpdateTag;
     void startUpdateCheck();
