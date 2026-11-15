@@ -521,27 +521,27 @@ namespace Palette
         }
         else
         {
-            // 既定テーマ (mode == 0): モダン・プロスタジオ・スレートグラファイト配色 (FabFilter / Soothe2 / Linear 系の静謐な色秩序)
-            bgTop    = juce::Colour (0xff11151c);   // ディープ・スタジオカーボン上端
-            bgBot    = juce::Colour (0xff0b0e14);   // オブシディアン・スタジオベース下端
-            panel    = juce::Colour (0xff171c26);   // マット・エレベーテッドカード面
-            panel2   = juce::Colour (0xff1f2633);   // コントロール・ヘッダ面
-            panelLn  = juce::Colour (0xff2e384a);   // 精密な1pxスレート境界線
-            ink      = juce::Colour (0xffedf2f8);   // クリスプ・スタジオホワイト文字 (14.5:1)
-            inkSoft  = juce::Colour (0xff9aa7ba);   // 落ち着いたクールグレー副文字 (6.8:1)
-            yellow   = juce::Colour (0xffe5a445);   // リファインド・ウォームアンバー（主CTA専用）
-            yellowDk = juce::Colour (0xffc08228);
-            green    = juce::Colour (0xff2dd4bf);   // 静謐なアコースティック・ミントティール（整音）
-            salmon   = juce::Colour (0xfff07178);   // ソフト・スタジオコーラル（警告・ミュート専用）
-            blue     = juce::Colour (0xff58a6ff);   // クリスプ・スタジオアズール（声質・ダイナミクス）
-            ice      = juce::Colour (0xff67d4f4);   // ソフト・スカイシアン（空間・空気感）
-            track    = juce::Colour (0xff262f3f);   // ニュートラル・リセストトラック溝
+            // 既定テーマ (mode == 0): モダン・プロスタジオ・オブシディアンスレート配色 (FabFilter / Soothe2 / Linear 系の静謐な色秩序)
+            bgTop    = juce::Colour (0xff10141c);   // ディープ・スタジオカーボン上端
+            bgBot    = juce::Colour (0xff0a0d13);   // オブシディアン・スタジオベース下端
+            panel    = juce::Colour (0xff161b25);   // マット・エレベーテッドカード面
+            panel2   = juce::Colour (0xff1e2533);   // コントロール・ヘッダ面
+            panelLn  = juce::Colour (0xff2b3547);   // 精密な1pxスレート境界線
+            ink      = juce::Colour (0xffedf2f8);   // クリスプ・スタジオホワイト文字 (14.8:1)
+            inkSoft  = juce::Colour (0xff9aa8bc);   // 落ち着いたクールスレート副文字 (6.9:1)
+            yellow   = juce::Colour (0xffe2a03f);   // リファインド・ウォームアンバー（主CTA・ピーク注意専用）
+            yellowDk = juce::Colour (0xffbc7d22);
+            green    = juce::Colour (0xff2bc4ad);   // 静謐なアコースティック・ミントティール（整音・ピッチ合致）
+            salmon   = juce::Colour (0xffe86b74);   // ソフト・スタジオコーラル（クリップ・ミュート専用）
+            blue     = juce::Colour (0xff569cf8);   // クリスプ・スタジオアズール（声質・ダイナミクス）
+            ice      = juce::Colour (0xff5ec8e8);   // クリーン・スカイシアン（空間・空気感）
+            track    = juce::Colour (0xff242d3d);   // ニュートラル・リセストトラック溝
             badge    = juce::Colour (0xffedf2f8);
             metalHi   = juce::Colour (0xffe2e8f0);
             metalMid  = juce::Colour (0xff64748b);
             metalDark = juce::Colour (0xff334155);
-            mirrorTop = juce::Colour (0xff243042);
-            mirrorBot = juce::Colour (0xff0f141d);
+            mirrorTop = juce::Colour (0xff222d3f);
+            mirrorBot = juce::Colour (0xff0e131c);
         }
     }
 
@@ -1146,23 +1146,27 @@ public:
                 const float rad = (s_accessMode == 1 || s_accessMode == 3) ? 6.0f : (s_useKawaii ? rf.getHeight() * 0.48f : 5.5f);
                 const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
                 const int group = (int) parentSlider->getProperties().getWithDefault ("signalGroup", 2);
-                const bool isMidnightFlagship = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0);
+                const bool isMidnightFlagship = (s_knobInnerArt && ! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii && s_accessMode == 0);
                 const juce::Colour acc = ! parentSlider->isEnabled() ? Palette::inkSoft
                                        : isMidnightFlagship
                                            ? ((group == 0 && parentSlider->getX() < 500) ? Palette::green
                                             : (group == 1 || (group == 0 && parentSlider->getX() >= 500)) ? Palette::yellow
                                             : Palette::salmon.interpolatedWith (Palette::yellow, 0.35f))
-                                           : (group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc);
+                                           : ! s_knobInnerArt
+                                               ? (group == 0 ? Palette::green : group == 1 ? Palette::blue : Palette::ice)
+                                               : (group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc);
                 const float prop = (float) juce::jlimit (0.0, 1.0, parentSlider->valueToProportionOfLength (parentSlider->getValue()));
 
                 float effInt = 0.0f; int effDir = 0; juce::String tagJa, tagEn;
                 queryKnobEffect (*parentSlider, prop, effInt, effDir, tagJa, tagEn);
                 const bool isWorking = (effInt > 0.02f);
-                const juce::Colour effCol = isMidnightFlagship
-                                          ? acc.interpolatedWith (Palette::yellow, 0.35f)
-                                          : (effDir < 0) ? Palette::green.interpolatedWith (Palette::ice, 0.38f)
-                                          : (effDir > 0) ? Palette::yellow.interpolatedWith (Palette::salmon, 0.35f)
-                                                         : acc;
+                const juce::Colour effCol = ! s_knobInnerArt
+                                          ? acc
+                                          : isMidnightFlagship
+                                              ? acc.interpolatedWith (Palette::yellow, 0.35f)
+                                              : (effDir < 0) ? Palette::green.interpolatedWith (Palette::ice, 0.38f)
+                                              : (effDir > 0) ? Palette::yellow.interpolatedWith (Palette::salmon, 0.35f)
+                                                             : acc;
 
                 if (s_accessMode == 1)  // ◉ くっきり大文字モード: 漆黒ソリッド下地＋太枠＋形状記号 (▼削る / ▲足す / ○待機)
                 {
@@ -1229,7 +1233,33 @@ public:
                 // 標準 または ★ かんたん3ステップスタイル (3ステップ時は待機カプセルを減光して作動中だけに視線を集中させる)
                 const float stepDim = (s_accessMode == 2 && ! isWorking) ? 0.38f : 1.0f;
 
-                if (! lightPanel && (s_knobStyle == 0 || s_knobStyle == 6) && ! s_useKawaii)
+                if (! s_knobInnerArt)
+                {
+                    // ★ モダン・プロスタジオ・リセスト数値ピル（ノブのセクション色 acc と完全一致し、作動中のみ下辺インジケータが点灯）
+                    const auto pillBg = lightPanel
+                        ? Palette::panel2.darker (isWorking ? 0.01f : 0.03f).withAlpha (0.94f * stepDim)
+                        : Palette::bgBot.withAlpha ((isWorking ? 0.68f : 0.48f) * stepDim);
+                    g.setColour (pillBg);
+                    g.fillRoundedRectangle (rf, 5.0f);
+
+                    if (isWorking && prop > 0.01f)
+                    {
+                        const float barMaxW = juce::jmax (8.0f, rf.getWidth() - 12.0f);
+                        const float barX    = rf.getX() + 6.0f;
+                        const float barY    = rf.getBottom() - 2.3f;
+                        g.setColour (acc.withAlpha (0.22f * stepDim));
+                        g.fillRoundedRectangle (barX, barY, barMaxW, 1.5f, 0.75f);
+                        const float fillW = juce::jmax (4.0f, barMaxW * prop);
+                        g.setColour (acc.withAlpha (0.92f * stepDim));
+                        g.fillRoundedRectangle (barX, barY, fillW, 1.8f, 0.9f);
+                    }
+
+                    g.setColour (isWorking
+                        ? acc.withAlpha (0.68f * stepDim)
+                        : (lightPanel ? Palette::panelLn.darker (0.12f) : Palette::panelLn).withAlpha (0.72f * stepDim));
+                    g.drawRoundedRectangle (rf.reduced (0.5f), 5.0f, isWorking ? 1.15f : 1.0f);
+                }
+                else if (! lightPanel && (s_knobStyle == 0 || s_knobStyle == 6) && ! s_useKawaii)
                 {
                     // ★ フラッグシップ・フローティング光学リードアウト（入れ子の四角い枠線を撤廃し、光アンダーライン＆楕円ハローで数値を浮遊表示）
                     const juce::Colour glowC = isWorking ? effCol : acc;
@@ -1739,18 +1769,41 @@ public:
         //   ニュートラルな溝＋単色セクションアーク＋マット文字盤＋高視認指針だけで「今効いているノブ」を一目で伝える。
         if (! s_knobInnerArt)
         {
-            for (float tNorm : { 0.0f, 0.5f, 1.0f })
+            // 11点の精密マイクロスケール目盛り（0%, 50%, 100%はメジャー目盛り線、中間はマイクロドット、作動中は現在値まで点灯）
+            for (int tick = 0; tick <= 10; ++tick)
             {
-                const float a = startAngle + (endAngle - startAngle) * tNorm;
-                const float rIn  = radius + 3.4f;
-                const float rOut = radius + (isHero ? 7.2f : 6.0f);
-                g.setColour (lightPanel ? Palette::inkSoft.withAlpha (0.48f) : Palette::panelLn.withAlpha (0.72f));
-                g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
-                            c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), 1.35f);
+                const float tNorm  = (float) tick * 0.10f;
+                const float a      = startAngle + (endAngle - startAngle) * tNorm;
+                const bool  major  = (tick == 0 || tick == 5 || tick == 10);
+                const bool  passed = isWorking && (tNorm <= pos + 0.015f);
+                const auto  tCol   = passed
+                    ? groupAccent.withAlpha (major ? 0.92f : 0.74f)
+                    : (lightPanel ? Palette::inkSoft.withAlpha (major ? 0.52f : 0.30f)
+                                  : Palette::panelLn.brighter (major ? 0.22f : 0.05f).withAlpha (major ? 0.82f : 0.52f));
+                g.setColour (tCol);
+                if (major)
+                {
+                    const float rIn  = radius + 3.4f;
+                    const float rOut = radius + (isHero ? 7.4f : 6.2f);
+                    g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
+                                c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), 1.4f);
+                }
+                else if (radius >= 16.0f)
+                {
+                    const float rDot = radius + (isHero ? 5.2f : 4.5f);
+                    const float dR   = isHero ? 1.15f : 0.95f;
+                    g.fillEllipse (c.x + rDot * std::sin (a) - dR, c.y - rDot * std::cos (a) - dR, dR * 2.0f, dR * 2.0f);
+                }
             }
 
+            // リセスト・ダークトラック溝
             juce::Path track;
             track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
+            if (! lightPanel)
+            {
+                g.setColour (Palette::bgBot.withAlpha (0.65f));
+                g.strokePath (track, juce::PathStrokeType (ring + 1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
             g.setColour (lightPanel ? Palette::track.darker (0.14f) : Palette::track);
             g.strokePath (track, juce::PathStrokeType (ring, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
@@ -1758,30 +1811,45 @@ public:
             {
                 juce::Path value;
                 value.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
-                g.setColour (groupAccent.withAlpha (0.15f + 0.10f * effInt));
-                g.strokePath (value, juce::PathStrokeType (ring * 2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.setColour (groupAccent.withAlpha (0.16f + 0.10f * effInt));
+                g.strokePath (value, juce::PathStrokeType (ring * 2.15f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
                 g.setColour (groupAccent);
-                g.strokePath (value, juce::PathStrokeType (ring * 1.06f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.strokePath (value, juce::PathStrokeType (ring * 1.08f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
                 const float tipX = c.x + radius * std::sin (angle), tipY = c.y - radius * std::cos (angle);
-                g.setColour (lightPanel ? juce::Colours::white : groupAccent.brighter (0.35f));
-                g.fillEllipse (tipX - ring * 0.48f, tipY - ring * 0.48f, ring * 0.96f, ring * 0.96f);
+                g.setColour (lightPanel ? juce::Colours::white : groupAccent.brighter (0.40f));
+                g.fillEllipse (tipX - ring * 0.50f, tipY - ring * 0.50f, ring * 1.00f, ring * 1.00f);
             }
 
             const float kr = radius - ring - (isHero ? 3.8f : 3.0f);
             if (kr >= 5.0f)
             {
-                g.setColour (juce::Colours::black.withAlpha (lightPanel ? 0.11f : 0.22f));
-                g.fillEllipse (c.x - kr, c.y - kr + 1.6f, kr * 2.0f, kr * 2.0f);
+                // ソフトドロップシャドウ
+                g.setColour (juce::Colours::black.withAlpha (lightPanel ? 0.12f : 0.34f));
+                g.fillEllipse (c.x - kr, c.y - kr + 1.9f, kr * 2.0f, kr * 2.0f);
 
-                const auto capTop = lightPanel ? Palette::panel2.brighter (0.02f) : Palette::panel2.brighter (0.06f);
-                const auto capBot = lightPanel ? Palette::panel2.darker   (0.09f) : Palette::panel.darker  (0.08f);
+                // アノダイズド・アルミ削り出し風マットキャップ面
+                const auto capTop = lightPanel ? Palette::panel.brighter  (0.03f) : Palette::panel2.brighter (0.08f);
+                const auto capBot = lightPanel ? Palette::panel2.darker   (0.08f) : Palette::panel.darker    (0.12f);
                 g.setGradientFill (juce::ColourGradient (capTop, c.x, c.y - kr, capBot, c.x, c.y + kr, false));
                 g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
 
-                g.setColour (isWorking ? groupAccent.withAlpha (0.82f)
-                                       : (lightPanel ? Palette::panelLn.darker (0.24f) : Palette::panelLn));
-                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.6f : 1.3f);
+                // 上縁の1pxスペキュラ・ハイライトリムと内側ディッシュ溝
+                if (kr >= 10.0f)
+                {
+                    juce::Path topRim;
+                    topRim.addCentredArc (c.x, c.y, kr - 0.9f, kr - 0.9f, 0.0f, -1.15f, 1.15f, true);
+                    g.setColour (juce::Colours::white.withAlpha (lightPanel ? 0.65f : 0.11f));
+                    g.strokePath (topRim, juce::PathStrokeType (1.0f));
+
+                    const float dishR = kr * 0.74f;
+                    g.setColour (lightPanel ? Palette::panelLn.withAlpha (0.45f) : Palette::panelLn.withAlpha (0.34f));
+                    g.drawEllipse (c.x - dishR, c.y - dishR, dishR * 2.0f, dishR * 2.0f, 0.9f);
+                }
+
+                g.setColour (isWorking ? groupAccent.withAlpha (0.85f)
+                                       : (lightPanel ? Palette::panelLn.darker (0.22f) : Palette::panelLn.brighter (0.06f)));
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.6f : 1.25f);
 
                 const float sinA = std::sin (angle), cosA = std::cos (angle);
                 const float pIn  = kr * 0.22f;
@@ -1789,14 +1857,14 @@ public:
                 const auto needleCol = isWorking
                     ? Palette::ink
                     : (lightPanel ? Palette::inkSoft.darker (0.18f) : Palette::inkSoft)
-                          .withAlpha (s_accessMode == 2 ? 0.50f : 0.90f);
+                          .withAlpha (s_accessMode == 2 ? 0.50f : 0.92f);
                 g.setColour (needleCol);
                 g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA,
                             c.x + pOut * sinA, c.y - pOut * cosA,
-                            juce::jmax (2.4f, kr * 0.082f));
+                            juce::jmax (2.4f, kr * 0.084f));
 
-                const float hubR = juce::jmax (2.1f, kr * 0.085f);
-                g.setColour (isWorking ? groupAccent : (lightPanel ? Palette::panelLn.darker (0.26f) : Palette::panelLn));
+                const float hubR = juce::jmax (2.2f, kr * 0.088f);
+                g.setColour (isWorking ? groupAccent : (lightPanel ? Palette::panelLn.darker (0.24f) : Palette::panelLn.brighter (0.10f)));
                 g.fillEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f);
 
                 if (! isWorking && s_accessMode == 2)
@@ -3848,18 +3916,23 @@ public:
         const float rad = juce::jmin (r.getWidth(), r.getHeight()) * 0.5f - 1.0f;
         const float ir = rad * 0.54f;
         const bool on = getToggleState();
-        const bool isMid = (GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0 && GzzioLnF::getAccessMode() == 0);
+        const bool isMid = (GzzioLnF::isKnobInnerArtEnabled() && GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0 && GzzioLnF::getAccessMode() == 0);
         const juce::Colour onCol = isMid
             ? (getX() < 400 ? Palette::green.interpolatedWith (Palette::yellow, 0.35f)
              : getX() < 880 ? Palette::yellow
                             : Palette::salmon.interpolatedWith (Palette::yellow, 0.42f))
             : Palette::green;
-        const auto accent = on ? onCol : Palette::inkSoft;
-        g.setColour (isMid ? juce::Colour (0xff060d22) : Palette::panel);
+        const auto accent = on ? onCol : Palette::inkSoft.withAlpha (GzzioLnF::isKnobInnerArtEnabled() ? 1.0f : 0.72f);
+        g.setColour (isMid ? juce::Colour (0xff060d22) : (GzzioLnF::isKnobInnerArtEnabled() ? Palette::panel : Palette::panel2));
         g.fillEllipse (r.reduced (0.5f));
-        g.setColour (accent.withAlpha (over ? 0.36f : (isMid ? 0.16f : 0.20f)));
+        g.setColour (accent.withAlpha (over ? 0.36f : (on ? (isMid ? 0.16f : 0.18f) : 0.08f)));
         g.fillEllipse (r.reduced (0.5f));
-        if (isMid && on)
+        if (! GzzioLnF::isKnobInnerArtEnabled())
+        {
+            g.setColour (on ? Palette::green.withAlpha (0.55f) : Palette::panelLn);
+            g.drawEllipse (r.reduced (0.6f), 1.0f);
+        }
+        else if (isMid && on)
         {
             g.setColour (accent.interpolatedWith (Palette::metalHi, 0.40f).withAlpha (0.72f));
             g.drawEllipse (r.reduced (0.8f), 1.0f);
@@ -6187,14 +6260,16 @@ public:
         int         ovLayout;       // overviewLayoutMode (0..3)
         int         knobStyle;      // GzzioLnF::s_knobStyle
     };
-    static constexpr int kLegacyVersionCount = 22;
+    static constexpr int kLegacyVersionCount = 23;
     static const LegacyVersionSpec& getLegacyVersionSpec (int id) noexcept;
     void applyLegacyVersion (int versionId, bool keepEcoGate = true);
     void openLegacyVersionPopup (juce::Rectangle<int> anchorScreenBounds);
     void openSizePopupForTest() { if (sizePopBtn.onClick) sizePopBtn.onClick(); }
     void openCheckupPopupForTest() { if (checkupButton.onClick) checkupButton.onClick(); }
     void setDenoiseClearVisibleForTest (bool v) { dnClearButton.setVisible (v); resized(); }
+    juce::Rectangle<int> getMicSafuPillBoundsForTest() const noexcept { return micSafuPillRect; }
     void requestMiniBarMode (bool enable);
+    void syncQuickAssistButtons() noexcept;
     std::shared_ptr<tip::Language> getLanguage() const noexcept { return language; }
 
 private:
@@ -6254,6 +6329,7 @@ private:
     juce::Rectangle<int> argonResetRect;  // ↺ タブレット・タッチ向け 2Dオーブ＆4軸バー 1タップ0%リセットピル
     juce::Rectangle<int> prismPillRect;   // 💎 ワールドクラス・マスタリングプリズム (Auto / Inflator / Rear-Bus / Prism MAX / Grammy統合) 1クリック切替ピル
     juce::Rectangle<int> jpopPolishPillRect; // ✨ v5.7.0: J-Pop完パケ艶＆喉締めオートリリーフ 1クリック切替ピル
+    juce::Rectangle<int> micSafuPillRect;    // 🎙️ v5.9.0: マイク劣化・パリパリ／サフー修復 (OFF / 標準 / 強力) 1クリック切替ピル
     std::array<juce::Rectangle<int>, 4> argonBarRects;
     std::array<juce::Rectangle<int>, 4> argonTargetRects;
     juce::Rectangle<int> levelBadgeRect;
@@ -6483,8 +6559,9 @@ private:
     juce::TextButton resetButton { juce::String::fromUTF8 ("初期化") };
     juce::TextButton abA { "A" }, abB { "B" }, abCopy { "A>B" }, saveButton { juce::String::fromUTF8 ("保存") }, loadButton { juce::String::fromUTF8 ("読込") };
 
-    // ---- v1.4.0: right-column tabs (EQ | Effects) ----
+    // ---- v1.4.0: right-column tabs (EQ | Effects) + v5.9.0 quick singing assist ----
     juce::TextButton tabEqButton { "EQ" }, tabFxButton;
+    juce::TextButton singSkillBtn, quickPitchBtn;
     // v2.4.0: modeButton(かんたん/こだわり)は廃止。ヘッダの大きなスイッチへ統合。
     bool  advancedMode { true };
     int currentTab { 0 };
@@ -6529,8 +6606,10 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> ornAttach;   // v2.7.0
     juce::ComboBox revTypeBox, dlySyncBox, megaTypeBox;
     PresetPaletteComboBox charBox;
+    std::unique_ptr<juce::ParameterAttachment> revTypeParamAttach;
+    bool revTypeSyncing = false;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>
-        revTypeAttach, dlySyncAttach, megaTypeAttach;
+        dlySyncAttach, megaTypeAttach;
     juce::TextButton tapButton { "TAP" };
     juce::TextButton midiButton;                           // v2.1.0 MIDIスイッチ設定
     juce::TextButton routeButton;                          // v4.7.0 入出力モノラル・マイク中央寄せ設定

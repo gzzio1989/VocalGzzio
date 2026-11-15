@@ -34,6 +34,8 @@ static constexpr int kRevTypeCount = kHeyaFirst + heya::kNumRooms;   // 13
 #include "SpatialMasteringConsole.h"// v5.5.0 エリプティック低域位相整合・動的M/Sスカルプター・4相FIRトゥルーピーク
 #include "StudioLiveSoundEffectsEngine.h" // 4大スタジオライブ効果音（拍手・キラ・ドラムロール・ベル）物理音響合成
 #include "VocalAiKarteAndPurifier.h"// v5.7.0 12タイプJ-Pop声質カルテ・AIノイズ指紋識別＆ピッチ同期声抽出・完パケ艶補正
+#include "BrokenMicSafuCanceller.h" // v5.9.0 劣化・湿気マイクのパリパリ放電／スポンジ共鳴サフー／擦れ音ゼロ遅延ANC
+#include "VocalSkillEnhancer.h"     // v5.9.0 ゼロ遅延ドップラー微細ピッチ揺らぎダンパー＆プロ歌唱力アシストスイート
 
 //==============================================================================
 // v2.10.0 #77/#78 音源モード — 同じツマミが「見る場所」を持ち替える
@@ -782,6 +784,28 @@ public:
     void  toggleMixVoiceBridgeOn() noexcept      { setMixVoiceBridgeOn (! getMixVoiceBridgeOn()); }
     float getMixVoiceBridgeMeterDb() const noexcept { return meterMixVoiceBridgeDb.load (std::memory_order_relaxed); }
 
+    //== v5.9.0 柱⑤：🎯 ゼロ遅延ピッチ揺らぎダンパー（Doppler Intonation Stabilizer）＆ 歌うま一括アシスト ==
+    bool  getIntonationStabOn() const noexcept   { return intonationStabOn.load (std::memory_order_relaxed); }
+    void  setIntonationStabOn (bool b) noexcept
+    {
+        intonationStabOn.store (b, std::memory_order_relaxed);
+        if (! b) meterIntonationStabCents.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  toggleIntonationStabOn() noexcept      { setIntonationStabOn (! getIntonationStabOn()); }
+    float getIntonationStabMeterCents() const noexcept { return meterIntonationStabCents.load (std::memory_order_relaxed); }
+
+    bool  isSingingSkillSuiteActive() const noexcept
+    {
+        return intonationStabOn.load (std::memory_order_relaxed)
+            || pitchSweetSpotOn.load (std::memory_order_relaxed)
+            || vowelAlignOn.load (std::memory_order_relaxed)
+            || mixVoiceBridgeOn.load (std::memory_order_relaxed);
+    }
+    void  applySingingSkillSuite (bool enable, int polishMode = 1, bool withTailVib = true) noexcept;
+    void  applyProSingingInitialSetup();
+    bool  migrateUntouchedLegacyStateIfNeeded();
+
     //== v5.5.0 Smart Sleep：音声スレッド → UIチューナー間のロックフリー F0 共有（歌・トーク時のUI側YIN重複解析を撤廃） ==
     float getSharedVocalF0Hz() const noexcept         { return sharedVocalF0Hz.load (std::memory_order_relaxed); }
     float getSharedVocalF0Confidence() const noexcept { return sharedVocalF0Conf.load (std::memory_order_relaxed); }
@@ -1033,13 +1057,13 @@ public:
     // id: 0 = v5.8.0 最新版, 1..21 = 歴代メジャー＆V5世代（v1.0.0〜v5.7.0 全22世代）
     // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
     //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0),
-    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0), 560(v5.6.0), 570(v5.7.0), 580(v5.8.0)
+    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0), 560(v5.6.0), 570(v5.7.0), 580(v5.8.0), 590(v5.9.0)
     int   getLegacyVersionId() const noexcept  { return legacyVersionId.load (std::memory_order_relaxed); }
     int   getLegacyVersionEra() const noexcept { return legacyVersionEra.load (std::memory_order_relaxed); }
     void  setLegacyVersionState (int id, int era)
     {
-        legacyVersionId.store (juce::jlimit (0, 21, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 580, era), std::memory_order_relaxed);
+        legacyVersionId.store (juce::jlimit (0, 22, id), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 590, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState && isStandalone())
@@ -1184,6 +1208,28 @@ public:
                                    : "Diagnosis: Zero dropouts — real-time audio callback is running cleanly within budget.")
             : juce::String::fromUTF8 (ecoNow ? "切り分け判定: 音途切れゼロで安定稼働中（⚡ DAWライブ超低負荷モード有効）。"
                                              : "切り分け判定: 音途切れ・予算超過ともにゼロで安定稼働中です。");
+    }
+
+    // v5.9.0 新機能：🎙️ マイク劣化・パリパリ／サフー修復（仮想リファレンスマイク・ピッチ周期差分ANC）
+    static constexpr int kNumMicSafuModes = 3;
+    int   getMicSafuMode() const noexcept       { return micSafuMode.load (std::memory_order_relaxed); }
+    void  setMicSafuMode (int mode) noexcept
+    {
+        micSafuMode.store (juce::jlimit (0, kNumMicSafuModes - 1, mode), std::memory_order_relaxed);
+        if (mode <= 0)
+            meterMicSafuCleanDb.store (0.0f, std::memory_order_relaxed);
+        markStateDirty();
+    }
+    void  cycleMicSafuMode() noexcept           { setMicSafuMode ((getMicSafuMode() + 1) % kNumMicSafuModes); }
+    float getMicSafuCleanDb() const noexcept    { return meterMicSafuCleanDb.load (std::memory_order_relaxed); }
+    juce::String getMicSafuModeName (bool english = false) const
+    {
+        switch (juce::jlimit (0, kNumMicSafuModes - 1, getMicSafuMode()))
+        {
+            case 1:  return juce::String::fromUTF8 (english ? "Mic Fix: Auto" : "劣化修復: 標準");
+            case 2:  return juce::String::fromUTF8 (english ? "Mic Fix: Deep" : "劣化修復: 強力");
+            default: return juce::String::fromUTF8 (english ? "Mic Fix: OFF"  : "劣化修復: OFF");
+        }
     }
 
     //== v2.10.0 点検 =========================================================
@@ -1897,7 +1943,7 @@ private:
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 580 };
+    std::atomic<int>   legacyVersionEra   { 590 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
@@ -2182,6 +2228,17 @@ private:
     gz::v580::DawRealtimeHealthMonitor                dawHealth;
     bool                                              dawHealthInSplit { false };
     std::atomic<bool>                                 dawLiveEcoMode { false };
+
+    // ---- v5.9.0 劣化・湿気マイクのパリパリ放電／スポンジ共鳴サフー／擦れ音 ゼロ遅延ANC ----
+    gz::v590::BrokenMicSafuCanceller                  brokenMicSafuCanceller;
+    std::atomic<int>                                  micSafuMode { 0 };
+    std::atomic<float>                                meterMicSafuCleanDb { 0.0f };
+
+    // ---- v5.9.0 ゼロ遅延ピッチ揺らぎダンパー ＆ プロ歌唱力初期レシピ ----
+    gz::v590::VocalIntonationStabilizer               intonationStabilizer;
+    std::atomic<bool>                                 intonationStabOn { false };
+    std::atomic<float>                                meterIntonationStabCents { 0.0f };
+    std::atomic<bool>                                 proSingSetupApplied { false };
     double                                            paramCacheSr { 0.0 };
     int                                               paramCacheSrcMode { -999 };
     int                                               paramCacheEra { -999 };

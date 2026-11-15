@@ -42,15 +42,176 @@ VocalGzzioProcessor::VocalGzzioProcessor()
     if (gz::isTestDataIsolated())
     {
         legacyVersionId.store  (0,    std::memory_order_relaxed);
-        legacyVersionEra.store (580,  std::memory_order_relaxed);
+        legacyVersionEra.store (590,  std::memory_order_relaxed);
         legacyEcoGate.store    (true, std::memory_order_relaxed);
     }
    #endif
+    if (! gz::isTestDataIsolated())
+        applyProSingingInitialSetup();
 
     apvts.state.addListener (this);
     stateDirty.store (false);
     usageLog.load();    // v2.10.0 使われ方（手元に貯めるだけ・送信しない）
     startTimer (500);   // autosave poll: writes ~1.2 s after the last change (Standalone only)
+}
+
+void VocalGzzioProcessor::applySingingSkillSuite (bool enable, int polishMode, bool withTailVib) noexcept
+{
+    intonationStabOn.store   (enable, std::memory_order_relaxed);
+    pitchSweetSpotOn.store   (enable, std::memory_order_relaxed);
+    onsetGrooveOn.store      (enable, std::memory_order_relaxed);
+    vowelAlignOn.store       (enable, std::memory_order_relaxed);
+    mixVoiceBridgeOn.store   (enable, std::memory_order_relaxed);
+    tailVibratoOn.store      (enable && withTailVib, std::memory_order_relaxed);
+    upwardAirOn.store        (enable, std::memory_order_relaxed);
+    breathControlOn.store    (enable, std::memory_order_relaxed);
+    micDistStabilizerOn.store(enable, std::memory_order_relaxed);
+    jpopPolishMode.store     (enable ? juce::jlimit (0, 2, polishMode) : 0, std::memory_order_relaxed);
+
+    if (! enable)
+    {
+        meterIntonationStabCents.store (0.0f, std::memory_order_relaxed);
+        meterPitchSweetSpotDb.store    (0.0f, std::memory_order_relaxed);
+        meterOnsetGrooveDb.store       (0.0f, std::memory_order_relaxed);
+        meterVowelAlignDb.store        (0.0f, std::memory_order_relaxed);
+        meterMixVoiceBridgeDb.store    (0.0f, std::memory_order_relaxed);
+        meterTailVibratoDb.store       (0.0f, std::memory_order_relaxed);
+        meterUpwardAirDb.store         (0.0f, std::memory_order_relaxed);
+        meterBreathControlDb.store     (0.0f, std::memory_order_relaxed);
+        meterMicDistStabDb.store       (0.0f, std::memory_order_relaxed);
+        meterJpopPolishReliefDb.store  (0.0f, std::memory_order_relaxed);
+    }
+    markStateDirty();
+}
+
+void VocalGzzioProcessor::applyProSingingInitialSetup()
+{
+    auto setP = [this] (const char* id, float v)
+    {
+        if (auto* prm = apvts.getParameter (id))
+            prm->setValueNotifyingHost (apvts.getParameterRange (id).convertTo0to1 (v));
+    };
+
+    // 1. きれいにする：低域ランブル・部屋箱鳴り・吹かれ・リップノイズを自然に整える
+    setP ("gate",    -72.0f);
+    setP ("gate_on",   1.0f);
+    setP ("lowcut",  105.0f);
+    setP ("mud",      -3.8f);
+    setP ("harsh",    -1.2f);
+    setP ("pop_amt",  35.0f);
+    setP ("lip_amt",  25.0f);
+    setP ("hum_amt",  40.0f);
+
+    // 2. 音量をそろえる：1176→LA-2A黄金比＋Vocal Rider＋マイク距離補正＋サビ張り上げ保護
+    setP ("prox_amt",  30.0f);
+    setP ("comp1",     38.0f);
+    setP ("comp2",     42.0f);
+    setP ("attack",    12.0f);
+    setP ("release",  115.0f);
+    setP ("deess",     38.0f);
+    setP ("ds_on",      1.0f);
+    setP ("ride_amt",  35.0f);
+    setP ("crush_on",   1.0f);
+
+    // 3. 音色をつくる：動的共鳴抑制・日本語子音輪郭・シンガーズフォルマントの艶・語尾の伸び
+    setP ("res_amt",   28.0f);
+    setP ("cons_amt",  30.0f);
+    setP ("presence",   3.4f);
+    setP ("air",        3.5f);
+    setP ("drive",     18.0f);
+    setP ("sustain",   24.0f);
+    setP ("ring",      28.0f);
+    setP ("br_amt",    16.0f);
+    setP ("emo_amt",   20.0f);
+
+    // 4. スマートEQ：声の刺さり・共鳴ピークが出た瞬間だけ自動で丸める
+    setP ("seq_on",     1.0f);
+    setP ("seq_mode",   0.0f);
+    setP ("seq_amount", 38.0f);
+    setP ("seq_focus",  55.0f);
+
+    // 5. ひろがり・しあげ：22msプリディレイ付きスタジオ・プレート残響＋歌詞優先ダッキング＋サビリフト
+    setP ("makeup",     3.0f);
+    setP ("mix",      100.0f);
+    setP ("width",     18.0f);
+    setP ("doubler",   10.0f);
+    setP ("dbl_on",     1.0f);
+    setP ("delay",      6.0f);
+    setP ("dly_on",     1.0f);
+    setP ("dly_ms",   260.0f);
+    setP ("dly_fb",    18.0f);
+    setP ("dly_hc",  3600.0f);
+    setP ("rev_type",   2.0f); // プレート (Studio Vocal Plate)
+    setP ("revsize",   42.0f);
+    setP ("revmix",    16.0f);
+    setP ("revon",      1.0f);
+    setP ("duck",      36.0f);
+    setP ("lift_amt",  22.0f);
+
+    // 6. Argon Velvet 倍音・並列マスタリング質感（Inflator / Scheps Rear-Bus / Soothe 連動）
+    setP ("argon_velvet", 32.0f);
+    setP ("argon_focus",  46.0f);
+    setP ("argon_silk",   44.0f);
+    setP ("argon_halo",   22.0f);
+
+    // 7. 自然音程プリコンフィグ（初期は0.0ms低遅延のためOFFだが、ONにした瞬間どの曲キーでも外れない半音階＋しゃくり保護）
+    setP ("at_scale",   0.0f); // Chromatic（キー未解析でも誤スケール吸い付きを起こさない）
+    setP ("at_amount", 62.0f);
+    setP ("at_speed",  38.0f);
+    setP ("orn_amt",   55.0f);
+
+    // 8. ゼロ遅延・プロ歌唱力アシスト群を一括有効化
+    applySingingSkillSuite (true, 1, true);
+    proSingSetupApplied.store (true, std::memory_order_relaxed);
+}
+
+bool VocalGzzioProcessor::migrateUntouchedLegacyStateIfNeeded()
+{
+    if (legacyVersionId.load (std::memory_order_relaxed) != 0)
+        return false;
+
+    const int vp = (int) apvts.state.getProperty ("ui_voice_preset", 0);
+    const int mp = (int) apvts.state.getProperty ("ui_mic_preset",   0);
+    const int ep = (int) apvts.state.getProperty ("ui_eq_preset",    0);
+    const int fp = (int) apvts.state.getProperty ("finish_preset",  -1);
+    const int sc = (int) apvts.state.getProperty ("ui_scene",       -1);
+    if (vp != 0 || mp != 0 || ep != 0 || fp >= 0 || sc >= 0)
+        return false;
+
+    auto val = [this] (const char* id) -> float
+    {
+        auto* p = apvts.getRawParameterValue (id);
+        return p != nullptr ? p->load() : 0.0f;
+    };
+
+    // v5.8.0以前の未操作ファクトリー初期状態（18パラメータ一致）のみ安全にv5.9.0プロ歌唱初期レシピへ昇格する
+    const bool untouchedLegacy =
+        (int) std::lround (val ("src_mode")) == 0
+        && std::abs (val ("in_gain")  -   0.0f) < 0.25f
+        && std::abs (val ("lowcut")   - 100.0f) < 1.5f
+        && std::abs (val ("mud")      - (-3.0f)) < 0.25f
+        && std::abs (val ("harsh")    - (-1.5f)) < 0.25f
+        && std::abs (val ("comp1")    -  35.0f) < 0.5f
+        && std::abs (val ("comp2")    -  30.0f) < 0.5f
+        && std::abs (val ("presence") -   1.5f) < 0.25f
+        && std::abs (val ("air")      -   2.0f) < 0.25f
+        && std::abs (val ("drive")    -  15.0f) < 0.5f
+        && val ("ride_amt")     < 0.25f
+        && val ("res_amt")      < 0.25f
+        && val ("sustain")      < 0.25f
+        && val ("ring")         < 0.25f
+        && val ("argon_velvet") < 0.25f
+        && (int) std::lround (val ("rev_type")) == 0
+        && std::abs (val ("revmix") - 10.0f) < 0.5f
+        && val ("at_on") < 0.5f
+        && val ("vc_on") < 0.5f
+        && val ("jn_on") < 0.5f;
+
+    if (! untouchedLegacy)
+        return false;
+
+    applyProSingingInitialSetup();
+    return true;
 }
 
 VocalGzzioProcessor::~VocalGzzioProcessor()
@@ -535,7 +696,7 @@ void VocalGzzioProcessor::applyTotonoe (juce::AudioBuffer<float>& buffer)
     harsh.process (ctx);
 
     const int eraNow = legacyEcoGate.load (std::memory_order_relaxed)
-                           ? legacyVersionEra.load (std::memory_order_relaxed) : 580;
+                           ? legacyVersionEra.load (std::memory_order_relaxed) : 590;
 
     // ---- v2.4.0 なめらか(動的レゾナンス抑制) ----
     // 「こもり」「キンキン」(固定EQ)のあと・コンプの前。コンプより前に刺さりを
@@ -1521,6 +1682,9 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         spatialMasteringConsole.prepare (sciSr);
         karteAnalyzer.prepare (sciSr);
         aiNoisePurifier.prepare (sciSr);
+        brokenMicSafuCanceller.prepare (sciSr);
+        intonationStabilizer.prepare (sciSr);
+        meterIntonationStabCents.store (0.0f, std::memory_order_relaxed);
         if (dnLearned)
             dnNoisePattern.store (aiNoisePurifier.classifyProfile (dnFloor), std::memory_order_relaxed);
         else
@@ -1880,7 +2044,7 @@ void VocalGzzioProcessor::updateParameters()
     // v5.8.0: 128サンプル等の小バッファASIO環境で毎コールバック11基のIIR双二次フィルタ係数を
     // 再設計する無駄を省くため、パラメータ値・サンプルレート・モードが変化した時のみ係数を更新する。
     const int  eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                             ? legacyVersionEra.load (std::memory_order_relaxed) : 580;
+                             ? legacyVersionEra.load (std::memory_order_relaxed) : 590;
     const int  srcMode = (eraNow >= 210) ? (int) apvts.getRawParameterValue ("src_mode")->load() : 0;
     const auto prof    = sourceProfile (srcMode);
 
@@ -2277,7 +2441,7 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // 🕰️ 世代タイムマシン・省負荷ゲート: 旧バージョンが選ばれているときは、
     // その世代以降に追加されたDSPステージを丸ごと休止させて当時の軽快なCPU負荷を再現する。
     const int   eraNow  = legacyEcoGate.load (std::memory_order_relaxed)
-                              ? legacyVersionEra.load (std::memory_order_relaxed) : 580;
+                              ? legacyVersionEra.load (std::memory_order_relaxed) : 590;
     const bool  dawEcoNow = dawLiveEcoMode.load (std::memory_order_relaxed)
                          && ! selfTestRunning.load (std::memory_order_relaxed);
     const bool  crushOn = (eraNow >= 300) && (apvts.getRawParameterValue ("crush_on")->load() > 0.5f);
@@ -2945,7 +3109,10 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     if (autoSetupCountdown.load() > 0 && asPrepared)
     {
         if (karteNeedsReset.exchange (false, std::memory_order_relaxed))
+        {
             karteAnalyzer.resetAccumulators();
+            brokenMicSafuCanceller.resetKarteObservation();
+        }
 
         double sums[asBands] = {};
         float  pk = asPeak.load();
@@ -3112,12 +3279,17 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         const float amount = juce::jlimit (0.0f, 1.0f,
                                 apvts.getRawParameterValue ("denoise")->load() * 0.01f * srcDnScale);
         int learn = learnCountdown.load();
+        const int  safuModeNow = (eraNow >= 590 && ! selfTestRunning.load (std::memory_order_relaxed))
+                                     ? micSafuMode.load (std::memory_order_relaxed) : 0;
+        const bool safuActive  = soujiRun && (safuModeNow > 0);
+        const bool safuObserve = (eraNow >= 590 && ! selfTestRunning.load (std::memory_order_relaxed))
+                                 && (autoSetupCountdown.load (std::memory_order_relaxed) > 0);
 
         // v5.7.0 Smart Sleep ＆ 位相整合保護:
         //  おそうじモジュール自体が完全OFF(soujiRun == false)かつ手動学習中でもない間は、
         //  毎ブロック4帯域コピー＋9基のLinkwitz-Rileyフィルタ通過を完全スリープしてCPU負荷を0にする。
         //  おそうじがONに復帰した最初のブロック(ModuleChainクロスフェード開始点)でクリーンリセットして再開する。
-        const bool needDnSplit = soujiRun || (learn > 0);
+        const bool needDnSplit = (soujiRun && dnOn && amount > 0.001f) || (learn > 0);
         if (! needDnSplit)
         {
             dnSplitSleeping = true;
@@ -3204,7 +3376,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 }
                 // 高域の子音は高域自身の立ち上がりで保護する。
                 // 母音が出たことだけを理由に高域の部屋ノイズを開放しない。
-                const bool hfOnset = dnEnv[3] > 2.2e-3f
+                // v5.9.0: マイク劣化修復ON時は、強い有声母音（「あー」等）の最中に飛び込む微細放電チリチリ音を
+                // サ行子音と誤認して高域ゲートを80ms全開にしないよう保護する（通常OFF時は従来と完全一致）。
+                const bool midVowelCrackleGuard = safuActive
+                                               && dnClassifier.isPeriodic()
+                                               && curF0Conf >= 0.65f
+                                               && (dnEnv[0] + dnEnv[1]) > 0.015f
+                                               && dnEnv[3] < (dnEnv[0] + dnEnv[1]) * 0.20f;
+                const bool hfOnset = ! midVowelCrackleGuard
+                                  && dnEnv[3] > 2.2e-3f
                                   && dnEnv[3] > dnEnvSlow3 * 1.25f;
                 if (hfOnset) { dnHfVoiceHold = dnHoldSamples; anyHfOnsetInBlock = true; }
                 else if (dnHfVoiceHold > 0) --dnHfVoiceHold;
@@ -3412,8 +3592,15 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 }
             }
 
-            // recombine bands
-            if (soujiRun && dnOn && amount > 0.001f)
+            meterDN.store (soujiRun && dnOn ? juce::jlimit (0.0f, 1.0f,
+                               attenSum / (4.0f * (float) juce::jmax (1, numSamples))) : 0.0f);
+        }
+        else
+            meterDN.store (meterDN.load() * 0.9f);
+
+        // recombine bands
+        if (needDnSplit && soujiRun && dnOn && amount > 0.001f)
+        {
             for (int ch = 0; ch < numCh; ++ch)
             {
                 auto* out = buffer.getWritePointer (ch);
@@ -3421,12 +3608,29 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                     out[n] = bandBuf[0].getSample (ch, n) + bandBuf[1].getSample (ch, n)
                            + bandBuf[2].getSample (ch, n) + bandBuf[3].getSample (ch, n);
             }
+        }
 
-            meterDN.store (soujiRun && dnOn ? juce::jlimit (0.0f, 1.0f,
-                               attenSum / (4.0f * (float) juce::jmax (1, numSamples))) : 0.0f);
+        // v5.9.0 🎙️ マイク劣化・パリパリ／サフー修復（位相回転0.000° 完全相補テレスコーピングANC）:
+        //  部屋ノイズ除去がOFF/0%のときもLR4オールパス位相回転を一切加えずに単独動作し、
+        //  ONのときはノイズ除去後の信号に対して直列協調動作する（ON/OFFライブ切替クリックもゼロ）。
+        if (safuActive || safuObserve)
+        {
+            const float f0HzNow   = sharedVocalF0Hz.load (std::memory_order_relaxed);
+            const float f0ConfNow = sharedVocalF0Conf.load (std::memory_order_relaxed);
+            brokenMicSafuCanceller.processBuffer (
+                buffer.getWritePointer (0),
+                numCh > 1 ? buffer.getWritePointer (1) : nullptr,
+                numSamples, numCh,
+                safuActive ? safuModeNow : 0,
+                f0HzNow, f0ConfNow, safuObserve);
+            meterMicSafuCleanDb.store (safuActive ? brokenMicSafuCanceller.cleanReductionDb() : 0.0f,
+                                       std::memory_order_relaxed);
         }
         else
-            meterDN.store (meterDN.load() * 0.9f);
+        {
+            brokenMicSafuCanceller.notifyBypassed();
+            meterMicSafuCleanDb.store (0.0f, std::memory_order_relaxed);
+        }
     }
 
     // ---- gate ----
@@ -3689,10 +3893,14 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
 
             const bool needAuxPitch = (lease > 0)
                 || (autoSetupCountdown.load (std::memory_order_relaxed) > 0)
-                || (eraNow >= 570 && ! selfTestRunning.load (std::memory_order_relaxed)
-                    && (jpopPolishMode.load (std::memory_order_relaxed) > 0
-                        || (soujiRun && apvts.getRawParameterValue ("dn_on")->load() > 0.5f
-                            && apvts.getRawParameterValue ("denoise")->load() > 1.0f)));
+                || (! selfTestRunning.load (std::memory_order_relaxed)
+                    && ((eraNow >= 590 && intonationStabOn.load (std::memory_order_relaxed))
+                        || (eraNow >= 530 && pitchSweetSpotOn.load (std::memory_order_relaxed))
+                        || (eraNow >= 540 && (tailVibratoOn.load (std::memory_order_relaxed)
+                                           || mixVoiceBridgeOn.load (std::memory_order_relaxed)))
+                        || (eraNow >= 570 && (jpopPolishMode.load (std::memory_order_relaxed) > 0
+                            || (soujiRun && apvts.getRawParameterValue ("dn_on")->load() > 0.5f
+                                && apvts.getRawParameterValue ("denoise")->load() > 1.0f)))));
 
             if (needAuxPitch && rawTunerInput != nullptr && rawTunerEnergy >= 1.5e-6)
             {
@@ -4773,7 +4981,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         {
             const double safeSr = juce::jmax (16000.0, currentSampleRate);
             const float maxF    = (float) (safeSr * 0.44);
-            const float detHz   = atDetectedHz.load (std::memory_order_relaxed);
+            const float atHzNow = atDetectedHz.load (std::memory_order_relaxed);
+            const float detHz   = (atHzNow > 0.0f) ? atHzNow : sharedVocalF0Hz.load (std::memory_order_relaxed);
             const float bAlpha  = 1.0f - std::exp (-(float) numSamples / (0.018f * (float) safeSr));
 
             if (detHz >= 65.0f && detHz <= 1100.0f)
@@ -4853,12 +5062,40 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         }
     }
 
-    // ---- v5.4.0 柱①〜④：歌が本当に上手く聴こえるゼロ遅延・歌唱力音作り4大エンジン ----
+    // ---- v5.4.0 柱①〜④ ＆ v5.9.0 柱⑤：歌が本当に上手く聴こえるゼロ遅延・歌唱力音作り5大エンジン ----
     if (neiroRun)
     {
-        const double safeSr = juce::jmax (16000.0, currentSampleRate);
-        const float  maxF   = (float) (safeSr * 0.44);
-        const bool   noTest = ! selfTestRunning.load (std::memory_order_relaxed);
+        const double safeSr     = juce::jmax (16000.0, currentSampleRate);
+        const float  maxF       = (float) (safeSr * 0.44);
+        const bool   noTest     = ! selfTestRunning.load (std::memory_order_relaxed);
+        const int    srcModeNow = (int) std::lround (apvts.getRawParameterValue ("src_mode")->load());
+
+        // 0) v5.9.0 柱⑤：🎯 ゼロ遅延ドップラー微細ピッチ揺らぎダンパー (Vocal Intonation Stabilizer)
+        //    オートチューンOFF時（報告遅延0サンプル）でも、持続母音の 1.2〜3.6Hz の無意識なピッチ揺らぎだけを
+        //    滑らかに制振し、意図的な 5〜8Hz の歌唱ビブラートやしゃくり・子音は 100% 自然に保護する。
+        const bool intStabSw = (eraNow >= 590)
+                            && intonationStabOn.load (std::memory_order_relaxed)
+                            && noTest
+                            && (srcModeNow == 0)
+                            && ! liveTalkMode.load (std::memory_order_relaxed)
+                            && (apvts.getRawParameterValue ("at_on")->load() < 0.5f)
+                            && (apvts.getRawParameterValue ("vc_on")->load() < 0.5f)
+                            && (apvts.getRawParameterValue ("mix")->load() >= 98.0f);
+        if (intStabSw)
+        {
+            const float f0Hz   = sharedVocalF0Hz.load (std::memory_order_relaxed);
+            const float f0Conf = sharedVocalF0Conf.load (std::memory_order_relaxed);
+            auto* L = buffer.getWritePointer (0);
+            auto* R = numCh > 1 ? buffer.getWritePointer (1) : nullptr;
+            intonationStabilizer.processBlock (L, R, numSamples, f0Hz, f0Conf, 0.0f);
+            meterIntonationStabCents.store (intonationStabilizer.getLastCorrectionCents(), std::memory_order_relaxed);
+        }
+        else if (meterIntonationStabCents.load (std::memory_order_relaxed) > 0.0f
+                 || intonationStabilizer.getLastCorrectionCents() > 0.0f)
+        {
+            intonationStabilizer.reset();
+            meterIntonationStabCents.store (0.0f, std::memory_order_relaxed);
+        }
 
         // 1) 柱③：⚡ 歌い出し発声アタック＆グルーヴ整形 (Vocal Onset & Groove Articulator)
         //    フレーズや言葉の頭（最初の0〜35ms）をミリ秒単位で検知し、弱く遅れがちな歌い出しには
@@ -5062,7 +5299,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         const bool mixSw = (eraNow >= 540) && mixVoiceBridgeOn.load (std::memory_order_relaxed) && noTest && ! dawEcoNow;
         if (mixSw)
         {
-            const float detHz    = atDetectedHz.load (std::memory_order_relaxed);
+            const float atHzMix  = atDetectedHz.load (std::memory_order_relaxed);
+            const float detHz    = (atHzMix > 0.0f) ? atHzMix : sharedVocalF0Hz.load (std::memory_order_relaxed);
             const float envAlpha = 1.0f - std::exp (-1.0f / (0.010f * (float) safeSr));
             const float lp220    = 1.0f - std::exp (-2.0f * juce::MathConstants<float>::pi * 220.0f / (float) safeSr);
             const float lp140    = 1.0f - std::exp (-2.0f * juce::MathConstants<float>::pi * 140.0f / (float) safeSr);
@@ -5142,10 +5380,12 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         //    歌い出し・歌詞の移動中は一切揺らさず、同一音が 0.24秒以上伸ばされたロングトーン・語尾だけを検知して
         //    5.6Hz の「微細ピッチ揺らぎ(±15cent) ＋ 2.65kHz 喉フォルマント揺らぎ(±1.8dB) ＋ 声門振幅シマー(±0.85dB)」を
         //    滑らかにフェードイン付加し、棒歌いの語尾をプロ歌手の豊かな自然ビブラートへ昇華させる。
-        const bool vibSw = (eraNow >= 540) && tailVibratoOn.load (std::memory_order_relaxed) && noTest;
+        const bool vibSw = (eraNow >= 540) && tailVibratoOn.load (std::memory_order_relaxed)
+                        && noTest && (srcModeNow != 2) && ! liveTalkMode.load (std::memory_order_relaxed);
         if (vibSw)
         {
-            const float detHz   = atDetectedHz.load (std::memory_order_relaxed);
+            const float atHzVib = atDetectedHz.load (std::memory_order_relaxed);
+            const float detHz   = (atHzVib > 0.0f) ? atHzVib : sharedVocalF0Hz.load (std::memory_order_relaxed);
             const float blockDt = (float) numSamples / (float) safeSr;
             const bool  voiced  = (detHz >= 65.0f && detHz <= 1050.0f) || (beltFastDb > -40.0f);
 
@@ -5175,8 +5415,9 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 tailVibHoldSec = juce::jmax (0.0f, tailVibHoldSec - blockDt * 4.0f);
             }
 
+            const float natVibGuard = 1.0f - 0.85f * intonationStabilizer.getVibratoConfidence();
             const float wantDepth = (tailVibHoldSec > 0.18f)
-                ? juce::jlimit (0.0f, 1.0f, (tailVibHoldSec - 0.18f) / 0.22f) : 0.0f;
+                ? juce::jlimit (0.0f, 1.0f, (tailVibHoldSec - 0.18f) / 0.22f) * natVibGuard : 0.0f;
             const float depthAtk  = 1.0f - std::exp (-1.0f / (0.035f * (float) safeSr));
             const float depthRel  = 1.0f - std::exp (-1.0f / (0.022f * (float) safeSr));
             const float phaseInc  = juce::MathConstants<float>::twoPi * 5.65f / (float) safeSr;
@@ -7649,7 +7890,7 @@ void VocalGzzioProcessor::applyAutoSetup()
         setP ("argon_halo",   (phonIdx == 0 || phonIdx == 2) ? 42.0f : 36.0f);
 
         const int finishEra = legacyEcoGate.load (std::memory_order_relaxed)
-                                  ? legacyVersionEra.load (std::memory_order_relaxed) : 580;
+                                  ? legacyVersionEra.load (std::memory_order_relaxed) : 590;
         if (finishEra >= 570
             && ! selfTestRunning.load (std::memory_order_relaxed))
         {
@@ -7661,6 +7902,11 @@ void VocalGzzioProcessor::applyAutoSetup()
             onsetGrooveOn.store    (karte.recOnsetGroove,    std::memory_order_relaxed);
             roomDereverbOn.store   (karte.recRoomDereverb,   std::memory_order_relaxed);
             jpopPolishMode.store   (karte.recJpopPolishMode, std::memory_order_relaxed);
+            if (finishEra >= 590)
+            {
+                micSafuMode.store      (brokenMicSafuCanceller.recommendedModeFromObservation(), std::memory_order_relaxed);
+                intonationStabOn.store (true, std::memory_order_relaxed);
+            }
             markStateDirty();
         }
 
@@ -7695,11 +7941,17 @@ void VocalGzzioProcessor::applyAutoSetup()
     setP ("argon_silk",   juce::jlimit (14.0f, 54.0f, 24.0f + (0.28f - airShare) * 110.0f));
     setP ("argon_halo",   10.0f);
     const int talkFinishEra = legacyEcoGate.load (std::memory_order_relaxed)
-                                  ? legacyVersionEra.load (std::memory_order_relaxed) : 580;
+                                  ? legacyVersionEra.load (std::memory_order_relaxed) : 590;
     if (talkFinishEra >= 570
         && ! selfTestRunning.load (std::memory_order_relaxed))
     {
         jpopPolishMode.store (0, std::memory_order_relaxed);
+        tailVibratoOn.store  (false, std::memory_order_relaxed);
+        if (talkFinishEra >= 590)
+        {
+            micSafuMode.store      (brokenMicSafuCanceller.recommendedModeFromObservation(), std::memory_order_relaxed);
+            intonationStabOn.store (false, std::memory_order_relaxed);
+        }
     }
 
     int nearest = -1;
@@ -8233,6 +8485,9 @@ std::unique_ptr<juce::XmlElement> VocalGzzioProcessor::makeStateXml()
         s51->setAttribute ("jpopPolish",      jpopPolishMode.load (std::memory_order_relaxed));
         s51->setAttribute ("karteArch",       karteArchetype.load (std::memory_order_relaxed));
         s51->setAttribute ("dawLiveEco",      dawLiveEcoMode.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("micSafuMode",     micSafuMode.load (std::memory_order_relaxed));
+        s51->setAttribute ("intonationStab",  intonationStabOn.load (std::memory_order_relaxed) ? 1 : 0);
+        s51->setAttribute ("proSingV590",     1);
         s51->setAttribute ("setlistCur",   currentSetlistIdx.load (std::memory_order_relaxed));
         const juce::ScopedLock sl (bgmMetaLock);
         if (snsAvatarClosedPath.isNotEmpty())
@@ -8416,19 +8671,19 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
 
             if (auto* lv = xml.getChildByName ("LEGACY_VER"))
             {
-                static constexpr int kEraMap[22] = { 580, 570, 560, 550, 541, 540, 530, 520, 510, 500, 490, 480, 460, 440, 433, 400, 310, 240, 200, 170, 130, 100 };
+                static constexpr int kEraMap[23] = { 590, 580, 570, 560, 550, 541, 540, 530, 520, 510, 500, 490, 480, 460, 440, 433, 400, 310, 240, 200, 170, 130, 100 };
                 const int rawId     = lv->getIntAttribute ("id",  0);
-                int       loadedEra = juce::jlimit (100, 580, lv->getIntAttribute ("era", 580));
-                int       loadedId  = juce::jlimit (0, 21, rawId);
+                int       loadedEra = juce::jlimit (100, 590, lv->getIntAttribute ("era", 590));
+                int       loadedId  = juce::jlimit (0, 22, rawId);
                 if (rawId <= 0)
                 {
                     loadedId  = 0;
-                    loadedEra = 580; // 最新版(id=0)が選ばれていた場合は v5.8.0 (era=580) へ自然昇格
+                    loadedEra = 590; // 最新版(id=0)が選ばれていた場合は v5.9.0 (era=590) へ自然昇格
                 }
                 else if (lv->hasAttribute ("era"))
                 {
-                    // 旧構成で保存されたプロジェクトも era 番号から現在の22世代IDへ正確にマッピングする
-                    for (int i = 1; i < 22; ++i)
+                    // 旧構成で保存されたプロジェクトも era 番号から現在の23世代IDへ正確にマッピングする
+                    for (int i = 1; i < 23; ++i)
                     {
                         if (kEraMap[i] == loadedEra)
                         {
@@ -8448,7 +8703,7 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
             else if (gz::isTestDataIsolated())
             {
                 legacyVersionId.store  (0,    std::memory_order_relaxed);
-                legacyVersionEra.store (580,  std::memory_order_relaxed);
+                legacyVersionEra.store (590,  std::memory_order_relaxed);
                 legacyEcoGate.store    (true, std::memory_order_relaxed);
             }
 
@@ -8496,6 +8751,8 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
                 jpopPolishMode.store       (juce::jlimit (0, 2, s51->getIntAttribute ("jpopPolish", 0)), std::memory_order_relaxed);
                 karteArchetype.store       (juce::jlimit (0, 12, s51->getIntAttribute ("karteArch", 0)), std::memory_order_relaxed);
                 dawLiveEcoMode.store       (s51->getIntAttribute ("dawLiveEco", 0) != 0, std::memory_order_relaxed);
+                micSafuMode.store          (juce::jlimit (0, kNumMicSafuModes - 1, s51->getIntAttribute ("micSafuMode", 0)), std::memory_order_relaxed);
+                intonationStabOn.store     (s51->getIntAttribute ("intonationStab", 0) != 0, std::memory_order_relaxed);
                 currentSetlistIdx.store (s51->getIntAttribute ("setlistCur", -1), std::memory_order_relaxed);
                 {
                     const auto avClosed = s51->getStringAttribute ("snsAvatarClosed");
@@ -8541,6 +8798,10 @@ void VocalGzzioProcessor::applyStateXml (const juce::XmlElement& xml)
                         clearCustomSeSlot (s);
                 }
             }
+            const bool hasProSingV590 = (xml.getChildByName ("STAGE_V51") != nullptr
+                                         && xml.getChildByName ("STAGE_V51")->hasAttribute ("proSingV590"));
+            if (! gz::isTestDataIsolated() && ! hasProSingV590)
+                migrateUntouchedLegacyStateIfNeeded();
         }
     }
     else if (xml.hasTagName (apvts.state.getType()))   // legacy v1.4.x chunk
@@ -8890,6 +9151,8 @@ juce::String VocalGzzioProcessor::buildReportText() const
     s << "  おそうじ区画 : " << (value ("mod_souji") > 0.5f ? "入" : "切") << "\n";
     s << "  ノイズ除去   : " << (value ("dn_on") > 0.5f ? "入" : "切")
       << " / " << juce::String (value ("denoise"), 0) << "%\n";
+    s << "  マイク劣化修復 : " << getMicSafuModeName (false)
+      << " (直近抑圧 -" << juce::String (getMicSafuCleanDb(), 1) << " dB)\n";
     s << "  加工音の割合 : " << juce::String (value ("mix"), 0) << "%\n";
     s << "  原音比較中   : " << (compareBypass.load() ? "はい" : "いいえ")
       << " / 区画比較番号 " << compareOne.load() << "（-1は比較なし）\n";

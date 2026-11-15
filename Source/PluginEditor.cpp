@@ -648,7 +648,7 @@ void VocalTuner::paint (juce::Graphics& g)
         g.setColour (juce::Colours::white.withAlpha (0.85f));
         g.drawRoundedRectangle (full.reduced (2.4f), 12.5f, 1.0f);
     }
-    else if ((GzzioLnF::getKnobStyle() == 6 || (GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0)) && GzzioLnF::getAccessMode() == 0)
+    else if (GzzioLnF::isKnobInnerArtEnabled() && (GzzioLnF::getKnobStyle() == 6 || (GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0)) && GzzioLnF::getAccessMode() == 0)
     {
         const bool isMidnight = (GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0);
         const auto topCol = isMidnight ? juce::Colour (0xff071028).withAlpha (0.88f) : Palette::panel.withAlpha (0.50f);
@@ -683,10 +683,24 @@ void VocalTuner::paint (juce::Graphics& g)
     }
     else
     {
-        g.setColour (Palette::panel);
-        g.fillRoundedRectangle (full, 14.0f);
+        const float tRad = GzzioLnF::isKnobInnerArtEnabled() ? 14.0f : 11.0f;
+        if (! lightTheme && GzzioLnF::getAccessMode() != 3)
+        {
+            g.setGradientFill (juce::ColourGradient (Palette::panel.brighter (0.02f), 0.0f, full.getY(),
+                                                     Palette::panel.darker   (0.03f), 0.0f, full.getBottom(), false));
+        }
+        else
+        {
+            g.setColour (Palette::panel);
+        }
+        g.fillRoundedRectangle (full, tRad);
+        if (! lightTheme && GzzioLnF::getAccessMode() == 0)
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.04f));
+            g.fillRect (full.reduced (12.0f, 0.0f).withHeight (1.0f).translated (0.0f, 1.0f));
+        }
         g.setColour (Palette::panelLn);
-        g.drawRoundedRectangle (full.reduced (0.5f), 14.0f, 1.0f);
+        g.drawRoundedRectangle (full.reduced (0.5f), tRad, 1.0f);
     }
 
     float fs = 1.0f;
@@ -785,9 +799,9 @@ void VocalTuner::paint (juce::Graphics& g)
     const float noteWidth = juce::jlimit (95.0f, 128.0f, reading.getWidth() * 0.30f);
     auto note = reading.removeFromLeft (noteWidth).reduced (0.0f, 3.0f);
     {
-        // ★ Red Dot 仕様: ダーククリスタル・ストロボピッチダイヤル窓
-        const bool isScenic = (GzzioLnF::getKnobStyle() == 6);
-        const bool isMidnight = (GzzioLnF::getKnobStyle() == 0 && GzzioLnF::getAccessMode() == 0 && ! lightTheme);
+        // ★ ダーククリスタル・ストロボピッチダイヤル窓（既定プロスタジオ時は静謐なリセストOLED窓）
+        const bool isScenic = (GzzioLnF::isKnobInnerArtEnabled() && GzzioLnF::getKnobStyle() == 6);
+        const bool isMidnight = (GzzioLnF::isKnobInnerArtEnabled() && GzzioLnF::getKnobStyle() == 0 && GzzioLnF::getAccessMode() == 0 && ! lightTheme);
         if (isMidnight)
         {
             g.setGradientFill (juce::ColourGradient (juce::Colour (0xff081430).withAlpha (0.94f), note.getX(), note.getY(),
@@ -811,13 +825,13 @@ void VocalTuner::paint (juce::Graphics& g)
         else
         {
             g.setGradientFill (juce::ColourGradient (
-                inTune ? Palette::green.withAlpha (0.28f)
-                       : (lightTheme ? Palette::panel2 : Palette::bgTop.darker (0.42f).withAlpha (0.88f)),
+                inTune ? Palette::green.withAlpha (0.24f)
+                       : (lightTheme ? Palette::panel2 : Palette::bgBot.withAlpha (0.86f)),
                 note.getX(), note.getY(),
-                inTune ? Palette::green.darker (0.35f).withAlpha (0.24f)
-                       : (lightTheme ? Palette::panel.darker (0.04f) : Palette::panel2.darker (0.18f).withAlpha (0.90f)),
+                inTune ? Palette::green.darker (0.35f).withAlpha (0.20f)
+                       : (lightTheme ? Palette::panel.darker (0.04f) : Palette::bgTop.withAlpha (0.90f)),
                 note.getX(), note.getBottom(), false));
-            g.fillRoundedRectangle (note, 11.0f);
+            g.fillRoundedRectangle (note, 10.0f);
         }
 
         // 上部の半円ストロボ・ピッチアーク目盛り
@@ -890,11 +904,12 @@ void VocalTuner::paint (juce::Graphics& g)
                                              keyStrip.getHeight());
             const bool isCurrent = show && (pc == activePc);
             const bool isRefA    = (! show) && (pc == 9);
-            const bool isMidKey  = (GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0 && GzzioLnF::getAccessMode() == 0 && ! lightTheme);
+            const bool isMidKey  = (GzzioLnF::isKnobInnerArtEnabled() && GzzioLnF::getKnobStyle() == 0 && Palette::currentTheme == 0 && GzzioLnF::getAccessMode() == 0 && ! lightTheme);
             const juce::Colour kCol = isCurrent ? (isMidKey ? Palette::yellow : (inTune ? Palette::green : Palette::yellow))
-                                    : isRefA    ? (lightTheme ? Palette::green.interpolatedWith (Palette::panel, 0.62f) : Palette::ice.withAlpha (0.38f))
+                                    : isRefA    ? (lightTheme ? Palette::green.interpolatedWith (Palette::panel, 0.68f)
+                                                              : (GzzioLnF::isKnobInnerArtEnabled() ? Palette::ice.withAlpha (0.38f) : Palette::blue.withAlpha (0.20f)))
                                     : lightTheme ? Palette::panel.brighter (0.04f)
-                                                 : Palette::bgTop.darker (0.35f).withAlpha (0.82f);
+                                                 : Palette::bgBot.withAlpha (0.76f);
             g.setColour (kCol);
             g.fillRoundedRectangle (kr, 3.5f);
             g.setColour (isCurrent ? (lightTheme ? Palette::ink : juce::Colours::white)
@@ -3805,6 +3820,18 @@ public:
         };
         addAndMakeVisible (breathCtrlBtn);
 
+        micSafuBtn.setClickingTogglesState (false);
+        micSafuBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+        micSafuBtn.setTooltip (language->T ("追加遅延0.0msで「あー」発声中のパリパリ・チリチリ放電音、劣化した風防スポンジのサフー共鳴尾、スピーカー擦れ歪みを除去します（クリックで OFF ➔ 標準 ➔ 強力）。",
+                                            "Zero-latency (0.0ms) suppression of mid-vowel capsule crackle bursts, degraded foam chuffing tails, and rub-and-buzz (click to cycle OFF -> Auto -> Deep)."));
+        micSafuBtn.onClick = [this]
+        {
+            processor.cycleMicSafuMode();
+            refresh();
+            owner.repaint();
+        };
+        addAndMakeVisible (micSafuBtn);
+
         chorusBoostBtn.setClickingTogglesState (true);
         chorusBoostBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
         chorusBoostBtn.setToggleState (processor.getChorusBoostMode(), juce::dontSendNotification);
@@ -4204,8 +4231,15 @@ public:
             const float lipDb    = processor.getLipDeclickMeterDb();
             const float derevDb  = processor.getRoomDereverbMeterDb();
             const float breathDb = processor.getBreathControlMeterDb();
+            const float safuDb   = processor.getMicSafuCleanDb();
             g.setFont (GzzioLnF::uiFont (13.0f, true));
-            if (processor.getRoomDereverbOn() && derevDb >= breathDb && derevDb >= lipDb && derevDb > 0.1f)
+            if (processor.getMicSafuMode() > 0 && safuDb >= derevDb && safuDb >= breathDb && safuDb > 0.15f)
+            {
+                g.setColour (processor.getMicSafuMode() == 2 ? Palette::salmon : Palette::green);
+                g.drawFittedText (language->T ("修復:-", "Fix:-") + juce::String (safuDb, 1) + "dB",
+                                  guardMeterRect, juce::Justification::centredRight, 1, 0.85f);
+            }
+            else if (processor.getRoomDereverbOn() && derevDb >= breathDb && derevDb >= lipDb && derevDb > 0.1f)
             {
                 g.setColour (Palette::yellow);
                 g.drawFittedText (language->T ("反響消:-", "DeRev:-") + juce::String (derevDb, 1) + "dB",
@@ -4450,11 +4484,12 @@ public:
             auto r1 = inner.removeFromTop (30);
             if (detailExpanded)
             {
-                coughBtn       .setBounds (r1.removeFromLeft (124)); r1.removeFromLeft (5);
-                screamGuardBtn .setBounds (r1.removeFromLeft (120)); r1.removeFromLeft (5);
-                lipDeclickBtn  .setBounds (r1.removeFromLeft (120)); r1.removeFromLeft (5);
-                roomDereverbBtn.setBounds (r1.removeFromLeft (122)); r1.removeFromLeft (5);
-                breathCtrlBtn  .setBounds (r1.removeFromLeft (128)); r1.removeFromLeft (4);
+                coughBtn       .setBounds (r1.removeFromLeft (108)); r1.removeFromLeft (4);
+                screamGuardBtn .setBounds (r1.removeFromLeft (106)); r1.removeFromLeft (4);
+                lipDeclickBtn  .setBounds (r1.removeFromLeft (106)); r1.removeFromLeft (4);
+                roomDereverbBtn.setBounds (r1.removeFromLeft (108)); r1.removeFromLeft (4);
+                breathCtrlBtn  .setBounds (r1.removeFromLeft (112)); r1.removeFromLeft (4);
+                micSafuBtn     .setBounds (r1.removeFromLeft (116)); r1.removeFromLeft (4);
                 guardMeterRect = r1;
             }
             else
@@ -4905,7 +4940,8 @@ private:
                          (juce::Component*) &autoChorusBtn, (juce::Component*) &autoApplauseBtn, (juce::Component*) &customSeMenuBtn,
                          (juce::Component*) &customSeBtns[0], (juce::Component*) &customSeBtns[1],
                          (juce::Component*) &customSeBtns[2], (juce::Component*) &customSeBtns[3],
-                         (juce::Component*) &lipDeclickBtn, (juce::Component*) &roomDereverbBtn, (juce::Component*) &breathCtrlBtn })
+                         (juce::Component*) &lipDeclickBtn, (juce::Component*) &roomDereverbBtn,
+                         (juce::Component*) &breathCtrlBtn, (juce::Component*) &micSafuBtn })
             c->setVisible (detailExpanded);
     }
 
@@ -5218,6 +5254,11 @@ private:
             ? language->T ("息＆サ行保護: ON", "Breath/Velvet: ON")
             : language->T ("息＆サ行保護", "Breath & Velvet"));
 
+        const int safuMode = processor.getMicSafuMode();
+        micSafuBtn.setToggleState (safuMode > 0, juce::dontSendNotification);
+        micSafuBtn.setColour (juce::TextButton::buttonOnColourId, safuMode == 2 ? Palette::salmon : Palette::green);
+        micSafuBtn.setButtonText (processor.getMicSafuModeName (language->english));
+
         if (! syncOffsetSlider.isMouseButtonDown())
             syncOffsetSlider.setValue ((double) processor.getSyncOffsetMs(), juce::dontSendNotification);
 
@@ -5236,7 +5277,7 @@ private:
         globalHotkeyBtn.setEnabled (processor.isStandalone());
 
         int foldedActiveCount = 0;
-        for (bool on : { unmaskOn, riderOn, upAirOn, sweetOn, cueOn, vcp > 0, symOn, vibOn, vowOn, onsOn, mixBrOn, distStabOn, autoCh, autoAppOn, lipOn, derevOn, breathOn })
+        for (bool on : { unmaskOn, riderOn, upAirOn, sweetOn, cueOn, vcp > 0, symOn, vibOn, vowOn, onsOn, mixBrOn, distStabOn, autoCh, autoAppOn, lipOn, derevOn, breathOn, safuMode > 0 })
             if (on) ++foldedActiveCount;
         detailFoldBtn.setToggleState (detailExpanded, juce::dontSendNotification);
         if (detailExpanded)
@@ -5281,7 +5322,7 @@ private:
     std::array<juce::TextButton, 4> seBtns;
     juce::TextButton customSeMenuBtn;
     std::array<juce::TextButton, 4> customSeBtns;
-    juce::TextButton coughBtn, screamGuardBtn, lipDeclickBtn, roomDereverbBtn, breathCtrlBtn;
+    juce::TextButton coughBtn, screamGuardBtn, lipDeclickBtn, roomDereverbBtn, breathCtrlBtn, micSafuBtn;
     std::unique_ptr<juce::FileChooser> chooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StageStudioPanel)
@@ -6371,7 +6412,7 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         styleButton (b);
     };
     setupRadio (sceneSolo, 2002, false);
-    setupRadio (sceneTalk, 2002, true);
+    setupRadio (sceneTalk, 2002, false);
     setupRadio (sceneBand, 2002, false);
     // v3.0-c ★シーンは「意思を持って先に選ぶ物」なので、
     //  (a) 選んだことを**プロジェクトに覚えさせる**（画面を開き直しても戻らない）
@@ -6529,7 +6570,10 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         st.setProperty ("ui_eq_preset",    0, nullptr);
         st.setProperty ("ui_char_preset",  0, nullptr);
         st.setProperty ("finish_preset",   -1, nullptr);
+        st.setProperty ("ui_scene",        -1, nullptr);
         finishPresetIndex = -1;
+        currentScene      = -1;
+        sceneChosen       = false;
         argonOrbX = 0.46f;
         argonOrbY = 0.36f;
         argonActiveTarget = -1;
@@ -6551,12 +6595,17 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         processor.setVowelAlignOn (false);
         processor.setOnsetGrooveOn (false);
         processor.setMixVoiceBridgeOn (false);
+        processor.setIntonationStabOn (false);
         processor.setBgmGuideMonitorOn (false);
         processor.setVocalCharPreset (0);
         processor.setMicDistStabilizerOn (false);
         processor.setSymphonicDoublerOn (false);
         processor.setAutoApplauseOn (false);
         processor.clearCustomIrFile();
+        if (! gz::isTestDataIsolated())
+            processor.applyProSingingInitialSetup();
+        syncArgonOrbFromParams();
+        syncQuickAssistButtons();
         infoText.clear();
         fxInfoText.clear();
         autoSetupMsg.clear();
@@ -6794,24 +6843,43 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     // effects-tab combos (items mirror the choice parameters)
     fillComboFromChoiceParam (revTypeBox, "rev_type");
     revTypeBox.setTooltip (language->rev_type_tip());
-    revTypeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>
-                        (processor.apvts, "rev_type", revTypeBox);
+    if (auto* revParam = processor.apvts.getParameter ("rev_type"))
+    {
+        // v5.9.0: revTypeBox は7項目(0..6)表示、rev_type パラメータは13項目(0..12)保持のため、
+        // JUCE 標準 ComboBoxAttachment の正規化スケーリングによる番号ズレ(2→1表示や選択時の4誤設定)を防ぎ、1対1で同期する。
+        revTypeParamAttach = std::make_unique<juce::ParameterAttachment> (
+            *revParam,
+            [this] (float newValue)
+            {
+                const int rawIdx = juce::jlimit (0, kRevTypeCount - 1, (int) std::lround (newValue));
+                const int boxIdx = (rawIdx >= kHeyaFirst)
+                                     ? ((rawIdx == 12) ? 2 : (rawIdx >= 10 ? 3 : 1))
+                                     : rawIdx;
+                if (revTypeBox.getSelectedItemIndex() != boxIdx)
+                {
+                    const juce::ScopedValueSetter<bool> svs (revTypeSyncing, true);
+                    revTypeBox.setSelectedItemIndex (boxIdx, juce::sendNotificationSync);
+                }
+            },
+            nullptr);
+    }
     revTypeBox.onChange = [this]
     {
         const juce::String d[7] = { language->rev_desc_normal(), language->rev_desc_room(),
                                     language->rev_desc_plate(),  language->rev_desc_hall(),
                                     language->rev_desc_church(), language->rev_desc_spring(),
                                     language->rev_desc_shimmer() };
-        // v4.0.0: 7 以上は「へや」。ここを jlimit(0,6) のままにしておくと
-        //         どの部屋を選んでもシマーの説明が出る。
-        const int sel = juce::jlimit (0, kRevTypeCount - 1, revTypeBox.getSelectedId() - 1);
-        const juce::String desc = (sel >= kHeyaFirst) ? language->rev_desc_heya (sel - kHeyaFirst)
-                                                      : d[sel];
+        const int sel = juce::jlimit (0, kHeyaFirst - 1, revTypeBox.getSelectedId() - 1);
+        if (! revTypeSyncing && revTypeParamAttach != nullptr && revTypeBox.getSelectedId() > 0)
+            revTypeParamAttach->setValueAsCompleteGesture ((float) sel);
+        const juce::String desc = d[sel];
         fxInfoText = desc;
         infoText   = desc;   // v1.6.0: the combo lives in section 4, so explain there too
         revTypeBox.setTooltip (language->rev_type_tip() + "\n" + desc);
         repaint();
     };
+    if (revTypeParamAttach != nullptr)
+        revTypeParamAttach->sendInitialUpdate();
 
     fillComboFromChoiceParam (dlySyncBox, "dly_sync");
     dlySyncBox.setTooltip (language->dly_sync_tip());
@@ -6915,11 +6983,11 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     };
     addAndMakeVisible (checkupButton);
 
-    // v5.5.0 📌 配信ミニバー（OBS・歌詞・コメント欄の隅に常駐できる 520×115px コンパクトバー）
-    miniBarButton.setButtonText (language->T ("📌 ミニバー", "📌 Mini-Bar"));
+    // v5.5.0 配信ミニバー（OBS・歌詞・コメント欄の隅に常駐できる 520×115px コンパクトバー）
+    miniBarButton.setButtonText (language->T ("ミニバー", "Mini-Bar"));
     miniBarButton.setTooltip (language->T ("OBSや歌詞・コメント欄の隅に置けるコンパクトな配信ミニバー画面（520×115px・最前面ピン留め可）に切り替えます。",
                                            "Switch to the compact Streaming Mini-Bar (520x115 px, optional Always-on-Top pin) for OBS, lyrics, and chat."));
-    miniBarButton.setColour (juce::TextButton::buttonColourId, Palette::yellow.withAlpha (0.22f));
+    miniBarButton.setColour (juce::TextButton::buttonColourId, Palette::panel2);
     styleButton (miniBarButton);
     miniBarButton.onClick = [this] { requestMiniBarMode (true); };
     addChildComponent (miniBarButton);
@@ -7004,6 +7072,61 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
     //  検査が**本物のタブを押す**ための名札（へんしんの中身は「エフェクト」側にある）
     tabEqButton.setComponentID ("tabEq");
     tabFxButton.setComponentID ("tabFx");
+
+    // v5.9.0: 詳細画面の右パネル上部に「歌うま補正（ゼロ遅延一括アシスト）」と「自然音程（1クリック音程補正）」を常設
+    singSkillBtn.setButtonText (language->sing_skill_label());
+    singSkillBtn.setTooltip (language->sing_skill_tip());
+    singSkillBtn.setClickingTogglesState (true);
+    singSkillBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+    styleButton (singSkillBtn);
+    singSkillBtn.setComponentID ("singSkillQuick");
+    singSkillBtn.onClick = [this]
+    {
+        const bool nextOn = ! processor.isSingingSkillSuiteActive();
+        processor.applySingingSkillSuite (nextOn, 1, true);
+        syncQuickAssistButtons();
+        infoText = nextOn
+            ? language->T ("歌うま補正 ON：微細ピッチ揺らぎ制振・高音厚み＆喉緩和・母音統一・倍音ブリッジ・語尾ビブラートが有効です（遅延0.0ms）。",
+                           "Skill Assist ON: micro-pitch stabilizer, high-note body, vowel align, mix-voice bridge & tail vibrato active (0.0 ms).")
+            : language->T ("歌うま補正 OFF：歌唱アシスト群をオフにしました。",
+                           "Skill Assist OFF.");
+        repaint();
+    };
+
+    quickPitchBtn.setButtonText (language->quick_pitch_label());
+    quickPitchBtn.setTooltip (language->quick_pitch_tip());
+    quickPitchBtn.setClickingTogglesState (true);
+    quickPitchBtn.setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+    styleButton (quickPitchBtn);
+    quickPitchBtn.setComponentID ("quickPitch");
+    quickPitchBtn.onClick = [this]
+    {
+        const bool nextAt = ! (processor.apvts.getRawParameterValue ("at_on")->load() > 0.5f);
+        auto setP = [this] (const char* pid, float v)
+        {
+            if (auto* prm = processor.apvts.getParameter (pid))
+                prm->setValueNotifyingHost (processor.apvts.getParameterRange (pid).convertTo0to1 (v));
+        };
+        if (nextAt)
+        {
+            int tonic = 0; bool minor = false; float conf = 0.0f;
+            const bool hasScannedKey = processor.getKeyResult (tonic, minor, conf);
+            // キー未解析のままCメジャー固定だと別キーの曲で外れるため、未解析時は安全な半音階＋自然追従へ自動調整
+            if (! hasScannedKey && (int) std::lround (processor.apvts.getRawParameterValue ("at_scale")->load()) == 1)
+                setP ("at_scale", 0.0f);
+            if (processor.apvts.getRawParameterValue ("orn_amt")->load() < 10.0f)
+                setP ("orn_amt", 55.0f);
+        }
+        setP ("at_on", nextAt ? 1.0f : 0.0f);
+        syncQuickAssistButtons();
+        infoText = nextAt
+            ? language->T ("自然音程 ON：しゃくり・ビブラートを残した自然な音程補正を有効化しました。",
+                           "Auto Pitch ON: natural pitch correction enabled with vibrato & scoop protection.")
+            : language->T ("自然音程 OFF：追加遅延 0.0ms のライブ低遅延状態に戻しました。",
+                           "Auto Pitch OFF: returned to 0.0 ms zero-latency mode.");
+        repaint();
+    };
+    syncQuickAssistButtons();
 
     // v2.4.0: 「かんたん/こだわり」ボタンは廃止。ヘッダの大きなスイッチ
     //         (drawThemeCross / mouseDown 内 idx=6) が同じ役目を担う。
@@ -7263,8 +7386,8 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                     addAndMakeVisible (sb);
                 }
 
-                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.8.0までの全22世代（v5.0.0〜v5.7.0を含む）をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
-                                                      "Select and recall any of the 22 generations from v1.0.0 to v5.8.0 including v5.0.0-v5.7.0 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
+                legacyVerBtn.setTooltip (language->T ("初代v1.0.0から最新v5.9.0までの全23世代（v5.0.0〜v5.8.0を含む）をいつでも呼び出せます（必要な時だけ遅延読み込み＆旧世代選択時は後発DSPを自動スリープする省負荷設計）。",
+                                                      "Select and recall any of the 23 generations from v1.0.0 to v5.9.0 including v5.0.0-v5.8.0 (on-demand lazy loading & zero-CPU sleep gating for post-era DSP)."));
                 legacyVerBtn.onClick = [this]
                 {
                     const auto anchor = ow.localAreaToGlobal (ow.sizePopBtn.getBounds());
@@ -7928,9 +8051,10 @@ void VocalGzzioContent::refreshPresetDisplays()
         const int sc = (int) st.getProperty ("ui_scene", -1);
         sceneChosen = (sc >= 0 && sc <= 2);
         if (sceneChosen) currentScene = sc;
-        sceneSolo.setToggleState (currentScene == 0, juce::dontSendNotification);
-        sceneTalk.setToggleState (currentScene == 1, juce::dontSendNotification);
-        sceneBand.setToggleState (currentScene == 2, juce::dontSendNotification);
+        sceneSolo.setToggleState (sceneChosen && currentScene == 0, juce::dontSendNotification);
+        sceneTalk.setToggleState (sceneChosen && currentScene == 1, juce::dontSendNotification);
+        sceneBand.setToggleState (sceneChosen && currentScene == 2, juce::dontSendNotification);
+        syncQuickAssistButtons();
     }
 
     const int c = juce::jlimit (0, gzzio::kNumCharPresets, (int) st.getProperty ("ui_char_preset", 0));
@@ -8102,7 +8226,7 @@ void VocalGzzioContent::fillComboFromChoiceParam (juce::ComboBox& box, const juc
     if (auto* ch = dynamic_cast<juce::AudioParameterChoice*> (processor.apvts.getParameter (paramID)))
     {
         const bool isRevType = (paramID == "rev_type");
-        if (isRevType && ch->getIndex() >= kHeyaFirst)
+        if (isRevType && ch->getIndex() >= kHeyaFirst && ! processor.hasCustomIr())
         {
             const int curIdx = ch->getIndex();
             const int mapped = (curIdx == 12) ? 2 : (curIdx >= 10 ? 3 : 1);
@@ -8246,6 +8370,7 @@ void VocalGzzioContent::updateTabVisibility()
                          (juce::Component*) &charBox,   (juce::Component*) &tapButton,
                          (juce::Component*) &analyzeButton, (juce::Component*) &keyScaleButton,
                          (juce::Component*) &tabFxButton,  (juce::Component*) &tabEqButton,
+                         (juce::Component*) &singSkillBtn, (juce::Component*) &quickPitchBtn,
                          (juce::Component*) &fxWarnButton, (juce::Component*) &midiButton,
                          (juce::Component*) &routeButton,  (juce::Component*) &stageButton,
                          (juce::Component*) &streamButton })
@@ -8284,7 +8409,7 @@ void VocalGzzioContent::updateTabVisibility()
     applyUseModeMask();
 
     // 🕰️ 歴代バージョン再現時（era < 500 かつ ぜんぶ表示OFF）：その世代に存在しなかった後発ツマミ・ボタンを隠す
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 590;
     if (eraNow < 500 && ! showAllKnobs && ! isOverview())
     {
         auto hideK = [] (Knob& k) { k.slider.setVisible (false); k.label.setVisible (false); };
@@ -8305,6 +8430,7 @@ void VocalGzzioContent::updateTabVisibility()
             vcOnButton.setVisible (false); jnOnButton.setVisible (false); jnHarmBox.setVisible (false); jnSoloButton.setVisible (false);
             hideK (vcPitchK); hideK (vcFormK); hideK (jnMixK);
             tabEqButton.setVisible (false); tabFxButton.setVisible (false); tempoFitButton.setVisible (false);
+            singSkillBtn.setVisible (false); quickPitchBtn.setVisible (false);
         }
         if (eraNow < 160) { revTypeBox.setVisible (false); }
         if (eraNow <= 130)
@@ -8368,6 +8494,8 @@ void VocalGzzioContent::applyModeVisibility()
     // the Effects tab button only exists in Advanced
     tabFxButton.setVisible (advancedMode);
     tabEqButton.setVisible (advancedMode);      // tabs only meaningful when 2 exist
+    singSkillBtn.setVisible (advancedMode && ! isOverview() && ! focusMode);
+    quickPitchBtn.setVisible (advancedMode && ! isOverview() && ! focusMode);
 
     // advanced-only side tools in the tuner + output panel
     tuner.setRangeToolsVisible (advancedMode);
@@ -8383,7 +8511,7 @@ void VocalGzzioContent::applyModeVisibility()
 void VocalGzzioContent::applyKnobVisibility()
 {
     restoreOverviewVisibility();
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 590;
     // v2.4.0 かんたんモードは「よく使う7ツマミ」だけ。残りは丸ごと隠す。
     auto showKnob = [] (Knob& k, bool v) { k.slider.setVisible (v); k.label.setVisible (v); };
     showKnob (outVolK, false); // outVolK はモダン総合画面専用（詳細・かんたん画面は makeupK を使用）
@@ -8952,6 +9080,8 @@ void VocalGzzioContent::timerCallback()
             repaint (stagePillRect);
         if (! jpopPolishPillRect.isEmpty() && processor.getJpopPolishMode() > 0 && processor.getInputLevel() > 0.002f)
             repaint (jpopPolishPillRect);
+        if (! micSafuPillRect.isEmpty() && processor.getMicSafuMode() > 0 && processor.getInputLevel() > 0.002f)
+            repaint (micSafuPillRect);
     }
     // v3.0「つぶさない」の数字は毎回変わるので、20Hz で描き直す。
     // ★これが無いと、OFF にした瞬間の数字が**消えずに残る**（実際に残った）。
@@ -9026,6 +9156,7 @@ void VocalGzzioContent::timerCallback()
         const bool jnOnNow = processor.apvts.getRawParameterValue ("jn_on")->load() > 0.5f;
         themePainter.jnActive = jnOnNow;
     }
+    syncQuickAssistButtons();
 
     const bool learning = processor.isDenoiseLearning();
     const auto learnTxtWant = learning ? language->T ("学習中…", "Learning…") : language->T ("ノイズを測る", "Learn noise");
@@ -9349,7 +9480,14 @@ void VocalGzzioContent::applyVoicePreset (int id)
         setP ("deess", v.ds);
     }
 
+    if (! gz::isTestDataIsolated() && (int) std::lround (processor.apvts.getRawParameterValue ("src_mode")->load()) == 0)
+    {
+        setP ("seq_on", 1.0f);
+        processor.applySingingSkillSuite (true, 1, true);
+    }
+
     syncArgonOrbFromParams();
+    syncQuickAssistButtons();
 }
 
 // v5.0: 第2軸「マイク方式・設置・部屋環境補正」
@@ -9407,7 +9545,9 @@ void VocalGzzioContent::applyEqPreset (int id)
             prm->setValueNotifyingHost (processor.apvts.getParameterRange (pid).convertTo0to1 (v));
     };
 
-    const auto& e = gzzio::kEqPresets[juce::jlimit (0, gzzio::kNumEqPresets - 1, id - 1)];
+    const int eqIdx = juce::jlimit (0, gzzio::kNumEqPresets - 1, id - 1);
+    const auto& e   = gzzio::kEqPresets[eqIdx];
+    const auto& sp  = gzzio::kEqSpacePresets[eqIdx];
     setP ("argon_halo", e.halo);
 
     const int micId   = micBox.getSelectedId();
@@ -9455,7 +9595,31 @@ void VocalGzzioContent::applyEqPreset (int id)
         setP ("argon_silk",   e.silk);
     }
 
+    // v5.9.0: シーン未固定時は曲調・ジャンルに合わせた最適リバーブ・ダッキング・広がり・Vocal Riderも同時構築する
+    if (! sceneChosen)
+    {
+        setP ("rev_type", (float) sp.revType);
+        setP ("revsize",  sp.revSize);
+        setP ("revmix",   sp.revMix);
+        setP ("revon",    sp.revMix > 0.0f ? 1.0f : 0.0f);
+        setP ("duck",     sp.duck);
+        setP ("width",    sp.width);
+        setP ("doubler",  sp.doubler);
+        setP ("dbl_on",   sp.doubler > 0.0f ? 1.0f : 0.0f);
+        setP ("delay",    sp.delay);
+        setP ("dly_on",   sp.delay > 0.0f ? 1.0f : 0.0f);
+        setP ("dly_ms",   sp.delayMs);
+    }
+    if (voiceId <= 0)
+        setP ("ride_amt", sp.ride);
+    setP ("emo_amt",  sp.emo);
+    setP ("lift_amt", sp.lift);
+    setP ("seq_on",   1.0f);
+    if (! gz::isTestDataIsolated())
+        processor.applySingingSkillSuite (sp.singingSkill, sp.jpopPolish, sp.tailVib);
+
     syncArgonOrbFromParams();
+    syncQuickAssistButtons();
 }
 
 // Scene owns: gate + space + output trim
@@ -9469,22 +9633,44 @@ void VocalGzzioContent::applyScene()
 
     switch (currentScene)
     {
-        case 0: // 弾き語り
-            setP ("gate", -66); setP ("makeup", 3);
-            setP ("width", 20); setP ("doubler", 15); setP ("delay", 10);
-            setP ("revsize", 38); setP ("revmix", 14);
+        case 0: // 弾き語り：親密なスタジオプレート残響＋ダッキング＋自然な伸び
+            setP ("gate", -68); setP ("makeup", 3.0f);
+            setP ("rev_type", 2.0f); setP ("revsize", 42.0f); setP ("revmix", 16.0f); setP ("revon", 1.0f);
+            setP ("duck", 34.0f); setP ("width", 18.0f); setP ("doubler", 10.0f); setP ("dbl_on", 1.0f);
+            setP ("delay", 8.0f); setP ("dly_on", 1.0f); setP ("ride_amt", 34.0f); setP ("crush_on", 1.0f);
+            if (! gz::isTestDataIsolated())
+                processor.applySingingSkillSuite (true, 2, true);
             break;
-        case 2: // Band
-            setP ("gate", -56); setP ("makeup", 5);
-            setP ("width", 5);  setP ("doubler", 0);  setP ("delay", 0);
-            setP ("revsize", 20); setP ("revmix", 5);
+        case 2: // バンド：分厚いオケに埋もれないプレート＋強ダッキング＋Vocal Rider強化
+            setP ("gate", -58); setP ("makeup", 4.5f);
+            setP ("rev_type", 2.0f); setP ("revsize", 34.0f); setP ("revmix", 12.0f); setP ("revon", 1.0f);
+            setP ("duck", 44.0f); setP ("width", 14.0f); setP ("doubler", 12.0f); setP ("dbl_on", 1.0f);
+            setP ("delay", 5.0f); setP ("dly_on", 1.0f); setP ("ride_amt", 45.0f); setP ("crush_on", 1.0f);
+            if (! gz::isTestDataIsolated())
+                processor.applySingingSkillSuite (true, 1, true);
             break;
-        default: // トーク配信
-            setP ("gate", -60); setP ("makeup", 4);
-            setP ("width", 0);  setP ("doubler", 0);  setP ("delay", 0);
-            setP ("revsize", 25); setP ("revmix", 6);
+        default: // トーク配信：残響を抑えて言葉が最前列で聞き取りやすい配信仕様
+            setP ("gate", -60); setP ("makeup", 4.0f);
+            setP ("rev_type", 1.0f); setP ("revsize", 18.0f); setP ("revmix", 0.0f); setP ("revon", 0.0f);
+            setP ("duck", 0.0f); setP ("width", 0.0f); setP ("doubler", 0.0f); setP ("dbl_on", 0.0f);
+            setP ("delay", 0.0f); setP ("dly_on", 0.0f); setP ("ride_amt", 48.0f); setP ("crush_on", 0.0f);
+            if (! gz::isTestDataIsolated())
+                processor.applySingingSkillSuite (false, 0, false);
             break;
     }
+    syncQuickAssistButtons();
+}
+
+void VocalGzzioContent::syncQuickAssistButtons() noexcept
+{
+    const bool skillOn = processor.isSingingSkillSuiteActive();
+    if (singSkillBtn.getToggleState() != skillOn)
+        singSkillBtn.setToggleState (skillOn, juce::dontSendNotification);
+
+    const auto* atP = processor.apvts.getRawParameterValue ("at_on");
+    const bool atOn = (atP != nullptr && atP->load() > 0.5f);
+    if (quickPitchBtn.getToggleState() != atOn)
+        quickPitchBtn.setToggleState (atOn, juce::dontSendNotification);
 }
 
 void VocalGzzioContent::updateABButtons()
@@ -9578,7 +9764,7 @@ void VocalGzzioContent::paint (juce::Graphics& g)
         }
     }
 
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 580;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 590;
     const bool isV10 = (eraNow == 100 && ! showAllKnobs);
     const bool isV13 = (eraNow == 130 && ! showAllKnobs);
 
@@ -9861,11 +10047,23 @@ void VocalGzzioContent::paint (juce::Graphics& g)
         }
         else
         {
-            g.setColour (Palette::panel.withMultipliedAlpha (panelA));
+            const bool lightCard = Palette::panel.getPerceivedBrightness() > 0.55f;
+            if (! liteMode && accessMode != 3)
+            {
+                g.setColour (lightCard ? Palette::panelLn.withAlpha (0.18f) : juce::Colours::black.withAlpha (0.26f));
+                g.fillRoundedRectangle (r.translated (0.0f, 2.0f), pRad);
+                g.setGradientFill (juce::ColourGradient (
+                    Palette::panel.brighter (lightCard ? 0.01f : 0.022f).withMultipliedAlpha (panelA), r.getX(), r.getY(),
+                    Palette::panel.darker   (lightCard ? 0.02f : 0.028f).withMultipliedAlpha (panelA), r.getX(), r.getBottom(), false));
+            }
+            else
+            {
+                g.setColour (Palette::panel.withMultipliedAlpha (panelA));
+            }
             g.fillRoundedRectangle (r, pRad);
             if (accessMode == 0 || accessMode == 2)
             {
-                g.setColour (juce::Colours::white.withAlpha (0.03f));   // top elevation highlight
+                g.setColour (juce::Colours::white.withAlpha (lightCard ? 0.50f : 0.045f)); // top elevation highlight
                 g.fillRect (r.reduced (10.0f, 0.0f).withHeight (1.0f).translated (0.0f, 1.0f));
             }
             g.setColour ((accessMode == 1) ? Palette::yellow : Palette::panelLn);
@@ -11283,13 +11481,6 @@ void VocalGzzioContent::resized()
         tempoFitButton.setVisible (tfX + tfW <= revHeaderLeft);
         if (! revTypeBox.isVisible()) revTypeLabArea = {};
     }
-    // right-column tabs: left side of the panel header
-    {
-        int tx = seqArea.getX() + 10;
-        const int we = fitW (tabEqButton, tabH, 56);
-        tabEqButton.setBounds (tx, seqArea.getY() + 3, we, tabH); tx += we + 8;
-        tabFxButton.setBounds (tx, seqArea.getY() + 3, fitW (tabFxButton, tabH, 100), tabH);
-    }
     // Smart EQ mode + on/off: top-right inside the panel header (EQ tab only)
     {
         // 「EQ ON」と「EQ OFF」で幅が変わるので、広いほう(OFF)で席を取る
@@ -11297,6 +11488,27 @@ void VocalGzzioContent::resized()
         const int wOn = fitW (seqOnButton, tabH, 72) + 10;
         seqOnButton.setBounds (seqArea.getRight() - 6 - wOn, seqArea.getY() + 3, wOn, tabH);
         seqModeBox .setBounds (seqOnButton.getX() - 6 - 84,  seqArea.getY() + 2, 84, tabH + 1);
+    }
+    // right-column tabs + v5.9.0 quick singing assist buttons: left-to-center of the panel header
+    {
+        int tx = seqArea.getX() + 10;
+        const int we = fitW (tabEqButton, tabH, 56);
+        tabEqButton.setBounds (tx, seqArea.getY() + 3, we, tabH); tx += we + 8;
+        const int wf = fitW (tabFxButton, tabH, 100);
+        tabFxButton.setBounds (tx, seqArea.getY() + 3, wf, tabH); tx += wf + 10;
+
+        const int eraQuick = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 590;
+        const bool wantQuick = (! isOverview() && advancedMode && ! focusMode && eraQuick >= 590);
+        const int rightLimit = (seqModeBox.isVisible() ? seqModeBox.getX() - 8 : seqArea.getRight() - 10);
+        const int wSkill = fitW (singSkillBtn, tabH, 92);
+        const int wPitch = fitW (quickPitchBtn, tabH, 88);
+        const bool fitSkill = wantQuick && (tx + wSkill <= rightLimit);
+        singSkillBtn.setBounds (tx, seqArea.getY() + 3, wSkill, tabH);
+        singSkillBtn.setVisible (fitSkill);
+        tx += wSkill + 6;
+        const bool fitPitch = fitSkill && (tx + wPitch <= rightLimit);
+        quickPitchBtn.setBounds (tx, seqArea.getY() + 3, wPitch, tabH);
+        quickPitchBtn.setVisible (fitPitch);
     }
 
     // red lamps at knob centres (after every knob has its bounds)
@@ -11410,6 +11622,10 @@ void VocalGzzioContent::applyThemeToKnobs()
     vcOnButton     .setColour (juce::TextButton::buttonOnColourId, cleanStudio ? Palette::ice  : Palette::salmon);
     tabEqButton    .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
     tabFxButton    .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+    singSkillBtn   .setColour (juce::TextButton::buttonOnColourId, Palette::green);
+    singSkillBtn   .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::green));
+    quickPitchBtn  .setColour (juce::TextButton::buttonOnColourId, Palette::blue);
+    quickPitchBtn  .setColour (juce::TextButton::textColourOnId,   Palette::readableOn (Palette::blue));
     tempoFitButton .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
     keyScaleButton .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::ice.withAlpha (0.18f));
     analyzeButton  .setColour (juce::TextButton::buttonColourId,  (cleanStudio || lightTheme) ? Palette::panel2 : Palette::blue.withAlpha (0.18f));
@@ -11458,7 +11674,7 @@ void VocalGzzioContent::refreshLanguage()
     // Rebuild text without notifying attachments: language changes must not alter sound.
     checkupButton.setButtonText (language->checkup_label());
     checkupButton.setTooltip (language->checkup_tip());
-    miniBarButton.setButtonText (language->T ("📌 ミニバー", "📌 Mini-Bar"));
+    miniBarButton.setButtonText (language->T ("ミニバー", "Mini-Bar"));
     miniBarButton.setTooltip (language->T ("OBSや歌詞・コメント欄の隅に置けるコンパクトな配信ミニバー画面（520×115px・最前面ピン留め可）に切り替えます。",
                                            "Switch to the compact Streaming Mini-Bar (520x115 px, optional Always-on-Top pin) for OBS, lyrics, and chat."));
     crushBtn.setButtonText (language->crush_label());
@@ -11637,6 +11853,10 @@ void VocalGzzioContent::refreshLanguage()
     keyScaleButton .setButtonText (language->keyscale_label());
     analyzeButton  .setButtonText (language->chord_label());
     tabFxButton    .setButtonText (language->fx_tab_fx());
+    singSkillBtn   .setButtonText (language->sing_skill_label());
+    singSkillBtn   .setTooltip    (language->sing_skill_tip());
+    quickPitchBtn  .setButtonText (language->quick_pitch_label());
+    quickPitchBtn  .setTooltip    (language->quick_pitch_tip());
     vcOnButton.setButtonText (language->vc_on_label());
     jnOnButton.setButtonText (language->jn_on_label());
     vcOnButton.setTooltip (language->vc_pitch_tip());
@@ -12325,154 +12545,161 @@ void VocalGzzioContent::openIrSelectorMenu (juce::Rectangle<int> anchorScreenBou
 const VocalGzzioContent::LegacyVersionSpec& VocalGzzioContent::getLegacyVersionSpec (int id) noexcept
 {
     static constexpr LegacyVersionSpec kSpecs[kLegacyVersionCount] = {
-        { 0,  580, "v5.8.0",
-          "最新フラッグシップ（プロスタジオUI刷新・REAPER低負荷＆音途切れ切り分け診断）",
-          "Current Flagship (Pro Studio UI Redesign & REAPER Dropout Diagnosis)",
-          "最新の全機能（プロスタジオ品質モダンUI＆高視認配色、REAPER/DAWリアルタイム音途切れ切り分け診断＆⚡DAWライブ超低負荷モード、2タップ位相ロック倍音純化、2.67ms高速ピッチ解析、12種声質カルテ）をフル稼働します。",
-          "Full v5.8 flagship suite: Modern Pro-Studio UI & WCAG color palette, Real-time DAW vs Plugin dropout diagnosis & Live Ultra-Low-CPU Mode, Dual-Tap Harmonic Purifier, and 12-Type Vocal Karte.",
+        { 0,  590, "v5.9.0",
+          "最新フラッグシップ（マイク劣化・パリパリ／サフー0.0ms修復 ＆ 標準日本語UI）",
+          "Current Flagship (0.0ms Broken-Mic Crackle/Safu Repair & Pro Studio UI)",
+          "最新の全機能（追加遅延0.0ms『マイク劣化・パリパリ／サフー修復』、『うた自動』マイク劣化自動検知、REAPER/DAW音途切れ切り分け診断、2タップ倍音純化、12種声質カルテ、プロスタジオ高視認UI）をフル稼働します。",
+          "Full v5.9 flagship suite: Zero-latency (0.0ms) Broken-Mic Crackle/Safu/Rub-and-Buzz Repair with consonant protection, Auto-Setup mic anomaly detection, DAW dropout diagnosis & Pro-Studio UI.",
           "assets/styles-5.0.0.png", 0, true, 0, 0, 0 },
 
-        { 1,  570, "v5.7.0",
+        { 1,  580, "v5.8.0",
+          "プロスタジオUI刷新・REAPER低負荷＆音途切れ切り分け診断",
+          "Pro Studio UI Redesign & REAPER Dropout Diagnosis",
+          "プロスタジオ品質モダンUI＆高視認配色、REAPER/DAWリアルタイム音途切れ切り分け診断＆⚡DAWライブ超低負荷モード、2タップ位相ロック倍音純化世代です。v5.9のマイク劣化修復は休止します。",
+          "v5.8 suite: Modern Pro-Studio UI & WCAG color palette, Real-time DAW vs Plugin dropout diagnosis & Live Ultra-Low-CPU Mode, and Dual-Tap Harmonic Purifier. Pauses v5.9 Mic Repair.",
+          "assets/styles-5.0.0.png", 0, true, 0, 0, 0 },
+
+        { 2,  570, "v5.7.0",
           "12種J-Pop声質カルテ・AI倍音同期ノイズ純化・完パケ艶リリーフ",
           "12-Type J-Pop Vocal Karte, AI Harmonic Purifier & Auto Polish",
           "無音免疫12帯域・12タイプJ-Pop声質カルテ『うた自動』、6種ノイズ指紋学習＆歌唱中ピッチ同期ハーモニック声抽出、✨完パケ艶＆喉締めオートリリーフを搭載したv5.7世代です。",
           "v5.7 suite: 12-type J-Pop Vocal Karte Auto-Setup, 6-class AI Noise Fingerprint & Pitch-Sync Harmonic Voice Extractor, and Auto Vocal Polish & Throat-Strain Relief.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 2,  560, "v5.6.0",
+        { 3,  560, "v5.6.0",
           "統合マスタリング・4大スタジオ物理ライブSE＆全19テーマWCAG高視認UI",
           "Unified Mastering, 4 Studio Physical Live SE & 19-Theme WCAG UI",
           "4大スタジオライブSE物理合成（拍手・キラ・ドラム・ベル）、全19テーマWCAG 4.5:1高コントラストUI、声量10割開放、Smart Sleep超軽量エンジン世代です。v5.7の完パケ艶リリーフピルを休止します。",
           "4 studio physical Live SE, 19-theme WCAG >=4.5:1 high-contrast UI, 100% Vocal Dynamics & Smart Sleep generation.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 3,  550, "v5.5.0",
+        { 4,  550, "v5.5.0",
           "声量10割開放・Smart Sleep超軽量・配信ミニバー＆音ズレ補正",
           "Full Vocal Dynamics, Smart Sleep, Mini-Bar & Sync Offset",
           "声量10割ダイレクト開放、最終音量0〜250%無歪みゲイン、Smart Sleep超軽量エンジン、📌配信ミニバー、±300ms音ズレ補正、裏ホットキー、歌唱表現4種を搭載したv5.5世代です。",
           "v5.5 flagship suite: 100% Vocal Dynamics mode, 0-250% clean Output Volume, Smart Sleep ultra-light engine, Streaming Mini-Bar, +/-300ms Sync Offset & Global Hotkeys.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 4,  541, "v5.4.1",
+        { 5,  541, "v5.4.1",
           "カスタムSE 4枠ポン出し・1080pスリム総合画面＆配信安定化",
           "Custom 4-Slot SE Pads, 1080p Decluttered Overview & Stability",
           "自作音源（.wav/.mp3/.flac/.ogg/.aiff）をセットできるカスタムSE 4枠パッドと1080pノートPCでも重ならない整理済み総合画面世代。v5.5以降の配信ミニバー・音ズレ補正・歌唱表現4種を休止します。",
           "Custom 4-slot user SE pads and decluttered 1080p overview generation. Pauses v5.5+ Mini-Bar, Sync Offset, Tail Vibrato, Vowel Align & Mix Bridge.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 5,  540, "v5.4.0",
+        { 6,  540, "v5.4.0",
           "総合画面すっきり整理・自作音源SEパッド＆操作レスポンス高速化",
           "Decluttered Overview, Custom Audio SE Pads & Fast UI Response",
           "情報密度を見直して見やすく整理した総合画面と自作音源SEポン出しパッド世代。v5.5の後発歌唱表現DSP（語尾ビブラート・母音統一・発音グルーヴ・ミックス接続）は完全スリープします。",
           "Streamlined overview layout with custom user SE pads and cached backdrop rendering. Post-v5.4 vocal expression DSP sleeps at 0 CPU.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 6,  530, "v5.3.0",
+        { 7,  530, "v5.3.0",
           "アップワード空気感・ピッチスイートスポット＆歌い手返しモニター",
           "Upward Air Shimmer, Pitch Sweet-Spot & Singer Cue Monitor",
           "小声の息遣いを艶やかに持ち上げるアップワード空気感、心地よいピッチ補正スイートスポット、歌い手専用返しモニター世代。v5.4以降のカスタムSE枠・v5.5表現DSPを休止します。",
           "Upward Air shimmer, musical Pitch Sweet-Spot tuning, and Singer Cue Monitor generation. Pauses v5.4+ Custom SE slots and v5.5 expression DSP.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 7,  520, "v5.2.0",
+        { 8,  520, "v5.2.0",
           "部屋反響カット・ブレス整音・BGM歌抜け＆自動ボーカルライダー",
           "Room De-Reverb, Breath Tamer, BGM Unmask & Auto Vocal Rider",
           "宅録の部屋鳴りを抑える反響カット、ブレス整音、カラオケBGM帯域アンマスク＆BGM連動ボーカルライダー世代。v5.3以降のアップワード空気感・返しモニター以降を休止します。",
           "Room De-Reverb, Breath Control, BGM Spectral Unmasking & BGM-linked Vocal Rider generation. Pauses v5.3+ Upward Air & Singer Cue.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 8,  510, "v5.1.0",
+        { 9,  510, "v5.1.0",
           "4大名機マイクモデリング・サビ自動検知＆18種ハモリ拡張",
           "4 Legendary Studio Mic Models, Auto-Chorus & 18-Mode Harmony",
           "U87/C800G/SM7B/251の名機マイクモデリング、サビ自動検知ディレクター、18種ユニゾン＆ボイチェンクイックスタジオ世代。v5.2以降の部屋反響カット・BGM連動系を休止します。",
           "4 legendary studio mic models, Auto-Chorus Director, 18-mode harmony & Voice Changer Quick Studio. Pauses v5.2+ De-Reverb & BGM Unmask.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 9,  500, "v5.0.0",
+        { 10, 500, "v5.0.0",
           "星空・海5景・3軸60種パレット・タッチ対応・サビ盛＆ライブSE",
           "Sky/Sea 5 Vistas, 3-Axis 60-Preset Palette, Touch & Live SE",
           "星空・海5景テーマ、3軸直交プリセット60種、指上特大ルーペ、1クリックサビ盛り、4種ライブSE、実測IR残響世代。v5.1以降のマイクモデリング＆サビ自動検知を休止します。",
           "5 Sky/Sea themes, 60 orthogonal 3-axis presets, touch loupe, manual Chorus Boost, Live SE pads, and IR reverb. Pauses v5.1+ Mic Modeler & Auto-Chorus.",
           "assets/styles-5.0.0.png", 0, true, 14, 0, 6 },
 
-        { 10, 490, "v4.9.0",
+        { 11, 490, "v4.9.0",
           "星空・海・黄昏 5景コレクション＆天球ガラスオーブ",
           "Sky, Ocean & Dusk 5 Vistas & Celestial Glass Orb",
           "天球ガラスオーブ＆アストロラーベ金環ダイヤルと星空・深海5景テーマ世代。v5.0以降のサビブースト・ライブSEパッド・フッタードックを休止します。",
           "Celestial glass orb & astrolabe gold dials with 5 sky/ocean themes. Pauses v5.0+ Chorus Boost & Live SE dock.",
           "assets/styles-4.9.0.png", 0, true, 14, 0, 6 },
 
-        { 11, 480, "v4.8.0",
+        { 12, 480, "v4.8.0",
           "歌枠ステージスタジオ（BGM・完パケ録音・声質診断）",
           "Stage Studio (BGM Player, FullMix WAV Rec & AI Voice Target)",
           "ダーク・ティール Argon Cockpit 総合画面にBGMプレイヤー・30秒さかのぼり録音・5秒声質ターゲット診断を搭載した配信特化世代です。",
           "Dark teal Argon Cockpit overview with BGM player, 30s retroactive WAV recording, and 5s AI voice target diagnosis.",
           "interface-compatibility-4.8.0.png", 0, true, 0, 0, 0 },
 
-        { 12, 460, "v4.6.0",
+        { 13, 460, "v4.6.0",
           "Argon 2D声質重力オーブ＆4種類の総合画面構成",
           "Argon 2D Voice Gravity Orb & 4 Overview Architectures",
           "2D声質重力オーブ（倍音・声芯・空気・立体）と4種類の画面構成（コックピット/ライバー/ラック/クラシック）が確立された世代です。",
           "2D Voice Gravity Orb (Velvet/Focus/Silk/Halo) and 4 switchable overview architectures.",
           "overview-ja-4.6.0.png", 0, true, 0, 0, 0 },
 
-        { 13, 440, "v4.4.0",
+        { 14, 440, "v4.4.0",
           "クチュール・コスメ 5色＆Vライバーステージ",
           "Couture Cosmetics 5 Palettes & V-Liver Stage",
           "女性Vライバー・歌い手向けのクチュール5色パレットと宝石ダイヤル・12連マカロンリボンを搭載した華やかな総合画面世代です。",
           "Couture Cosmetics 5 color palettes, jewel dials, and 12-dial ribbon tailored for V-Livers and singers.",
           "assets/archive-ui/v4.4.0_liver_stage.png", 0, true, 5, 1, 2 },
 
-        { 14, 433, "v4.3.3",
+        { 15, 433, "v4.3.3",
           "3ステップ総合画面（オートミキサー＆実測部屋残響）",
           "3-Step Classic Overview (Auto-Mixer & Room IR Convolution)",
           "「1 整える・2 声をつくる・3 空間をつくる」の3カード総合画面と6種の部屋IR畳み込みリバーブ世代。Argon 4軸DSPは完全スリープします。",
           "Classic 3-card overview (Clean / Shape / Space) and 6 room IR spaces. Argon 4-axis DSP sleeps at 0 CPU.",
           "assets/archive-ui/v4.3.3_overview.png", 0, true, 0, 3, 10 },
 
-        { 15, 400, "v4.0.0",
+        { 16, 400, "v4.0.0",
           "初代オーバービュー総合画面＆1クリックととのえる",
           "First-Gen Overview Screen & 1-Click Auto-Setup",
           "総合画面が初めて登場した記念すべき v4.0 世代。上部に大型チューナー、下部に3カードを並べたクラシック構成で軽快に動作します。",
           "The original v4.0 Overview generation with large top tuner, 3-card layout, and lightweight DSP.",
           "assets/archive-ui/v4.2.0_overview.png", 0, true, 0, 3, 10 },
 
-        { 16, 310, "v3.1.0",
+        { 17, 310, "v3.1.0",
           "「音のとおり道」左列常設＆詳細3列スタジオ画面",
           "Signal Path Rail & 3-Column Studio Detail View",
           "左端に「音のとおり道」8モジュール列を常設した詳細3列レイアウト世代。「つぶさない」保護・自動ノイズ再学習・アコギピック抑制を搭載。",
           "3-column detail layout with the 8-module Signal Path Rail, Anti-Crush guard, and auto noise re-learn.",
           "assets/archive-ui/v4.3.3_detail.png", 1, true, 0, 0, 7 },
 
-        { 17, 240, "v2.4.0",
+        { 18, 240, "v2.4.0",
           "かんたん1列モード（10秒おまかせ設定＋よく使う7ツマミ）",
           "Easy 1-Row Mode (10s Auto-Setup + 7 Essential Knobs)",
           "初めてでも迷わず触れる「かんたんモード」世代。10秒おまかせ設定・大型チューナー・よく使う7ツマミだけに絞った超低負荷レイアウトです。",
           "Easy 1-row mode with 10s Auto-Setup, large pitch tuner, and 7 essential giant knobs.",
           "assets/archive-ui/v2.4.0_simple.png", 1, false, 0, 0, 7 },
 
-        { 18, 200, "v2.0.0",
+        { 19, 200, "v2.0.0",
           "エモート表現（息・エモ・サビリフト）＆伝統2列詳細画面",
           "Emote Expression (Breath/Emo/Chorus Lift) & 2-Column UI",
           "左列「音のとおり道」以前の伝統的な2列詳細画面。息・エモ・サビリフト・ピッチ補正・5人ユニゾンまでの構成で軽快に動作します。",
           "Classic 2-column detail UI with Breath/Emo/Chorus Lift, Auto-Tune, and 5-Voice Unison.",
           "assets/archive-ui/v1.9.0_standard.png", 1, true, 0, 0, 7 },
 
-        { 19, 170, "v1.7.0",
+        { 20, 170, "v1.7.0",
           "ゆるふわパステル＆機械式ギア2列画面",
           "Yuru-Kawa Pastel & Mechanical Gear 2-Column UI",
           "大人気の「ゆるふわ」パステル配色と機械式デュアルギアツマミ・右下のジュースサーバーが登場した2列世代。ピッチ補正・ユニゾン休止で超低負荷。",
           "Beloved Yuru-Kawa pastel theme with dual-gear knobs and corner dispenser in a 2-column layout. Very low CPU.",
           "assets/archive-ui/v1.7.0_yurufuwa.png", 1, true, 1, 1, 7 },
 
-        { 20, 130, "v1.3.0",
+        { 21, 130, "v1.3.0",
           "ダーク・ネイビー2列スタジオ＆スマート動的EQ",
           "Dark Navy 2-Column Studio & Smart Dynamic EQ",
           "ダーク・ネイビー配色と3バンド手動/自動スマート動的EQが確立された初期2列スタジオ世代。基本ストリップのみで極小CPU負荷で動作します。",
           "Early 2-column dark navy studio UI with 3-band Smart Dynamic EQ and core vocal strip at minimal CPU load.",
           "assets/archive-ui/v1.3.0_ui.png", 1, true, 20, 2, 9 },
 
-        { 21, 100, "v1.0.0",
+        { 22, 100, "v1.0.0",
           "初代 クリーム・フラット1列縦積み（原点・最軽量モード）",
           "Original Cream Flat 1-Column Stack (Origin & Ultra-Light)",
           "記念すべき初代 VocalGzzio v1.0.0！明るいクリーム背景・フラットリングダイヤル・基本18ツマミ縦積み構成。後発DSPを全休止し最軽量で動作します。",
@@ -12489,6 +12716,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
         processor.setLegacyEcoGate (true);
     const bool eco = processor.getLegacyEcoGate();
     processor.setLegacyVersionState (spec.id, spec.era);
+    if (spec.era < 590 && eco)
+        processor.setMicSafuMode (0);
     lastAppliedLegacyVer = spec.id;
     lastAppliedLegacyEco = eco;
 
@@ -12501,8 +12730,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     if (spec.pageMode != 0)
         setAdvanced (spec.advMode);
 
-    // 2. 世代固有のテーマと総合画面アーキテクチャを適用（最新v5.8.0復帰時はクリーンスタジオモードに戻し、装飾世代再現時は当時の装飾を再現）
-    setKnobInnerArtOn (spec.id >= 1 && spec.id <= 13 && (spec.knobStyle == 2 || spec.knobStyle == 6));
+    // 2. 世代固有のテーマと総合画面アーキテクチャを適用（最新v5.9.0/v5.8.0復帰時はクリーンスタジオモードに戻し、装飾世代再現時は当時の装飾を再現）
+    setKnobInnerArtOn (spec.id >= 2 && spec.id <= 14 && (spec.knobStyle == 2 || spec.knobStyle == 6));
     setThemeMode (spec.themeId);
     setOverviewLayoutMode (spec.ovLayout, spec.id > 0);
     applyThemeToKnobs();
@@ -12520,8 +12749,8 @@ void VocalGzzioContent::applyLegacyVersion (int versionId, bool keepEcoGate)
     tuner.resized();
 
     const juce::String msg = (spec.id == 0)
-        ? language->T ("✨ 最新 v5.8.0（プロスタジオUI・REAPER低負荷＆途切れ診断・2タップ倍音純化エンジン）に戻しました。",
-                       "✨ Restored latest v5.8.0 (Pro-Studio UI, REAPER Dropout Diagnosis & Dual-Tap Purifier).")
+        ? language->T ("✨ 最新 v5.9.0（マイク劣化・パリパリ／サフー0.0ms修復・プロスタジオUI・REAPER低負荷診断）に戻しました。",
+                       "✨ Restored latest v5.9.0 (0.0ms Broken-Mic Crackle/Safu Repair, Pro-Studio UI & REAPER Dropout Diagnosis).")
         : (language->T ("🕰️ 歴代バージョン再現: ", "🕰️ Recalled Legacy Version: ")
            + juce::String (spec.verTag) + " — "
            + juce::String::fromUTF8 (language->english ? spec.titleEn : spec.titleJa)
@@ -12602,8 +12831,8 @@ public:
 
         g.setColour (kGold);
         g.setFont (GzzioLnF::uiFont (20.0f, true));
-        g.drawFittedText (language->T ("🕰️ 歴代バージョン呼び出し・世代タイムマシン (v1.0.0 〜 v5.8.0)",
-                                       "🕰️ Legacy Version Time Machine (v1.0.0 - v5.8.0)"),
+        g.drawFittedText (language->T ("🕰️ 歴代バージョン呼び出し・世代タイムマシン (v1.0.0 〜 v5.9.0)",
+                                       "🕰️ Legacy Version Time Machine (v1.0.0 - v5.9.0)"),
                           { hdr.getX() + 14, hdr.getY() + 2, 540, 24 },
                           juce::Justification::centredLeft, 1, 0.88f);
 
@@ -12635,11 +12864,11 @@ public:
                  ecoOn ? language->T ("🔋 世代別省負荷ゲート: ON", "🔋 Era Eco-Gate: ON")
                        : language->T ("🔋 世代別省負荷ゲート: OFF", "🔋 Era Eco-Gate: OFF"));
         drawBtn (latestBtnRect, kCyan, owner.processor.getLegacyVersionId() == 0,
-                 language->T ("✨ 最新 v5.8.0 へ", "✨ Latest v5.8.0"));
+                 language->T ("✨ 最新 v5.9.0 へ", "✨ Latest v5.9.0"));
         drawBtn (closeBtnRect, kSalmon, false,
                  language->T ("✕ 閉じる", "✕ Close"));
 
-        // ---- 2. 左カラム：全22世代カード一覧（3列×8段、オンデマンド選択） ----
+        // ---- 2. 左カラム：全23世代カード一覧（3列×8段、オンデマンド選択） ----
         const int leftX = 16, leftY = 68, leftW = 616;
         const int colW  = (leftW - 16) / 3;
         const int rowH  = 67;
@@ -12733,7 +12962,7 @@ public:
                           + juce::String (insp.previewPng)
                           + (cachedPreview.isValid()
                              ? ("  (" + juce::String (cachedPreview.getWidth()) + "x" + juce::String (cachedPreview.getHeight())
-                                + language->T (" — 他の21世代は未読込でメモリ節約中)", " — Other 21 eras unloaded)"))
+                                + language->T (" — 他の22世代は未読込でメモリ節約中)", " — Other 22 eras unloaded)"))
                              : language->T (" (軽量ベクタープレビュー)", " (Lightweight Vector Preview)")),
                           { prevBox.getX() + 12, prevBox.getBottom() - 24, prevBox.getWidth() - 24, 20 },
                           juce::Justification::centredLeft, 1, 0.85f);
@@ -12759,9 +12988,12 @@ public:
                           juce::Justification::topLeft, 2, 0.90f);
 
         // 省負荷ゲートで休止される後発DSPモジュールの明示
-        const juce::String sleepSummary = (insp.era >= 550)
-            ? language->T ("⚡ 稼働DSP: 全モジュール稼働（Smart Sleep超軽量化・歌唱表現エンジン・名機マイク・実測IR残響もオンデマンド稼働）",
-                           "⚡ Active DSP: All flagship v5.5 modules active with Smart Sleep zero-cost idle gating")
+        const juce::String sleepSummary = (insp.era >= 590)
+            ? language->T ("⚡ 稼働DSP: 全モジュール稼働（0.0msマイク劣化修復・Smart Sleep超軽量化・歌唱表現・名機マイク・実測IR残響もオンデマンド稼働）",
+                           "⚡ Active DSP: All flagship v5.9 modules active (0.0ms Broken-Mic Repair + Smart Sleep zero-cost idle gating)")
+            : (insp.era >= 550)
+                ? language->T ("⚡ 省負荷スリープ対象: v5.9 マイク劣化修復を休止し、v5.5〜v5.8の主要モジュールがオンデマンド稼働 (Smart Sleep有効)",
+                               "⚡ Sleeping DSP: v5.9 Broken-Mic Repair asleep; v5.5-v5.8 core modules active with Smart Sleep")
             : (insp.era >= 540)
                 ? language->T ("⚡ 省負荷スリープ対象: v5.5 語尾ビブラート・母音統一EQ・発音グルーヴ・ミックス接続・音ズレ遅延を完全休止 (0 CPU)",
                                "⚡ Sleeping DSP: v5.5 Tail Vibrato, Vowel Align, Onset Groove, Mix Bridge & Sync Delay asleep at 0 CPU")
@@ -13740,20 +13972,34 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         appProps.setStorageParameters (o);
     }
     auto* prefs = appProps.getUserSettings();
+    const auto getTestEnv = [] (const char* name) -> juce::String
+    {
+        return juce::SystemStats::getEnvironmentVariable (name, {});
+    };
+    const bool hasTestEnvOverride = getTestEnv ("GZ_THEME").isNotEmpty()
+                                 || getTestEnv ("GZ_TAB").isNotEmpty()
+                                 || getTestEnv ("GZ_ADV").isNotEmpty()
+                                 || getTestEnv ("GZ_ARCH").isNotEmpty()
+                                 || getTestEnv ("GZ_LITE").isNotEmpty()
+                                 || getTestEnv ("GZ_SEASON").isNotEmpty()
+                                 || getTestEnv ("GZ_LEGACY_VER").isNotEmpty()
+                                 || getTestEnv ("GZ_MINIBAR").isNotEmpty();
 
-    // window-zoom slider drives geometry
-    content.onScaleChange = [this, prefs] (float s)
+    // v5.9.0: 過去のスナップショット実行等で英語(Brand: ui_theme=3)や縮小ズームが残っていた実環境を
+    //         「ふつう（日本語・標準総合画面・100%/自動フィット）」へ1回限りクリーン移行する
+    if (prefs != nullptr && ! gz::isTestDataIsolated() && ! hasTestEnvOverride
+        && ! prefs->getBoolValue ("ui_default_futsuu_v590", false))
     {
-        applyScale (s);
-        if (prefs != nullptr) prefs->setValue ("ui_zoom", (double) s);
-    };
-    // font slider drives text size only (no geometry change)
-    content.onFontChange = [this, prefs] (float f)
-    {
-        lnf.setFontScale (f * kFontRebase);
-        content.setFontScale (f * kFontRebase);
-        if (prefs != nullptr) prefs->setValue ("ui_font", (double) f);
-    };
+        prefs->setValue ("ui_default_futsuu_v590", true);
+        prefs->setValue ("ui_theme", 0);        // 0 = ふつう（日本語）
+        prefs->setValue ("ui_overview", true);  // 標準総合画面
+        prefs->setValue ("ui_lite", false);
+        prefs->setValue ("ui_arch", 0);
+        prefs->setValue ("ui_legacy_ver", 0);
+        prefs->setValue ("ui_legacy_era", 590);
+        prefs->removeValue ("ui_zoom");
+        prefs->saveIfNeeded();
+    }
 
     // corner-drag resize (keeps 1280x790 aspect, 70..140 percent)
     setResizable (true, true);
@@ -13791,32 +14037,12 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
     content.setFontScale (juce::jlimit (0.80f, 1.50f, f0) * kFontRebase);
     applyScale (juce::jlimit (0.70f, 1.40f, z0));
 
-    // ---- v1.4.0: persist editor-only UI state so it survives window close ----
-    // (the editor object is destroyed/recreated; these live in the shared file)
-    content.onUiStateChange = [prefs] (const juce::String& key, int val)
-    {
-        if (prefs != nullptr)
-        {
-            prefs->setValue (key, val);
-            if (key.startsWith ("ui_legacy") || key == "ui_theme" || key == "ui_overview"
-                || key == "ui_advanced" || key == "ui_arch" || key == "ui_decor_art_v580" || key == "ui_update_check")
-                prefs->saveIfNeeded();
-        }
-    };
-    content.getTuner().onRailChange = [prefs] (bool r)
-    {
-        if (prefs != nullptr) prefs->setValue ("ui_rail", r ? 1 : 0);
-    };
     {
         const bool revised = prefs == nullptr || prefs->getIntValue ("ui_layout_revision", 0) < 2;
         const bool adv  = revised || prefs->getBoolValue ("ui_advanced", true);
         const int  tab  = prefs != nullptr ? prefs->getIntValue ("ui_tab", 0) : 0;
         const bool rail = prefs != nullptr && prefs->getBoolValue ("ui_rail", false);
         int theme = prefs != nullptr ? prefs->getIntValue ("ui_theme", 0) : 0;
-        const auto getTestEnv = [] (const char* name) -> juce::String
-        {
-            return juce::SystemStats::getEnvironmentVariable (name, {});
-        };
         if (const auto tm = getTestEnv ("GZ_THEME"); tm.isNotEmpty())   // test hook: force a theme
             theme = tm.getIntValue();
 
@@ -13835,7 +14061,7 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         if (const auto lt = getTestEnv ("GZ_LITE"); lt.isNotEmpty())
             content.setLiteMode (lt.getIntValue() != 0);
         // v5.8.0: 既存ユーザー環境でもアップデート直後に新プロスタジオUI（装飾OFF）が有効になるよう1回限り移行
-        if (prefs != nullptr && ! prefs->getBoolValue ("ui_clean_studio_v580", false))
+        if (prefs != nullptr && ! hasTestEnvOverride && ! prefs->getBoolValue ("ui_clean_studio_v580", false))
         {
             prefs->setValue ("ui_clean_studio_v580", true);
             prefs->setValue ("ui_decor_art_v580", 0);
@@ -13853,7 +14079,7 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
             content.setAutoUpdateCheckOn ((bool) p.apvts.state.getProperty ("ui_update_check", true));
         content.setFocusedEditing (! revised && prefs->getBoolValue ("ui_focus", false));
         content.setOverview (revised || prefs->getBoolValue ("ui_overview", true));
-        if (prefs != nullptr && revised)
+        if (prefs != nullptr && revised && ! hasTestEnvOverride)
         {
             prefs->setValue ("ui_layout_revision", 2);
             prefs->setValue ("ui_focus", false);
@@ -13864,9 +14090,22 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
             content.forceSeason (ss.getIntValue());
         int prefLegacyVer = (prefs != nullptr && prefs->containsKey ("ui_legacy_ver"))
                           ? prefs->getIntValue ("ui_legacy_ver", -1) : -1;
-        // 旧14世代カタログ(1=v5.0.0..13=v1.0.0)で保存された環境設定を新19世代カタログ(6=v5.0.0..18=v1.0.0)へ自動移行
-        if (prefLegacyVer >= 1 && prefLegacyVer <= 13 && (prefs == nullptr || ! prefs->containsKey ("ui_legacy_era")))
-            prefLegacyVer += 5;
+        if (prefLegacyVer > 0 && prefs != nullptr && prefs->containsKey ("ui_legacy_era"))
+        {
+            const int savedEra = prefs->getIntValue ("ui_legacy_era", 590);
+            for (int lid = 0; lid < VocalGzzioContent::kLegacyVersionCount; ++lid)
+            {
+                if (VocalGzzioContent::getLegacyVersionSpec (lid).era == savedEra)
+                {
+                    prefLegacyVer = lid;
+                    break;
+                }
+            }
+        }
+        else if (prefLegacyVer >= 1 && prefLegacyVer <= 13 && (prefs == nullptr || ! prefs->containsKey ("ui_legacy_era")))
+        {
+            prefLegacyVer += 6;
+        }
         if (prefs != nullptr && prefs->containsKey ("ui_legacy_eco"))
             p.setLegacyEcoGate (prefs->getIntValue ("ui_legacy_eco", 1) != 0);
 
@@ -13879,6 +14118,33 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
         else if (p.getLegacyVersionId() > 0)
             content.applyLegacyVersion (p.getLegacyVersionId(), true);
     }
+
+    // ---- v1.4.0 / v5.9.0: 初期復元完了後にのみUI状態保存コールバックを接続（GZ_THEME=3等のテスト環境変数がユーザー設定を上書きするのを完全防止） ----
+    content.onScaleChange = [this, prefs, hasTestEnvOverride] (float s)
+    {
+        applyScale (s);
+        if (prefs != nullptr && ! hasTestEnvOverride) prefs->setValue ("ui_zoom", (double) s);
+    };
+    content.onFontChange = [this, prefs, hasTestEnvOverride] (float f)
+    {
+        lnf.setFontScale (f * kFontRebase);
+        content.setFontScale (f * kFontRebase);
+        if (prefs != nullptr && ! hasTestEnvOverride) prefs->setValue ("ui_font", (double) f);
+    };
+    content.onUiStateChange = [prefs, hasTestEnvOverride] (const juce::String& key, int val)
+    {
+        if (prefs != nullptr && ! hasTestEnvOverride)
+        {
+            prefs->setValue (key, val);
+            if (key.startsWith ("ui_legacy") || key == "ui_theme" || key == "ui_overview"
+                || key == "ui_advanced" || key == "ui_arch" || key == "ui_decor_art_v580" || key == "ui_update_check")
+                prefs->saveIfNeeded();
+        }
+    };
+    content.getTuner().onRailChange = [prefs, hasTestEnvOverride] (bool r)
+    {
+        if (prefs != nullptr && ! hasTestEnvOverride) prefs->setValue ("ui_rail", r ? 1 : 0);
+    };
 
     // 起動時1回だけのプロセス分離型アップデート確認（設定復元後に実行・Cubase終了ハング0ms）
     content.triggerUpdateCheck (false);

@@ -1593,32 +1593,32 @@ int main()
                                "v5.5.0 setMiniBarMode(false) restores exact normal UI window dimensions");
                     }
 
-                    // (E) Full 22-Generation Legacy Version Recall (v1.0.0 .. v5.8.0)
-                    check (VocalGzzioContent::kLegacyVersionCount == 22,
-                           "v5.8.0 Legacy Version Time Machine exposes all 22 generations (v1.0.0 - v5.8.0)");
-                    const char* expectedTags[10] = { "v5.8.0", "v5.7.0", "v5.6.0", "v5.5.0", "v5.4.1", "v5.4.0", "v5.3.0", "v5.2.0", "v5.1.0", "v5.0.0" };
-                    const int   expectedEras[10] = { 580,      570,      560,      550,      541,      540,      530,      520,      510,      500 };
-                    for (int gi = 0; gi < 10; ++gi)
+                    // (E) Full 23-Generation Legacy Version Recall (v1.0.0 .. v5.9.0)
+                    check (VocalGzzioContent::kLegacyVersionCount == 23,
+                           "v5.9.0 Legacy Version Time Machine exposes all 23 generations (v1.0.0 - v5.9.0)");
+                    const char* expectedTags[11] = { "v5.9.0", "v5.8.0", "v5.7.0", "v5.6.0", "v5.5.0", "v5.4.1", "v5.4.0", "v5.3.0", "v5.2.0", "v5.1.0", "v5.0.0" };
+                    const int   expectedEras[11] = { 590,      580,      570,      560,      550,      541,      540,      530,      520,      510,      500 };
+                    for (int gi = 0; gi < 11; ++gi)
                     {
                         const auto& sp = VocalGzzioContent::getLegacyVersionSpec (gi);
                         check (juce::String (sp.verTag) == expectedTags[gi] && sp.era == expectedEras[gi],
-                               "v5.8.0 v5.x back-number slot matches expected version tag and DSP era");
+                               "v5.9.0 v5.x back-number slot matches expected version tag and DSP era");
                     }
-                    check (juce::String (VocalGzzioContent::getLegacyVersionSpec (21).verTag) == "v1.0.0"
-                           && VocalGzzioContent::getLegacyVersionSpec (21).era == 100,
-                           "v5.8.0 Legacy slot 21 preserves original v1.0.0 (era 100)");
+                    check (juce::String (VocalGzzioContent::getLegacyVersionSpec (22).verTag) == "v1.0.0"
+                           && VocalGzzioContent::getLegacyVersionSpec (22).era == 100,
+                           "v5.9.0 Legacy slot 22 preserves original v1.0.0 (era 100)");
 
-                    for (int testLegId : { 1, 2, 3, 5, 7, 8, 21, 0 })
+                    for (int testLegId : { 1, 2, 3, 4, 6, 8, 9, 22, 0 })
                     {
                         view.applyLegacyVersion (testLegId, true);
                         check (processor->getLegacyVersionId() == testLegId
                                && processor->getLegacyVersionEra() == VocalGzzioContent::getLegacyVersionSpec (testLegId).era,
-                               "v5.8.0 applyLegacyVersion activates exact era state including v5.1.0/v5.3.0/v5.7.0");
+                               "v5.9.0 applyLegacyVersion activates exact era state including v5.8.0/v5.7.0/v1.0.0/v5.9.0");
                         for (auto* c : view.getChildren())
                         {
                             if (! c->isVisible()) continue;
                             check (! c->getBounds().isEmpty() && view.getLocalBounds().contains (c->getBounds()),
-                                   "v5.8.0 Recalled legacy version keeps every visible control strictly inside window");
+                                   "v5.9.0 Recalled legacy version keeps every visible control strictly inside window");
                         }
                     }
 
@@ -1634,6 +1634,22 @@ int main()
                     view.setThemeMode (0);
                     view.handleOverviewMouseDown ({ 748, 34 });
                     check (! processor->getDawLiveEcoMode(), "v5.8.0 Clicking latBadgeArea again disables dawLiveEcoMode");
+
+                    // (E-3) v5.9.0 Broken-Mic Crackle & Safu Repair Pill (micSafuPillRect) 1-Click Cycle & Brand English Check
+                    const auto safuRect = view.getMicSafuPillBoundsForTest();
+                    check (! safuRect.isEmpty(), "v5.9.0 micSafuPillRect is visible on Card 0 in default Argon Cockpit");
+                    processor->setMicSafuMode (0);
+                    view.handleOverviewMouseDown (safuRect.getCentre());
+                    check (processor->getMicSafuMode() == 1, "v5.9.0 1st click on micSafuPillRect switches to Auto (mode 1)");
+                    view.handleOverviewMouseDown (safuRect.getCentre());
+                    check (processor->getMicSafuMode() == 2, "v5.9.0 2nd click on micSafuPillRect switches to Deep (mode 2)");
+                    view.setThemeMode (3);
+                    check (! containsJapanese (view.overviewHelpAt (safuRect.getCentre()))
+                           && ! containsJapanese (processor->getMicSafuModeName (true)),
+                           "v5.9.0 micSafuPillRect hover help and label have zero Japanese in Brand English mode");
+                    view.setThemeMode (0);
+                    view.handleOverviewMouseDown (safuRect.getCentre());
+                    check (processor->getMicSafuMode() == 0, "v5.9.0 3rd click on micSafuPillRect returns to OFF (mode 0)");
 
                     // (F) Knob Inner Artwork ON/OFF toggle & offscreen rendering across jewel/gear/juice themes
                     view.setOverview (true);

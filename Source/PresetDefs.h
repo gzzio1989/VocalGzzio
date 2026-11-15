@@ -21,6 +21,10 @@ struct FinishPresetDef
     float peaks, level, attack, release, deess, sustain, consonants;
     int reverbType;
     float reverb, size, delay, delayMs, feedback, duck;
+    // v5.9.0 拡張: Vocal Rider・共鳴抑制・倍音艶・空間ダブラー・Argon 4軸を各仕上がりに最適統合
+    float ride, res, ring, breath, emo, lift, prox, width, doubler;
+    float velvet, focus, silk, halo;
+    bool  crush;
 };
 
 inline constexpr FinishPresetDef kFinishPresets[] =
@@ -28,33 +32,45 @@ inline constexpr FinishPresetDef kFinishPresets[] =
     { "自然に整える", "Natural",
       "声や楽器の抑揚を残して、低い振動と小さな音量差を整えます。響きは短く控えめ。まず原音に近い仕上がりから始めたいときに。",
       "Keeps the expression of your voice or instrument, gently controlling rumble and peaks with a small room. Start here for a natural finish.",
-      75, -1, -0.5f, 0, 0, 0, 12, 10, 24, 180, 15, 0, 0,
-      1, 9, 20, 0, 240, 15, 0 },
+      75, -1.2f, -0.6f, 0.6f, 1.0f, 8, 12, 10, 24, 180, 20, 8, 10,
+      1, 8, 20, 0, 240, 15, 20,
+      6, 14, 8, 6, 8, 0, 15, 8, 0,
+      16, 18, 20, 10, false },
     { "歌詞を前へ", "Vocal Forward",
-      "低いこもりを引いて言葉の輪郭と明るさを足します。大小をそろえ、短い響きで歌を伴奏の前へ。硬く感じたら「明るさ」を下げてください。",
-      "Clears low mids, adds presence and air, and evens out phrases. A short plate keeps the vocal in front of the backing. Reduce brightness if it sounds sharp.",
-      120, -4.5f, -1, 4.5f, 3, 12, 45, 52, 8, 100, 40, 0, 15,
-      2, 15, 35, 0, 240, 15, 30 },
+      "低いこもりを引いて言葉の輪郭と明るさを足します。大小をそろえ、スタジオプレート残響で歌を伴奏の最前列へ押し出します。",
+      "Clears low mids, adds presence and air, and evens out phrases. A studio plate and vocal rider lock your voice right in front of the mix.",
+      115, -4.5f, -1.0f, 4.5f, 3.2f, 16, 44, 50, 9, 105, 40, 24, 30,
+      2, 16, 40, 5, 250, 16, 38,
+      36, 28, 26, 16, 20, 22, 30, 18, 10,
+      32, 48, 42, 22, true },
     { "丸く親密に", "Warm & Intimate",
-      "低音の厚みを残し、耳に当たる高音を丸くします。遅めの音量調整で出だしを残す、近く落ち着いた声。明るすぎる録音や静かな曲に。",
-      "Retains body while softening the upper mids. Slower dynamics preserve the start of each phrase, with a close room for intimate vocals or bright recordings.",
-      65, 0, -4, -2, 0, 32, 20, 34, 25, 220, 30, 8, 0,
-      1, 14, 30, 0, 240, 15, 0 },
+      "低音の厚みを残し、耳に当たる高音を丸くします。真空管風の温かい倍音と近い空気感で、弾き語りや静かな曲にしっとり馴染みます。",
+      "Retains body while softening the upper mids. Velvet tube harmonics and a close room create warm, intimate vocals for chill or acoustic songs.",
+      68, 0.0f, -4.2f, -2.2f, 0.4f, 34, 22, 34, 24, 210, 32, 22, 8,
+      1, 14, 30, 0, 240, 15, 24,
+      24, 26, 10, 20, 18, 8, 25, 12, 6,
+      50, 18, 22, 18, true },
     { "太く力強く", "Dense & Driven",
-      "大きな音を速く受け止め、音量差を強めにそろえて密度を出します。中高音の芯と軽い歪みを足す、ロックや力強い歌の仕上がり。",
-      "Catches loud peaks quickly and reduces the gap between loud and quiet phrases. Adds midrange weight and gentle saturation for dense, driven vocals.",
-      90, -2, -1.5f, 3, 1, 55, 65, 60, 4, 90, 45, 12, 5,
-      2, 10, 20, 0, 240, 15, 40 },
+      "大きな音を速く受け止め、音量差を強めにそろえて密度を出します。中高音の芯と倍音ドライブを足す、ロックや力強い歌の仕上がり。",
+      "Catches loud peaks quickly and locks quiet and loud phrases together. Adds midrange punch and harmonic drive for powerful rock vocals.",
+      95, -2.2f, -1.5f, 3.2f, 1.8f, 52, 65, 62, 4, 88, 45, 20, 24,
+      2, 12, 28, 0, 240, 15, 42,
+      40, 24, 28, 10, 16, 24, 30, 14, 12,
+      46, 56, 30, 18, false },
     { "語りをくっきり", "Speech Focus",
-      "低音の膨らみを削り、言葉の出だしと小さな声をそろえます。残響とやまびこは切り、言葉を近くはっきり届けます。歌では乾いた質感に。",
-      "Reduces low-end buildup and brings quiet words forward. Reverb and delay are off for close, intelligible speech or a deliberately dry vocal.",
-      145, -5, -2, 2.5f, 0, 0, 35, 68, 3, 80, 50, 0, 30,
-      1, 0, 0, 0, 240, 15, 0 },
+      "低音の膨らみを削り、言葉の出だしと小さな声をそろえます。残響とやまびこは切り、配信や実況で言葉を近くはっきり届けます。",
+      "Reduces low-end buildup and brings quiet words forward. Reverb and delay are completely off for crisp, intelligible speech and streaming.",
+      140, -5.0f, -2.0f, 2.8f, 1.2f, 6, 35, 66, 4, 82, 50, 0, 36,
+      1, 0, 0, 0, 240, 15, 0,
+      44, 30, 12, 6, 0, 0, 35, 0, 0,
+      20, 42, 22, 0, false },
     { "広く響かせる", "Wide Ballad",
-      "明るさを少し足し、長いホールと薄いやまびこで余韻を広げます。歌っている間は響きを抑え、語尾から広がるバラード向け。響きが多ければ「残響量」を下げてください。",
-      "Adds a long hall and a quiet echo, opening up the ends of phrases. Ducking keeps the words clear while you sing. Reduce reverb for a closer sound.",
-      90, -2.5f, -1, 1, 3.5f, 10, 28, 28, 18, 180, 28, 0, 0,
-      3, 32, 70, 12, 320, 18, 35 }
+      "明るさと伸びを足し、豊かなホールと薄いやまびこで余韻を広げます。歌っている間はダッキングで響きを抑え、語尾から美しく広がります。",
+      "Adds silky air, sustain, and a lush concert hall with gentle echo. Ducking keeps lyrics clear while singing, blooming on every phrase tail.",
+      90, -2.5f, -1.2f, 1.8f, 3.6f, 16, 28, 32, 16, 175, 32, 34, 18,
+      3, 34, 72, 14, 320, 20, 36,
+      30, 26, 24, 22, 28, 26, 25, 28, 12,
+      44, 36, 52, 42, true }
 };
 inline constexpr int kNumFinishPresets = (int) (sizeof (kFinishPresets) / sizeof (kFinishPresets[0]));
 
@@ -69,9 +85,8 @@ bool applyFinishPreset (int index, SetParameter&& setParameter)
     const auto& p = kFinishPresets[index];
     for (const char* id : { "mod_totonoe", "mod_soroe", "mod_sagyo", "mod_neiro", "mod_hirogari" })
         setParameter (id, 1.0f);
-    for (const char* id : { "res_amt", "ride_amt", "ring", "br_amt", "emo_amt", "lift_amt",
-                           "robo_mix", "mega_amt", "cho_amt", "doubler", "width", "seq_on",
-                           "crush_on", "ord_eq", "ord_space", "jn_solo" })
+    for (const char* id : { "robo_mix", "mega_amt", "cho_amt", "seq_on",
+                            "ord_eq", "ord_space", "jn_solo", "pick_amt" })
         setParameter (id, 0.0f);
     setParameter ("mix", 100.0f);
     setParameter ("ord_deess", 1.0f);
@@ -89,6 +104,21 @@ bool applyFinishPreset (int index, SetParameter&& setParameter)
     setParameter ("deess", p.deess);
     setParameter ("sustain", p.sustain);
     setParameter ("cons_amt", p.consonants);
+    setParameter ("ride_amt", p.ride);
+    setParameter ("res_amt",  p.res);
+    setParameter ("ring",     p.ring);
+    setParameter ("br_amt",   p.breath);
+    setParameter ("emo_amt",  p.emo);
+    setParameter ("lift_amt", p.lift);
+    setParameter ("prox_amt", p.prox);
+    setParameter ("width",    p.width);
+    setParameter ("doubler",  p.doubler);
+    setParameter ("dbl_on",   p.doubler > 0.0f ? 1.0f : 0.0f);
+    setParameter ("crush_on", p.crush ? 1.0f : 0.0f);
+    setParameter ("argon_velvet", p.velvet);
+    setParameter ("argon_focus",  p.focus);
+    setParameter ("argon_silk",   p.silk);
+    setParameter ("argon_halo",   p.halo);
     setParameter ("rev_type", (float) p.reverbType);
     setParameter ("revon", p.reverb > 0.0f ? 1.0f : 0.0f);
     setParameter ("revmix", p.reverb);
@@ -98,7 +128,7 @@ bool applyFinishPreset (int index, SetParameter&& setParameter)
     setParameter ("dly_sync", 0.0f);
     setParameter ("dly_ms", p.delayMs);
     setParameter ("dly_fb", p.feedback);
-    setParameter ("dly_hc", 5000.0f);
+    setParameter ("dly_hc", 4200.0f);
     setParameter ("duck", p.duck);
     return true;
 }
@@ -416,6 +446,46 @@ inline constexpr EqPresetDef kEqPresets[] =
 inline constexpr int kNumVoicePresets = (int) (sizeof (kVoicePresets) / sizeof (kVoicePresets[0]));
 inline constexpr int kNumMicPresets   = (int) (sizeof (kMicPresets)   / sizeof (kMicPresets[0]));
 inline constexpr int kNumEqPresets    = (int) (sizeof (kEqPresets)    / sizeof (kEqPresets[0]));
+
+// v5.9.0: 曲調・ジャンル20種ごとの空間設計＆歌唱アシスト連動テーブル
+// revType: 1=ルーム, 2=プレート, 3=ホール
+struct EqSpaceSkillDef
+{
+    int   revType;
+    float revSize, revMix, duck, width, doubler, delay, delayMs;
+    float ride, emo, lift;
+    int   jpopPolish; // 0=OFF, 1=Modern Bright, 2=Silk Ballad
+    bool  singingSkill;
+    bool  tailVib;
+};
+
+inline constexpr EqSpaceSkillDef kEqSpacePresets[kNumEqPresets] =
+{
+    // 0..6: アニソン・ボカロ・J-POP
+    { 2, 38.0f, 14.0f, 44.0f, 20.0f, 14.0f,  7.0f, 230.0f, 42.0f, 22.0f, 28.0f, 1, true,  true  }, // 0: アニソン疾走ギターロック
+    { 3, 66.0f, 24.0f, 36.0f, 28.0f, 12.0f, 11.0f, 310.0f, 36.0f, 28.0f, 30.0f, 2, true,  true  }, // 1: アニソンシンフォニック劇伴
+    { 2, 40.0f, 15.0f, 40.0f, 20.0f, 14.0f,  6.0f, 240.0f, 40.0f, 20.0f, 26.0f, 1, true,  true  }, // 2: アニソン王道ヒーロー
+    { 2, 36.0f, 16.0f, 42.0f, 24.0f, 18.0f,  8.0f, 210.0f, 42.0f, 24.0f, 28.0f, 1, true,  true  }, // 3: アニソン・アイドルキラキラ
+    { 2, 32.0f, 12.0f, 48.0f, 22.0f, 16.0f,  6.0f, 195.0f, 45.0f, 18.0f, 24.0f, 1, true,  false }, // 4: ボカロ高速エレクトロ（早口のため語尾ビブラート控えめ）
+    { 2, 46.0f, 18.0f, 38.0f, 22.0f, 12.0f,  9.0f, 270.0f, 38.0f, 28.0f, 26.0f, 1, true,  true  }, // 5: ボカロダーク＆エモ
+    { 2, 42.0f, 16.0f, 36.0f, 18.0f, 10.0f,  6.0f, 260.0f, 36.0f, 20.0f, 22.0f, 1, true,  true  }, // 6: J-POP王道ブライト
+    // 7..9: ロック・バンド・ラウド
+    { 2, 34.0f, 13.0f, 42.0f, 16.0f, 12.0f,  5.0f, 240.0f, 42.0f, 18.0f, 24.0f, 1, true,  true  }, // 7: ギターロック＆オルタナ
+    { 2, 36.0f, 14.0f, 46.0f, 20.0f, 16.0f,  8.0f, 250.0f, 45.0f, 22.0f, 30.0f, 1, true,  true  }, // 8: ハードロック・ラウド・V系
+    { 1, 24.0f,  9.0f, 45.0f, 10.0f, 10.0f,  0.0f, 200.0f, 44.0f, 14.0f, 20.0f, 1, true,  false }, // 9: パンク・ライブハウス生感
+    // 10..15: バラード・アコースティック・R&B・シティポップ
+    { 3, 68.0f, 26.0f, 34.0f, 26.0f, 10.0f, 12.0f, 330.0f, 34.0f, 30.0f, 26.0f, 2, true,  true  }, // 10: バラード王道ホール
+    { 1, 32.0f, 13.0f, 30.0f, 12.0f,  6.0f,  0.0f, 250.0f, 30.0f, 20.0f, 14.0f, 2, true,  true  }, // 11: アコースティック弾き語り
+    { 2, 44.0f, 17.0f, 36.0f, 22.0f, 12.0f,  8.0f, 280.0f, 36.0f, 24.0f, 18.0f, 2, true,  true  }, // 12: R&B・ネオソウル
+    { 2, 46.0f, 18.0f, 36.0f, 24.0f, 14.0f,  9.0f, 275.0f, 36.0f, 22.0f, 20.0f, 2, true,  true  }, // 13: シティポップ・レトロモダン
+    { 3, 48.0f, 18.0f, 32.0f, 18.0f,  6.0f,  4.0f, 300.0f, 30.0f, 24.0f, 12.0f, 2, true,  true  }, // 14: ジャズ・ボサノヴァ
+    { 1, 28.0f, 12.0f, 32.0f, 16.0f,  8.0f,  5.0f, 260.0f, 34.0f, 22.0f, 10.0f, 2, true,  false }, // 15: Lo-Fi・ベッドルームポップ
+    // 16..19: ラップ・伝統歌唱・配信トーク・ASMR
+    { 1, 22.0f,  8.0f, 50.0f, 14.0f, 12.0f,  5.0f, 190.0f, 46.0f, 14.0f, 18.0f, 1, true,  false }, // 16: ヒップホップ・ラップ
+    { 3, 64.0f, 25.0f, 32.0f, 22.0f,  8.0f, 10.0f, 320.0f, 34.0f, 28.0f, 24.0f, 2, true,  true  }, // 17: 演歌・民謡・和風
+    { 1,  0.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.0f, 240.0f, 48.0f,  0.0f,  0.0f, 0, false, false }, // 18: 雑談配信・ラジオ・実況（残響OFF・明瞭トーク）
+    { 1, 20.0f,  6.0f, 28.0f, 24.0f,  0.0f,  0.0f, 240.0f, 38.0f, 16.0f,  0.0f, 2, false, false }, // 19: ASMR・ささやき・朗読
+};
 
 // ---- v1.4.0 / v5.1.0 Voice Changer & Character-Voice presets (pitch/formant + robot + megaphone) ----
 struct CharPresetDef

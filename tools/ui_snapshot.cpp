@@ -79,6 +79,32 @@ int main (int argc, char** argv)
         {
             content.applyLegacyVersion (std::atoi (argv[12]), true);
         }
+        if (argc > 14 && std::atoi (argv[14]) != 0)
+        {
+            processor.applyProSingingInitialSetup();
+            juce::AudioBuffer<float> voiceBuf (2, 512);
+            juce::MidiBuffer midi;
+            double ph = 0.0;
+            for (int blk = 0; blk < 28; ++blk)
+            {
+                auto* L = voiceBuf.getWritePointer (0);
+                auto* R = voiceBuf.getWritePointer (1);
+                for (int n = 0; n < 512; ++n)
+                {
+                    const double f0 = 220.0;
+                    ph += juce::MathConstants<double>::twoPi * f0 / 48000.0;
+                    const float s = (float) (0.20 * std::sin (ph)
+                                           + 0.11 * std::sin (2.0 * ph)
+                                           + 0.06 * std::sin (3.0 * ph)
+                                           + 0.03 * std::sin (5.0 * ph)
+                                           + 0.02 * std::sin (12.0 * ph));
+                    L[n] = R[n] = s;
+                }
+                processor.processBlock (voiceBuf, midi);
+            }
+            content.syncArgonOrbFromParams();
+            content.syncQuickAssistButtons();
+        }
         content.resized();
         if (argc > 13 && std::atoi (argv[13]) != 0)
         {

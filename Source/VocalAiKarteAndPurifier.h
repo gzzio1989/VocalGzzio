@@ -764,8 +764,10 @@ public:
         {
             targetPeriod = std::clamp ((float) (sr / (double) f0Hz), 8.0f, (float) (kCombRingSize - 8));
             const float confFactor = std::clamp ((f0Conf - 0.58f) / 0.32f, 0.0f, 1.0f);
-            wantAlpha = std::clamp (0.35f * denoiseAmount01 * confFactor * glideGuard * floorPresence * (0.35f + 0.65f * snrNeed),
-                                    0.0f, 0.35f);
+            // v5.9.0: 1次再帰型IIRハーモニック・コム化により、整数倍音は無損失(0.00dB)のまま
+            //         母音中に混じる「サフサフ」倍音間ヒス雑音の減衰力を最大 -9.1 dB へ倍増
+            wantAlpha = std::clamp (0.48f * denoiseAmount01 * confFactor * glideGuard * floorPresence * (0.38f + 0.62f * snrNeed),
+                                    0.0f, 0.48f);
 
             // v5.8.0: 2タップ位相ロック静止クロスフェード方式
             // 読み出しタップをサンプルごとに連続スイープさせると dd/dn != 0 のドップラー・ジッパーノイズが出るため、
@@ -808,8 +810,8 @@ public:
 
         float* bandsL[3] = { b1L, b2L, b3L };
         float* bandsR[3] = { b1R, b2R, b3R };
-        // 高域(>5kHz)はピッチ揺らぎへの感度が高いためコム深度を控えめ(0.45倍)にして息の自然さを100%保つ
-        static constexpr float kBandCombScale[3] = { 0.80f, 1.00f, 0.45f };
+        // サフサフ変調ヒスの主帯域(b1:250-1.2kHz, b2:1.2-5kHz)は再帰コムで深く純化し、超高域(b3:>5kHz)は補間ロールオフを防ぎ息の自然さを100%保つ
+        static constexpr float kBandCombScale[3] = { 0.82f, 1.00f, 0.34f };
 
         const int chCount = std::min (numCh, 2);
         for (int n = 0; n < numSamples; ++n)
@@ -862,7 +864,6 @@ public:
                         if (ptr == nullptr) continue;
                         const float x = ptr[n];
                         auto& ring = combRing[b][ch];
-                        ring[(size_t) w] = x;
                         float delayed = c0A * ring[(size_t) idxA0]
                                       + c1A * ring[(size_t) idxA1]
                                       + c2A * ring[(size_t) idxA2]
@@ -875,7 +876,9 @@ public:
                                                  + c3B * ring[(size_t) idxB3];
                             delayed += xfadeMix * (delayedB - delayed);
                         }
-                        ptr[n] = (1.0f - a) * x + a * delayed;
+                        const float y = (1.0f - a) * x + a * delayed;
+                        ring[(size_t) w] = y;
+                        ptr[n] = y;
                     }
                 }
             }
@@ -893,8 +896,8 @@ public:
             ringWrite = (w + 1) & kCombRingMask;
         }
 
-        // 倍音間の雑音が何dB引き算されたかをテレメトリ保存 (1 - 2*alpha)
-        const float notchGain = std::clamp (1.0f - 2.0f * combMixAlpha, 0.25f, 1.0f);
+        // 再帰型IIR倍音コムで倍音間の雑音が何dB引き算されたかをテレメトリ保存 ((1 - alpha) / (1 + alpha))
+        const float notchGain = std::clamp ((1.0f - combMixAlpha) / (1.0f + combMixAlpha), 0.18f, 1.0f);
         lastHarmonicCleanDb = (combMixAlpha > 0.005f) ? (-20.0f * std::log10 (notchGain)) : 0.0f;
     }
 
