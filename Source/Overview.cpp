@@ -552,8 +552,8 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         if (processor.getLegacyVersionId() > 0)
         {
             openLegacyVersionPopup (localAreaToGlobal (latBadgeArea));
-            overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.9.0までの全23世代を選択して画面配置・配色・DSP構成を瞬時に再現します。",
-                                        "[LEGACY VERSION TIME MACHINE] Select and recall any of the 23 generations from v1.0.0 to v5.9.0 with era-specific zero-CPU sleep gating.");
+            overviewHint = language->T ("【歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v6.0.0までの全24世代を選択して画面配置・配色・DSP構成を瞬時に再現します。",
+                                        "[LEGACY VERSION TIME MACHINE] Select and recall any of the 24 generations from v1.0.0 to v6.0.0 with era-specific zero-CPU sleep gating.");
             return true;
         }
         processor.toggleDawLiveEcoMode();
@@ -584,8 +584,8 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
     if (topBrandVerRect.contains (pt))
     {
         openLegacyVersionPopup (localAreaToGlobal (juce::Rectangle<int> (68, 32, 160, 24)));
-        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.9.0までの全23世代（v5.0.0〜v5.8.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
-                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 23 generations from v1.0.0 to v5.9.0 (including v5.0.0-v5.8.0) with era-specific zero-CPU sleep gating.");
+        overviewHint = language->T ("【歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v6.0.0までの全24世代（v5.0.0〜v5.9.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
+                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 24 generations from v1.0.0 to v6.0.0 (including v5.0.0-v5.9.0) with era-specific zero-CPU sleep gating.");
         return true;
     }
 
@@ -773,6 +773,15 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+    // 1c-5b. v6.0.0: カード1ヘッダの「曲キー・スケール 1クリック選択＆自動検出」ピル
+    if (! overviewKeyPillRect.isEmpty() && overviewKeyPillRect.expanded (2, 4).contains (pt))
+    {
+        openOverviewKeyPopup (localAreaToGlobal (overviewKeyPillRect));
+        overviewHint = language->T ("【曲キー・スケール即選択】総合画面のまま1クリックで「半音階（全曲自動）」「メジャー／マイナー全24キー」「8秒歌ってキー自動検出」を切り替えられます。ピッチ補正とハモリ生成の両方に連動します。",
+                                    "[SONG KEY & SCALE] Instantly select Chromatic (any song), all 24 Major/Minor keys, or 8s Auto-Key Detection directly from Overview (linked to both Pitch Correction & Harmony).");
+        return true;
+    }
+
     // 1c-2. カード0ヘッダの「🎙️ マイク劣化・パリパリ／サフー修復 (OFF / 標準 / 強力)」ピル
     if (! micSafuPillRect.isEmpty() && micSafuPillRect.expanded (2, 4).contains (pt))
     {
@@ -800,15 +809,6 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         openStreamOutPopup (localAreaToGlobal (streamPillRect));
         overviewHint = language->T ("【📡 外部出力・OBS連携】ASIOで自分の声を聴きながら外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）へ同時出力するほか、OBS標準VST3直接読込・オーディオIF内蔵ループバックの連携ガイドを開きます。",
                                     "[STREAM OUT & OBS GUIDE] Bridges processed audio to external virtual cables (VB-CABLE / Yamaha SYNCROOM Driver) while on ASIO, and opens the OBS VST3 / Loopback connection guide.");
-        return true;
-    }
-
-    // 1d-1b. ヘッダの「🕰 歴代バージョン呼び出し・世代タイムマシン (v5.9.0▼ / 遅延)」ピル
-    if (! latBadgeArea.isEmpty() && latBadgeArea.expanded (2, 4).contains (pt))
-    {
-        openLegacyVersionPopup (localAreaToGlobal (latBadgeArea));
-        overviewHint = language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）】初代v1.0.0〜最新v5.9.0までの全23世代（v5.0.0〜v5.8.0を含む）を選択して画面配置・配色・DSP構成を瞬時に再現します。",
-                                    "[LEGACY VERSION TIME MACHINE] Select and recall any of the 23 generations from v1.0.0 to v5.9.0 (including v5.0.0-v5.8.0) with era-specific zero-CPU sleep gating.");
         return true;
     }
 
@@ -1395,7 +1395,7 @@ void VocalGzzioContent::updateOverviewVisibility()
     }
 
     // 🕰️ v4.0.0 / v4.3.3 初代・3ステップ総合画面再現 (v4.2.0_overview.png / v4.3.3_overview.png 完全一致)
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 590;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 600;
     const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
     outVolK.slider.setVisible (! isClassicV4);
     outVolK.label .setVisible (! isClassicV4);
@@ -1516,8 +1516,8 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
         return language->T ("【⚡ DAWリアルタイム負荷＆音途切れ診断・超低負荷モード】VocalGzzio単体のDSP負荷（%）とDAW/ASIO側のバッファ途切れをリアルタイム監視します。クリックするとREAPER等での録音・複数トラック同時アーム時に最適な「⚡DAWライブ超低負荷モード」をワンタッチ切替します。",
                             "[DAW REAL-TIME CPU & DROPOUT MONITOR / LIVE ECO] Monitors VocalGzzio DSP peak load (%) vs DAW/ASIO host buffer dropouts. Click to toggle DAW Live Ultra-Low-CPU Mode for multi-track low-buffer recording.");
     if (juce::Rectangle<int> (20, 10, 212, 50).contains (pt))
-        return language->T ("【🕰 歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v5.9.0までの全23世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
-                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any of the 23 generations from v1.0.0 to v5.9.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
+        return language->T ("【歴代バージョン呼び出し（世代タイムマシン）＆追加遅延表示】クリックすると初代v1.0.0〜最新v6.0.0までの全24世代をいつでも呼び出せます。旧世代選択時はその時代より後のDSPを自動スリープさせてCPU負荷を劇的に下げます。",
+                            "[LEGACY VERSION TIME MACHINE & LATENCY] Click to recall any of the 24 generations from v1.0.0 to v6.0.0. Selecting an earlier era automatically puts newer DSP stages to sleep at 0 CPU.");
     if (talkPillRect.contains (pt))
         return language->T ("【歌枠⇄雑談MC 瞬間切替】クリックすると歌設定（残響・エコー・ハモリ・広がり）を一切壊さず一時ミュートし、曲間のトークでもお風呂場にならないクリアなMC声へワンタッチで切り替えます。",
                             "[Singing / MC Talk Toggle] Non-destructively mutes reverb, echo, harmony, and stereo width for clean between-song MC talk while preserving 100% of your singing settings for instant return.");
@@ -1563,8 +1563,11 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
         return language->T ("【✨ J-Pop 完パケ艶＆喉締めオートリリーフ】クリックまたはホイール回転で「艶補正: OFF ➔ ✨艶: 歌枠自然 ➔ ✨艶: 完パケ極」を切り替えます。1.08kHz鼻声イキミ＆3.88kHz高音耳痛を動的に引き算し、母音発声中のみ2.95kHz抜け＆11.5kHzシルク艶を添えます。",
                             "[J-Pop Auto Polish & Throat-Strain Relief] Click or scroll wheel to cycle: OFF -> Natural Polish -> Master Polish. Dynamically relieves 1.08kHz/3.88kHz strain while boosting 2.95kHz focus & 11.5kHz silk air on voiced vowels.");
     if (! micSafuPillRect.isEmpty() && micSafuPillRect.contains (pt))
-        return language->T ("【🎙️ マイク劣化・パリパリ／サフー修復（追加遅延0.0ms）】クリックまたはホイール回転で「劣化修復: OFF ➔ 劣化修復: 標準 ➔ 劣化修復: 強力」を切り替えます。発声中のカプセル湿気パリパリ・チリチリ放電音、劣化した風防スポンジのサフー共鳴尾、スピーカー擦れ歪みを除去し、日本語の「さ・ふ・息継ぎ」は100%保護します。",
+        return language->T ("【マイク劣化・パリパリ／サフー修復（追加遅延0.0ms）】クリックまたはホイール回転で「劣化修復: OFF ➔ 劣化修復: 標準 ➔ 劣化修復: 強力」を切り替えます。発声中のカプセル湿気パリパリ・チリチリ放電音、劣化した風防スポンジのサフー共鳴尾、スピーカー擦れ歪みを除去し、日本語の「さ・ふ・息継ぎ」は100%保護します。",
                             "[Broken-Mic Crackle & Safu Repair (0.0ms Latency)] Click or scroll wheel to cycle: OFF -> Mic Fix: Auto -> Mic Fix: Deep. Suppresses mid-vowel capsule crackle bursts, degraded sponge chuffing tails, and rub-and-buzz while keeping sibilants and breaths intact.");
+    if (! overviewKeyPillRect.isEmpty() && overviewKeyPillRect.contains (pt))
+        return language->T ("【曲キー・スケール直結セレクター】クリックすると「半音階（全曲自動）」「メジャー／マイナー全24キー」「8秒キー自動検出」をその場で選べます。ピッチ補正とハモリのスケールが同時連動します。",
+                            "[Song Key & Scale Selector] Click to choose Chromatic (auto-fit), any of the 24 Major/Minor keys, or 8s Auto-Key Scan for Pitch Correction and Harmony.");
     for (size_t c = 0; c < coutureSwatchRects.size(); ++c)
         if (! coutureSwatchRects[c].isEmpty() && coutureSwatchRects[c].contains (pt))
             return language->T ("クチュール・コスメ5色のカラーバリエーション（01ロゼ／02アイシーラベンダー／03ノワールロリータ／04ティファニーミント／05ハニーピーチ）をワンタッチで切り替えます。",
@@ -1580,7 +1583,11 @@ void VocalGzzioContent::updateOverviewState()
     const bool enabled = active ("mod_souji") && active ("dn_on");
     const int amount = juce::roundToInt (processor.apvts.getRawParameterValue ("denoise")->load());
     const auto measured = learned ? language->T ("学習済", "Learned") : language->T ("自動", "Auto");
-    const auto aiPat    = processor.getDenoisePatternBadge (language->english);
+    juce::String aiPat  = processor.getDenoisePatternBadge (language->english);
+    if (! knobInnerArtOn && aiPat.isNotEmpty() && aiPat[0] > 0x2600 && aiPat[0] < 0x3000)
+        aiPat = aiPat.substring (1).trimStart();
+    else if (! knobInnerArtOn && aiPat.length() >= 2 && (juce::uint32) aiPat[0] >= 0x1F000)
+        aiPat = aiPat.substring (1).trimStart();
     const float hClean  = processor.getDenoiseHarmonicCleanDb();
     const auto status = learning ? language->T ("測定中：声を出さないで", "Learning: stay quiet")
                       : ! enabled ? measured + language->T (" ／ ノイズ除去は切", " / Reduction OFF")
@@ -1770,6 +1777,7 @@ void VocalGzzioContent::resizedOverview()
     prismPillRect = {};
     jpopPolishPillRect = {};
     micSafuPillRect = {};
+    overviewKeyPillRect = {};
     overviewUpdateRect = {};
     routePillRect = {};
     streamPillRect = {};
@@ -1791,7 +1799,7 @@ void VocalGzzioContent::resizedOverview()
     for (auto& r : archPillRects) r = {};
     litePillRect = {};
 
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 590;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 600;
     const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
     Knob* const outKnob = isClassicV4 ? &makeupK : &outVolK;
     if (latestUpdateTag.isNotEmpty())
@@ -2218,8 +2226,13 @@ void VocalGzzioContent::resizedOverview()
         && overviewCards[1].getWidth() >= (accessMode == 0 ? 480 : 560))
     {
         const auto& pwr1 = overviewSectionPower[1].getBounds();
-        const int jpW = (overviewCards[1].getWidth() >= 550) ? 124 : 108;
-        jpopPolishPillRect = { pwr1.getX() - jpW - 8, pwr1.getY() + 3, jpW, 28 };
+        const int jpW = (overviewCards[1].getWidth() >= 550) ? 114 : 106;
+        jpopPolishPillRect = { pwr1.getX() - jpW - 6, pwr1.getY() + 3, jpW, 28 };
+        if ((eraNow >= 600 || showAllKnobs) && overviewCards[1].getWidth() >= 550)
+        {
+            const int keyW = 104;
+            overviewKeyPillRect = { jpopPolishPillRect.getX() - keyW - 6, pwr1.getY() + 3, keyW, 28 };
+        }
     }
 
     if (! isClassicV4 && (eraNow >= 590 || showAllKnobs)
@@ -2470,6 +2483,89 @@ void VocalGzzioContent::openCustomSeSlotMenu (int slotIndex, juce::Rectangle<int
                              safe->processor.clearCustomSeSlot (slotIndex);
                              safe->repaint();
                          }
+                     });
+}
+
+void VocalGzzioContent::openOverviewKeyPopup (juce::Rectangle<int> anchorScreenBounds)
+{
+    juce::PopupMenu m;
+    const int curKey   = juce::jlimit (0, 11, (int) std::lround (processor.apvts.getRawParameterValue ("at_key")->load()));
+    const int curScale = juce::jlimit (0, 8,  (int) std::lround (processor.apvts.getRawParameterValue ("at_scale")->load()));
+    static const char* const kKeyNames[12] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
+
+    m.addSectionHeader (language->T ("曲キー・スケール直結設定（ピッチ補正＆ハモリ連動）", "Song Key & Scale (Pitch & Harmony)"));
+    m.addItem (1, language->T ("半音階 — 全曲自動（キー指定なし）", "Chromatic — Auto-fit Any Song"), true, curScale == 0);
+    m.addItem (2, language->T ("8秒 歌ってキー自動検出を開始...", "Start 8s Singing Auto-Key Scan..."), true, false);
+    m.addSeparator();
+
+    juce::PopupMenu majSub, minSub;
+    for (int k = 0; k < 12; ++k)
+    {
+        majSub.addItem (10 + k, juce::String (kKeyNames[k]) + language->T (" メジャー（明るい曲）", " Major"),
+                        true, curScale == 1 && curKey == k);
+        minSub.addItem (30 + k, juce::String (kKeyNames[k]) + language->T (" マイナー（切ない曲）", " Minor"),
+                        true, curScale == 2 && curKey == k);
+    }
+    m.addSubMenu (language->T ("メジャーキー（長調 12キー）", "Major Keys (12 Keys)"), majSub, true, nullptr, curScale == 1);
+    m.addSubMenu (language->T ("マイナーキー（短調 12キー）", "Minor Keys (12 Keys)"), minSub, true, nullptr, curScale == 2);
+
+    // よく使う定番キーは1階層目からも即1クリック選択可能にする
+    m.addSeparator();
+    static constexpr int kQuickMaj[6] = { 0, 7, 2, 5, 10, 3 }; // C, G, D, F, Bb, Eb
+    static constexpr int kQuickMin[4] = { 9, 4, 2, 7 };        // Am, Em, Dm, Gm
+    for (int qi = 0; qi < 6; ++qi)
+    {
+        const int k = kQuickMaj[qi];
+        m.addItem (10 + k, juce::String (kKeyNames[k]) + " Major", true, curScale == 1 && curKey == k);
+    }
+    for (int qi = 0; qi < 4; ++qi)
+    {
+        const int k = kQuickMin[qi];
+        m.addItem (30 + k, juce::String (kKeyNames[k]) + " Minor", true, curScale == 2 && curKey == k);
+    }
+    m.addSeparator();
+    m.addItem (50, language->T ("音程・ハモリ詳細画面を開く...", "Open Pitch & Harmony Details..."), true, false);
+
+    juce::Component::SafePointer<VocalGzzioContent> safe (this);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (anchorScreenBounds),
+                     [safe] (int res)
+                     {
+                         if (safe == nullptr || res <= 0) return;
+                         auto setChoice = [&] (const char* pid, int idx)
+                         {
+                             if (auto* p = safe->processor.apvts.getParameter (pid))
+                             {
+                                 p->beginChangeGesture();
+                                 p->setValueNotifyingHost (safe->processor.apvts.getParameterRange (pid).convertTo0to1 ((float) idx));
+                                 p->endChangeGesture();
+                             }
+                         };
+                         if (res == 1)
+                         {
+                             setChoice ("at_scale", 0);
+                         }
+                         else if (res == 2)
+                         {
+                             safe->processor.requestKeyScan (8.0);
+                             safe->overviewHint = safe->language->T ("【8秒キー自動検出 開始】8秒ほど普段通りに歌ってください。歌声から曲のキーとメジャー／マイナーを自動判定して設定します。",
+                                                                      "[8s AUTO-KEY SCAN] Sing normally for ~8 seconds to automatically detect and lock your song's key and scale.");
+                         }
+                         else if (res >= 10 && res < 22)
+                         {
+                             setChoice ("at_key",   res - 10);
+                             setChoice ("at_scale", 1);
+                         }
+                         else if (res >= 30 && res < 42)
+                         {
+                             setChoice ("at_key",   res - 30);
+                             setChoice ("at_scale", 2);
+                         }
+                         else if (res == 50)
+                         {
+                             if (safe->overviewPitch.onClick)
+                                 safe->overviewPitch.onClick();
+                         }
+                         safe->repaint();
                      });
 }
 
@@ -2949,8 +3045,25 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             fitText (g, label, ri.reduced (2, 0), juce::Justification::centred, 13.5f, active);
         };
 
-        const char* pillJa[4] = { oceanStarTheme() ? "天球水鏡" : "ARGON", "LIVER", "STUDIO", "従来" };
-        const char* pillEn[4] = { oceanStarTheme() ? "HORIZON"  : "ARGON", "LIVER", "STUDIO", "CLASSIC" };
+        const int pillEraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 600;
+        if (! knobInnerArtOn && ! archPillRects[0].isEmpty() && ! archPillRects[3].isEmpty() && Palette::panel.getPerceivedBrightness() <= 0.55f)
+        {
+            const auto tray1 = archPillRects[0].getUnion (archPillRects[3]).expanded (3, 3).toFloat();
+            g.setColour (Palette::bgBot.withAlpha (0.88f));
+            g.fillRoundedRectangle (tray1, 8.0f);
+            g.setColour (Palette::panelLn.withAlpha (0.55f));
+            g.drawRoundedRectangle (tray1.reduced (0.5f), 8.0f, 1.0f);
+            if (! litePillRect.isEmpty() && ! latBadgeArea.isEmpty())
+            {
+                const auto tray2 = litePillRect.getUnion (latBadgeArea).expanded (3, 3).toFloat();
+                g.setColour (Palette::bgBot.withAlpha (0.88f));
+                g.fillRoundedRectangle (tray2, 8.0f);
+                g.setColour (Palette::panelLn.withAlpha (0.55f));
+                g.drawRoundedRectangle (tray2.reduced (0.5f), 8.0f, 1.0f);
+            }
+        }
+        const char* pillJa[4] = { oceanStarTheme() ? "天球水鏡" : (pillEraNow >= 600 ? "CARBON" : "ARGON"), "LIVER", "STUDIO", "従来" };
+        const char* pillEn[4] = { oceanStarTheme() ? "HORIZON"  : (pillEraNow >= 600 ? "CARBON" : "ARGON"), "LIVER", "STUDIO", "CLASSIC" };
         const juce::Colour pillCols[4] = { Palette::ice, Palette::salmon, Palette::yellow, Palette::blue };
         for (int i = 0; i < 4; ++i)
         {
@@ -3055,7 +3168,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         }
     }
 
-    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 590;
+    const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 600;
     const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
     if (! staticPass && g.clipRegionIntersects ({ 0, 0, getWidth(), 124 }))
     {
@@ -3114,7 +3227,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 
                 g.setColour ((ecoNow || drops > 0) ? Palette::ink : Palette::ink);
                 const juce::String topTxt = ecoNow
-                    ? language->T ("⚡超低負荷", "⚡LIVE ECO")
+                    ? (knobInnerArtOn ? language->T ("⚡超低負荷", "⚡LIVE ECO") : language->T ("超低負荷ON", "LIVE ECO"))
                     : ("DSP " + juce::String (juce::jlimit (0, 99, juce::roundToInt (dspPct))) + "%");
                 fitText (g, topTxt,
                          { latBadgeArea.getX() + 2, latBadgeArea.getY() + 2, latBadgeArea.getWidth() - 4, 16 },
@@ -3123,11 +3236,11 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (drops > 0 ? Palette::salmon : (ecoNow ? Palette::green : Palette::inkSoft));
                #if VOCALGZZIO_TRIAL
                 const juce::String botTxt = (drops > 0)
-                    ? language->T ("⚠途切検知", "⚠DROPOUT")
+                    ? (knobInnerArtOn ? language->T ("⚠途切検知", "⚠DROPOUT") : language->T ("途切検知", "DROPOUT"))
                     : (language->T ("体験 ", "TR ") + juce::String (latencyMs, 1) + "ms");
                #else
                 const juce::String botTxt = (drops > 0)
-                    ? language->T ("⚠途切検知", "⚠DROPOUT")
+                    ? (knobInnerArtOn ? language->T ("⚠途切検知", "⚠DROPOUT") : language->T ("途切検知", "DROPOUT"))
                     : ((liteMode ? "ECO " : "+") + juce::String (latencyMs, 1) + "ms");
                #endif
                 fitText (g, botTxt,
@@ -3939,6 +4052,121 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.drawLine (cx, cy, ox, oy, 2.0f);
                 g.setColour (isLiverStyle ? Palette::salmon : Palette::yellow);
                 g.fillEllipse (ox - 9.0f, oy - 9.0f, 18.0f, 18.0f);
+            }
+        }
+        else if (! knobInnerArtOn)
+        {
+            // =========================================================================
+            // ★ v6.0.0 Carbon 2D Acoustic Vector Crosshair & Live Telemetry Matrix
+            //   3Dワイヤーフレーム球体を廃し、精密極座標レティクル＋4象限ベクトル指標＋
+            //   リアルタイムBS.1770 LUFS / dBTP / De-Ess / Pocket テレメトリストリップへ進化
+            // =========================================================================
+            const bool lightPad = Palette::panel.getPerceivedBrightness() > 0.55f;
+            if (staticPass)
+            {
+                const auto bg0 = lightPad ? Palette::panel2 : Palette::bgBot.darker (0.10f);
+                const auto bg1 = lightPad ? Palette::panel2.darker (0.04f) : Palette::panel.darker (0.28f);
+                g.setGradientFill (juce::ColourGradient (bg0, padF.getX(), padF.getY(), bg1, padF.getX(), padF.getBottom(), false));
+                g.fillRoundedRectangle (padF, 9.0f);
+                g.setColour (lightPad ? Palette::panelLn.darker (0.08f) : Palette::panelLn);
+                g.drawRoundedRectangle (padF.reduced (0.5f), 9.0f, 1.0f);
+
+                // 同心円レンジリング (33%, 66%, 100%) ＆ 直交クロスヘア
+                for (int rStep = 1; rStep <= 3; ++rStep)
+                {
+                    const float rr = ballR * ((float) rStep / 3.0f);
+                    g.setColour (Palette::panelLn.withAlpha (rStep == 3 ? 0.78f : 0.36f));
+                    g.drawEllipse (cx - rr, cy - rr, rr * 2.0f, rr * 2.0f, rStep == 3 ? 1.25f : 0.85f);
+                }
+                g.setColour (Palette::panelLn.withAlpha (0.48f));
+                g.drawLine (cx - ballR - 4.0f, cy, cx + ballR + 4.0f, cy, 0.9f);
+                g.drawLine (cx, cy - ballR - 4.0f, cx, cy + ballR + 4.0f, 0.9f);
+                g.setColour (Palette::panelLn.withAlpha (0.22f));
+                const float diagR = ballR * 0.7071f;
+                g.drawLine (cx - diagR, cy - diagR, cx + diagR, cy + diagR, 0.8f);
+                g.drawLine (cx - diagR, cy + diagR, cx + diagR, cy - diagR, 0.8f);
+
+                // 外周24分割のCNCマイクロ角度目盛り
+                for (int deg = 0; deg < 24; ++deg)
+                {
+                    const float da = (float) deg * juce::MathConstants<float>::twoPi / 24.0f;
+                    const bool cardinal = (deg % 6 == 0);
+                    const float r0 = ballR + 1.5f;
+                    const float r1 = ballR + (cardinal ? 6.0f : 3.6f);
+                    g.setColour (Palette::panelLn.brighter (cardinal ? 0.25f : 0.0f).withAlpha (cardinal ? 0.85f : 0.42f));
+                    g.drawLine (cx + r0 * std::cos (da), cy + r0 * std::sin (da),
+                                cx + r1 * std::cos (da), cy + r1 * std::sin (da), cardinal ? 1.4f : 0.9f);
+                }
+            }
+            else
+            {
+                // 4方向のリアルタイム活性アーク (Left:Velvet=Emerald, Top:Focus=Amber, Right:Silk=Ice, Bottom:Halo=Azure)
+                const float brAngles[4] = { -juce::MathConstants<float>::halfPi, 0.0f, juce::MathConstants<float>::halfPi, juce::MathConstants<float>::pi };
+                const juce::Colour brCols[4] = { Palette::green, Palette::yellow, Palette::ice, Palette::blue };
+                const float brVals[4] = { vVal, fVal, sVal, hVal };
+                for (int b = 0; b < 4; ++b)
+                {
+                    const float normV = juce::jlimit (0.0f, 1.0f, brVals[b] * 0.01f);
+                    if (normV > 0.01f)
+                    {
+                        const float span = 0.12f + 0.30f * normV;
+                        juce::Path arcP;
+                        arcP.addCentredArc (cx, cy, ballR + 0.5f, ballR + 0.5f, 0.0f,
+                                            brAngles[b] - span, brAngles[b] + span, true);
+                        g.setColour (brCols[b].withAlpha (0.35f + 0.55f * normV));
+                        g.strokePath (arcP, juce::PathStrokeType (2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                    }
+                }
+
+                // 原点 (cx, cy) からターゲット座標 (ox, oy) への精密ベクトル線＆クロスガイド
+                g.setColour (Palette::yellow.withAlpha (0.20f));
+                g.drawLine (cx - ballR, oy, cx + ballR, oy, 0.8f);
+                g.drawLine (ox, cy - ballR, ox, cy + ballR, 0.8f);
+                if (std::hypot (ox - cx, oy - cy) > 2.5f)
+                {
+                    g.setColour (Palette::yellow.withAlpha (0.78f));
+                    g.drawLine (cx, cy, ox, oy, 1.8f);
+                }
+                g.setColour (Palette::panelLn.brighter (0.25f));
+                g.fillEllipse (cx - 2.4f, cy - 2.4f, 4.8f, 4.8f);
+
+                // 音響活性パルスリング＆CNC精密ターゲットレティクル
+                const float inLv = juce::jlimit (0.0f, 1.0f, processor.getInputLevel() * 3.2f);
+                const float pulseR = 11.5f + (vAct + fAct + sAct + hAct + inLv) * 7.5f;
+                g.setColour (Palette::yellow.withAlpha (0.16f));
+                g.fillEllipse (ox - pulseR, oy - pulseR, pulseR * 2.0f, pulseR * 2.0f);
+                g.setColour (Palette::yellow.withAlpha (0.72f));
+                g.drawEllipse (ox - pulseR, oy - pulseR, pulseR * 2.0f, pulseR * 2.0f, 1.2f);
+
+                g.setColour (lightPad ? Palette::yellowDk : Palette::yellow);
+                g.fillEllipse (ox - 6.5f, oy - 6.5f, 13.0f, 13.0f);
+                g.setColour (lightPad ? juce::Colours::white : Palette::bgBot);
+                g.fillEllipse (ox - 2.6f, oy - 2.6f, 5.2f, 5.2f);
+                g.setColour (Palette::ink);
+                g.drawEllipse (ox - 6.8f, oy - 6.8f, 13.6f, 13.6f, 1.35f);
+
+                // 下部 Carbon Live BS.1770 LUFS / True Peak / Pocket テレメトリバー
+                if (argonPadRect.getHeight() >= 188)
+                {
+                    const float sLufs = processor.getCarbonShortTermLufs();
+                    const float tpDb  = processor.getCarbonTruePeakDbtp();
+                    const float pkDb  = processor.getCarbonReverbPocketDb();
+                    const juce::String lufsStr = (sLufs <= -68.0f) ? "-inf" : juce::String (sLufs, 1);
+                    const juce::String tpStr   = (tpDb  <= -68.0f) ? "-inf" : ((tpDb >= 0.0f ? "+" : "") + juce::String (tpDb, 1));
+                    const juce::String hudTxt  = "LUFS " + lufsStr
+                                               + " | TP " + tpStr + "dB"
+                                               + (pkDb >= 0.15f ? (" | M-Pocket -" + juce::String (pkDb, 1) + "dB")
+                                                                : (" | Crest " + juce::String (processor.getVocalCrestFactorDb(), 1) + "dB"));
+                    const juce::Rectangle<int> hudRect (argonPadRect.getX() + 20,
+                                                        (int) (cy + ballR - 24.0f),
+                                                        argonPadRect.getWidth() - 40, 17);
+                    g.setColour ((lightPad ? Palette::panel : Palette::bgBot).withAlpha (0.90f));
+                    g.fillRoundedRectangle (hudRect.toFloat(), 5.0f);
+                    g.setColour (Palette::panelLn.withAlpha (0.72f));
+                    g.drawRoundedRectangle (hudRect.toFloat().reduced (0.5f), 5.0f, 0.9f);
+                    g.setColour (tpDb > -1.0f ? Palette::salmon : Palette::ink);
+                    fitText (g, hudTxt, hudRect.reduced (6, 0), juce::Justification::centred, 11.2f, true);
+                }
             }
         }
         else if (accessMode == 1 || accessMode == 3)
@@ -4843,7 +5071,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     const float densDb = processor.getMasteringDensityDb() + processor.getRearBusAuthorityDb();
                     const float crestDb = processor.getVocalCrestFactorDb();
                     const juce::String hudTxt = language->T ("倍音密度 +", "Density +")
-                                              + juce::String (densDb, 1) + "dB  ·  "
+                                              + juce::String (densDb, 1) + "dB  |  "
                                               + language->T ("芯圧 Crest ", "Crest ")
                                               + juce::String (crestDb, 1) + "dB";
                     const juce::Rectangle<int> hudRect (argonPadRect.getX() + 18,
@@ -4905,7 +5133,7 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         const char* barEnShort[4] = { "VELV",        "FOC",        "SILK",      "HALO"      };
         const juce::Colour barCols[4] = {
             knobInnerArtOn ? Palette::salmon : Palette::green,
-            knobInnerArtOn ? Palette::yellow : Palette::blue,
+            Palette::yellow,
             Palette::ice,
             Palette::blue
         };
@@ -5119,12 +5347,27 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
         && g.clipRegionIntersects (argonTargetRects[0].getUnion (argonTargetRects[3]).expanded (8)))
     {
         const bool compactPill = (argonTargetRects[0].getWidth() < 96);
-        const char* tJaFull[4]  = { "★ VELVET 歌枠", "♥ ASMR 囁き", "✦ CRYSTAL 抜け", "◆ HALO 立体" };
-        const char* tJaShort[4] = { "★ 歌枠",        "♥ ASMR",      "✦ 透明抜け",     "◆ 3D立体" };
-        const char* tEn[4]      = { "VELVET",        "ASMR",        "CRYSTAL",        "3D HALO" };
+        const char* tJaFull[4]  = {
+            knobInnerArtOn ? "★ VELVET 歌枠"  : "01 VELVET 歌枠",
+            knobInnerArtOn ? "♥ ASMR 囁き"    : "02 WHISPER 囁き",
+            knobInnerArtOn ? "✦ CRYSTAL 抜け" : "03 CRYSTAL 抜け",
+            knobInnerArtOn ? "◆ HALO 立体"    : "04 HALO 立体"
+        };
+        const char* tJaShort[4] = {
+            knobInnerArtOn ? "★ 歌枠"   : "01 歌枠",
+            knobInnerArtOn ? "♥ ASMR"   : "02 囁き",
+            knobInnerArtOn ? "✦ 透明抜け" : "03 抜け",
+            knobInnerArtOn ? "◆ 3D立体" : "04 立体"
+        };
+        const char* tEn[4]      = {
+            knobInnerArtOn ? "VELVET"  : "01 VELVET",
+            knobInnerArtOn ? "ASMR"    : "02 WHISPER",
+            knobInnerArtOn ? "CRYSTAL" : "03 CRYSTAL",
+            knobInnerArtOn ? "3D HALO" : "04 HALO"
+        };
         const juce::Colour tCols[4] = {
             knobInnerArtOn ? Palette::salmon : Palette::green,
-            knobInnerArtOn ? Palette::yellow : Palette::blue,
+            Palette::yellow,
             Palette::ice,
             Palette::blue
         };
@@ -6052,10 +6295,10 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
     const char* namesJaStep[]     = { "STEP 1 雑音を消す",   "STEP 2 声を揃える",   "STEP 3 残響を足す" };
     const char* namesJaConcrete[] = { "01 雑音・不要帯域除去", "02 音量均一・周波数", "03 残響・空間幅" };
     const char* namesEn[]         = { "01 CLEAN",            "02 CHARACTER",        "03 SPACE" };
-    // 標準スタジオUI(!knobInnerArtOn)は緑・青・シアン系の統一感ある3アクセント、装飾ON時はランタン3色
+    // 標準スタジオUI(!knobInnerArtOn)は Clean=Emerald / Tone=Warm Amber / Space=Titanium Ice の3系統ハードウェア配色
     const juce::Colour accents[] = {
         Palette::green,
-        ! knobInnerArtOn ? Palette::blue
+        ! knobInnerArtOn ? Palette::yellow
                          : ((themeMode == 0 || (isLiverStyle && (accessMode == 0 || accessMode == 2))) ? Palette::yellow : Palette::blue),
         ! knobInnerArtOn ? Palette::ice
                          : ((themeMode == 0) ? Palette::salmon
@@ -6105,6 +6348,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 
             const int pwrX = (i == 0 && ! micSafuPillRect.isEmpty())
                                  ? (micSafuPillRect.getX() - 6)
+                           : (i == 1 && ! overviewKeyPillRect.isEmpty())
+                                 ? (overviewKeyPillRect.getX() - 6)
                            : (i == 1 && ! jpopPolishPillRect.isEmpty())
                                  ? (jpopPolishPillRect.getX() - 6)
                                  : overviewSectionPower[(size_t) i].getX();
@@ -6205,6 +6450,36 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             g.setColour (Palette::ink);
             fitText (g, jTxt, jpopPolishPillRect.withTrimmedLeft (15).reduced (3, 0),
                      juce::Justification::centred, 12.5f, true);
+        }
+
+        // ---- 🎹 v6.0.0 総合画面 曲キー・スケール 1クリック直結セレクターピル描画 ----
+        if (i == 1 && ! overviewKeyPillRect.isEmpty() && g.clipRegionIntersects (overviewKeyPillRect.expanded (4)))
+        {
+            const auto krf  = overviewKeyPillRect.toFloat();
+            const float kRad = krf.getHeight() * 0.5f;
+            const int curKey   = juce::jlimit (0, 11, (int) std::lround (processor.apvts.getRawParameterValue ("at_key")->load()));
+            const int curScale = juce::jlimit (0, 8,  (int) std::lround (processor.apvts.getRawParameterValue ("at_scale")->load()));
+            const bool keyLocked = (curScale > 0);
+            const juce::Colour kCol = keyLocked ? Palette::blue : Palette::panelLn;
+
+            g.setGradientFill (juce::ColourGradient (Palette::panel2.brighter (0.08f), krf.getX(), krf.getY(),
+                                                     Palette::panel.darker (0.10f),   krf.getX(), krf.getBottom(), false));
+            g.fillRoundedRectangle (krf, kRad);
+            g.setColour (keyLocked ? kCol.withAlpha (0.90f) : Palette::panelLn.withAlpha (0.75f));
+            g.drawRoundedRectangle (krf.reduced (0.6f), kRad, keyLocked ? 1.6f : 1.1f);
+
+            const float gx = krf.getX() + 9.0f, gy = krf.getCentreY();
+            g.setColour (keyLocked ? kCol : Palette::inkSoft);
+            g.fillEllipse (gx - 3.2f, gy - 3.2f, 6.4f, 6.4f);
+
+            static const char* const kKeyNames[12] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
+            static const char* const kScShort[9]   = { "", " Maj", " Min", " HMin", " PMaj", " PMin", " Blu", " Dor", " Mix" };
+            const juce::String keyLabel = (curScale == 0)
+                ? language->T ("Key: 半音階▼", "Key: Chrom▼")
+                : ("Key: " + juce::String (kKeyNames[curKey]) + kScShort[curScale] + juce::String::fromUTF8 ("▼"));
+            g.setColour (Palette::ink);
+            fitText (g, keyLabel, overviewKeyPillRect.withTrimmedLeft (15).reduced (3, 0),
+                     juce::Justification::centred, 12.2f, true);
         }
 
         // 各カード内の4つのツマミが「いま音を変えているか (effInt > 0.02f)」を集計

@@ -434,7 +434,7 @@ public:
         truePeakCeiling.setCeilingDbtp(ceilingDbtp);
     }
 
-    inline void processStereoBlock(float* left, float* right, int numSamples) noexcept
+    inline void processStereoBlock(float* left, float* right, int numSamples, bool applyLookaheadCeiling = true) noexcept
     {
         if (numSamples <= 0 || left == nullptr)
             return;
@@ -446,7 +446,8 @@ public:
 
             msSculptor.processStereoSample(l, r);
             ellipticAligner.processStereoSample(l, r);
-            truePeakCeiling.processStereoSample(l, r);
+            if (applyLookaheadCeiling)
+                truePeakCeiling.processStereoSample(l, r);
 
             left[i] = l;
             if (right != nullptr)

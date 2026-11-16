@@ -3,16 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VocalGzzio 5.7.0 説明書・OBS配信連携ガイド・対応インターフェース一覧</title>
+<title>VocalGzzio 6.0.0 説明書・Carbon Edition・OBS配信連携ガイド・対応インターフェース一覧</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><nav><strong>VocalGzzio 5.7.0</strong><a href="index.html">紹介</a><a href="updates-5.5.0.md">更新情報</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a><a href="en.html">🌐 English</a></nav></header>
+<header><nav><strong>VocalGzzio 6.0.0</strong><a href="index.html">紹介</a><a href="updates-6.0.0.md">更新情報</a><a href="https://gzzio.booth.pm/items/8764003">配布ページ</a><a href="en.html">🌐 English</a></nav></header>
 <main>
-<aside class="note" aria-label="配布状況"><strong>VocalGzzio 5.7.0（12-Type J-Pop Vocal Karte, AI Harmonic Voice Purifier &amp; Auto Vocal Polish Edition）の説明書です。</strong><br>Windows版とMac版は同じ製品の購入に含まれ、購入済みの方も追加料金なしで両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
-<h1>どんな機材でも、どんな裏画面配信でも。<br>歌枠から歌ってみた完パケまで超軽量1画面で。</h1>
-<p class="lead">総合画面で「仕上がり」や「🎯5秒AI声質診断」を選び、必要なところだけ調整します。CPU/UI負荷を40〜70%削減した「⚡Smart Sleep超軽量エンジン」、OBSや歌詞の隅に常駐できる「📌配信ミニバー（520×115px）」、カラオケ配信の音ズレを1ms単位で揃える「⏱️声⇄伴奏 音ズレ補正（±300ms）」、全角かな入力中でも誤爆しない「⌨️裏画面グローバルホットキー」、語尾ナチュラルビブラート・母音フォーム統一EQ・歌い出しグルーヴ・ミックス＆胸鳴り・自作音源カスタムSE 4枠・ささやき浮上＆ドルビーA倍音エアー・音程追従オートスイートスポット・骨伝導モニター補正・伴奏「声ポケット」自動掘り・ゼロ遅延部屋鳴り除去・原曲1クリック伴奏ボーカル除去・-14 LUFS自動音圧マスタリング＆完パケ同時書き出し・cluster/通話との完全共存まで完結します。</p>
-<nav aria-label="目次"><a href="#start">はじめる</a><a href="#obs-routing">OBS・配信連携ガイド</a><a href="#v55">v5.5 新機能</a><a href="#trial-vs-prod">体験版と製品版の違い・Q&amp;A</a><a href="#theme">風景テーマ・4種の表示スタイル</a><a href="#stage">伴奏・音ズレ補正・ホットキー</a><a href="#interfaces">対応インターフェース・音消え対策</a><a href="#argon">声の質感</a><a href="#level">音量・絶叫/咳ガード</a><a href="#noise">ノイズ</a><a href="#pitch">音程</a><a href="#space">残響・IR</a><a href="#install">導入</a></nav>
+<aside class="note" aria-label="配布状況"><strong>VocalGzzio 6.0.0（Carbon Edition — Forged Carbon Hardware Console &amp; Carbon Vocal Engine）の説明書です。</strong><br>Windows版とMac版（Apple Silicon &amp; Intel Universal）は同じ製品の購入に含まれ、購入済みの方も追加料金なしで両方利用できます。配布ファイル・動作確認状況・価格は<a href="https://gzzio.booth.pm/items/8764003">商品ページ</a>をご確認ください。</aside>
+<h1>どんな機材でも、どんな裏画面配信でも。<br>歌枠から歌ってみた完パケまで鍛造カーボン1画面で。</h1>
+<p class="lead">v6.0.0「Carbon Edition」では、鍛造カーボン×ヘアライン金属のハードウェア・コンソール設計と「Carbon Vocal Engine」を新搭載。総合画面の1クリック調律・曲キー直接選択から、11.8kHzシルク空気保護ディエッサー、歌唱中M/Sリバーブ「声ポケット」自動彫刻、1次ADAAアンチエイリアシング倍音飽和、多段EQ/空気感インテリジェント上限調停、ITU-R BS.1770-4準拠リアルタイムLUFS＆4倍オーバーサンプリングTrue Peak（dBTP）監視、壊れかけマイク応急補正・SAFUゼロ遅延サ行除去（v5.9.0）、OBS常駐ミニバー（520×115px）、±300ms音ズレ補正、原曲ボーカル除去、-14 LUFS完パケ同時書き出しまで1画面で完結します。</p>
+<nav aria-label="目次"><a href="#start">はじめる</a><a href="#v60">v6.0 Carbon新機能</a><a href="#obs-routing">OBS・配信連携ガイド</a><a href="#v55">v5.5〜v5.9 機能</a><a href="#trial-vs-prod">体験版と製品版の違い・Q&amp;A</a><a href="#theme">外観テーマ・24世代切替</a><a href="#stage">伴奏・音ズレ補正・ホットキー</a><a href="#interfaces">対応インターフェース・音消え対策</a><a href="#argon">声の質感</a><a href="#level">音量・絶叫/咳ガード</a><a href="#noise">ノイズ</a><a href="#pitch">音程</a><a href="#space">残響・IR</a><a href="#install">導入</a></nav>
+
+<h2 id="v60">v6.0.0 新機能：Carbon Edition — 鍛造カーボン・ハードウェアUI ＆ Carbon Vocal Engine</h2>
+<ul>
+<li><strong>🎛 鍛造カーボン・モノリスUI（Forged Carbon Monolith Hardware Design）：</strong>眩しいベタ塗りネオンやAI生成風の装飾を一新し、鍛造カーボン筐体（<code>#0d1015</code>）・21メモリCNC削り出しロータリーノブ・信号系統別3色インジケーター（エメラルド＝ダイナミクス／スタジオアンバー＝倍音・空間／チタニウムアイス＝ピッチ・空気感）・ロッカースイッチを採用。WCAG AAA（<code>16.1:1</code>）の超高視認性を実現しました。</li>
+<li><strong>🎹 総合画面での「曲キー・スケール」ワンクリック選択（Keyピル新設）：</strong>総合画面「02 声をつくる」ヘッダーから直接「半音階（Chromatic）」「8秒オートキー解析」「全24メジャー／マイナーキー」を切り替えられ、詳細画面を開かずにピッチ補正とハモリを曲キーへ同期できます。</li>
+<li><strong>📊 総合2D音響クロスヘア ＆ 詳細マスタリング・シグナルバジェットコンソール：</strong>総合画面の2Dパッドをハードウェア音響ベクトルスコープ＋リアルタイム<code>S-LUFS / dBTP / Pocket</code>ストリップへ刷新。詳細画面右下にはITU-R BS.1770-4 K特性<code>S-LUFS</code>・<code>M-LUFS</code>・4点エルミート4倍補間<code>True Peak (dBTP)</code>・<code>CREST</code>と6段ゲイン配分バーを常時表示します。</li>
+<li><strong>💎 11.8kHz 超高域エアー保護スプリット・ディエッサー（Carbon Air-Preserving De-Esser）：</strong>サ行の刺さり帯域（<code>5.5〜9.5 kHz</code>）を確実に抑えながら、<code>11.8 kHz</code>以上の繊細な息づかい（シルクエアー）だけを分離復元し、ディエッサー特有の声のこもり・暗さを解消します。</li>
+<li><strong>🕳️ M/S リバーブ「声ポケット」自動彫刻（Carbon M/S Reverb Vocal Pocket）：</strong>発声中のみリバーブ成分のセンター（Mid）を最大<code>-3.6 dB</code>自動ダッキングしつつステレオ端（Side）を<code>+8%</code>広げ、深い残響をかけても歌詞の子音と輪郭が真正面に浮かび上がります。</li>
+<li><strong>✨ 1次ADAAアンチエイリアシング倍音回路 ＆ 多段スペクトル予算調停（Budget Arbitrator）：</strong>高域シルク倍音やチューブ飽和に1次逆導関数アンチエイリアシング（ADAA）を導入して折り返し雑音を根絶。さらに複数ステージのプレゼンス・エアー・小声持ち上げが重なった際の過剰ブースト（耳障りな硬さ）を自動調停します。</li>
+<li><strong>🔬 パラレルMix位相干渉ゼロ化 ＆ v5.9.0「壊れかけマイク応急補正・SAFUサ行除去」標準統合：</strong><code>Mix=50%</code>時の内部3サンプル遅延による<code>8 kHz</code>コムフィルタ位相干渉や<code>Mix=0%</code>時の微細ウェット漏れを完全解消。さらにv5.9.0の「壊れかけマイク応急補正（接触不良ポップ・DC/ハム・籠もり救済）」およびゼロ遅延「SAFUサ行除去」もシームレスに統合されています。</li>
+</ul>
 
 <h2 id="start">はじめの調整</h2>
 <ol>
@@ -56,7 +67,7 @@
 <table>
 <thead><tr><th>機能・項目</th><th>無料体験版（0円）</th><th>製品版（2,500円・税込買い切り）</th></tr></thead>
 <tbody>
-<tr><td>音声エンジン・全19テーマ・4種の表示スタイル・v5.5.0全機能</td><td>○ すべて製品版と同じ</td><td><strong>◎ すべて制限なし</strong></td></tr>
+<tr><td>音声エンジン・全テーマ・4種の表示スタイル・v6.0.0 Carbon全機能</td><td>○ すべて製品版と同じ</td><td><strong>◎ すべて制限なし</strong></td></tr>
 <tr><td>連続使用時の試聴制限</td><td>60秒ごとに約0.6秒だけ音量が低下</td><td><strong>◎ 音量低下なし（何時間の歌枠配信・録音でも途切れず使用可能）</strong></td></tr>
 <tr><td>設定・ノイズ学習・お気に入りテーマの自動保存＆読込（A/B比較）</td><td>×（終了すると初期状態へリセット）</td><td><strong>◎ 完全対応（毎回起動0秒でいつもの声で歌える）</strong></td></tr>
 <tr><td>商用利用・収益化配信・動画投稿・OS対応</td><td>機材相性・音質確認用（公開・配信利用不可）</td><td><strong>◎ 収益化配信・スパチャ歌枠・案件・歌ってみた投稿・同人販売すべて自由（報告・クレジット不要）／Win＆Mac同梱（PC3台まで・無償アップデート対象）</strong></td></tr>
@@ -72,7 +83,7 @@
 <li><strong>🌌「星空・海・黄昏」5大風景コレクション：</strong>総合画面中央の「01銀河」「02碧海」「03朝焼」「04晩秋」「05蒼劇」ピル、または上部の「文字・見た目」から5つの風景・季節テーマをワンタッチで切り替えられます（「⚡軽量」ON時や最小化時は描画負荷0%で自動休止）。</li>
 <li><strong>♥LIVER（クチュール5色）・☕ゆるふわ・🎛STUDIO・◎従来：</strong>上部の配置ボタンから「✦天球水鏡」「♥LIVER（01ロゼ・02氷紫・03黒姫・04翡翠・05白桃）」「🎛STUDIO」「◎従来」を1クリックで切り替えられます。また「文字・見た目」➔「ブランド」で全画面100%英語UIへ切り替えられます。</li>
 <li><strong>4つの「画面の見やすさ・操作スタイル切替」：</strong>標準デザイン／◉くっきり大文字／★かんたん3ステップ／●マット・具体表記をいつでも切り替えられます。</li>
-<li><strong>🕰️ 歴代バージョン呼び出し・世代タイムマシン（v1.0.0〜v5.5.0 全19世代）＆ 省負荷ゲート：</strong>初代 <code>v1.0.0</code> から <code>v5.0.0〜v5.4.1</code>・最新 <code>v5.5.0</code> まで全19世代をオンデマンド遅延読み込み（常駐メモリ0MB）で呼び出せ、旧世代選択時は後発DSPを完全スリープさせて省負荷動作します。</li>
+<li><strong>🕰️ 歴代バージョン呼び出し・世代タイムマシン（v1.0.0〜v6.0.0 全24世代）＆ 省負荷ゲート：</strong>初代 <code>v1.0.0</code> から <code>v5.0.0〜v5.9.0</code>・最新フラッグシップ <code>v6.0.0 Carbon Edition</code> まで全24世代をオンデマンド遅延読み込み（常駐メモリ0MB）で呼び出せ、旧世代選択時は後発DSPを完全スリープさせて省負荷動作します。</li>
 </ul>
 
 <h2 id="stage">カラオケ伴奏・音ズレ補正・30秒さかのぼり録音・裏画面ホットキー</h2>
@@ -126,8 +137,8 @@
 <p>6種類の空間IR（おふろ・カラオケ箱・録音スタジオ・ライブハウス・コンサートホール・プレート）に加え、「📂IR読込」からお手持ちの <code>.wav</code> / <code>.aiff</code> IRファイルを読み込めます。「声優先ダッキング」を入れると歌っている最中だけ残響が自動で少し下がり、歌詞がくっきり聞こえます。</p>
 
 <h2 id="install">インストールと更新</h2>
-<p>録音ソフト・OBS・単体起動アプリを終了してから、配布物のインストーラー（<code>VocalGzzio_Setup_v5.5.0.exe</code> / 体験版は <code>VocalGzzio_Trial_Setup_v5.5.0.exe</code>）を実行します。WindowsではVST3プラグインと単体起動アプリ・オフライン取扱説明書が一括導入されます（Windows 11 の最新カーネル保護・署名審査への適合に万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦見送っております）。Macは同梱の「ここから始める.html」に沿って .pkg を実行します。</p>
+<p>録音ソフト・OBS・単体起動アプリを終了してから、配布物のインストーラー（<code>VocalGzzio_Setup_v6.0.0.exe</code> / 体験版は <code>VocalGzzio_Trial_Setup_v6.0.0.exe</code>）を実行します。WindowsではVST3プラグインと単体起動アプリ・オフライン取扱説明書が一括導入されます（Windows 11 の最新カーネル保護・署名審査への適合に万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦見送っております）。Mac（Apple Silicon / Intel Universal対応）は同梱の「ここから始める.html」に沿って <code>.pkg</code> を実行します。</p>
 </main>
-<footer>VocalGzzio 5.5.0 · <a href="index.html">製品紹介</a> · <a href="en.html">English Guide</a> · <a href="https://gzzio.booth.pm/items/8764003">商品・問い合わせ先</a></footer>
+<footer>VocalGzzio 6.0.0 Carbon Edition · <a href="index.html">製品紹介</a> · <a href="en.html">English Guide</a> · <a href="https://gzzio.booth.pm/items/8764003">商品・問い合わせ先</a></footer>
 </body>
 </html>

@@ -521,27 +521,28 @@ namespace Palette
         }
         else
         {
-            // 既定テーマ (mode == 0): モダン・プロスタジオ・オブシディアンスレート配色 (FabFilter / Soothe2 / Linear 系の静謐な色秩序)
-            bgTop    = juce::Colour (0xff10141c);   // ディープ・スタジオカーボン上端
-            bgBot    = juce::Colour (0xff0a0d13);   // オブシディアン・スタジオベース下端
-            panel    = juce::Colour (0xff161b25);   // マット・エレベーテッドカード面
-            panel2   = juce::Colour (0xff1e2533);   // コントロール・ヘッダ面
-            panelLn  = juce::Colour (0xff2b3547);   // 精密な1pxスレート境界線
-            ink      = juce::Colour (0xffedf2f8);   // クリスプ・スタジオホワイト文字 (14.8:1)
-            inkSoft  = juce::Colour (0xff9aa8bc);   // 落ち着いたクールスレート副文字 (6.9:1)
-            yellow   = juce::Colour (0xffe2a03f);   // リファインド・ウォームアンバー（主CTA・ピーク注意専用）
-            yellowDk = juce::Colour (0xffbc7d22);
-            green    = juce::Colour (0xff2bc4ad);   // 静謐なアコースティック・ミントティール（整音・ピッチ合致）
-            salmon   = juce::Colour (0xffe86b74);   // ソフト・スタジオコーラル（クリップ・ミュート専用）
-            blue     = juce::Colour (0xff569cf8);   // クリスプ・スタジオアズール（声質・ダイナミクス）
-            ice      = juce::Colour (0xff5ec8e8);   // クリーン・スカイシアン（空間・空気感）
-            track    = juce::Colour (0xff242d3d);   // ニュートラル・リセストトラック溝
-            badge    = juce::Colour (0xffedf2f8);
+            // 既定テーマ (mode == 0): v6.0.0 Carbon Monolith — マシンド・フォージドカーボン＆チタンスレート配色
+            // (FabFilter / UAD / SSL 等のハードウェアコンソールに準拠したニュートラル黒鉛下地と3段階セマンティック色秩序)
+            bgTop    = juce::Colour (0xff0d1015);   // フォージド・カーボン上端（青紫かぶりを排した純黒鉛）
+            bgBot    = juce::Colour (0xff080a0e);   // ディープ・オブシディアンカーボン下端
+            panel    = juce::Colour (0xff13171e);   // CNCマシンド・マットカーボンカード面
+            panel2   = juce::Colour (0xff1b2029);   // アノダイズド・グラファイト操作面
+            panelLn  = juce::Colour (0xff2a3240);   // 精密1pxチタン・ヘアライン境界線
+            ink      = juce::Colour (0xfff0f4f8);   // クリスプ・スタジオアラバスター主文字 (16.1:1 WCAG AAA)
+            inkSoft  = juce::Colour (0xff9aa6b8);   // クール・チタンスレート副文字 (7.2:1 WCAG AAA)
+            yellow   = juce::Colour (0xffe5a43b);   // ウォーム・スタジオアンバー / VUゴールド（ダイナミクス・音色・主CTA）
+            yellowDk = juce::Colour (0xffbd7f1e);
+            green    = juce::Colour (0xff28c095);   // プレシジョン・シグナルエメラルド（整音・ピッチ合致）
+            salmon   = juce::Colour (0xffe86670);   // スタジオ・ピークコーラル（クリップ・ミュート・録音）
+            blue     = juce::Colour (0xff529bf5);   // プレシジョン・スタジオアズール（解析・補助指標）
+            ice      = juce::Colour (0xff5cc4e6);   // チタン・アイスシアン（空間・リバーブ・空気感）
+            track    = juce::Colour (0xff212834);   // リセスト・エンコーダトラック溝
+            badge    = juce::Colour (0xfff0f4f8);
             metalHi   = juce::Colour (0xffe2e8f0);
             metalMid  = juce::Colour (0xff64748b);
             metalDark = juce::Colour (0xff334155);
-            mirrorTop = juce::Colour (0xff222d3f);
-            mirrorBot = juce::Colour (0xff0e131c);
+            mirrorTop = juce::Colour (0xff202836);
+            mirrorBot = juce::Colour (0xff0c1017);
         }
     }
 
@@ -990,7 +991,7 @@ public:
         const juce::String id = sl.getProperties().getWithDefault ("paramID", "").toString();
         const double val = sl.getValue();
         const float liveMeter = (float) sl.getProperties().getWithDefault ("liveMeter", 0.0);
-        const bool literalMode = (s_accessMode == 3); // ● マット・具体表記モード: 比喩・絵文字を排し具体的・機能的な言葉で統一
+        const bool literalMode = (s_accessMode == 3 || ! s_knobInnerArt); // v6.0.0 Carbon Studio / マット表記: 絵文字を排し端正な機能表記で統一
 
         if (id == "denoise")
         {
@@ -1156,7 +1157,7 @@ public:
                                             : (group == 1 || (group == 0 && parentSlider->getX() >= 500)) ? Palette::yellow
                                             : Palette::salmon.interpolatedWith (Palette::yellow, 0.35f))
                                            : ! s_knobInnerArt
-                                               ? (group == 0 ? Palette::green : group == 1 ? Palette::blue : Palette::ice)
+                                               ? (group == 0 ? Palette::green : group == 1 ? Palette::yellow : Palette::ice)
                                                : (group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc);
                 const float prop = (float) juce::jlimit (0.0, 1.0, parentSlider->valueToProportionOfLength (parentSlider->getValue()));
 
@@ -1465,7 +1466,7 @@ public:
              : (group == 1 || (group == 0 && sl.getX() >= 500)) ? Palette::yellow
                           : Palette::salmon.interpolatedWith (Palette::yellow, 0.35f))
             : (! s_knobInnerArt
-                ? (group == 0 ? Palette::green : group == 1 ? Palette::blue : Palette::ice)
+                ? (group == 0 ? Palette::green : group == 1 ? Palette::yellow : Palette::ice)
                 : (group == 0 ? Palette::green : group == 1 ? Palette::blue : themeArc));
 
         float effInt = 0.0f;
@@ -1767,45 +1768,56 @@ public:
             }
         }
 
-        // ★ モダン・プロスタジオ・クリーンダイヤル (!s_knobInnerArt 既定モード):
-        //   FabFilter / Soothe2 / Linear の設計原則に基づき、待機ノブの色汚染や過剰な花火・光輪を排し、
-        //   ニュートラルな溝＋単色セクションアーク＋マット文字盤＋高視認指針だけで「今効いているノブ」を一目で伝える。
+        // ★ v6.0.0 Carbon CNC-Machined Hardware Encoder (!s_knobInnerArt 既定モード):
+        //   21分割精密マイクロスケール＋バイポーラ0点基準＋アノダイズド削り出しキャップ＋高視認ブレード指針により、
+        //   Clean(Emerald) / Dynamics&Tone(Warm Amber) / Space(Titanium Ice) の3系統をハードウェア機材水準で表現。
         if (! s_knobInnerArt)
         {
-            // 11点の精密マイクロスケール目盛り（0%, 50%, 100%はメジャー目盛り線、中間はマイクロドット、作動中は現在値まで点灯）
-            for (int tick = 0; tick <= 10; ++tick)
+            const bool isBipolar = (sl.getMinimum() < -0.001 && sl.getMaximum() > 0.001
+                                    && std::abs (sl.getMinimum() + sl.getMaximum()) < 0.5);
+            const float originAngle = isBipolar ? (startAngle + 0.5f * (endAngle - startAngle)) : startAngle;
+
+            // 21点の精密マイクロスケール目盛り（0%, 25%, 50%, 75%, 100%はメジャー刻み線、中間は精密ノッチ）
+            const int tickSteps = (radius >= 20.0f) ? 20 : 10;
+            for (int tick = 0; tick <= tickSteps; ++tick)
             {
-                const float tNorm  = (float) tick * 0.10f;
+                const float tNorm  = (float) tick / (float) tickSteps;
                 const float a      = startAngle + (endAngle - startAngle) * tNorm;
-                const bool  major  = (tick == 0 || tick == 5 || tick == 10);
-                const bool  passed = isWorking && (tNorm <= pos + 0.015f);
+                const bool  major  = (tick == 0 || tick * 2 == tickSteps || tick == tickSteps
+                                      || (tickSteps == 20 && (tick == 5 || tick == 15)));
+                const bool  passed = isWorking && (isBipolar
+                    ? ((pos >= 0.5f) ? (tNorm >= 0.495f && tNorm <= pos + 0.012f)
+                                     : (tNorm <= 0.505f && tNorm >= pos - 0.012f))
+                    : (tNorm <= pos + 0.015f));
                 const auto  tCol   = passed
-                    ? groupAccent.withAlpha (major ? 0.92f : 0.74f)
-                    : (lightPanel ? Palette::inkSoft.withAlpha (major ? 0.52f : 0.30f)
-                                  : Palette::panelLn.brighter (major ? 0.22f : 0.05f).withAlpha (major ? 0.82f : 0.52f));
+                    ? groupAccent.withAlpha (major ? 0.94f : 0.68f)
+                    : (lightPanel ? Palette::inkSoft.withAlpha (major ? 0.54f : 0.28f)
+                                  : Palette::panelLn.brighter (major ? 0.28f : 0.06f).withAlpha (major ? 0.86f : 0.46f));
                 g.setColour (tCol);
                 if (major)
                 {
-                    const float rIn  = radius + 3.4f;
-                    const float rOut = radius + (isHero ? 7.4f : 6.2f);
+                    const float rIn  = radius + 3.2f;
+                    const float rOut = radius + (isHero ? 7.6f : 6.3f);
                     g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
-                                c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), 1.4f);
+                                c.x + rOut * std::sin (a), c.y - rOut * std::cos (a),
+                                (tick * 2 == tickSteps && isBipolar) ? 1.7f : 1.35f);
                 }
                 else if (radius >= 16.0f)
                 {
-                    const float rDot = radius + (isHero ? 5.2f : 4.5f);
-                    const float dR   = isHero ? 1.15f : 0.95f;
-                    g.fillEllipse (c.x + rDot * std::sin (a) - dR, c.y - rDot * std::cos (a) - dR, dR * 2.0f, dR * 2.0f);
+                    const float rIn  = radius + 3.8f;
+                    const float rOut = radius + (isHero ? 5.6f : 5.0f);
+                    g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
+                                c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), 0.95f);
                 }
             }
 
-            // リセスト・ダークトラック溝
+            // リセスト・カーボントラック溝
             juce::Path track;
             track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
             if (! lightPanel)
             {
-                g.setColour (Palette::bgBot.withAlpha (0.65f));
-                g.strokePath (track, juce::PathStrokeType (ring + 1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.setColour (Palette::bgBot.withAlpha (0.78f));
+                g.strokePath (track, juce::PathStrokeType (ring + 1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
             }
             g.setColour (lightPanel ? Palette::track.darker (0.14f) : Palette::track);
             g.strokePath (track, juce::PathStrokeType (ring, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
@@ -1813,50 +1825,55 @@ public:
             if (isWorking)
             {
                 juce::Path value;
-                value.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
-                g.setColour (groupAccent.withAlpha (0.16f + 0.10f * effInt));
-                g.strokePath (value, juce::PathStrokeType (ring * 2.15f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                const float a0 = juce::jmin (originAngle, angle);
+                const float a1 = juce::jmax (originAngle, angle);
+                value.addCentredArc (c.x, c.y, radius, radius, 0.0f, a0, a1, true);
+                g.setColour (groupAccent.withAlpha (0.18f + 0.10f * effInt));
+                g.strokePath (value, juce::PathStrokeType (ring * 2.10f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
                 g.setColour (groupAccent);
-                g.strokePath (value, juce::PathStrokeType (ring * 1.08f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.strokePath (value, juce::PathStrokeType (ring * 1.10f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
                 const float tipX = c.x + radius * std::sin (angle), tipY = c.y - radius * std::cos (angle);
-                g.setColour (lightPanel ? juce::Colours::white : groupAccent.brighter (0.40f));
+                g.setColour (lightPanel ? juce::Colours::white : groupAccent.brighter (0.45f));
                 g.fillEllipse (tipX - ring * 0.50f, tipY - ring * 0.50f, ring * 1.00f, ring * 1.00f);
             }
 
             const float kr = radius - ring - (isHero ? 3.8f : 3.0f);
             if (kr >= 5.0f)
             {
-                // ソフトドロップシャドウ
-                g.setColour (juce::Colours::black.withAlpha (lightPanel ? 0.12f : 0.34f));
-                g.fillEllipse (c.x - kr, c.y - kr + 1.9f, kr * 2.0f, kr * 2.0f);
+                // ハードウェア・ドロップシャドウ
+                g.setColour (juce::Colours::black.withAlpha (lightPanel ? 0.13f : 0.44f));
+                g.fillEllipse (c.x - kr, c.y - kr + 2.0f, kr * 2.0f, kr * 2.0f);
 
-                // アノダイズド・アルミ削り出し風マットキャップ面
-                const auto capTop = lightPanel ? Palette::panel.brighter  (0.03f) : Palette::panel2.brighter (0.08f);
-                const auto capBot = lightPanel ? Palette::panel2.darker   (0.08f) : Palette::panel.darker    (0.12f);
+                // CNCマシンド・アノダイズドアルミ削り出し外周チャンファー＆ディッシュ面
+                const auto capTop = lightPanel ? Palette::panel.brighter  (0.03f) : Palette::panel2.brighter (0.10f);
+                const auto capBot = lightPanel ? Palette::panel2.darker   (0.08f) : Palette::bgBot.brighter  (0.04f);
                 g.setGradientFill (juce::ColourGradient (capTop, c.x, c.y - kr, capBot, c.x, c.y + kr, false));
                 g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
 
-                // 上縁の1pxスペキュラ・ハイライトリムと内側ディッシュ溝
                 if (kr >= 10.0f)
                 {
-                    juce::Path topRim;
-                    topRim.addCentredArc (c.x, c.y, kr - 0.9f, kr - 0.9f, 0.0f, -1.15f, 1.15f, true);
-                    g.setColour (juce::Colours::white.withAlpha (lightPanel ? 0.65f : 0.11f));
-                    g.strokePath (topRim, juce::PathStrokeType (1.0f));
-
-                    const float dishR = kr * 0.74f;
-                    g.setColour (lightPanel ? Palette::panelLn.withAlpha (0.45f) : Palette::panelLn.withAlpha (0.34f));
+                    const float dishR = kr * 0.78f;
+                    const auto dishTop = lightPanel ? Palette::panel2.darker (0.04f) : Palette::panel.darker (0.14f);
+                    const auto dishBot = lightPanel ? Palette::panel.brighter (0.02f) : Palette::panel2.brighter (0.04f);
+                    g.setGradientFill (juce::ColourGradient (dishTop, c.x, c.y - dishR, dishBot, c.x, c.y + dishR, false));
+                    g.fillEllipse (c.x - dishR, c.y - dishR, dishR * 2.0f, dishR * 2.0f);
+                    g.setColour (lightPanel ? Palette::panelLn.withAlpha (0.48f) : Palette::panelLn.withAlpha (0.42f));
                     g.drawEllipse (c.x - dishR, c.y - dishR, dishR * 2.0f, dishR * 2.0f, 0.9f);
+
+                    juce::Path topRim;
+                    topRim.addCentredArc (c.x, c.y, kr - 0.8f, kr - 0.8f, 0.0f, -1.20f, 1.20f, true);
+                    g.setColour (juce::Colours::white.withAlpha (lightPanel ? 0.65f : 0.14f));
+                    g.strokePath (topRim, juce::PathStrokeType (1.0f));
                 }
 
-                g.setColour (isWorking ? groupAccent.withAlpha (0.85f)
-                                       : (lightPanel ? Palette::panelLn.darker (0.22f) : Palette::panelLn.brighter (0.06f)));
+                g.setColour (isWorking ? groupAccent.withAlpha (0.88f)
+                                       : (lightPanel ? Palette::panelLn.darker (0.22f) : Palette::panelLn.brighter (0.08f)));
                 g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.6f : 1.25f);
 
                 const float sinA = std::sin (angle), cosA = std::cos (angle);
-                const float pIn  = kr * 0.22f;
-                const float pOut = kr * 0.82f;
+                const float pIn  = kr * 0.24f;
+                const float pOut = kr * 0.84f;
                 const auto needleCol = isWorking
                     ? Palette::ink
                     : (lightPanel ? Palette::inkSoft.darker (0.18f) : Palette::inkSoft)
@@ -1864,7 +1881,7 @@ public:
                 g.setColour (needleCol);
                 g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA,
                             c.x + pOut * sinA, c.y - pOut * cosA,
-                            juce::jmax (2.4f, kr * 0.084f));
+                            juce::jmax (2.4f, kr * 0.086f));
 
                 const float hubR = juce::jmax (2.2f, kr * 0.088f);
                 g.setColour (isWorking ? groupAccent : (lightPanel ? Palette::panelLn.darker (0.24f) : Palette::panelLn.brighter (0.10f)));
@@ -2991,6 +3008,7 @@ public:
         const bool  lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
         const bool  lightSw    = ((s_knobInnerArt && s_useKawaii) || lightPanel);
         const bool  isMidnightFlagship = (s_knobInnerArt && ! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
+        const bool  isCarbonStudio     = (! s_knobInnerArt && ! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
 
         auto col = on ? b.findColour (juce::TextButton::buttonOnColourId) : bg;
         if (on && col.getFloatAlpha() < 0.85f)
@@ -3005,6 +3023,40 @@ public:
         if (isPureSwitch)
         {
             const float swRad = r.getHeight() * 0.5f;
+            if (isCarbonStudio)
+            {
+                // v6.0.0 Carbon CNCマシンド・ダークロッカースイッチ（ベタ塗りミントを廃止し、黒鉛削り出し筐体＋発光LEDコアに統一）
+                g.setColour (juce::Colours::black.withAlpha (0.34f));
+                g.fillRoundedRectangle (r.translated (0.0f, down ? 0.4f : 1.3f), swRad);
+                const juce::Colour trkTop = on ? juce::Colour (0xff141b25) : juce::Colour (0xff0d1118);
+                const juce::Colour trkBot = on ? juce::Colour (0xff0d121a) : juce::Colour (0xff080b10);
+                g.setGradientFill (juce::ColourGradient (trkTop, r.getX(), r.getY(), trkBot, r.getX(), r.getBottom(), false));
+                g.fillRoundedRectangle (r, swRad);
+                if (on)
+                {
+                    g.setGradientFill (juce::ColourGradient (col.withAlpha (0.24f), r.getRight() - 8.0f, r.getCentreY(),
+                                                             col.withAlpha (0.04f), r.getX(),            r.getCentreY(), false));
+                    g.fillRoundedRectangle (r, swRad);
+                }
+                g.setColour (on ? col.withAlpha (0.88f) : Palette::panelLn.brighter (over ? 0.22f : 0.04f));
+                g.drawRoundedRectangle (r, swRad, on ? 1.5f : 1.15f);
+
+                const float pad    = juce::jmax (2.2f, r.getHeight() * 0.125f);
+                const float thumbD = juce::jmax (8.0f, r.getHeight() - pad * 2.0f);
+                const float thumbX = on ? (r.getRight() - pad - thumbD) : (r.getX() + pad);
+                const juce::Rectangle<float> thumb (thumbX, r.getCentreY() - thumbD * 0.5f, thumbD, thumbD);
+                g.setColour (juce::Colours::black.withAlpha (0.36f));
+                g.fillEllipse (thumb.translated (0.0f, 1.0f));
+                g.setColour (on ? Palette::ink : Palette::inkSoft.withAlpha (0.72f));
+                g.fillEllipse (thumb);
+                if (on && thumbD >= 9.0f)
+                {
+                    const float coreR = juce::jmax (2.1f, thumbD * 0.24f);
+                    g.setColour (col.darker (0.12f));
+                    g.fillEllipse (thumb.getCentreX() - coreR, thumb.getCentreY() - coreR, coreR * 2.0f, coreR * 2.0f);
+                }
+                return;
+            }
             if (s_knobStyle != 5)
             {
                 g.setColour ((lightSw ? Palette::panelLn : juce::Colours::black).withAlpha (on ? 0.30f : 0.18f));
@@ -3085,8 +3137,8 @@ public:
         }
         else if (! s_knobInnerArt)
         {
-            // ★ モダン・プロスタジオ・フラットマットボタン (!s_knobInnerArt 既定モード):
-            //   ハート飾り・>>><<<シェブロン・プラスチック反射グロス・下辺ライトパイプを排し、端正な1px境界と明確なON/OFF対比に統一
+            // ★ v6.0.0 Carbon ハードウェア・アノダイズドボタン (!s_knobInnerArt 既定モード):
+            //   主CTA(yellow)のみアンバー真鍮プレートとし、ONトグルはダーク・フォージドカーボン筐体＋発光セマンティックリム＋LEDで品格を統一
             if (isHoldTrigger)
             {
                 const auto holdFill = down ? Palette::yellow.withAlpha (lightPanel ? 0.22f : 0.28f)
@@ -3097,12 +3149,66 @@ public:
                 g.drawRoundedRectangle (r, rad, down ? 1.6f : 1.1f);
                 return;
             }
-            const auto baseFill = (! on && lightPanel && col == Palette::panel2)
-                                ? Palette::panel2.brighter (over ? 0.04f : 0.0f)
-                                : col;
-            g.setGradientFill (juce::ColourGradient (baseFill.brighter (on ? 0.05f : 0.02f), r.getX(), r.getY(),
-                                                     baseFill.darker   (on ? 0.06f : 0.02f), r.getX(), r.getBottom(), false));
-            g.fillRoundedRectangle (r, rad);
+            if (isCarbonStudio)
+            {
+                const auto rawOnCol = b.findColour (juce::TextButton::buttonOnColourId);
+                const bool isAmberOnPill = (on && rawOnCol == Palette::yellow);
+                const bool isAmberOffCta = (! on && bg.withAlpha (1.0f) == Palette::yellow);
+                if (isAmberOnPill)
+                {
+                    g.setGradientFill (juce::ColourGradient (col.brighter (0.06f), r.getX(), r.getY(),
+                                                             Palette::yellowDk,    r.getX(), r.getBottom(), false));
+                    g.fillRoundedRectangle (r, rad);
+                    g.setColour (juce::Colours::white.withAlpha (0.20f));
+                    g.drawHorizontalLine (juce::roundToInt (r.getY() + 1.0f), r.getX() + rad, r.getRight() - rad);
+                }
+                else if (isAmberOffCta)
+                {
+                    // 主役アクションCTA（うた自動）：ダーク・フォージドカーボン筐体＋アンバー内面発光で純白文字とのコントラスト16:1を確保
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (over ? 0xff1c1916 : 0xff161412), r.getX(), r.getY(),
+                                                             juce::Colour (over ? 0xff12100e : 0xff0d0c0b), r.getX(), r.getBottom(), false));
+                    g.fillRoundedRectangle (r, rad);
+                    g.setGradientFill (juce::ColourGradient (Palette::yellow.withAlpha (over ? 0.28f : 0.20f), r.getCentreX(), r.getBottom(),
+                                                             Palette::yellow.withAlpha (0.04f),                r.getCentreX(), r.getY(), false));
+                    g.fillRoundedRectangle (r, rad);
+                    g.setColour (Palette::yellow.withAlpha (0.35f));
+                    g.drawHorizontalLine (juce::roundToInt (r.getY() + 1.0f), r.getX() + rad, r.getRight() - rad);
+                }
+                else if (on)
+                {
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff141923), r.getX(), r.getY(),
+                                                             juce::Colour (0xff0b0f16), r.getX(), r.getBottom(), false));
+                    g.fillRoundedRectangle (r, rad);
+                    g.setGradientFill (juce::ColourGradient (col.withAlpha (0.18f), r.getX() + 10.0f, r.getCentreY(),
+                                                             col.withAlpha (0.03f), r.getRight(),     r.getCentreY(), false));
+                    g.fillRoundedRectangle (r, rad);
+                    g.setColour (juce::Colours::white.withAlpha (0.09f));
+                    g.drawHorizontalLine (juce::roundToInt (r.getY() + 1.0f), r.getX() + rad, r.getRight() - rad);
+                }
+                else
+                {
+                    const bool hasAccentTint = (bg != Palette::panel2 && bg != Palette::panel);
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (over ? 0xff161c27 : 0xff11161f), r.getX(), r.getY(),
+                                                             juce::Colour (over ? 0xff0d1118 : 0xff0a0d13), r.getX(), r.getBottom(), false));
+                    g.fillRoundedRectangle (r, rad);
+                    if (hasAccentTint)
+                    {
+                        const auto pureTint = bg.withAlpha (1.0f);
+                        g.setGradientFill (juce::ColourGradient (pureTint.withAlpha (over ? 0.16f : 0.09f), r.getCentreX(), r.getBottom(),
+                                                                 pureTint.withAlpha (0.0f),                 r.getCentreX(), r.getY(), false));
+                        g.fillRoundedRectangle (r, rad);
+                    }
+                }
+            }
+            else
+            {
+                const auto baseFill = (! on && lightPanel && col == Palette::panel2)
+                                    ? Palette::panel2.brighter (over ? 0.04f : 0.0f)
+                                    : col;
+                g.setGradientFill (juce::ColourGradient (baseFill.brighter (on ? 0.05f : 0.02f), r.getX(), r.getY(),
+                                                         baseFill.darker   (on ? 0.06f : 0.02f), r.getX(), r.getBottom(), false));
+                g.fillRoundedRectangle (r, rad);
+            }
         }
         else if (isHoldTrigger)
         {
@@ -3297,6 +3403,13 @@ public:
             ? (on ? Palette::metalDark : ((s_knobStyle == 2) ? Palette::metalMid : Palette::panelLn.darker (0.12f)))
             : lightPanel
             ? (on ? col.darker (0.28f) : Palette::panelLn.darker (over ? 0.28f : 0.16f))
+            : isCarbonStudio
+            ? (on ? col.withAlpha (0.88f)
+                  : (bg.withAlpha (1.0f) == Palette::yellow
+                      ? Palette::yellow.withAlpha (over ? 0.96f : 0.88f)
+                      : (bg != Palette::panel2 && bg != Palette::panel
+                          ? bg.withAlpha (1.0f).withAlpha (over ? 0.72f : 0.46f)
+                          : Palette::panelLn.brighter (over ? 0.24f : 0.04f))))
             : isMidnightFlagship
             ? (on ? effOnCol.interpolatedWith (Palette::metalHi, 0.42f).withAlpha (0.94f)
                   : (col != Palette::panel2
@@ -3326,18 +3439,28 @@ public:
 
         if (! s_knobInnerArt)
         {
-            // ★ モダン・プロスタジオ LEDインジケーター（ON=塗りつぶし丸、OFF=端正な中抜きリングで省スペースかつ色覚多様性にも配慮）
-            const float cx = r.getX() + 8.0f;
+            // ★ v6.0.0 Carbon スタジオLEDインジケーター（Carbon筐体上ではアクセント発光ドット、明色/ベタボタン上では高コントラスト丸）
+            const float cx = r.getX() + 8.4f;
             const float cy = r.getCentreY();
-            const float dotR = 3.1f;
+            const float dotR = 3.2f;
             if (on)
             {
-                g.setColour (Palette::readableOn (col));
-                g.fillEllipse (cx - dotR, cy - dotR, dotR * 2.0f, dotR * 2.0f);
+                if (isCarbonStudio && col != Palette::yellow)
+                {
+                    g.setColour (col.withAlpha (0.28f));
+                    g.fillEllipse (cx - dotR - 1.6f, cy - dotR - 1.6f, (dotR + 1.6f) * 2.0f, (dotR + 1.6f) * 2.0f);
+                    g.setColour (col.brighter (0.18f));
+                    g.fillEllipse (cx - dotR, cy - dotR, dotR * 2.0f, dotR * 2.0f);
+                }
+                else
+                {
+                    g.setColour (Palette::readableOn (col));
+                    g.fillEllipse (cx - dotR, cy - dotR, dotR * 2.0f, dotR * 2.0f);
+                }
             }
             else
             {
-                g.setColour (Palette::inkSoft.withAlpha (0.68f));
+                g.setColour (Palette::inkSoft.withAlpha (0.62f));
                 g.drawEllipse (cx - dotR + 0.4f, cy - dotR + 0.4f, (dotR - 0.4f) * 2.0f, (dotR - 0.4f) * 2.0f, 1.25f);
             }
             return;
@@ -3428,15 +3551,15 @@ public:
                                 b.getButtonText(), area.getWidth());
         g.setFont (f);
         const bool lightPanel = Palette::panel.getPerceivedBrightness() > 0.55f;
-        const bool isMidnightFlagship = (s_knobInnerArt && ! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
+        const bool isDarkHardwareBtn = (! lightPanel && Palette::currentTheme == 0 && s_knobStyle == 0 && ! s_useKawaii);
         const auto onCol = b.findColour (juce::TextButton::buttonOnColourId);
         const auto rawOffBg = b.findColour (juce::TextButton::buttonColourId);
-        const auto effOffBg = isMidnightFlagship ? juce::Colour (0xff071024)
+        const auto effOffBg = isDarkHardwareBtn ? juce::Colour (0xff071024)
                             : (rawOffBg.getFloatAlpha() < 0.85f)
                                 ? Palette::panel2.interpolatedWith (rawOffBg.withAlpha (1.0f), juce::jlimit (0.18f, 0.42f, rawOffBg.getFloatAlpha() * 1.35f))
                                 : rawOffBg.withAlpha (1.0f);
         const auto txtCol = b.getToggleState()
-            ? ((isMidnightFlagship && onCol != Palette::yellow)
+            ? ((isDarkHardwareBtn && onCol != Palette::yellow)
                 ? Palette::ink
                 : Palette::readableOn (onCol))
             : Palette::accentOn (b.findColour (juce::TextButton::textColourOffId), effOffBg, 4.5f);
@@ -6263,7 +6386,7 @@ public:
         int         ovLayout;       // overviewLayoutMode (0..3)
         int         knobStyle;      // GzzioLnF::s_knobStyle
     };
-    static constexpr int kLegacyVersionCount = 23;
+    static constexpr int kLegacyVersionCount = 24;
     static const LegacyVersionSpec& getLegacyVersionSpec (int id) noexcept;
     void applyLegacyVersion (int versionId, bool keepEcoGate = true);
     void openLegacyVersionPopup (juce::Rectangle<int> anchorScreenBounds);
@@ -6271,6 +6394,7 @@ public:
     void openCheckupPopupForTest() { if (checkupButton.onClick) checkupButton.onClick(); }
     void setDenoiseClearVisibleForTest (bool v) { dnClearButton.setVisible (v); resized(); }
     juce::Rectangle<int> getMicSafuPillBoundsForTest() const noexcept { return micSafuPillRect; }
+    juce::Rectangle<int> getOverviewKeyPillBoundsForTest() const noexcept { return overviewKeyPillRect; }
     void requestMiniBarMode (bool enable);
     void syncQuickAssistButtons() noexcept;
     std::shared_ptr<tip::Language> getLanguage() const noexcept { return language; }
@@ -6294,6 +6418,7 @@ private:
     void openVoiceChangerPopup (juce::Rectangle<int> anchorScreenBounds);
     void openIrSelectorMenu (juce::Rectangle<int> anchorScreenBounds);
     void openPresetMatrixMenu (juce::Rectangle<int> anchorScreenBounds);
+    void openOverviewKeyPopup (juce::Rectangle<int> anchorScreenBounds);
     void browseCustomSeSlot (int slotIndex);
     void openCustomSeSlotMenu (int slotIndex, juce::Rectangle<int> anchorScreenBounds);
     juce::Rectangle<int> detailVerBadgeRect; // 詳細・かんたん画面ヘッダの歴代バージョン切替バッジ領域
@@ -6333,6 +6458,7 @@ private:
     juce::Rectangle<int> prismPillRect;   // 💎 ワールドクラス・マスタリングプリズム (Auto / Inflator / Rear-Bus / Prism MAX / Grammy統合) 1クリック切替ピル
     juce::Rectangle<int> jpopPolishPillRect; // ✨ v5.7.0: J-Pop完パケ艶＆喉締めオートリリーフ 1クリック切替ピル
     juce::Rectangle<int> micSafuPillRect;    // 🎙️ v5.9.0: マイク劣化・パリパリ／サフー修復 (OFF / 標準 / 強力) 1クリック切替ピル
+    juce::Rectangle<int> overviewKeyPillRect; // 🎹 v6.0.0: 総合画面1クリック曲キー・スケール選択＆8秒キー自動検出ピル
     std::array<juce::Rectangle<int>, 4> argonBarRects;
     std::array<juce::Rectangle<int>, 4> argonTargetRects;
     juce::Rectangle<int> levelBadgeRect;

@@ -396,8 +396,8 @@ int main()
                    "v5.9.0 Default startup opens on Standard Overview screen (isOverview() == true)");
             check (! content.isLiteMode() && content.getAccessMode() == 0,
                    "v5.9.0 Default startup has liteMode=false and accessMode=0");
-            check (proc.getLegacyVersionId() == 0 && proc.getLegacyVersionEra() == 590,
-                   "v5.9.0 Default startup runs flagship v5.9.0 (id=0, era=590)");
+            check (proc.getLegacyVersionId() == 0 && proc.getLegacyVersionEra() >= 590,
+                   "v6.0.0/v5.9.0 Default startup runs current flagship (id=0, era>=590)");
         }
     }
 

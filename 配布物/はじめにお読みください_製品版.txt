@@ -1,12 +1,12 @@
 ================================================================
- VocalGzzio v5.9.0 （製品版）
+ VocalGzzio v6.0.0 — Carbon Edition （製品版）
  お買い上げありがとうございます。
 ================================================================
 
 ■ 3分で音が出るまで（使い方に合わせて A・B・C から選んでください）
 
   【推奨】まずはこのフォルダ内のインストーラー
-         「VocalGzzio_Setup_v5.9.0.exe」を実行してください。
+         「VocalGzzio_Setup_v6.0.0.exe」を実行してください。
          単体起動アプリ・VST3プラグイン・オフライン取扱説明書がすべて一括導入されます。
          ※ Windowsで青い画面「Windows によって PC が保護されました」が出たときは、
             画面内の「詳細情報」をクリック →「実行」を押すとそのまま進めます。
@@ -40,9 +40,19 @@
     2. DAWをいったん終了して再起動し、ボーカルトラックに挿してください。
 
 
-■ v5.9.0 / v5.8 / v5.7 / v5.5 の主な新機能・便利機能
+■ v6.0.0 Carbon Edition ＆ v5.9 / v5.8 / v5.5 の主な新機能・便利機能
 
-  ・🎤 『ゼロ遅延・歌うま補正 ＆ 新スタジオプレート初期レシピ』（v5.9.0 新搭載）：
+  ・🎛️ 『Carbon Monolith プロ用ハードウェアUI ＆ 総合画面1クリック曲キー直結』（v6.0.0 新搭載）：
+    AI的なベタ塗りやSF球体を一掃し、フォージドカーボン削り出しハードウェアUI（21目盛りCNCダイヤル・
+    ダークアノダイズドLEDスイッチ・2D音響ベクトルパッド）へ全面刷新！総合画面「02 声をつくる」から
+    1クリックで曲キー・スケール選択＆8秒キー自動検出が可能になり、詳細画面右下にはITU-R BS.1770-4
+    リアルタイム LUFS / True Peak (dBTP) ＆ 6系統ゲインバジェット・マスタリングコンソールを搭載しました。
+  ・💎 『Carbon Vocal Engine — 超高域エアー保護De-Esser・M/S残響ポケット・ADAA倍音』（v6.0.0 新搭載）：
+    サ行の刺さり(6.5kHz)を抑えても11.8kHz以上のシルク空気感を無傷で残すスプリット保護ディエッサー、
+    発声中はリバーブのセンター(Mid)だけ最大-3.6dB譲って歌詞を最前面に出すM/Sボーカルポケット、
+    1次ADAAアンチエイリアシング倍音、多段エンハンサの過飽和を防ぐスペクトル予算調停器を新搭載！
+    さらに歴代全24世代（v1.0.0〜v6.0.0）をワンクリックで完全再現できます。
+  ・🎤 『ゼロ遅延・歌うま補正 ＆ 新スタジオプレート初期レシピ』（v5.9.0 搭載）：
     挿した瞬間からプロの歌声へ整う初期レシピに加え、ロングトーンの音程微揺れ（1.5〜3.5Hz）を
     追加遅延0.0msで自動制振しつつ、しゃくり・こぶし・表現ビブラートと子音をそのまま守ります。
   ・🛡️ 『劣化マイク・パリパリ／サフサフ除去 ANC ＆ 長時間アンカー保持』（v5.9.0 新搭載）：
@@ -84,7 +94,7 @@
 
 ■ 入っているもの
 
-  VocalGzzio_Setup_v5.9.0.exe … オールインワン公式インストーラー（推奨）
+  VocalGzzio_Setup_v6.0.0.exe … オールインワン公式インストーラー（推奨）
   VST3プラグイン/             … DAW・OBSに挿して使う本体（手動配置用）
   単体起動アプリ/             … DAWなしで使うアプリ（歌枠・カラオケ練習・単体録音・SNS動画保存用）
   説明書/                     … 詳しいつかいかた・OBS連携ガイド・対応インターフェース一覧
@@ -110,12 +120,12 @@
 
 
 ================================================================
- 🌐 English Quick Start Guide — VocalGzzio v5.9.0 (Full Version)
+ 🌐 English Quick Start Guide — VocalGzzio v6.0.0 Carbon Edition (Full Version)
  Thank you for purchasing VocalGzzio!
 ================================================================
 
 1. How to Get Sound in 60 Seconds
-   ★ RECOMMENDED: Run "VocalGzzio_Setup_v5.9.0.exe" included in this folder!
+   ★ RECOMMENDED: Run "VocalGzzio_Setup_v6.0.0.exe" included in this folder!
      It installs the Standalone App, VST3 Plug-in, and offline manuals cleanly.
      (If Windows SmartScreen shows "Windows protected your PC", click
       "More info" -> "Run anyway".)
@@ -135,10 +145,10 @@
        proprietary virtual driver has been postponed to a future roadmap release.
 
    [C] DAWs (REAPER / Studio One / FL Studio / Ableton):
-     - Run "VocalGzzio_Setup_v5.9.0.exe", or copy "VocalGzzio.vst3" into:
+     - Run "VocalGzzio_Setup_v6.0.0.exe", or copy "VocalGzzio.vst3" into:
        C:\Program Files\Common Files\VST3\
 
-2. Built-in 100% English UI Mode & New v5.9.0 Highlights
+2. Built-in 100% English UI Mode & New v6.0.0 Carbon Highlights
    ★ 2-CLICK FULL ENGLISH UI: Click "文字・見た目" (top-right bar) -> "ブランド" (Brand)
      to switch all buttons, knobs, Mini-Bar, 60 presets, and tooltips into 100% English!
    - 🌐 アプリ音取込▼      : Driverless App-Specific Karaoke Audio Capture

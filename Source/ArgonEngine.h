@@ -58,6 +58,7 @@ public:
         cChestDc   = pole (32.0f);
         cTriodeLp  = pole (3600.0f);
         cTriodeDc  = pole (28.0f);
+        cAirNyqLp  = pole (std::min (19200.0f, fs * 0.43f));
         cFocusHp   = pole (1850.0f);
         cFocusLp   = pole (3650.0f);
         cAirHp1    = pole (8200.0f);
@@ -115,7 +116,8 @@ public:
             triLp[ch] = triDc[ch] = 0.0f;
             triPrevU[ch] = 0.24f;
             focHp[ch] = focLp[ch] = 0.0f;
-            airHp1[ch] = airHp2[ch] = 0.0f;
+            airHp1[ch] = airHp2[ch] = airNyqLp[ch] = 0.0f;
+            silkPrevX[ch] = silkPrevF[ch] = 0.0f;
         }
         haloHpState = haloLpState = 0.0f;
         haloWrite = ap1Idx = ap2Idx = 0;
@@ -273,12 +275,26 @@ public:
                 auto applySilkCh = [&] (float x, int ch) noexcept
                 {
                     airHp1[ch] += cAirHp1 * (x - airHp1[ch]);
-                    const float hf = x - airHp1[ch];
-                    // Soft algebraic harmonic exciter (no hard clipping)
-                    const float ex = (hf * (1.0f + 1.8f * std::abs (hf))) / (1.0f + 2.4f * hf * hf);
+                    const float hfRaw = x - airHp1[ch];
+                    // v6.0.0 Carbon: ナイキスト折り返し防止プリLP ＋ 1次ADAA軟飽和により超高域ザラつきを根絶
+                    airNyqLp[ch] += cAirNyqLp * (hfRaw - airNyqLp[ch]);
+                    const float u  = airNyqLp[ch] * 2.2f;
+                    const float au = std::abs (u);
+                    const float fu = au - std::log1pf (au);
+                    const float du = u - silkPrevX[ch];
+                    float ex = 0.0f;
+                    if (std::abs (du) > 1.0e-4f)
+                        ex = (fu - silkPrevF[ch]) / du;
+                    else
+                    {
+                        const float um = 0.5f * (u + silkPrevX[ch]);
+                        ex = um / (1.0f + std::abs (um));
+                    }
+                    silkPrevX[ch] = u;
+                    silkPrevF[ch] = fu;
                     airHp2[ch] += cAirHp2 * (ex - airHp2[ch]);
                     const float ultraAir = ex - airHp2[ch];
-                    return x + ultraAir * (0.85f * effSilk);
+                    return x + ultraAir * (0.92f * effSilk);
                 };
 
                 outL = applySilkCh (outL, 0);
@@ -367,7 +383,7 @@ private:
     float cChestHp = 0.01f, cChestLp = 0.03f, cChestDc = 0.004f;
     float cTriodeLp = 0.25f, cTriodeDc = 0.004f;
     float cFocusHp = 0.20f, cFocusLp = 0.35f;
-    float cAirHp1 = 0.45f, cAirHp2 = 0.55f;
+    float cAirHp1 = 0.45f, cAirHp2 = 0.55f, cAirNyqLp = 0.85f;
     float cHaloHp = 0.03f, cHaloLp = 0.40f;
     float vAtk = 0.01f, vRel = 0.001f, sAtk = 0.03f, sRel = 0.002f, fAtk = 0.015f, fRel = 0.0015f;
     float ratioFall = 0.02f, ratioRise = 0.002f, paramSlew = 0.003f;
@@ -377,7 +393,7 @@ private:
     float chestHp[2] {}, chestLp[2] {}, chestDc[2] {};
     float triLp[2] {}, triDc[2] {}, triPrevU[2] { 0.24f, 0.24f };
     float focHp[2] {}, focLp[2] {};
-    float airHp1[2] {}, airHp2[2] {};
+    float airHp1[2] {}, airHp2[2] {}, airNyqLp[2] {}, silkPrevX[2] {}, silkPrevF[2] {};
 
     int haloMask = 16383, haloWrite = 0;
     std::vector<float> haloBuf;

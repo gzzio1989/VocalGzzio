@@ -36,6 +36,7 @@ static constexpr int kRevTypeCount = kHeyaFirst + heya::kNumRooms;   // 13
 #include "VocalAiKarteAndPurifier.h"// v5.7.0 12タイプJ-Pop声質カルテ・AIノイズ指紋識別＆ピッチ同期声抽出・完パケ艶補正
 #include "BrokenMicSafuCanceller.h" // v5.9.0 劣化・湿気マイクのパリパリ放電／スポンジ共鳴サフー／擦れ音ゼロ遅延ANC
 #include "VocalSkillEnhancer.h"     // v5.9.0 ゼロ遅延ドップラー微細ピッチ揺らぎダンパー＆プロ歌唱力アシストスイート
+#include "CarbonVocalEngine.h"      // v6.0.0 Carbon 統合バジェット調停・シルク保護De-Esser・M/S残響ポケット・BS.1770テレメトリ
 
 //==============================================================================
 // v2.10.0 #77/#78 音源モード — 同じツマミが「見る場所」を持ち替える
@@ -1054,16 +1055,16 @@ public:
     }
 
     //== 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ==
-    // id: 0 = v5.8.0 最新版, 1..21 = 歴代メジャー＆V5世代（v1.0.0〜v5.7.0 全22世代）
+    // id: 0 = v6.0.0 Carbon 最新版, 1..23 = 歴代メジャー＆V5世代（v1.0.0〜v5.9.0 全24世代）
     // era: 100(v1.0.0), 130(v1.3.0), 170(v1.7.0), 200(v2.0.0), 240(v2.4.0), 310(v3.1.0),
     //      400(v4.0.0), 433(v4.3.3), 440(v4.4.0), 460(v4.6.0), 480(v4.8.0), 490(v4.9.0),
-    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0), 560(v5.6.0), 570(v5.7.0), 580(v5.8.0), 590(v5.9.0)
+    //      500(v5.0.0), 510(v5.1.0), 520(v5.2.0), 530(v5.3.0), 540(v5.4.0), 541(v5.4.1), 550(v5.5.0), 560(v5.6.0), 570(v5.7.0), 580(v5.8.0), 590(v5.9.0), 600(v6.0.0)
     int   getLegacyVersionId() const noexcept  { return legacyVersionId.load (std::memory_order_relaxed); }
     int   getLegacyVersionEra() const noexcept { return legacyVersionEra.load (std::memory_order_relaxed); }
     void  setLegacyVersionState (int id, int era)
     {
-        legacyVersionId.store (juce::jlimit (0, 22, id), std::memory_order_relaxed);
-        legacyVersionEra.store (juce::jlimit (100, 590, era), std::memory_order_relaxed);
+        legacyVersionId.store (juce::jlimit (0, 23, id), std::memory_order_relaxed);
+        legacyVersionEra.store (juce::jlimit (100, 600, era), std::memory_order_relaxed);
         markStateDirty();
        #if ! VOCALGZZIO_TRIAL
         if (! restoringState && isStandalone())
@@ -1154,8 +1155,8 @@ public:
     {
         switch (juce::jlimit (0, kNumJpopPolishModes - 1, getJpopPolishMode()))
         {
-            case 1:  return juce::String::fromUTF8 (english ? "Polish: Natural" : "✨艶補正: 歌枠");
-            case 2:  return juce::String::fromUTF8 (english ? "Polish: J-Pop+"  : "✨艶補正: 完パケ");
+            case 1:  return juce::String::fromUTF8 (english ? "Polish: Natural" : "艶補正: 歌枠");
+            case 2:  return juce::String::fromUTF8 (english ? "Polish: J-Pop+"  : "艶補正: 完パケ");
             default: return juce::String::fromUTF8 (english ? "Polish: OFF"     : "艶補正: OFF");
         }
     }
@@ -1440,7 +1441,29 @@ public:
     }
     gzzio::mastering::BobKatzKSystemAnalyzer::KSystemMetrics getBobKatzKSystemMetrics() const noexcept
     {
-        return grammyChainRack.getKSystemMetrics();
+        auto m = grammyChainRack.getKSystemMetrics();
+        const float liveMom = carbonTelemetry.getMomentaryLufs();
+        if (liveMom > -69.5f)
+        {
+            m.momentaryLufs  = liveMom;
+            m.shortTermLufs  = carbonTelemetry.getShortTermLufs();
+            m.truePeakDbtp   = carbonTelemetry.getTruePeakDbtp();
+            m.crestFactorDb  = meterVocalCrestDb.load (std::memory_order_relaxed);
+            m.k14MeterDb     = m.shortTermLufs + 14.0f;
+        }
+        return m;
+    }
+    // ---- v6.0.0 Carbon Studio Monolith 統合制御＆リアルタイム計器公開API ----
+    void  setCarbonEngineOn (bool on) noexcept { carbonEngineOn.store (on, std::memory_order_relaxed); markStateDirty(); }
+    bool  getCarbonEngineOn() const noexcept   { return carbonEngineOn.load (std::memory_order_relaxed); }
+    float getCarbonMomentaryLufs()  const noexcept { return carbonTelemetry.getMomentaryLufs(); }
+    float getCarbonShortTermLufs()  const noexcept { return carbonTelemetry.getShortTermLufs(); }
+    float getCarbonTruePeakDbtp()   const noexcept { return carbonTelemetry.getTruePeakDbtp(); }
+    float getCarbonDeEssGrDb()      const noexcept { return carbonTelemetry.getDeEssGrDb(); }
+    float getCarbonReverbPocketDb() const noexcept { return carbonTelemetry.getReverbPocketDb(); }
+    void  copyCarbonTelemetryHistory (std::array<float, 64>& outCents, std::array<float, 64>& outGr) const noexcept
+    {
+        carbonTelemetry.copyTelemetryHistory (outCents, outGr);
     }
     gzzio::science::AudioStabilityGuardian::StabilityDiagnostics getAudioStabilityDiagnostics() const noexcept
     {
@@ -1961,7 +1984,7 @@ private:
 
     // ---- 🕰️ 歴代バージョン呼び出し（世代タイムマシン）＆ 世代別省負荷エコゲート ----
     std::atomic<int>   legacyVersionId    { 0 };
-    std::atomic<int>   legacyVersionEra   { 590 };
+    std::atomic<int>   legacyVersionEra   { 600 };
     std::atomic<bool>  legacyEcoGate      { true };
 
     // ---- v5.0.0 柱④：サビ1クリック華やか演出（Chorus Boost） ----
@@ -2259,6 +2282,16 @@ private:
     std::atomic<bool>                                 intonationStabOn { false };
     std::atomic<float>                                meterIntonationStabCents { 0.0f };
     std::atomic<bool>                                 proSingSetupApplied { false };
+
+    // ---- v6.0.0 Carbon 統合バジェット調停・シルク保護De-Esser・M/S残響ポケット・BS.1770テレメトリ ----
+    gz::CarbonSpectralBudgetArbitrator                carbonBudget;
+    gz::CarbonAirPreservingDeEsser                    carbonAirDeEss;
+    gz::CarbonMsReverbPocket                          carbonReverbPocket;
+    gz::CarbonLiveTelemetry                           carbonTelemetry;
+    gz::CarbonAdaaSaturator                           carbonMicAdaa[2];
+    gz::CarbonAdaaSaturator                           carbonCharAdaa[2];
+    juce::AudioBuffer<float>                          dsAirPreScratch;
+    std::atomic<bool>                                 carbonEngineOn { true };
     double                                            paramCacheSr { 0.0 };
     int                                               paramCacheSrcMode { -999 };
     int                                               paramCacheEra { -999 };
