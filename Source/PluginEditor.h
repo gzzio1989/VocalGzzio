@@ -967,7 +967,10 @@ public:
         if (t.isEmpty() || w <= 0) return f;
         const int need = stringWidth (f, t);
         if (need <= w) return f;
-        const float shrunk = juce::jmax (kFitMinPx, f.getHeight() * (float) w / (float) need);
+        // §4「文字の規律」: 元が 14px 以上（100%〜150%表示）のとき 14px 未満への縮小を禁止し、
+        // 残りの微小な幅差（macOS Hiragino Sans Bold 等）は drawFittedText の水平スケールで吸収する。
+        const float minPx = (f.getHeight() >= 14.0f) ? 14.0f : kFitMinPx;
+        const float shrunk = juce::jmax (minPx, f.getHeight() * (float) w / (float) need);
         FontProbe::note (shrunk);
         return f.withHeight (shrunk);
     }
@@ -1175,7 +1178,7 @@ public:
                     g.setColour (isWorking ? (effDir < 0 ? Palette::green : Palette::yellow) : Palette::panelLn.withAlpha (0.75f));
                     g.drawRoundedRectangle (rf.reduced (0.5f), rad, isWorking ? 2.2f : 1.4f);
 
-                    const bool hasSym = (rf.getWidth() >= 68.0f);
+                    const bool hasSym = (rf.getWidth() >= 82.0f);
                     if (hasSym)
                     {
                         const float sx = rf.getX() + 9.0f;
