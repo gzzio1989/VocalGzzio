@@ -6561,7 +6561,7 @@ private:
 
     // ---- v1.4.0: right-column tabs (EQ | Effects) + v5.9.0 quick singing assist ----
     juce::TextButton tabEqButton { "EQ" }, tabFxButton;
-    juce::TextButton singSkillBtn, quickPitchBtn;
+    juce::TextButton singSkillBtn, quickPitchBtn, detailMicSafuBtn;
     // v2.4.0: modeButton(かんたん/こだわり)は廃止。ヘッダの大きなスイッチへ統合。
     bool  advancedMode { true };
     int currentTab { 0 };

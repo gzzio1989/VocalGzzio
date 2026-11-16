@@ -55,6 +55,7 @@ public:
             ring.assign ((size_t) ringSize, RingFrame {});
 
         aPitchLp = onePoleFreqCoef (480.0, sr);
+        aFund185 = onePoleFreqCoef (185.0, sr);
 
         // 6帯域 1次RC直交テレスコーピング分割カットオフ
         static constexpr double kSplitHz[kNumSubBands] = {
@@ -66,7 +67,7 @@ public:
         aLowAtk     = onePoleTauMs (0.65,  sr);
         aLowRel     = onePoleTauMs (2.20,  sr);
         aLowTailAtk = onePoleTauMs (1.80,  sr);
-        aLowTailRel = onePoleTauMs (18.00, sr);
+        aLowTailRel = onePoleTauMs (48.00, sr);
 
         // 0サンプル遅延ピークホールド＋0.24ms高速減衰
         aSbRmsAtk   = onePoleTauMs (0.24, sr);
@@ -74,7 +75,7 @@ public:
         aSbPeakRel  = onePoleTauMs (0.24, sr);
         aConsAtk    = onePoleTauMs (1.60, sr);
         aConsRel    = onePoleTauMs (3.20, sr);
-        aTailHfSlew = onePoleTauMs (5.50, sr);
+        aTailHfSlew = onePoleTauMs (7.50, sr);
 
         aPowAtk     = onePoleTauMs (1.60, sr);
         aPowRel     = onePoleTauMs (6.00, sr);
@@ -83,12 +84,13 @@ public:
         aVoicedRel     = onePoleTauMs (2.60, sr);
         aSpikeAtk      = 1.00f; // 先頭サンプル (k=0) で遅延ゼロ即時クランプ
         aSpikeRel      = onePoleTauMs (0.95, sr);
+        aBodySpikeRel  = onePoleTauMs (0.65, sr);
         aWienerSlew    = onePoleTauMs (2.40, sr);
         aWienerTailAtk = onePoleTauMs (0.30, sr);
         aBypassSlew    = onePoleTauMs (3.00, sr);
 
         xfadeStep      = (float) (1.0 / std::max (8.0, 0.0020 * sr));
-        maxTailSamples = std::max (64, (int) std::lround (sr * 0.068));
+        maxTailSamples = std::max (64, (int) std::lround (sr * 0.115));
 
         // 1.33ms (64サンプル@48kHz) ピッチ更新＋サンプル毎チャープ速度補間により超低CPUとビブラート追従を両立
         corrHopSamples = std::max (32, (int) std::lround (sr * (64.0 / 48000.0)));
@@ -107,6 +109,7 @@ public:
         {
             sbFastPow[(size_t) s]        = 0.0f;
             sbPeakEnv[(size_t) s]        = 0.0f;
+            sbCleanPeakEnv[(size_t) s]   = 0.0f;
             powSig[(size_t) s]           = 0.0f;
             powDiff1[(size_t) s]         = 0.0f;
             powDiff2[(size_t) s]         = 0.0f;
@@ -116,6 +119,8 @@ public:
             voicedNoiseFloor[(size_t) s] = 0.0f;
         }
         pitchLpState[0] = pitchLpState[1] = 0.0f;
+        rcFund[0] = rcFund[1] = 0.0f;
+        spikeBodyGain = 1.0f;
         for (int ch = 0; ch < 2; ++ch)
             for (int k = 0; k < kNumSubBands; ++k)
                 rcLp[ch][k] = 0.0f;
@@ -152,6 +157,8 @@ public:
         lastCleanDb            = 0.0f;
         defectAccumScore       = 0.0f;
         defectFrames           = 0;
+        sentinelEma            = 0.0f;
+        sentinelHighBlocks     = 0;
     }
 
     void notifyBypassed() noexcept
@@ -165,6 +172,23 @@ public:
     {
         defectAccumScore = 0.0f;
         defectFrames     = 0;
+    }
+
+    void resetMidSessionSentinel() noexcept
+    {
+        sentinelEma        = 0.0f;
+        sentinelHighBlocks = 0;
+    }
+
+    bool consumeMidSessionSentinelTrigger() noexcept
+    {
+        if (sentinelHighBlocks >= 22 && sentinelEma >= 0.28f)
+        {
+            sentinelEma        = 0.0f;
+            sentinelHighBlocks = 0;
+            return true;
+        }
+        return false;
     }
 
     int recommendedModeFromObservation() const noexcept
@@ -200,12 +224,16 @@ public:
 
         if (wasSleeping)
         {
-            const float savedScore  = defectAccumScore;
-            const int   savedFrames = defectFrames;
+            const float savedScore    = defectAccumScore;
+            const int   savedFrames   = defectFrames;
+            const float savedSentEma  = sentinelEma;
+            const int   savedSentHigh = sentinelHighBlocks;
             reset();
-            defectAccumScore = savedScore;
-            defectFrames     = savedFrames;
-            wasSleeping      = false;
+            defectAccumScore   = savedScore;
+            defectFrames       = savedFrames;
+            sentinelEma        = savedSentEma;
+            sentinelHighBlocks = savedSentHigh;
+            wasSleeping        = false;
         }
 
         const float strength = (mode >= Deep) ? 1.85f : (mode == Standard ? 1.05f : 0.0f);
@@ -306,8 +334,10 @@ public:
             if (tapCrossfading)
                 makeTapIndex (w, tapLagBackup, rSize, rMask, tap1Old);
 
-            // 6帯域 1次RC直交テレスコーピング分割: bodyKeep + sb0..sb5 === inSample！
-            float bodyKeep[2] = {};
+            // 6帯域 1次RC直交テレスコーピング分割: fundKeep + bodyMidIn + sb0..sb5 === inSample！
+            float fundKeep[2]  = {};
+            float bodyMidIn[2] = {};
+            float bodyKeep[2]  = {};
             float sbIn[kNumSubBands][2] = {};
             for (int ch = 0; ch < chCount; ++ch)
             {
@@ -315,6 +345,9 @@ public:
 
                 rcLp[ch][0] += aSplit[0] * (x - rcLp[ch][0]);
                 bodyKeep[ch] = rcLp[ch][0];
+                rcFund[ch]  += aFund185 * (bodyKeep[ch] - rcFund[ch]);
+                fundKeep[ch]  = rcFund[ch];
+                bodyMidIn[ch] = bodyKeep[ch] - fundKeep[ch];
                 float rem = x - rcLp[ch][0];
 
                 for (int k = 0; k < kNumSubBands - 1; ++k)
@@ -339,7 +372,7 @@ public:
             const float consBypass = isUnvoicedFricative ? 0.0f : 1.0f;
             const float wvSafe = wv * consBypass;
 
-            // 母音オフセット後の単調減衰尾トラッキング（後続の子音・ブレス立ち上がりで即時開放）
+            // 母音オフセット後の単調減衰尾トラッキング（定常ヒスの微小揺らぎでは誤解除せず、本物の子音立ち上がりで即時開放）
             if (wvSafe > 0.45f && envLow > 0.022f)
             {
                 sinceVoicedSamples     = 0;
@@ -352,7 +385,7 @@ public:
                     ++sinceVoicedSamples;
                 if (tailEnvHf < tailHfMin)
                     tailHfMin = tailEnvHf;
-                else if (tailEnvHf > tailHfMin * 1.85f + 2.2e-3f)
+                else if (tailEnvHf > tailHfMin * 2.35f + 3.6e-3f)
                     tailAbortedByConsonant = true;
             }
 
@@ -393,15 +426,19 @@ public:
             float broadbandSpikeG  = 1.0f;
             float hiBandNoiseRatio = 0.0f;
 
+            const float tailNoEcho = (envLowTail > 0.010f && envLow < envLowTail * 0.85f)
+                ? std::clamp ((envLow - envLowTail * 0.45f) / (envLowTail * 0.40f + 1.0e-5f), 0.0f, 1.0f)
+                : 1.0f;
+
             float sharedTailGate = 0.0f;
             if (! tailAbortedByConsonant
                 && sinceVoicedSamples > 0
                 && sinceVoicedSamples < maxTailSamples
-                && envLowTail > 0.005f
-                && envLow < envLowTail * 0.80f)
+                && envLowTail > 0.0022f
+                && envLow < envLowTail * 0.85f)
             {
                 const float fadeEnd = std::clamp ((float) (maxTailSamples - sinceVoicedSamples) / (0.25f * (float) maxTailSamples), 0.0f, 1.0f);
-                sharedTailGate = fadeEnd * std::clamp ((envLowTail * 0.80f - envLow) / (envLowTail * 0.45f + 1.0e-5f), 0.0f, 1.0f);
+                sharedTailGate = fadeEnd * std::clamp ((envLowTail * 0.85f - envLow) / (envLowTail * 0.42f + 1.0e-5f), 0.0f, 1.0f);
             }
 
             for (int s = kNumSubBands - 1; s >= 0; --s)
@@ -449,12 +486,10 @@ public:
                 sbPeakEnv[(size_t) s] = (absMax > sbPeakEnv[(size_t) s])
                     ? absMax
                     : (sbPeakEnv[(size_t) s] + aSbPeakRel * (absMax - sbPeakEnv[(size_t) s]));
-                const float curPeak  = sbPeakEnv[(size_t) s];
-                const float curRatio = curPeak / envLowDenom;
-                curFrame.ratio[s] = curRatio;
+                const float curPeak = sbPeakEnv[(size_t) s];
 
                 float targetSpikeG = 1.0f;
-                if (wvSafe > 0.15f && have3Periods)
+                if (wvSafe > 0.15f && have3Periods && sinceVoicedSamples == 0)
                 {
                     float v[4] = {
                         std::max (ringPtr[(size_t) rIdx1a].ratio[s], ringPtr[(size_t) rIdx1b].ratio[s]),
@@ -497,9 +532,14 @@ public:
                         if (activeSuppress)
                             targetSpikeG = 1.0f - std::min (1.0f, wvSafe * std::min (1.0f, strength)) * (1.0f - rawG);
 
-                        // 散発パリパリ放電の瞬間は低中域 s=0,1 の同時広帯域放電成分も4周期トリム波形へ同期置換！
-                        if (s >= 2 && prevPn < 0.30f * prevPx && absMax > 1.38f * allowPk + 2.4e-3f)
+                        // サフサフ共鳴が同時発生中でも、クレストが高い広帯域パリパリ放電スパイク時は低中域(185Hz〜2.65kHz)も同期置換！
+                        const float sbRms = std::sqrt (std::max (0.0f, prevPx));
+                        if (s >= 2
+                            && absMax > 1.35f * allowPk + 2.0e-3f
+                            && signedJump > 2.55f * sbRms + 1.8e-3f)
+                        {
                             broadbandSpikeG = std::min (broadbandSpikeG, targetSpikeG);
+                        }
 
                         if (s >= 1)
                         {
@@ -517,11 +557,20 @@ public:
                 const float gSp = (activeSuppress && have2Periods) ? spikeGain[(size_t) s] : 1.0f;
 
                 float uDec[2] = { 0.0f, 0.0f };
+                float decAbsMax = 0.0f;
                 for (int ch = 0; ch < chCount; ++ch)
                 {
                     const float cleanRef = (voicedHoldSamples > lag1 * 2) ? (0.55f * hPrev[ch] + 0.45f * uTrim[ch]) : uTrim[ch];
                     uDec[ch] = cleanRef + gSp * (sbIn[s][ch] - cleanRef);
+                    decAbsMax = std::max (decAbsMax, std::abs (uDec[ch]));
                 }
+
+                // 連続高密度パリパリ放電(毎周期スパイク)でも過去4周期の参照ピークが汚染されないよう、クランプ後包絡を保存
+                const float ratioSrcAbs = activeSuppress ? decAbsMax : absMax;
+                sbCleanPeakEnv[(size_t) s] = (ratioSrcAbs > sbCleanPeakEnv[(size_t) s])
+                    ? ratioSrcAbs
+                    : (sbCleanPeakEnv[(size_t) s] + aSbPeakRel * (ratioSrcAbs - sbCleanPeakEnv[(size_t) s]));
+                curFrame.ratio[s] = sbCleanPeakEnv[(size_t) s] / envLowDenom;
 
                 curFrame.dec[s][0] = uDec[0];
                 if (chCount > 1)
@@ -558,9 +607,6 @@ public:
                 if (wvSafe > 0.60f && envLow > 0.020f && s >= 1 && s <= 4 && noiseRatio > 0.18f && pn > 1.5e-6f)
                     blockDefectPeak = std::max (blockDefectPeak, std::min (1.0f, (noiseRatio - 0.18f) * 2.2f));
 
-                const float tailNoEcho = (envLowTail > 0.010f && envLow < envLowTail * 0.85f)
-                    ? std::clamp ((envLow - envLowTail * 0.45f) / (envLowTail * 0.40f + 1.0e-5f), 0.0f, 1.0f)
-                    : 1.0f;
                 const float onsetReady = (voicedHoldSamples > lag1 + 16)
                     ? std::clamp ((float) (voicedHoldSamples - lag1 - 16) / (float) lag1, 0.0f, 1.0f)
                     : 0.0f;
@@ -568,9 +614,10 @@ public:
                 const float effNoiseRatio = (s <= 1 && hiBandNoiseRatio > 0.40f)
                     ? std::max (noiseRatio, 0.45f * hiBandNoiseRatio)
                     : noiseRatio;
-                const float combDrive = std::min (1.0f, std::max (0.0f, effNoiseRatio - 0.025f) * 30.0f);
-                const float alphaH    = have2Periods
-                    ? std::min (kCombMax[s], wvSafe * onsetReady * tailNoEcho * kCombMax[s] * std::min (1.12f, strength) * combDrive)
+                const float combDrive  = std::min (1.0f, std::max (0.0f, effNoiseRatio - 0.025f) * 30.0f);
+                const float vibCombCap = std::max (0.42f, kCombMax[s] / (1.0f + 16.0f * std::abs (lagVel) * harmK));
+                const float alphaH     = have2Periods
+                    ? std::min (vibCombCap, wvSafe * onsetReady * tailNoEcho * kCombMax[s] * std::min (1.12f, strength) * combDrive)
                     : 0.0f;
 
                 float sigHarm[2] = { 0.0f, 0.0f };
@@ -645,16 +692,39 @@ public:
                 }
             }
 
+            // 185〜740Hz (bodyMid) の広帯域パリパリ放電成分も、高域スパイク確認瞬間のみ4周期トリム予測へ置換（クリーン時は恒等 0.000 dB）
+            const float targetBodySpG = (activeSuppress && have2Periods && sinceVoicedSamples == 0 && wvSafe > 0.40f && broadbandSpikeG < 0.45f)
+                ? broadbandSpikeG
+                : 1.0f;
+            spikeBodyGain += (targetBodySpG < spikeBodyGain ? aSpikeAtk : aBodySpikeRel) * (targetBodySpG - spikeBodyGain);
+            const float gBodySp = (activeSuppress && have2Periods) ? spikeBodyGain : 1.0f;
+
+            float bodyOut[2] = { bodyKeep[0], bodyKeep[1] };
+            for (int ch = 0; ch < chCount; ++ch)
+            {
+                float midRef = bodyMidIn[ch];
+                if (have2Periods)
+                {
+                    const float m1 = tap1.c0 * f1_0.bodyMid[ch] + tap1.c1 * f1_1.bodyMid[ch] + tap1.c2 * f1_2.bodyMid[ch] + tap1.c3 * f1_3.bodyMid[ch];
+                    const float m2 = tap2.c0 * f2_0.bodyMid[ch] + tap2.c1 * f2_1.bodyMid[ch] + tap2.c2 * f2_2.bodyMid[ch] + tap2.c3 * f2_3.bodyMid[ch];
+                    const float m3 = tap3.c0 * f3_0.bodyMid[ch] + tap3.c1 * f3_1.bodyMid[ch] + tap3.c2 * f3_2.bodyMid[ch] + tap3.c3 * f3_3.bodyMid[ch];
+                    midRef = midMean4 (bodyMidIn[ch], m1, m2, m3);
+                }
+                const float midDec = midRef + gBodySp * (bodyMidIn[ch] - midRef);
+                curFrame.bodyMid[ch] = midDec;
+                bodyOut[ch] = fundKeep[ch] + (bodyMidIn[ch] + activeMix * (midDec - bodyMidIn[ch]));
+            }
+
             if (activeMix >= 1.0e-4f)
             {
-                float sumL = bodyKeep[0];
+                float sumL = bodyOut[0];
                 for (int s = 0; s < kNumSubBands; ++s)
                     sumL += sbOut[s][0];
                 chL[n] = sumL;
 
                 if (chCount > 1)
                 {
-                    float sumR = bodyKeep[1];
+                    float sumR = bodyOut[1];
                     for (int s = 0; s < kNumSubBands; ++s)
                         sumR += sbOut[s][1];
                     chR[n] = sumR;
@@ -664,10 +734,18 @@ public:
             ringPos = (w + 1) & rMask;
         }
 
-        if (observeOnlyForKarte && blockHadVoiced && defectFrames < 4000)
+        if (observeOnlyForKarte && blockHadVoiced)
         {
-            defectAccumScore += blockDefectPeak;
-            ++defectFrames;
+            if (defectFrames < 4000)
+            {
+                defectAccumScore += blockDefectPeak;
+                ++defectFrames;
+            }
+            sentinelEma = 0.92f * sentinelEma + 0.08f * blockDefectPeak;
+            if (blockDefectPeak >= 0.42f)
+                sentinelHighBlocks = std::min (200, sentinelHighBlocks + 1);
+            else
+                sentinelHighBlocks = std::max (0, sentinelHighBlocks - 1);
         }
 
         if (activeSuppress)
@@ -689,6 +767,7 @@ private:
     struct RingFrame
     {
         float low = 0.0f;
+        float bodyMid[2] {};
         float ratio[kNumSubBands] {};
         float dec[kNumSubBands][2] {};
         float harm[kNumSubBands][2] {};
@@ -971,18 +1050,19 @@ private:
     double sr = 48000.0;
 
     float aPitchLp = 0.06f;
+    float aFund185 = 0.024f;
     std::array<float, kNumSubBands> aSplit {};
-    float aLowAtk = 0.03f, aLowRel = 0.008f, aLowTailAtk = 0.01f, aLowTailRel = 0.0011f;
+    float aLowAtk = 0.03f, aLowRel = 0.008f, aLowTailAtk = 0.01f, aLowTailRel = 0.00043f;
     float aSbRmsAtk = 0.05f, aSbRmsRel = 0.022f, aSbPeakRel = 0.04f;
-    float aConsAtk = 0.012f, aConsRel = 0.006f, aTailHfSlew = 0.0038f;
+    float aConsAtk = 0.012f, aConsRel = 0.006f, aTailHfSlew = 0.0028f;
     float aPowAtk = 0.012f, aPowRel = 0.0034f;
     float aVoicedAtk = 0.013f, aVoicedRel = 0.0075f;
-    float aSpikeAtk = 1.00f, aSpikeRel = 0.015f;
+    float aSpikeAtk = 1.00f, aSpikeRel = 0.015f, aBodySpikeRel = 0.032f;
     float aWienerSlew = 0.0085f, aWienerTailAtk = 0.030f;
     float aBypassSlew = 0.007f;
     float xfadeStep = 0.005f;
 
-    int maxTailSamples = 3264;
+    int maxTailSamples = 5520;
     int corrHopSamples = 64;
     int corrWinSamples = 432;
     int corrDecim      = 6;
@@ -994,10 +1074,12 @@ private:
     std::vector<RingFrame> ring;
 
     float pitchLpState[2] = { 0.0f, 0.0f };
+    float rcFund[2]       = { 0.0f, 0.0f };
     float rcLp[2][kNumSubBands] = {};
 
     std::array<float, kNumSubBands> sbFastPow {};
     std::array<float, kNumSubBands> sbPeakEnv {};
+    std::array<float, kNumSubBands> sbCleanPeakEnv {};
     std::array<float, kNumSubBands> powSig {};
     std::array<float, kNumSubBands> powDiff1 {};
     std::array<float, kNumSubBands> powDiff2 {};
@@ -1005,6 +1087,7 @@ private:
     std::array<float, kNumSubBands> wienerGain { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
     std::array<float, kNumSubBands> spongeAlpha {};
     std::array<float, kNumSubBands> voicedNoiseFloor {};
+    float spikeBodyGain = 1.0f;
 
     int ringPos = 0;
     std::uint64_t totalPushed = 0;
@@ -1038,6 +1121,8 @@ private:
     float lastCleanDb            = 0.0f;
     float defectAccumScore       = 0.0f;
     int   defectFrames           = 0;
+    float sentinelEma            = 0.0f;
+    int   sentinelHighBlocks     = 0;
 };
 
 } // namespace gz::v590

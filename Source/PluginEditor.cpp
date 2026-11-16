@@ -7126,6 +7126,29 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                            "Auto Pitch OFF: returned to 0.0 ms zero-latency mode.");
         repaint();
     };
+
+    detailMicSafuBtn.setClickingTogglesState (false);
+    detailMicSafuBtn.setColour (juce::TextButton::buttonOnColourId, Palette::green);
+    detailMicSafuBtn.setTooltip (language->T ("追加遅延0.0msで「あー」発声中のパリパリ・チリチリ放電音、劣化した風防スポンジのサフー共鳴尾、スピーカー擦れ歪みを除去します（クリックで OFF ➔ 標準 ➔ 強力）。",
+                                              "Zero-latency (0.0 ms) repair for mid-vowel capsule crackle, degraded foam chuffing tails, and diaphragm rub & buzz (click: OFF -> Auto -> Deep)."));
+    styleButton (detailMicSafuBtn);
+    detailMicSafuBtn.setComponentID ("detailMicSafu");
+    detailMicSafuBtn.onClick = [this]
+    {
+        processor.cycleMicSafuMode();
+        syncQuickAssistButtons();
+        const int sm = processor.getMicSafuMode();
+        infoText = (sm == 2)
+            ? language->T ("劣化修復 [強力]：湿気カプセルのパリパリ放電・風防スポンジのサフー共鳴尾・擦れ歪みを深層除去します（遅延0.0ms・子音保護）。",
+                           "Mic Fix [Deep]: deep zero-latency suppression of capsule crackle, sponge chuffing tails & rub-and-buzz.")
+            : (sm == 1)
+                ? language->T ("劣化修復 [標準]：歌声の透明感を保ったまま、発声中のパリパリ放電やサフサフ共鳴を除去します（遅延0.0ms）。",
+                               "Mic Fix [Auto]: transparent zero-latency suppression of mid-vowel crackle & sponge safu.")
+                : language->T ("劣化修復 [OFF]：マイク劣化修復をオフにしました。",
+                               "Mic Fix [OFF]: broken-mic repair turned off.");
+        resized();
+        repaint();
+    };
     syncQuickAssistButtons();
 
     // v2.4.0: 「かんたん/こだわり」ボタンは廃止。ヘッダの大きなスイッチ
@@ -8371,6 +8394,7 @@ void VocalGzzioContent::updateTabVisibility()
                          (juce::Component*) &analyzeButton, (juce::Component*) &keyScaleButton,
                          (juce::Component*) &tabFxButton,  (juce::Component*) &tabEqButton,
                          (juce::Component*) &singSkillBtn, (juce::Component*) &quickPitchBtn,
+                         (juce::Component*) &detailMicSafuBtn,
                          (juce::Component*) &fxWarnButton, (juce::Component*) &midiButton,
                          (juce::Component*) &routeButton,  (juce::Component*) &stageButton,
                          (juce::Component*) &streamButton })
@@ -8391,7 +8415,7 @@ void VocalGzzioContent::updateTabVisibility()
                              (juce::Component*) &dlySyncBox, (juce::Component*) &tapButton,
                              (juce::Component*) &tempoFitButton,
                              (juce::Component*) &learnButton, (juce::Component*) &relearnBtn,
-                             (juce::Component*) &dnClearButton })
+                             (juce::Component*) &dnClearButton, (juce::Component*) &detailMicSafuBtn })
                 c->setVisible (inEx (c));
         }
         for (auto* l : { &lampGate, &lampDn, &lampDs, &lampRev, &lampDbl, &lampDly,
@@ -8410,6 +8434,12 @@ void VocalGzzioContent::updateTabVisibility()
 
     // 🕰️ 歴代バージョン再現時（era < 500 かつ ぜんぶ表示OFF）：その世代に存在しなかった後発ツマミ・ボタンを隠す
     const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 590;
+    if (eraNow < 590 && ! showAllKnobs && ! isOverview())
+    {
+        singSkillBtn.setVisible (false);
+        quickPitchBtn.setVisible (false);
+        detailMicSafuBtn.setVisible (false);
+    }
     if (eraNow < 500 && ! showAllKnobs && ! isOverview())
     {
         auto hideK = [] (Knob& k) { k.slider.setVisible (false); k.label.setVisible (false); };
@@ -8496,6 +8526,7 @@ void VocalGzzioContent::applyModeVisibility()
     tabEqButton.setVisible (advancedMode);      // tabs only meaningful when 2 exist
     singSkillBtn.setVisible (advancedMode && ! isOverview() && ! focusMode);
     quickPitchBtn.setVisible (advancedMode && ! isOverview() && ! focusMode);
+    detailMicSafuBtn.setVisible (advancedMode && ! isOverview() && ! focusMode);
 
     // advanced-only side tools in the tuner + output panel
     tuner.setRangeToolsVisible (advancedMode);
@@ -8683,7 +8714,7 @@ std::vector<juce::Component*> VocalGzzioContent::focusExtras (int module)
     switch (module)
     {
         case gz::ModuleChain::Souji:
-            return { &learnButton, &relearnBtn, &dnClearButton };
+            return { &learnButton, &relearnBtn, &dnClearButton, &detailMicSafuBtn };
         case gz::ModuleChain::Henshin:
             return { &vcOnButton, &jnOnButton, &atOnButton, &jnSoloButton,
                      &jnHarmBox, &atKeyBox, &atScaleBox,
@@ -9671,6 +9702,14 @@ void VocalGzzioContent::syncQuickAssistButtons() noexcept
     const bool atOn = (atP != nullptr && atP->load() > 0.5f);
     if (quickPitchBtn.getToggleState() != atOn)
         quickPitchBtn.setToggleState (atOn, juce::dontSendNotification);
+
+    const int safuMode = processor.getMicSafuMode();
+    if (detailMicSafuBtn.getToggleState() != (safuMode > 0))
+        detailMicSafuBtn.setToggleState (safuMode > 0, juce::dontSendNotification);
+    detailMicSafuBtn.setColour (juce::TextButton::buttonOnColourId, safuMode == 2 ? Palette::salmon : Palette::green);
+    const auto safuLbl = processor.getMicSafuModeName (language->english);
+    if (detailMicSafuBtn.getButtonText() != safuLbl)
+        detailMicSafuBtn.setButtonText (safuLbl);
 }
 
 void VocalGzzioContent::updateABButtons()
@@ -11502,6 +11541,7 @@ void VocalGzzioContent::resized()
         const int rightLimit = (seqModeBox.isVisible() ? seqModeBox.getX() - 8 : seqArea.getRight() - 10);
         const int wSkill = fitW (singSkillBtn, tabH, 92);
         const int wPitch = fitW (quickPitchBtn, tabH, 88);
+        const int wSafu  = fitW (detailMicSafuBtn, tabH, 106);
         const bool fitSkill = wantQuick && (tx + wSkill <= rightLimit);
         singSkillBtn.setBounds (tx, seqArea.getY() + 3, wSkill, tabH);
         singSkillBtn.setVisible (fitSkill);
@@ -11509,6 +11549,10 @@ void VocalGzzioContent::resized()
         const bool fitPitch = fitSkill && (tx + wPitch <= rightLimit);
         quickPitchBtn.setBounds (tx, seqArea.getY() + 3, wPitch, tabH);
         quickPitchBtn.setVisible (fitPitch);
+        tx += wPitch + 6;
+        const bool fitSafu = fitPitch && (tx + wSafu <= rightLimit);
+        detailMicSafuBtn.setBounds (tx, seqArea.getY() + 3, wSafu, tabH);
+        detailMicSafuBtn.setVisible (fitSafu);
     }
 
     // red lamps at knob centres (after every knob has its bounds)
@@ -11857,6 +11901,9 @@ void VocalGzzioContent::refreshLanguage()
     singSkillBtn   .setTooltip    (language->sing_skill_tip());
     quickPitchBtn  .setButtonText (language->quick_pitch_label());
     quickPitchBtn  .setTooltip    (language->quick_pitch_tip());
+    detailMicSafuBtn.setButtonText (processor.getMicSafuModeName (language->english));
+    detailMicSafuBtn.setTooltip    (language->T ("追加遅延0.0msで「あー」発声中のパリパリ・チリチリ放電音、劣化した風防スポンジのサフー共鳴尾、スピーカー擦れ歪みを除去します（クリックで OFF ➔ 標準 ➔ 強力）。",
+                                                 "Zero-latency (0.0 ms) repair for mid-vowel capsule crackle, degraded foam chuffing tails, and diaphragm rub & buzz (click: OFF -> Auto -> Deep)."));
     vcOnButton.setButtonText (language->vc_on_label());
     jnOnButton.setButtonText (language->jn_on_label());
     vcOnButton.setTooltip (language->vc_pitch_tip());

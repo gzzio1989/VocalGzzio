@@ -193,7 +193,7 @@ NEW_BLOCK_1 = """    bool start (int userBufferSizeIn)
         const int readable  = queue.getNumReadable();
         const int lowWater  = bufferSize + (int) actualBufferSize + jmax (256, bufferSize / 2);
         const int highWater = lowWater + jmax (1024, (int) actualBufferSize * 2);
-        const int kFade     = jmin (32, bufferSize / 2);
+        const int kFade     = jmin (256, bufferSize);
 
         if (readable >= bufferSize - 1 && readable < lowWater && kFade >= 8)
         {
@@ -211,7 +211,7 @@ NEW_BLOCK_1 = """    bool start (int userBufferSizeIn)
             }
 
             const int startIdx = bufferSize - kFade;
-            float tail[32];
+            float tail[256];
             for (auto i = 0; i < numDestBuffers; ++i)
             {
                 for (int k = 0; k < kFade - 1; ++k)
@@ -249,7 +249,7 @@ NEW_BLOCK_1 = """    bool start (int userBufferSizeIn)
                     if (block.getLength() > 0)
                     {
                         const int startIdx = bufferSize - kFade;
-                        float tail[33];
+                        float tail[257];
                         for (auto i = 0; i < numDestBuffers; ++i)
                         {
                             float extraSample = destBuffers[i][bufferSize - 1];
@@ -365,6 +365,13 @@ def patch_file(path: pathlib.Path) -> bool:
     )
     if prev_water in norm:
         norm = norm.replace(prev_water, curr_water, 1)
+        changed = True
+    prev_fade32 = "        const int kFade     = jmin (32, bufferSize / 2);"
+    curr_fade256 = "        const int kFade     = jmin (256, bufferSize);"
+    if prev_fade32 in norm:
+        norm = norm.replace(prev_fade32, curr_fade256, 1)
+        norm = norm.replace("            float tail[32];", "            float tail[256];", 1)
+        norm = norm.replace("                        float tail[33];", "                        float tail[257];", 1)
         changed = True
     if OLD_BLOCK_2 in norm:
         norm = norm.replace(OLD_BLOCK_2, NEW_BLOCK_2, 1)

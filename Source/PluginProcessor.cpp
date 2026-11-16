@@ -1153,10 +1153,18 @@ void VocalGzzioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         dnLearned = false;
         dnLearnedShared.store (false);
         dnProfileValidation.store (0);
-        for (int b = 0; b < 4; ++b) { dnFloor[b] = 1e-5f; dnFloorShared[b].store (1e-5f); }
+        for (int b = 0; b < 4; ++b) { dnFloor[b] = 1e-5f; dnLearnedAnchor[b] = 1e-5f; dnFloorShared[b].store (1e-5f); }
     }
     if (! dnLearned)
-        for (int b = 0; b < 4; ++b) dnFloor[b] = 1e-5f;
+    {
+        for (int b = 0; b < 4; ++b) { dnFloor[b] = 1e-5f; dnLearnedAnchor[b] = 1e-5f; }
+    }
+    else
+    {
+        for (int b = 0; b < 4; ++b)
+            if (dnLearnedAnchor[b] <= 1.0e-5f)
+                dnLearnedAnchor[b] = dnFloor[b];
+    }
     learnCountdown.store (0);
     // 操作側が新しく送った学習／解除は消さず、次の音声ブロックで処理する。
 
@@ -2675,8 +2683,12 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
     // wrote the shared atomics; the audio thread owns the working copies).
     if (dnProfilePending.exchange (false, std::memory_order_acq_rel))
     {
-        for (int b = 0; b < 4; ++b) dnFloor[b] = dnFloorShared[b].load();
         dnLearned = dnLearnedShared.load();
+        for (int b = 0; b < 4; ++b)
+        {
+            dnFloor[b]         = dnFloorShared[b].load();
+            dnLearnedAnchor[b] = dnLearned ? dnFloor[b] : 1e-5f;
+        }
         if (dnLearned)
             dnNoisePattern.store (aiNoisePurifier.classifyProfile (dnFloor), std::memory_order_relaxed);
         else
@@ -2709,7 +2721,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             dnNoisePattern.store (0, std::memory_order_relaxed);
             for (int b = 0; b < 4; ++b)
             {
-                dnFloor[b] = 1e-5f;
+                dnFloor[b]         = 1e-5f;
+                dnLearnedAnchor[b] = 1e-5f;
                 dnFloorShared[b].store (dnFloor[b]);
             }
         }
@@ -3282,8 +3295,13 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
         const int  safuModeNow = (eraNow >= 590 && ! selfTestRunning.load (std::memory_order_relaxed))
                                      ? micSafuMode.load (std::memory_order_relaxed) : 0;
         const bool safuActive  = soujiRun && (safuModeNow > 0);
+        const bool safuSentinelAllow = (eraNow >= 590 && soujiRun && safuModeNow == 0
+                                        && ! micSafuManualOff.load (std::memory_order_relaxed)
+                                        && (autoSafuSentinelForceTest.load (std::memory_order_relaxed)
+                                            || (! gz::isTestDataIsolated() && ! selfTestRunning.load (std::memory_order_relaxed)))
+                                        && buffer.getMagnitude (0, numSamples) > 0.015f);
         const bool safuObserve = (eraNow >= 590 && ! selfTestRunning.load (std::memory_order_relaxed))
-                                 && (autoSetupCountdown.load (std::memory_order_relaxed) > 0);
+                                 && ((autoSetupCountdown.load (std::memory_order_relaxed) > 0) || safuSentinelAllow);
 
         // v5.7.0 Smart Sleep ＆ 位相整合保護:
         //  おそうじモジュール自体が完全OFF(soujiRun == false)かつ手動学習中でもない間は、
@@ -3443,9 +3461,13 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                         && dnClassifier.isStationary() && dnFallRun[b] <= dnFallMax)
                     {
                         const float target = dnClassifier.floorTarget (b);
-                        const float follow = (! dnLearned || dnFloor[b] < target * 0.25f)
-                                           ? dnInitialFollowCoef : dnRelearnCoef;
+                        const float upFollow = (! dnLearned || dnFloor[b] < target * 0.25f)
+                                             ? dnInitialFollowCoef : dnRelearnCoef;
+                        // v5.9.0 サフサフ復活防止: 騒音上昇へは即応しつつ、静穏区間で学習済みの壊れマイク底ノイズ床を忘却しないようアンカー下限を保護
+                        const float follow = (target < dnFloor[b]) ? (dnRelearnCoef * 0.12f) : upFollow;
                         dnFloor[b] += follow * (target - dnFloor[b]);
+                        if (dnLearned)
+                            dnFloor[b] = juce::jmax (dnFloor[b], dnLearnedAnchor[b] * 0.90f);
                         dnFloor[b] = juce::jlimit (1.0e-6f, 0.5f, dnFloor[b]);
                     }
 
@@ -3579,7 +3601,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                             // 中央値 +3dB を床にする（従来は最大値×1.4＝+3dB相当）
                             // ★第2引数は「これ未満のdBは0とみなす」境界。gainではない。
                             const float med = juce::Decibels::decibelsToGain (medDb[b], -200.0f);
-                            dnFloor[b] = juce::jmax (med * 1.4f, 1e-6f);
+                            dnFloor[b]         = juce::jmax (med * 1.4f, 1e-6f);
+                            dnLearnedAnchor[b] = dnFloor[b];
                             dnFloorShared[b].store (dnFloor[b]);   // expose for state save
                         }
                         dnLearned = true;
@@ -3623,6 +3646,8 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
                 numSamples, numCh,
                 safuActive ? safuModeNow : 0,
                 f0HzNow, f0ConfNow, safuObserve);
+            if (! safuActive && safuSentinelAllow && brokenMicSafuCanceller.consumeMidSessionSentinelTrigger())
+                micSafuMode.store (1, std::memory_order_relaxed);
             meterMicSafuCleanDb.store (safuActive ? brokenMicSafuCanceller.cleanReductionDb() : 0.0f,
                                        std::memory_order_relaxed);
         }
@@ -3894,7 +3919,9 @@ void VocalGzzioProcessor::processBlock (juce::AudioBuffer<float>& fullBuffer, ju
             const bool needAuxPitch = (lease > 0)
                 || (autoSetupCountdown.load (std::memory_order_relaxed) > 0)
                 || (! selfTestRunning.load (std::memory_order_relaxed)
-                    && ((eraNow >= 590 && intonationStabOn.load (std::memory_order_relaxed))
+                    && ((eraNow >= 590 && (intonationStabOn.load (std::memory_order_relaxed)
+                                        || micSafuMode.load (std::memory_order_relaxed) > 0
+                                        || autoSafuSentinelForceTest.load (std::memory_order_relaxed)))
                         || (eraNow >= 530 && pitchSweetSpotOn.load (std::memory_order_relaxed))
                         || (eraNow >= 540 && (tailVibratoOn.load (std::memory_order_relaxed)
                                            || mixVoiceBridgeOn.load (std::memory_order_relaxed)))
@@ -7904,7 +7931,9 @@ void VocalGzzioProcessor::applyAutoSetup()
             jpopPolishMode.store   (karte.recJpopPolishMode, std::memory_order_relaxed);
             if (finishEra >= 590)
             {
-                micSafuMode.store      (brokenMicSafuCanceller.recommendedModeFromObservation(), std::memory_order_relaxed);
+                micSafuMode.store (juce::jmax (micSafuMode.load (std::memory_order_relaxed),
+                                               brokenMicSafuCanceller.recommendedModeFromObservation()),
+                                   std::memory_order_relaxed);
                 intonationStabOn.store (true, std::memory_order_relaxed);
             }
             markStateDirty();
@@ -7949,7 +7978,9 @@ void VocalGzzioProcessor::applyAutoSetup()
         tailVibratoOn.store  (false, std::memory_order_relaxed);
         if (talkFinishEra >= 590)
         {
-            micSafuMode.store      (brokenMicSafuCanceller.recommendedModeFromObservation(), std::memory_order_relaxed);
+            micSafuMode.store (juce::jmax (micSafuMode.load (std::memory_order_relaxed),
+                                           brokenMicSafuCanceller.recommendedModeFromObservation()),
+                               std::memory_order_relaxed);
             intonationStabOn.store (false, std::memory_order_relaxed);
         }
     }

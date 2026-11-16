@@ -1215,12 +1215,29 @@ public:
     int   getMicSafuMode() const noexcept       { return micSafuMode.load (std::memory_order_relaxed); }
     void  setMicSafuMode (int mode) noexcept
     {
-        micSafuMode.store (juce::jlimit (0, kNumMicSafuModes - 1, mode), std::memory_order_relaxed);
-        if (mode <= 0)
+        const int clamped = juce::jlimit (0, kNumMicSafuModes - 1, mode);
+        micSafuMode.store (clamped, std::memory_order_relaxed);
+        if (clamped > 0)
+            micSafuManualOff.store (false, std::memory_order_relaxed);
+        else
             meterMicSafuCleanDb.store (0.0f, std::memory_order_relaxed);
         markStateDirty();
     }
-    void  cycleMicSafuMode() noexcept           { setMicSafuMode ((getMicSafuMode() + 1) % kNumMicSafuModes); }
+    void  cycleMicSafuMode() noexcept
+    {
+        const int next = (getMicSafuMode() + 1) % kNumMicSafuModes;
+        setMicSafuMode (next);
+        micSafuManualOff.store (next == 0, std::memory_order_relaxed);
+    }
+    void  setAutoSafuSentinelForTest (bool enable) noexcept
+    {
+        autoSafuSentinelForceTest.store (enable, std::memory_order_relaxed);
+        if (enable)
+        {
+            micSafuManualOff.store (false, std::memory_order_relaxed);
+            brokenMicSafuCanceller.resetMidSessionSentinel();
+        }
+    }
     float getMicSafuCleanDb() const noexcept    { return meterMicSafuCleanDb.load (std::memory_order_relaxed); }
     juce::String getMicSafuModeName (bool english = false) const
     {
@@ -1516,6 +1533,7 @@ private:
     //  -93dBFS は、実在するどんな静かな部屋・機材の床よりも低い。
     static constexpr float kDenoiseMinLearnedFloorDb = -93.0f;
     float dnFloor[4] = { 1e-5f, 1e-5f, 1e-5f, 1e-5f };   // estimated noise floor
+    float dnLearnedAnchor[4] = { 1e-5f, 1e-5f, 1e-5f, 1e-5f }; // 手動学習で確定した基準ノイズ床（dn_relearnによる静穏時の忘却を防止）
     float dnFloorLearn[4] = {};     // capture during learn (peak; v2.10.0 は判定用)
     float dnGain[4]  = { 1, 1, 1, 1 };
     float dnEnvAtk = 0, dnEnvRel = 0, dnOpenCoef = 0, dnCloseCoef = 0;
@@ -2232,6 +2250,8 @@ private:
     // ---- v5.9.0 劣化・湿気マイクのパリパリ放電／スポンジ共鳴サフー／擦れ音 ゼロ遅延ANC ----
     gz::v590::BrokenMicSafuCanceller                  brokenMicSafuCanceller;
     std::atomic<int>                                  micSafuMode { 0 };
+    std::atomic<bool>                                 micSafuManualOff { false };
+    std::atomic<bool>                                 autoSafuSentinelForceTest { false };
     std::atomic<float>                                meterMicSafuCleanDb { 0.0f };
 
     // ---- v5.9.0 ゼロ遅延ピッチ揺らぎダンパー ＆ プロ歌唱力初期レシピ ----
