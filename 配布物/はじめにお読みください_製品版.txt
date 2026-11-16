@@ -1,17 +1,17 @@
 ================================================================
- VocalGzzio v5.5.0 （製品版）
+ VocalGzzio v5.9.0 （製品版）
  お買い上げありがとうございます。
 ================================================================
 
 ■ 3分で音が出るまで（使い方に合わせて A・B・C から選んでください）
 
   【推奨】まずはこのフォルダ内のインストーラー
-         「VocalGzzio_Setup_v5.5.0.exe」を実行してください。
+         「VocalGzzio_Setup_v5.9.0.exe」を実行してください。
          単体起動アプリ・VST3プラグイン・オフライン取扱説明書がすべて一括導入されます。
          ※ Windowsで青い画面「Windows によって PC が保護されました」が出たときは、
             画面内の「詳細情報」をクリック →「実行」を押すとそのまま進めます。
 
-  【A】OBS Studio で一番かんたんに歌枠・雑談配信をする方（仮想ドライバ不要・ゼロ遅延）
+  【A】OBS Studio で一番かんたんに歌枠・雑談配信をする方（VST3プラグイン直接読込・ゼロ遅延）
     1. 上記インストーラーを実行したあと、OBS Studio を開きます。
     2. OBS の「マイク音声」の「フィルタ」→「＋」→「VST 2.x/3.x プラグイン」から
        「VocalGzzio」を選び、「プラグインインターフェースを開く」を押します。
@@ -24,25 +24,34 @@
        お使いのブラウザ（Chrome / Edge 等）を選ぶだけで、仮想ケーブル不要でミックス・キー変更・
        ボーカル除去・完パケ録音・SNS動画保存が可能です（自分の耳への二重再生も自動防止されます）。
     3. OBS や Discord、cluster / VRChat 等へ単体起動版の音を丸ごと送る場合は、お手持ちのオーディオIFの
-       内蔵ループバック機能、または無料の定番外部仮想ケーブル（VB-CABLE / Yamaha SYNCROOM Driver 等）
+       内蔵ループバック機能、または無料の定番外部仮想ケーブル（VB-CABLE 等）
        をお使いください（アプリ内の「配信出力」スイッチが外部仮想ケーブルを自動検出します）。
        ※ Windows 10 / 11 のカーネル保護要件および Microsoft ハードウェア署名審査スケジュールへの適合に
           万全を期すため、独自仮想ドライバの同梱は次期以降のロードマップへ一旦先送りし、現在は
-          ドライバ不要の「🌐アプリ別カラオケ音声取込」および OBS 標準 VST3 直挿し・IFループバック・
+          「🌐アプリ別カラオケ音声取込」および OBS 標準 VST3 直挿し・IFループバック・
           外部仮想ケーブル連携をご案内しております。
        ※ インターフェース側で自分の声を直接聴いている場合は、画面上の
           「🎧自分の耳への返しミュート」をONにすると二重聞こえを防げます。
 
-  【C】DAW（Cubase / Studio One / FL Studio / REAPER 等）で使う方
+  【C】DAW（Studio One / FL Studio / REAPER / Ableton Live 等）で使う方
     1. インストーラーを実行するか、「VST3プラグイン」フォルダ内の
        VocalGzzio.vst3 をまるごと次の場所に貼り付けてください。
            C:\Program Files\Common Files\VST3\
     2. DAWをいったん終了して再起動し、ボーカルトラックに挿してください。
 
 
-■ v5.5.0 / v5.4 / v5.3 / v5.2 の主な新機能・便利機能
+■ v5.9.0 / v5.8 / v5.7 / v5.5 の主な新機能・便利機能
 
-  ・🌐 ドライバ不要『アプリ別カラオケ音声取込』（Windows 10/11 単体起動版・v5.5.0 新搭載）：
+  ・🎤 『ゼロ遅延・歌うま補正 ＆ 新スタジオプレート初期レシピ』（v5.9.0 新搭載）：
+    挿した瞬間からプロの歌声へ整う初期レシピに加え、ロングトーンの音程微揺れ（1.5〜3.5Hz）を
+    追加遅延0.0msで自動制振しつつ、しゃくり・こぶし・表現ビブラートと子音をそのまま守ります。
+  ・🛡️ 『劣化マイク・パリパリ／サフサフ除去 ANC ＆ 長時間アンカー保持』（v5.9.0 新搭載）：
+    壊れかけマイクや湿気結露による母音中のパリパリ・チリチリ放電音、劣化した風防スポンジの
+    サフサフ共鳴尾をゼロ遅延で除去し、長時間配信での復活防止アンカー＆自動センチネルも搭載しました。
+  ・⚡ 『DAWライブ超低負荷モード（0.13ms）＆ 音途切れ診断・12種声質カルテ』（v5.7〜v5.8 搭載）：
+    REAPER等の小バッファ歌唱モニター時の負荷を極小化し、12タイプJ-Pop声質カルテ「うた自動」や
+    完パケ艶＆喉締めオートリリーフも統合しています。
+  ・🌐 『アプリ別カラオケ音声取込』（Windows 10/11 単体起動版・v5.5.0 新搭載）：
     仮想ケーブル不要で Chrome / Edge（YouTubeカラオケ等）や音楽プレイヤーの音だけを直接取り込み、
     リアルタイムでボーカル除去・キー変更（±6）・声ポケット掘削・完パケ録音へミックスできます
     （Discord通話声の混入や、自分のヘッドホンでの二重再生フランジングも自動防止）。
@@ -75,7 +84,7 @@
 
 ■ 入っているもの
 
-  VocalGzzio_Setup_v5.5.0.exe … オールインワン公式インストーラー（推奨）
+  VocalGzzio_Setup_v5.9.0.exe … オールインワン公式インストーラー（推奨）
   VST3プラグイン/             … DAW・OBSに挿して使う本体（手動配置用）
   単体起動アプリ/             … DAWなしで使うアプリ（歌枠・カラオケ練習・単体録音・SNS動画保存用）
   説明書/                     … 詳しいつかいかた・OBS連携ガイド・対応インターフェース一覧
@@ -101,12 +110,12 @@
 
 
 ================================================================
- 🌐 English Quick Start Guide — VocalGzzio v5.5.0 (Full Version)
+ 🌐 English Quick Start Guide — VocalGzzio v5.9.0 (Full Version)
  Thank you for purchasing VocalGzzio!
 ================================================================
 
 1. How to Get Sound in 60 Seconds
-   ★ RECOMMENDED: Run "VocalGzzio_Setup_v5.5.0.exe" included in this folder!
+   ★ RECOMMENDED: Run "VocalGzzio_Setup_v5.9.0.exe" included in this folder!
      It installs the Standalone App, VST3 Plug-in, and offline manuals cleanly.
      (If Windows SmartScreen shows "Windows protected your PC", click
       "More info" -> "Run anyway".)
@@ -120,16 +129,16 @@
      - Use "🌐アプリ音取込▼" inside "🎵BGM・録音" to capture Chrome/YouTube karaoke
        directly without virtual cables or local headphone flanging!
      - Route to OBS / Discord / VRChat via your audio interface's built-in
-       loopback or an external virtual cable (VB-CABLE / Yamaha SYNCROOM Driver).
+       loopback or an external virtual cable (VB-CABLE, etc.).
      - Note: To ensure full compliance with Windows 10/11 kernel security and
        Microsoft hardware signature certification scheduling, bundling of a
        proprietary virtual driver has been postponed to a future roadmap release.
 
-   [C] DAWs (REAPER / Cubase / Studio One / FL Studio / Ableton):
-     - Run "VocalGzzio_Setup_v5.5.0.exe", or copy "VocalGzzio.vst3" into:
+   [C] DAWs (REAPER / Studio One / FL Studio / Ableton):
+     - Run "VocalGzzio_Setup_v5.9.0.exe", or copy "VocalGzzio.vst3" into:
        C:\Program Files\Common Files\VST3\
 
-2. Built-in 100% English UI Mode & New v5.5.0 Highlights
+2. Built-in 100% English UI Mode & New v5.9.0 Highlights
    ★ 2-CLICK FULL ENGLISH UI: Click "文字・見た目" (top-right bar) -> "ブランド" (Brand)
      to switch all buttons, knobs, Mini-Bar, 60 presets, and tooltips into 100% English!
    - 🌐 アプリ音取込▼      : Driverless App-Specific Karaoke Audio Capture
