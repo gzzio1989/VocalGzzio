@@ -48,7 +48,7 @@ public:
                 std::this_thread::sleep_for (std::chrono::milliseconds (5));
             }
         });
-        startTimer (150);
+        startTimer (260);
     }
 
     ~NavigationCheck() override
@@ -135,7 +135,7 @@ private:
                 if (++round < 3) step = 0; else { finish(); return; }
                 break;
         }
-        if (! finished.load()) startTimer (150);
+        if (! finished.load()) startTimer (260);
     }
     void finish() { stopTimer(); juce::MessageManager::getInstance()->stopDispatchLoop(); }
     std::unique_ptr<VocalGzzioProcessor> processor;

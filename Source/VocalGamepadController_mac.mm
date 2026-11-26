@@ -21,8 +21,8 @@ bool pollMacGameController (GamepadState& out) noexcept
                 continue;
 
             out.connected = true;
-            NSString* cat = ctrl.productCategory ?: @"";
-            NSString* vnd = ctrl.vendorName ?: @"Wireless Controller";
+            NSString* cat = (ctrl.productCategory != nil) ? ctrl.productCategory : @"";
+            NSString* vnd = (ctrl.vendorName != nil) ? ctrl.vendorName : @"Wireless Controller";
             out.deviceName = juce::String::fromUTF8 ([vnd UTF8String]);
 
             if ([cat containsString:@"DualSense"] || [cat containsString:@"DualShock"] || [vnd containsString:@"Sony"] || [vnd containsString:@"PlayStation"])
