@@ -67,7 +67,7 @@ void VocalGzzioContent::setLiteMode (bool on)
     liteMode = on;
     eqGraph.setLiteMode (liteMode);
     tuner.setLiteMode (liteMode);
-    startTimerHz (liteMode ? 10 : 20);
+    startTimerHz (liteMode ? 8 : 15);
     applyThemeToKnobs();
     if (onUiStateChange) onUiStateChange ("ui_lite", liteMode ? 1 : 0);
     overviewHint = liteMode
@@ -579,6 +579,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+
     // 0c. 左上ブランド＆バージョン表示欄 ({ 20, 10, 212, 50 }) クリックで「🕰 歴代バージョン呼び出し（世代タイムマシン）」を開く
     const juce::Rectangle<int> topBrandVerRect (20, 10, 212, 50);
     if (topBrandVerRect.contains (pt))
@@ -710,6 +711,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+
     // 1c-3. 計器＆入出力カード内の「🎵声量幅: 標準 / 🎤10割ダイレクト / 📻一定キープ」ワンクリック切替ピル
     if (! ioExprRect.isEmpty() && ioExprRect.expanded (2, 4).contains (pt))
     {
@@ -726,6 +728,21 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         repaint();
         return true;
     }
+
+    // 1c-3b. スタンドアロン時の「🎧 返し音: ON ⇄ 返しミュート」ワンクリック切替ピル（自分の生声・IFダイレクトモニターとの二重聴こえ防止）
+    if (! ioMonMuteRect.isEmpty() && ioMonMuteRect.expanded (2, 4).contains (pt))
+    {
+        const bool nextMute = ! processor.getMonitorMute();
+        processor.setMonitorMute (nextMute);
+        overviewHint = nextMute
+            ? language->T ("【🔇 返しミュート ON】自分のヘッドホン／スピーカーへの返し音だけを消しました（配信出力・録音には加工後の声がそのまま送られます）。自分の生声やオーディオIFのダイレクトモニターと混ざって違和感がある時に最適です。",
+                           "[SELF-MONITOR MUTE ON] Muted local headphone/speaker return while keeping Stream Out and recording active. Ideal when your raw voice or audio-interface Direct Monitor mixes with pitched audio.")
+            : language->T ("【🎧 返し音: ON】自分のヘッドホン／スピーカーへのモニタリング返し音を再開しました。二重に聴こえる場合はオーディオIF側のダイレクトモニターをOFFにするか、ここを押して返しミュートにしてください。",
+                           "[SELF-MONITOR ON] Restored local headphone monitoring. If you hear a doubled raw voice, mute Direct Monitor on your audio interface or click here to mute self-return.");
+        repaint();
+        return true;
+    }
+
 
     // 1c-4. 中央モニターヘッダの「◆ Mastering Prism (Auto / Inflator倍音 / Rear-Bus芯圧 / Prism極致 / Grammy統合)」ワンクリック切替ピル
     if (! prismPillRect.isEmpty() && prismPillRect.expanded (2, 4).contains (pt))
@@ -752,6 +769,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+
     // 1c-5. カード1ヘッダの「✨ J-Pop 完パケ艶＆喉締めオートリリーフ」ワンクリック切替ピル
     if (! jpopPolishPillRect.isEmpty() && jpopPolishPillRect.expanded (2, 4).contains (pt))
     {
@@ -772,6 +790,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         repaint();
         return true;
     }
+
 
     // 1c-5b. v6.0.0: カード1ヘッダの「曲キー・スケール 1クリック選択＆自動検出」ピル
     if (! overviewKeyPillRect.isEmpty() && overviewKeyPillRect.expanded (2, 4).contains (pt))
@@ -803,6 +822,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+
     // 1d. ヘッダの「📡外部出力 (VB-CABLE / Yamaha SYNCROOM Driver / OBS連携ガイド)」ブリッジ設定ピル
     if (! streamPillRect.isEmpty() && streamPillRect.expanded (2, 4).contains (pt))
     {
@@ -826,6 +846,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+
     // 1d-3. 2段目の「🔄5秒試聴ルーパー」録音・手放しループ再生ピル
     if (! loopPillRect.isEmpty() && loopPillRect.expanded (2, 4).contains (pt))
     {
@@ -843,6 +864,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         return true;
     }
 
+
     // 1d-4. 2段目の「😷咳ミュート」ワンクリック瞬間無音ミュートピル（8ms滑らか遮断・残響鳴り残り防止）
     if (! coughPillRect.isEmpty() && coughPillRect.expanded (2, 4).contains (pt))
     {
@@ -856,6 +878,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         repaint();
         return true;
     }
+
 
     // 1d-5. 2段目の「🎵BGM・録音・診断」ステージ＆スタジオ統合パネルピル
     if (! stagePillRect.isEmpty() && stagePillRect.expanded (2, 4).contains (pt))
@@ -875,6 +898,64 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
             &inGainK, &outVolK, &makeupK
         };
         Knob* targetK = (lastTouchedKnob != nullptr && lastTouchedKnob->slider.isVisible()) ? lastTouchedKnob : &presenceK;
+
+        if (! padSlotPrevRect.isEmpty() && padSlotPrevRect.expanded (2, 4).contains (pt))
+        {
+            processor.setPadTargetSlot ((processor.getPadTargetSlot() + 3) % 4);
+            overviewHint.clear();
+            repaint (overviewHelp);
+            return true;
+        }
+        if (! padSlotNextRect.isEmpty() && padSlotNextRect.expanded (2, 4).contains (pt))
+        {
+            processor.setPadTargetSlot ((processor.getPadTargetSlot() + 1) % 4);
+            overviewHint.clear();
+            repaint (overviewHelp);
+            return true;
+        }
+        if (! padSlotCurrRect.isEmpty() && padSlotCurrRect.expanded (2, 4).contains (pt))
+        {
+            if (processor.getPadTargetSlot() == 1)
+                processor.setPadWahAmount (processor.getPadWahAmount() > 0.35f ? 0.0f : 0.72f);
+            else
+                processor.setPadTargetSlot ((processor.getPadTargetSlot() + 1) % 4);
+            overviewHint.clear();
+            repaint (overviewHelp);
+            return true;
+        }
+        if (! padAmbRect.isEmpty() && padAmbRect.expanded (2, 4).contains (pt))
+        {
+            const auto mods = juce::ModifierKeys::getCurrentModifiers();
+            if (mods.isPopupMenu() || mods.isShiftDown())
+                processor.setPadAmbientMomentary (! processor.getPadAmbientMomentary());
+            else
+                processor.setPadAmbientActive (! processor.getPadAmbientActive());
+            overviewHint.clear();
+            repaint (overviewHelp);
+            return true;
+        }
+        if (! padRewriteRect.isEmpty() && padRewriteRect.expanded (2, 4).contains (pt))
+        {
+            processor.setPadRewriteDelayActive (! processor.getPadRewriteDelayActive());
+            overviewHint.clear();
+            repaint (overviewHelp);
+            return true;
+        }
+        if (! padPingPongRect.isEmpty() && padPingPongRect.expanded (2, 4).contains (pt))
+        {
+            processor.setPadPingPongActive (! processor.getPadPingPongActive());
+            overviewHint.clear();
+            repaint (overviewHelp);
+            return true;
+        }
+        if (! padL3LockRect.isEmpty() && padL3LockRect.expanded (2, 4).contains (pt))
+        {
+            processor.setPadL3Locked (! processor.getPadL3Locked());
+            overviewHint.clear();
+            repaint (overviewHelp);
+            if (! argonPadRect.isEmpty()) repaint (argonPadRect);
+            return true;
+        }
 
         if (! fineMinusRect.isEmpty() && fineMinusRect.expanded (2, 4).contains (pt))
         {
@@ -971,6 +1052,7 @@ bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
         repaint();
         return true;
     }
+
 
     // 1d-7. v5.0: フッター右デッキの「👏 歌枠・VC盛り上げ 4種ライブSEポン出しパッド」＋「🎵 自作音源カスタムSE 4枠」
     for (int s = 0; s < 4; ++s)
@@ -1503,6 +1585,9 @@ juce::String VocalGzzioContent::overviewHelpAt (juce::Point<int> pt) const
     if (! ioExprRect.isEmpty() && ioExprRect.contains (pt))
         return language->T ("【🎵 声量幅（ダイナミクス）切替】クリックするたびに「🎵標準バランス ➔ 🎤声量幅:10割!（全力で歌った10割の声量が頭打ちせず伸びやかに出る歌枠・レコーディング向け） ➔ 📻一定キープ（小声も大きい声も聴きやすい音量に揃える雑談向け）」を切り替えます。",
                             "[VOCAL DYNAMICS RANGE] Click to cycle: Balanced -> Full 100% Expression! (full-power 100% singing comes through naturally without ceiling squash) -> Steady Level (even broadcast volume).");
+    if (! ioMonMuteRect.isEmpty() && ioMonMuteRect.contains (pt))
+        return language->T ("【🎧 返し音: ON ⇄ 返しミュート】スタンドアロン起動時に、自分のヘッドホンへの返し音だけを1クリックでON/OFFします（配信出力・録音はそのまま継続）。ピッチ補正時に自分の生声やオーディオIFのダイレクトモニターと混ざって聴こえる時は「返しミュート」にしてください。",
+                            "[SELF-MONITOR ON / MUTE] One-click mute for local headphone monitoring in Standalone while keeping Stream Out and recording active. Mute if your raw voice or Direct Monitor mixes with pitch correction.");
     if (routePillRect.contains (pt) || ioInMonoRect.contains (pt))
         return language->T ("【🎤 入力・出力 モノラル／ステレオ設定】マイク入力をモノラル（自動中央寄せ／入力1モノラル／入力2モノラル／1+2合成モノラル）またはステレオに切り替え、出力のモノラル／ステレオも設定します。",
                             "[INPUT / OUTPUT MONO & STEREO] Switch mic input between Mono (Auto, Input 1, Input 2, Sum 1+2) and Stereo, and toggle Mono/Stereo output.");
@@ -1774,6 +1859,7 @@ void VocalGzzioContent::resizedOverview()
     ioInMonoRect = {};
     ioOutMonoRect = {};
     ioExprRect = {};
+    ioMonMuteRect = {};
     prismPillRect = {};
     jpopPolishPillRect = {};
     micSafuPillRect = {};
@@ -2316,6 +2402,14 @@ void VocalGzzioContent::resizedOverview()
                        overviewOutput.getWidth() - 24,
                        22 };
     }
+    if (processor.isStandalone() && ! ioExprRect.isEmpty() && ioExprRect.getWidth() >= 148)
+    {
+        const int fullW = ioExprRect.getWidth();
+        const int exprW = (fullW - 4) * 56 / 100;
+        const int monW  = fullW - 4 - exprW;
+        ioMonMuteRect = { ioExprRect.getX() + exprW + 4, ioExprRect.getY(), monW, ioExprRect.getHeight() };
+        ioExprRect.setWidth (exprW);
+    }
 
     // ---- 各セクションカード上段のダイレクトスイッチ群（全配置共通でカード上部に整列） ----
     // カード0（整える）上段2行: ノイズ測定・自動追従・状態表示
@@ -2396,6 +2490,27 @@ void VocalGzzioContent::resizedOverview()
         fineMinusRect  = { fx, deckY, 48,  deckH }; fx += 48  + 4;
         finePlusRect   = { fx, deckY, 48,  deckH }; fx += 48  + 4;
         fineResetRect  = { fx, deckY, 56,  deckH };
+
+        // フッター左側 (x = overviewHelp.x+10 .. fineTargetRect.x-10) にワイヤレスコントローラー歌唱ライブドックを配置
+        const int padLeftX = overviewHelp.getX() + 10;
+        const int padAvailW = fineTargetRect.getX() - 10 - padLeftX;
+        if (padAvailW >= 460)
+        {
+            int px = padLeftX;
+            padSlotPrevRect = { px, deckY, 46, deckH };  px += 46 + 3;
+            padSlotCurrRect = { px, deckY, 128, deckH }; px += 128 + 3;
+            padSlotNextRect = { px, deckY, 46, deckH };  px += 46 + 8;
+            const int fxW   = juce::jmin (116, (padLeftX + padAvailW - px - 72 - 12) / 3);
+            padAmbRect      = { px, deckY, fxW, deckH }; px += fxW + 4;
+            padRewriteRect  = { px, deckY, fxW, deckH }; px += fxW + 4;
+            padPingPongRect = { px, deckY, fxW, deckH }; px += fxW + 4;
+            padL3LockRect   = { px, deckY, juce::jmax (64, padLeftX + padAvailW - px), deckH };
+        }
+        else
+        {
+            padSlotPrevRect = padSlotCurrRect = padSlotNextRect = {};
+            padAmbRect = padRewriteRect = padPingPongRect = padL3LockRect = {};
+        }
 
         int dx = overviewHelp.getRight() - 488;
         chorusPillRect = { dx, deckY, 102, deckH };
@@ -3372,31 +3487,43 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 
         if (! knobInnerArtOn)
         {
-            // Clean Pro-Studio Card: FabFilter / Linear 級の立体階層と静謐な色秩序を備えたモダンスタジオ・カード
-            const bool lightCard = Palette::panel.getPerceivedBrightness() > 0.55f;
-            const float rad = 11.0f;
-            g.setColour (lightCard ? Palette::panelLn.withAlpha (0.20f) : juce::Colours::black.withAlpha (0.30f));
-            g.fillRoundedRectangle (rf.translated (0.0f, 2.4f), rad);
+            // ★ Vivid Good-Design Island Card & Frosted Four-Seasons Glass:
+            //    簡素な1px線ボックスから脱却し、立体アノダイズド階層・鮮烈な機能色ヘッダー光帯・日本の四季絵画を美しく透かすすりガラス質感を両立
+            const bool lightCard   = Palette::panel.getPerceivedBrightness() > 0.55f;
+            const bool scenicGlass = (themeMode == 2 || oceanStarTheme());
+            const float effAlpha   = scenicGlass ? 0.80f : cardAlpha;
+            const float rad        = 13.0f;
+            g.setColour (lightCard ? juce::Colours::black.withAlpha (0.12f) : juce::Colours::black.withAlpha (0.48f));
+            g.fillRoundedRectangle (rf.translated (0.0f, 3.5f), rad);
             g.setGradientFill (juce::ColourGradient (
-                Palette::panel.brighter (lightCard ? 0.01f : 0.022f).withMultipliedAlpha (cardAlpha), rf.getX(), rf.getY(),
-                Palette::panel.darker   (lightCard ? 0.02f : 0.028f).withMultipliedAlpha (cardAlpha), rf.getX(), rf.getBottom(), false));
+                Palette::panel.brighter (lightCard ? 0.02f : 0.06f).withMultipliedAlpha (effAlpha), rf.getX(), rf.getY(),
+                Palette::panel.darker   (lightCard ? 0.03f : 0.14f).withMultipliedAlpha (effAlpha), rf.getX(), rf.getBottom(), false));
             g.fillRoundedRectangle (rf, rad);
 
             {
                 juce::Path hdrClip;
                 hdrClip.addRoundedRectangle (rf.getX(), rf.getY(), rf.getWidth(), 45.0f, rad, rad, true, true, false, false);
-                g.setColour (Palette::panel2.withAlpha (lightCard ? 0.72f : 0.72f));
+                g.setGradientFill (juce::ColourGradient (
+                    accent.withAlpha (lightCard ? 0.18f : 0.24f), rf.getX(), rf.getY(),
+                    Palette::panel2.withAlpha (scenicGlass ? 0.58f : 0.82f), rf.getX() + rf.getWidth() * 0.72f, rf.getY(), false));
                 g.fillPath (hdrClip);
             }
 
-            g.setColour (juce::Colours::white.withAlpha (lightCard ? 0.55f : 0.045f));
-            g.fillRect (rf.reduced (12.0f, 0.0f).withHeight (1.0f).translated (0.0f, 1.0f));
+            // 上端エッジのシャープなハイライト＆ヘッダー下の鮮彩レーザーライン
+            g.setColour (juce::Colours::white.withAlpha (lightCard ? 0.65f : 0.09f));
+            g.fillRect (rf.reduced (14.0f, 0.0f).withHeight (1.0f).translated (0.0f, 1.0f));
+            g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.92f), rf.getX() + 12.0f, rf.getY() + 45.0f,
+                                                     accent.withAlpha (0.12f), rf.getRight() - 12.0f, rf.getY() + 45.0f, false));
+            g.fillRect (rf.getX() + 12.0f, rf.getY() + 44.5f, rf.getWidth() - 24.0f, 1.6f);
 
-            g.setColour (Palette::panelLn);
-            g.drawLine (rf.getX() + 12.0f, rf.getY() + 45.0f, rf.getRight() - 12.0f, rf.getY() + 45.0f, 1.0f);
-            g.drawRoundedRectangle (rf.reduced (0.5f), rad, 1.0f);
+            g.setColour (accent.interpolatedWith (Palette::panelLn, 0.62f).withAlpha (scenicGlass ? 0.85f : 0.92f));
+            g.drawRoundedRectangle (rf.reduced (0.5f), rad, 1.25f);
+
+            // 左上見出しのビビッド発光ピルマーカー
+            g.setColour (accent.withAlpha (0.28f));
+            g.fillRoundedRectangle (rf.getX() + 10.5f, rf.getY() + 11.5f, 8.0f, 22.0f, 4.0f);
             g.setColour (accent);
-            g.fillRoundedRectangle (rf.getX() + 13.0f, rf.getY() + 13.5f, 3.5f, 18.0f, 1.75f);
+            g.fillRoundedRectangle (rf.getX() + 12.5f, rf.getY() + 13.5f, 4.0f, 18.0f, 2.0f);
             return;
         }
 
@@ -4145,26 +4272,23 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                 g.setColour (Palette::ink);
                 g.drawEllipse (ox - 6.8f, oy - 6.8f, 13.6f, 13.6f, 1.35f);
 
-                // 下部 Carbon Live BS.1770 LUFS / True Peak / Pocket テレメトリバー
+                // 下部 直感ガイドバー（難解なLUFS/dBTP専門記号を撤去し、寒色クール ◀▶ 暖色あたたか＆Lスティック/L3確定を明快表示）
                 if (argonPadRect.getHeight() >= 188)
                 {
-                    const float sLufs = processor.getCarbonShortTermLufs();
-                    const float tpDb  = processor.getCarbonTruePeakDbtp();
-                    const float pkDb  = processor.getCarbonReverbPocketDb();
-                    const juce::String lufsStr = (sLufs <= -68.0f) ? "-inf" : juce::String (sLufs, 1);
-                    const juce::String tpStr   = (tpDb  <= -68.0f) ? "-inf" : ((tpDb >= 0.0f ? "+" : "") + juce::String (tpDb, 1));
-                    const juce::String hudTxt  = "LUFS " + lufsStr
-                                               + " | TP " + tpStr + "dB"
-                                               + (pkDb >= 0.15f ? (" | M-Pocket -" + juce::String (pkDb, 1) + "dB")
-                                                                : (" | Crest " + juce::String (processor.getVocalCrestFactorDb(), 1) + "dB"));
-                    const juce::Rectangle<int> hudRect (argonPadRect.getX() + 20,
+                    const bool l3Lk = processor.getPadL3Locked();
+                    const juce::String hudTxt = l3Lk
+                        ? language->T ("★ L3 質感ロック中（再クリック／L3押し込みで解除）",
+                                       "★ L3 TEXTURE LOCKED (Click or press L3 to unlock)")
+                        : language->T ("◀ クール・澄み  |  ドラッグ / Lスティック (L3確定)  |  暖色・艶 ▶",
+                                       "◀ COOL / DRY  |  Drag or L-Stick (L3 Lock)  |  WARM / RICH ▶");
+                    const juce::Rectangle<int> hudRect (argonPadRect.getX() + 14,
                                                         (int) (cy + ballR - 24.0f),
-                                                        argonPadRect.getWidth() - 40, 17);
-                    g.setColour ((lightPad ? Palette::panel : Palette::bgBot).withAlpha (0.90f));
-                    g.fillRoundedRectangle (hudRect.toFloat(), 5.0f);
-                    g.setColour (Palette::panelLn.withAlpha (0.72f));
-                    g.drawRoundedRectangle (hudRect.toFloat().reduced (0.5f), 5.0f, 0.9f);
-                    g.setColour (tpDb > -1.0f ? Palette::salmon : Palette::ink);
+                                                        argonPadRect.getWidth() - 28, 18);
+                    g.setColour ((lightPad ? Palette::panel : Palette::bgBot).withAlpha (0.92f));
+                    g.fillRoundedRectangle (hudRect.toFloat(), 5.5f);
+                    g.setColour (l3Lk ? Palette::yellow : Palette::blue.withAlpha (0.72f));
+                    g.drawRoundedRectangle (hudRect.toFloat().reduced (0.5f), 5.5f, l3Lk ? 1.5f : 1.0f);
+                    g.setColour (l3Lk ? (lightPad ? Palette::yellowDk : Palette::yellow) : Palette::ink);
                     fitText (g, hudTxt, hudRect.reduced (6, 0), juce::Justification::centred, 11.2f, true);
                 }
             }
@@ -5518,6 +5642,15 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
                     : (compactExpr ? language->T ("声量:標準", "Dyn:Auto")
                                    : language->T ("声量幅:標準バランス", "Dyn:Balanced"));
             drawIoPill (ioExprRect, exprActive, exprCol, exprTxt);
+        }
+        if (! ioMonMuteRect.isEmpty())
+        {
+            const bool mm = processor.getMonitorMute();
+            const bool compactMon = (ioMonMuteRect.getWidth() < 86);
+            const juce::String monTxt = mm
+                ? (compactMon ? language->T ("返し消", "Mute") : language->T ("返しミュート", "Self-Mute"))
+                : (compactMon ? language->T ("返しON", "Mon:ON") : language->T ("返し音:ON", "Monitor:ON"));
+            drawIoPill (ioMonMuteRect, mm, Palette::salmon, monTxt);
         }
     }
 
@@ -7000,11 +7133,64 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
            #else
             const auto defaultHint = language->T ("中央の丸や4本のバーで、声の温かさ・芯・明るさ・広がりを調整できます。操作部にカーソルを合わせると使い方が表示されます。「押して原音と比較」で効果を聴き比べてください。", "Use the orb or four bars for warmth, focus, air and stereo space. Hover over a control for help, and hold Compare to hear the unprocessed input.");
            #endif
-            const auto hint = dnMsgTicks > 0 && infoText.isNotEmpty() ? infoText
-                            : overviewHint.isNotEmpty() ? overviewHint : defaultHint;
-            g.setColour (Palette::inkSoft.interpolatedWith (Palette::ink, 0.68f));
-            g.setFont (GzzioLnF::uiFont (16.0f * juce::jlimit (1.0f, 1.20f, fontScale / 1.5f), false));
-            g.drawFittedText (hint, overviewHelp.reduced (14, 5).withTrimmedRight (fineTargetRect.isEmpty() ? 0 : 798), juce::Justification::centredLeft, 2, 0.90f);
+            const bool showTempHint = (dnMsgTicks > 0 && infoText.isNotEmpty()) || overviewHint.isNotEmpty();
+            if (showTempHint || padSlotCurrRect.isEmpty())
+            {
+                const auto hint = dnMsgTicks > 0 && infoText.isNotEmpty() ? infoText
+                                : overviewHint.isNotEmpty() ? overviewHint : defaultHint;
+                g.setColour (Palette::inkSoft.interpolatedWith (Palette::ink, 0.68f));
+                g.setFont (GzzioLnF::uiFont (16.0f * juce::jlimit (1.0f, 1.20f, fontScale / 1.5f), false));
+                g.drawFittedText (hint, overviewHelp.reduced (14, 5).withTrimmedRight (fineTargetRect.isEmpty() ? 0 : 798), juce::Justification::centredLeft, 2, 0.90f);
+            }
+            else
+            {
+                // ---- 🎮 PS / Switch / Xbox ワイヤレスコントローラー歌唱ライブドック（マウスでもクリック操作可能！） ----
+                auto drawPadBtn = [&] (juce::Rectangle<int> br, bool active, juce::Colour col, const juce::String& label, float fontSz = 12.8f)
+                {
+                    if (br.isEmpty()) return;
+                    const auto bf = br.toFloat();
+                    g.setColour (active ? (lightDock ? col : col.withAlpha (0.36f))
+                                        : (lightDock ? Palette::panel.brighter (0.04f) : Palette::bgBot.withAlpha (0.88f)));
+                    g.fillRoundedRectangle (bf, rad);
+                    g.setColour (active ? (lightDock ? col.darker (0.28f) : col)
+                                        : (lightDock ? Palette::panelLn.darker (0.16f) : Palette::panelLn.withAlpha (0.72f)));
+                    g.drawRoundedRectangle (bf.reduced (0.5f), rad, active ? 1.8f : 1.0f);
+                    g.setColour (active ? (lightDock ? Palette::readableOn (col) : Palette::ink)
+                                        : Palette::ink);
+                    fitText (g, label, br.reduced (4, 0), juce::Justification::centred, fontSz, active || lightDock);
+                };
+
+                const int slot = processor.getPadTargetSlot();
+                const int wahPct = juce::roundToInt (processor.getPadWahAmount() * 100.0f);
+                const int volPct = juce::roundToInt (processor.getOutputVolumePct());
+                const int revPct = juce::roundToInt (processor.apvts.getRawParameterValue ("revmix")->load());
+                const int hrmPct = juce::roundToInt (processor.apvts.getRawParameterValue ("jn_mix")->load());
+                const juce::String slotTxt = (slot == 0)
+                    ? (language->T ("L2/R2 音量 ", "L2/R2 VOL ") + juce::String (volPct) + "%")
+                    : (slot == 1)
+                        ? (language->T ("L2/R2 ワウ ", "L2/R2 WAH ") + juce::String (wahPct) + "%")
+                        : (slot == 2)
+                            ? (language->T ("L2/R2 残響 ", "L2/R2 REV ") + juce::String (revPct) + "%")
+                            : (language->T ("L2/R2 ハモリ ", "L2/R2 HARM ") + juce::String (hrmPct) + "%");
+                const juce::Colour slotCol = (slot == 0) ? Palette::green
+                                           : (slot == 1) ? Palette::yellow
+                                           : (slot == 2) ? Palette::ice
+                                                         : Palette::salmon;
+
+                drawPadBtn (padSlotPrevRect, false, Palette::blue, juce::String::fromUTF8 ("◀L1"), 12.2f);
+                drawPadBtn (padSlotCurrRect, true,  slotCol, slotTxt, 13.0f);
+                drawPadBtn (padSlotNextRect, false, Palette::blue, juce::String::fromUTF8 ("R1▶"), 12.2f);
+
+                drawPadBtn (padAmbRect,     processor.getPadAmbientActive(),      Palette::blue,
+                            language->T ("↑アンビエント", "↑Ambient"), 12.2f);
+                drawPadBtn (padRewriteRect, processor.getPadRewriteDelayActive(), Palette::yellow,
+                            language->T ("→刻みディレイ", "→Stutter DLY"), 12.2f);
+                drawPadBtn (padPingPongRect, processor.getPadPingPongActive(),    Palette::ice,
+                            language->T ("←ピンポンL⇄R", "←Ping-Pong"), 12.2f);
+                drawPadBtn (padL3LockRect,  processor.getPadL3Locked(),           Palette::green,
+                            processor.getPadL3Locked() ? language->T ("L3:固定", "L3:LOCK")
+                                                       : language->T ("L3:確定", "L3:SET"), 12.2f);
+            }
 
             // ---- ★ 指が太い人・タッチ操作対応：「ワンタップ微調整ドック (ターゲット)」描画 ----
             Knob* const targetK = (lastTouchedKnob != nullptr && lastTouchedKnob->slider.isVisible()) ? lastTouchedKnob : &presenceK;

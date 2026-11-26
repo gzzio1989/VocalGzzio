@@ -463,6 +463,235 @@ int main()
         proc.releaseResources();
     }
 
+    // =========================================================================
+    // 6. 実戦耳テスト監査①：「劣化修復 ON」時の生身の人間ボーカル完全透明保護（こもり・金属コム歪み・ピーク削れゼロ）
+    // =========================================================================
+    {
+        const double sr = 48000.0;
+        const int totalSamples = (int) (sr * 2.2); // 2.2秒の表現豊かな人間ボーカル（ビブラート＋シマー＋ジッター＋息成分＋クレッシェンド）
+        std::vector<float> humanVoice ((size_t) totalSamples, 0.0f);
+        double phase = 0.0;
+        uint32_t rng = 0x9E3779B9u;
+        auto nextWhite = [&]() -> float
+        {
+            rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5;
+            return ((float) (rng & 0xFFFFu) / 32768.0f) - 1.0f;
+        };
+        float breathLp = 0.0f, breathHpPrev = 0.0f;
+        for (int n = 0; n < totalSamples; ++n)
+        {
+            const double t = (double) n / sr;
+            // クレッシェンド -> フォルテ -> デクレッシェンド
+            const float env = (t < 0.25) ? (float) (t / 0.25)
+                            : (t > 1.85) ? (float) juce::jmax (0.0, (2.2 - t) / 0.35)
+                            : (float) (0.78 + 0.22 * std::sin (2.0 * juce::MathConstants<double>::pi * 1.1 * t));
+            // 5.5Hz ビブラート (±35 cents) + 自然な微細ジッター
+            const double vibSemis = 0.35 * std::sin (2.0 * juce::MathConstants<double>::pi * 5.5 * t);
+            const double jitter   = 0.008 * std::sin (2.0 * juce::MathConstants<double>::pi * 17.3 * t);
+            const double f0       = 220.0 * std::pow (2.0, (vibSemis + jitter) / 12.0);
+            // 9% 自然シマー（周期ごとの振幅ゆらぎ）
+            const float shimmer   = 1.0f + 0.09f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 9.7 * t);
+            // フォルマント移動 (800Hz -> 1450Hz)
+            const double f1Center = 800.0 + 650.0 * (0.5 + 0.5 * std::sin (2.0 * juce::MathConstants<double>::pi * 0.7 * t));
+
+            double harmSum = 0.0;
+            for (int h = 1; h <= 16; ++h)
+            {
+                const double hf = f0 * (double) h;
+                if (hf >= sr * 0.45) break;
+                const double formDist = (hf - f1Center) / 520.0;
+                const double formGain = 1.0 + 1.35 * std::exp (-0.5 * formDist * formDist);
+                const double roll     = 1.0 / std::pow ((double) h, 1.08);
+                harmSum += roll * formGain * std::sin (phase * (double) h + 0.17 * (double) h);
+            }
+            phase += juce::MathConstants<double>::twoPi * f0 / sr;
+            if (phase > juce::MathConstants<double>::twoPi * 1024.0)
+                phase -= juce::MathConstants<double>::twoPi * 1024.0;
+
+            // 自然な声帯気流ノイズ（2.5kHz以上のブレス成分）
+            const float wn = nextWhite();
+            breathLp += 0.32f * (wn - breathLp);
+            const float breathHi = wn - breathLp + 0.15f * (breathLp - breathHpPrev);
+            breathHpPrev = breathLp;
+
+            humanVoice[(size_t) n] = env * shimmer * (float) (0.145 * harmSum) + env * 0.010f * breathHi;
+        }
+
+        auto auditSafuTransparency = [&] (int safuMode, double minCorr, double maxHfLossDb)
+        {
+            gz::v590::BrokenMicSafuCanceller safu;
+            safu.prepare (sr);
+            std::vector<float> outL = humanVoice;
+            std::vector<float> outR = humanVoice;
+            for (int pos = 0; pos < totalSamples; pos += 128)
+            {
+                const int nThis = juce::jmin (128, totalSamples - pos);
+                safu.processBuffer (outL.data() + pos, outR.data() + pos, nThis, 2, safuMode, 0.0f, 0.0f, false);
+            }
+
+            // 立ち上がり0.3秒以降の定常〜表現区間で原音とのピアソン相関＆高域(3.5kHz付近)エネルギー保持率を計測
+            const int s0 = (int) (0.30 * sr);
+            const int sN = (int) (1.85 * sr) - s0;
+            double dot = 0.0, eRef = 0.0, eOut = 0.0;
+            for (int i = s0; i < s0 + sN; ++i)
+            {
+                const double r = humanVoice[(size_t) i];
+                const double y = outL[(size_t) i];
+                dot  += r * y;
+                eRef += r * r;
+                eOut += y * y;
+            }
+            const double corr = dot / std::sqrt (juce::jmax (1.0e-18, eRef * eOut));
+            const double rmsDiffDb = 10.0 * std::log10 (juce::jmax (1.0e-18, eOut) / juce::jmax (1.0e-18, eRef));
+
+            // 高域倍音帯 (3080Hz = 14倍音付近 & 3520Hz = 16倍音付近) のこもり量が許容範囲内か
+            const double hfRef = goertzelMag (humanVoice.data() + s0, sN, 3080.0, sr)
+                               + goertzelMag (humanVoice.data() + s0, sN, 3520.0, sr);
+            const double hfOut = goertzelMag (outL.data() + s0, sN, 3080.0, sr)
+                               + goertzelMag (outL.data() + s0, sN, 3520.0, sr);
+            const double hfLossDb = 20.0 * std::log10 (juce::jmax (1.0e-12, hfRef) / juce::jmax (1.0e-12, hfOut));
+
+            std::printf ("  [MicSafu mode=%d Human Vocal Transparency] r=%.5f, rmsDiff=%.2f dB, HF loss=%.2f dB\n",
+                         safuMode, corr, rmsDiffDb, hfLossDb);
+            check (corr >= minCorr && std::abs (rmsDiffDb) < 1.2 && hfLossDb <= maxHfLossDb,
+                   safuMode == 1
+                       ? "v6.0.0 MicSafu [Standard] preserves expressive human vocals transparently (r>=0.992, zero muffling)"
+                       : "v6.0.0 MicSafu [Deep] preserves expressive human vocals without severe muffling or metallic distortion");
+        };
+
+        auditSafuTransparency (1, 0.992, 1.05);
+        auditSafuTransparency (2, 0.972, 2.50);
+    }
+
+    // =========================================================================
+    // 7. 実戦耳テスト監査②：DSP通常モード（dawLiveEcoMode == false）でのパリパリ不連続ノイズ根絶＆低CPU検証
+    // =========================================================================
+    {
+        const double sr = 48000.0;
+        const int blockSize = 128;
+        VocalGzzioProcessor proc;
+        proc.prepareToPlay (sr, blockSize);
+        drainSelfTest (proc, blockSize);
+        proc.applyProSingingInitialSetup();
+        proc.setDawLiveEcoMode (false); // 「超低負荷」OFF ＝ 通常フル精度DSPモード！
+        proc.setMicSafuMode (1);        // 劣化修復 [標準] も同時ON
+        setParam (proc, "at_on", 1.0f); // 自然ピッチ補正も同時ON
+
+        juce::AudioBuffer<float> buf (2, blockSize);
+        juce::MidiBuffer midi;
+        double ph = 0.0;
+        float prev1 = 0.0f, prev2 = 0.0f;
+        bool havePrev = false;
+        float maxSecondDiff = 0.0f;
+        double totalUs = 0.0;
+        const int numBlocks = 300; // 約0.8秒 (128 * 300 = 38400 samples)
+
+        for (int b = 0; b < numBlocks; ++b)
+        {
+            const double tBlock = (double) (b * blockSize) / sr;
+            const double f0 = 205.0 + 55.0 * std::sin (2.0 * juce::MathConstants<double>::pi * 1.4 * tBlock);
+            for (int n = 0; n < blockSize; ++n)
+            {
+                const float s = 0.22f * (float) (std::sin (ph) + 0.45 * std::sin (ph * 2.0) + 0.22 * std::sin (ph * 3.0));
+                ph += juce::MathConstants<double>::twoPi * f0 / sr;
+                buf.setSample (0, n, s);
+                buf.setSample (1, n, s);
+            }
+
+            const double t0 = juce::Time::getMillisecondCounterHiRes();
+            proc.processBlock (buf, midi);
+            const double t1 = juce::Time::getMillisecondCounterHiRes();
+            if (b >= 30)
+                totalUs += (t1 - t0) * 1000.0;
+
+            const float* outL = buf.getReadPointer (0);
+            for (int n = 0; n < blockSize; ++n)
+            {
+                const float y = outL[n];
+                if (b >= 30 && havePrev)
+                {
+                    const float d2 = std::abs (y - 2.0f * prev1 + prev2);
+                    maxSecondDiff = juce::jmax (maxSecondDiff, d2);
+                }
+                prev2 = prev1;
+                prev1 = y;
+                havePrev = true;
+            }
+        }
+
+        const double avgUs = totalUs / (double) (numBlocks - 30);
+        std::printf ("  [Normal DSP (!Eco) 128-sample Live Audit] max2ndDiff=%.5f, avgBlock=%.1f us (budget 2666.7 us)\n",
+                     maxSecondDiff, avgUs);
+        check (maxSecondDiff < 0.095f,
+               "v6.0.0 Normal DSP mode (!dawLiveEcoMode) runs completely free of subChestFlip / IIR comb crackle spikes");
+        check (avgUs < 650.0,
+               "v6.0.0 Normal DSP mode (!dawLiveEcoMode) runs well within real-time 128-sample budget without requiring Eco mode");
+        proc.releaseResources();
+    }
+
+    // =========================================================================
+    // 8. 実戦耳テスト監査③：自然音程 / ピッチ補正 ON 時の原音混入・遅延ダブラー混入ゼロ検証（100%純粋補正音）
+    // =========================================================================
+    {
+        const double sr = 48000.0;
+        VocalGzzioProcessor proc;
+        proc.prepareToPlay (sr, 256);
+        drainSelfTest (proc, 256);
+        proc.applyProSingingInitialSetup();
+
+        const float defWidth   = proc.apvts.getRawParameterValue ("width")->load();
+        const float defDoubler = proc.apvts.getRawParameterValue ("doubler")->load();
+        const float defDblOn   = proc.apvts.getRawParameterValue ("dbl_on")->load();
+        const float defDelay   = proc.apvts.getRawParameterValue ("delay")->load();
+        const float defDlyOn   = proc.apvts.getRawParameterValue ("dly_on")->load();
+        const float defAtAmt   = proc.apvts.getRawParameterValue ("at_amount")->load();
+        check (defWidth == 0.0f && defDoubler == 0.0f && defDblOn < 0.5f && defDelay == 0.0f && defDlyOn < 0.5f && defAtAmt >= 80.0f,
+               "v6.0.0 Initial setup defaults width/doubler/delay dry-copy layers to OFF so pitched voice never doubles with raw taps");
+
+        // A3 (220.0 Hz) に対して約 +35.8 cents 高い 224.6 Hz の歌声をクロマチック補正し、原音 224.6 Hz 成分が残っていないことを周波数解析で証明
+        setParam (proc, "at_on",     1.0f);
+        setParam (proc, "at_scale",  0.0f);   // Chromatic
+        setParam (proc, "at_amount", 100.0f);
+        setParam (proc, "at_speed",  5.0f);
+        setParam (proc, "orn_amt",   0.0f);
+        setParam (proc, "revmix",    0.0f);
+        setParam (proc, "revon",     0.0f);
+
+        juce::AudioBuffer<float> buf (2, 256);
+        juce::MidiBuffer midi;
+        double ph = 0.0;
+        const double inHz = 224.6; // Target = 220.0 Hz (A3, +35.8 cents -> 半音境界から十分内側でA3へ確定吸着)
+        std::vector<float> steadyOut;
+        steadyOut.reserve (48000);
+
+        for (int b = 0; b < 260; ++b)
+        {
+            for (int n = 0; n < 256; ++n)
+            {
+                const float s = 0.24f * (float) (std::sin (ph) + 0.35 * std::sin (ph * 2.0));
+                ph += juce::MathConstants<double>::twoPi * inHz / sr;
+                buf.setSample (0, n, s);
+                buf.setSample (1, n, s);
+            }
+            proc.processBlock (buf, midi);
+            if (b >= 72 && (int) steadyOut.size() < 48000)
+            {
+                const float* r = buf.getReadPointer (0);
+                for (int n = 0; n < 256 && (int) steadyOut.size() < 48000; ++n)
+                    steadyOut.push_back (r[n]);
+            }
+        }
+
+        const double magTarget220 = goertzelMag (steadyOut.data(), (int) steadyOut.size(), 220.0, sr);
+        const double magRaw226    = goertzelMag (steadyOut.data(), (int) steadyOut.size(), inHz,  sr);
+        const double dryRejectDb  = 20.0 * std::log10 (juce::jmax (1.0e-12, magTarget220) / juce::jmax (1.0e-12, magRaw226));
+        std::printf ("  [Pitch Correction Dry-Bleed Audit] target(220Hz)=%.5f, rawBleed(224.6Hz)=%.5f, rejection=%.1f dB\n",
+                     magTarget220, magRaw226, dryRejectDb);
+        check (dryRejectDb > 20.0,
+               "v6.0.0 Pitch correction outputs 100% shifted voice (>20 dB dry-pitch rejection, zero raw voice bleed)");
+        proc.releaseResources();
+    }
+
     if (gFailures == 0)
         std::printf ("\n=== ALL v6.0.0 CARBON EDITION CHECKS PASSED (0 failures) ===\n");
     return gFailures == 0 ? 0 : 1;

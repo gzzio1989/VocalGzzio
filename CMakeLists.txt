@@ -120,12 +120,23 @@ juce_add_plugin(VocalGzzio
     NEEDS_MIDI_OUTPUT         FALSE)
 
 juce_add_binary_data(VocalGzzioAssets
-    SOURCES Resources/character.png Resources/puniguji_kawaii.png Resources/kawaii_font.ttf)
+    SOURCES
+    Resources/character.png
+    Resources/puniguji_kawaii.png
+    Resources/kawaii_font.ttf
+    Resources/season_spring.jpg
+    Resources/season_summer.jpg
+    Resources/season_autumn.jpg
+    Resources/season_winter.jpg)
 
 target_sources(VocalGzzio PRIVATE
     Source/PluginProcessor.cpp
     Source/Overview.cpp
     Source/PluginEditor.cpp)
+if (APPLE)
+    target_sources(VocalGzzio PRIVATE Source/VocalGamepadController_mac.mm)
+    target_link_libraries(VocalGzzio PUBLIC "-framework GameController")
+endif()
 
 # v1.9.2: 日本語ロケールのWindowsではMSVCがソースをCP932として読み、
 # 全角で終わるコメント行が次の行を巻き込んでコメント化してしまう。
@@ -197,7 +208,7 @@ target_compile_definitions(VocalGzzio PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0)
 if (WIN32)
     target_compile_definitions(VocalGzzio PUBLIC JUCE_ASIO=1)
-    target_link_libraries(VocalGzzio PUBLIC mfplat mfreadwrite mfuuid)
+    target_link_libraries(VocalGzzio PUBLIC mfplat mfreadwrite mfuuid winmm)
     # v5.5.0: Windows 11 の最新カーネル保護・署名審査への適合に万全を期すため、
     # 独自仮想ドライバ（VocalGzzio Driver / VocalGzzioWdmInstaller.exe）の同梱は次期以降のロードマップへ一旦見送り、
     # 現在は安定実績の高い OBS 標準 VST3 プラグイン直接読込・オーディオIF内蔵ループバック・

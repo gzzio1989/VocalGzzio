@@ -68,6 +68,27 @@ int                 GzzioLnF::s_knobStyle = 0;
 float               GzzioLnF::s_juicePhase = 0.0f;
 std::atomic<int>    GzzioLnF::s_instances { 0 };
 
+const juce::Image& ThemePainter::getSeasonMasterImage (int seasonIndex)
+{
+    static juce::Image s_masters[4];
+    const int idx = juce::jlimit (0, 3, seasonIndex);
+    if (! s_masters[idx].isValid())
+    {
+        const void* data = nullptr;
+        int size = 0;
+        switch (idx)
+        {
+            case 0: data = BinaryData::season_spring_jpg; size = BinaryData::season_spring_jpgSize; break;
+            case 1: data = BinaryData::season_summer_jpg; size = BinaryData::season_summer_jpgSize; break;
+            case 2: data = BinaryData::season_autumn_jpg; size = BinaryData::season_autumn_jpgSize; break;
+            default: data = BinaryData::season_winter_jpg; size = BinaryData::season_winter_jpgSize; break;
+        }
+        if (data != nullptr && size > 0)
+            s_masters[idx] = juce::ImageFileFormat::loadFrom (data, (size_t) size);
+    }
+    return s_masters[idx];
+}
+
 //==============================================================================
 // Tuner
 //==============================================================================
@@ -212,7 +233,7 @@ VocalTuner::VocalTuner (VocalGzzioProcessor& p, std::shared_ptr<tip::Language> v
     const int savedString = (int) proc.apvts.state.getProperty ("ui_tuner_string", 0);
     setTuningMode (savedMode);
     setGuitarString (savedString);
-    startTimerHz (30);
+    startTimerHz (15);
 }
 
 void VocalTuner::clearPitchDisplay()
@@ -7111,17 +7132,18 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
         {
             int tonic = 0; bool minor = false; float conf = 0.0f;
             const bool hasScannedKey = processor.getKeyResult (tonic, minor, conf);
-            // キー未解析のままCメジャー固定だと別キーの曲で外れるため、未解析時は安全な半音階＋自然追従へ自動調整
+            // キー未解析のままCメジャー固定だと別キーの曲で外れるため、未解析時は安全な半音階へ自動調整
             if (! hasScannedKey && (int) std::lround (processor.apvts.getRawParameterValue ("at_scale")->load()) == 1)
                 setP ("at_scale", 0.0f);
-            if (processor.apvts.getRawParameterValue ("orn_amt")->load() < 10.0f)
-                setP ("orn_amt", 55.0f);
+            // 元の音程が中途半端に残って生声と混ざる違和感を防ぐため、十分な補正深さ(86%)を確保
+            if (processor.apvts.getRawParameterValue ("at_amount")->load() < 55.0f)
+                setP ("at_amount", 86.0f);
         }
         setP ("at_on", nextAt ? 1.0f : 0.0f);
         syncQuickAssistButtons();
         infoText = nextAt
-            ? language->T ("自然音程 ON：しゃくり・ビブラートを残した自然な音程補正を有効化しました。",
-                           "Auto Pitch ON: natural pitch correction enabled with vibrato & scoop protection.")
+            ? language->T ("自然音程 ON：100%補正音出力（原音混入なし）で滑らかに音程を整えます。※オーディオIFのダイレクトモニター（元の声）と重なる場合はIF側モニターか「返し音」をOFFにしてください。",
+                           "Auto Pitch ON: 100% wet pitch correction active (zero dry bleed). If your audio interface direct monitor mixes raw voice, mute Direct Monitor or Self-Monitor.")
             : language->T ("自然音程 OFF：追加遅延 0.0ms のライブ低遅延状態に戻しました。",
                            "Auto Pitch OFF: returned to 0.0 ms zero-latency mode.");
         repaint();
@@ -7146,6 +7168,26 @@ VocalGzzioContent::VocalGzzioContent (VocalGzzioProcessor& p)
                                "Mic Fix [Auto]: transparent zero-latency suppression of mid-vowel crackle & sponge safu.")
                 : language->T ("劣化修復 [OFF]：マイク劣化修復をオフにしました。",
                                "Mic Fix [OFF]: broken-mic repair turned off.");
+        resized();
+        repaint();
+    };
+
+    detailMonMuteBtn.setClickingTogglesState (true);
+    detailMonMuteBtn.setColour (juce::TextButton::buttonOnColourId, Palette::salmon);
+    detailMonMuteBtn.setTooltip (language->T ("スタンドアロン起動時に、自分のヘッドホン／スピーカーへの返し音だけをミュートします（配信出力や録音はそのまま継続）。自分の生声やオーディオIFのダイレクトモニターと重なって二重に聴こえる時にONにしてください。",
+                                              "Mutes local headphone/speaker self-monitoring in Standalone while keeping Stream Output and recording active. Turn ON if your raw voice or audio-interface Direct Monitor doubles with the processed voice."));
+    styleButton (detailMonMuteBtn);
+    detailMonMuteBtn.setComponentID ("detailMonMute");
+    detailMonMuteBtn.onClick = [this]
+    {
+        const bool nextMute = ! processor.getMonitorMute();
+        processor.setMonitorMute (nextMute);
+        syncQuickAssistButtons();
+        infoText = nextMute
+            ? language->T ("返しミュート ON：自分のヘッドホンへの返し音を消しました（配信出力・録音はそのまま継続します）。",
+                           "Self-Monitor Muted: local headphone return muted (Stream Out & recording stay active).")
+            : language->T ("返し音 ON：ヘッドホンへのモニタリング返し音を再開しました。",
+                           "Self-Monitor ON: local headphone monitoring restored.");
         resized();
         repaint();
     };
@@ -8394,7 +8436,7 @@ void VocalGzzioContent::updateTabVisibility()
                          (juce::Component*) &analyzeButton, (juce::Component*) &keyScaleButton,
                          (juce::Component*) &tabFxButton,  (juce::Component*) &tabEqButton,
                          (juce::Component*) &singSkillBtn, (juce::Component*) &quickPitchBtn,
-                         (juce::Component*) &detailMicSafuBtn,
+                         (juce::Component*) &detailMicSafuBtn, (juce::Component*) &detailMonMuteBtn,
                          (juce::Component*) &fxWarnButton, (juce::Component*) &midiButton,
                          (juce::Component*) &routeButton,  (juce::Component*) &stageButton,
                          (juce::Component*) &streamButton })
@@ -8439,6 +8481,7 @@ void VocalGzzioContent::updateTabVisibility()
         singSkillBtn.setVisible (false);
         quickPitchBtn.setVisible (false);
         detailMicSafuBtn.setVisible (false);
+        detailMonMuteBtn.setVisible (false);
     }
     if (eraNow < 500 && ! showAllKnobs && ! isOverview())
     {
@@ -8527,6 +8570,7 @@ void VocalGzzioContent::applyModeVisibility()
     singSkillBtn.setVisible (advancedMode && ! isOverview() && ! focusMode);
     quickPitchBtn.setVisible (advancedMode && ! isOverview() && ! focusMode);
     detailMicSafuBtn.setVisible (advancedMode && ! isOverview() && ! focusMode);
+    detailMonMuteBtn.setVisible (processor.isStandalone() && advancedMode && ! isOverview() && ! focusMode);
 
     // advanced-only side tools in the tuner + output panel
     tuner.setRangeToolsVisible (advancedMode);
@@ -8983,8 +9027,223 @@ void VocalGzzioContent::addKnob (Knob& k, const juce::String& paramID, const juc
                        (processor.apvts, paramID, k.slider);
 }
 
+void VocalGzzioContent::pollGamepadAndApply()
+{
+    gz::GamepadState gs;
+    const bool ok = gamepadPoller.poll (gs);
+    const bool wasConnected = curGamepadState.connected;
+    curGamepadState = gs;
+    if (! ok)
+    {
+        if (wasConnected)
+        {
+            if (processor.getPadAmbientMomentary() && processor.getPadAmbientActive())
+                processor.setPadAmbientActive (false);
+            prevGamepadState = gz::GamepadState{};
+            repaint (overviewHelp);
+        }
+        return;
+    }
+
+    auto setParamNorm = [this] (const char* id, float unnormVal)
+    {
+        if (auto* p = processor.apvts.getParameter (id))
+            p->setValueNotifyingHost (processor.apvts.getParameterRange (id).convertTo0to1 (unnormVal));
+    };
+
+    // 1. L1 / R1 バンパー：中央操作ターゲットスロットを左右スライド切替 (0=音量, 1=ワウ, 2=リバーブ, 3=ハモリ量)
+    if (gs.l1 && ! prevGamepadState.l1)
+    {
+        processor.setPadTargetSlot ((processor.getPadTargetSlot() + 3) % 4);
+        overviewHint.clear();
+        repaint (overviewHelp);
+    }
+    if (gs.r1 && ! prevGamepadState.r1)
+    {
+        processor.setPadTargetSlot ((processor.getPadTargetSlot() + 1) % 4);
+        overviewHint.clear();
+        repaint (overviewHelp);
+    }
+
+    // 2. L2 / R2 アナログトリガー（遊びデッドゾーン考慮済み）：選択中ターゲットを連続コントロール
+    const int slot = processor.getPadTargetSlot();
+    if (slot == 1) // ボーカルワウ（R2で開き、離すかL2でスッと戻る表現ペダル動作）
+    {
+        const float wahTarget = juce::jlimit (0.0f, 1.0f, gs.r2 - gs.l2 * 0.65f);
+        if (std::abs (wahTarget - processor.getPadWahAmount()) > 0.008f)
+        {
+            processor.setPadWahAmount (wahTarget);
+            repaint (overviewHelp);
+        }
+    }
+    else if (gs.l2 > 0.02f || gs.r2 > 0.02f)
+    {
+        const float delta = (gs.r2 - gs.l2);
+        if (slot == 0) // 最終出力音量 (outputVolumePct: 0..200%)
+        {
+            const float curV = processor.getOutputVolumePct();
+            processor.setOutputVolumePct (juce::jlimit (0.0f, 200.0f, curV + delta * 3.2f));
+        }
+        else if (slot == 2) // リバーブ強さ (revmix: 0..100%)
+        {
+            const float curR = processor.apvts.getRawParameterValue ("revmix")->load();
+            if (delta > 0.05f && processor.apvts.getRawParameterValue ("revon")->load() < 0.5f)
+                setParamNorm ("revon", 1.0f);
+            setParamNorm ("revmix", juce::jlimit (0.0f, 100.0f, curR + delta * 2.4f));
+        }
+        else if (slot == 3) // ハモリ量 (jn_mix: 0..100%)
+        {
+            const float curH = processor.apvts.getRawParameterValue ("jn_mix")->load();
+            if (delta > 0.05f && processor.apvts.getRawParameterValue ("jn_on")->load() < 0.5f)
+                setParamNorm ("jn_on", 1.0f);
+            setParamNorm ("jn_mix", juce::jlimit (0.0f, 100.0f, curH + delta * 2.4f));
+        }
+        repaint (overviewHelp);
+    }
+
+    // 3. 左スティック (3D質感パッド移動) ＋ L3押し込みで位置確定ロック！
+    if (gs.l3 && ! prevGamepadState.l3)
+    {
+        processor.setPadL3Locked (! processor.getPadL3Locked());
+        overviewHint.clear();
+        repaint (overviewHelp);
+        if (! argonPadRect.isEmpty()) repaint (argonPadRect);
+    }
+    if (! processor.getPadL3Locked() && (std::abs (gs.lx) > 0.02f || std::abs (gs.ly) > 0.02f))
+    {
+        argonOrbX = juce::jlimit (0.08f, 0.92f, argonOrbX + gs.lx * 0.032f);
+        argonOrbY = juce::jlimit (0.08f, 0.92f, argonOrbY + gs.ly * 0.032f);
+        const float velvet = juce::jlimit (0.0f, 100.0f, (1.0f - argonOrbX) * 85.0f);
+        const float silk   = juce::jlimit (0.0f, 100.0f, argonOrbX * 88.0f);
+        const float focus  = juce::jlimit (0.0f, 100.0f, (1.0f - argonOrbY) * 86.0f);
+        const float halo   = juce::jlimit (0.0f, 100.0f, argonOrbY * 78.0f);
+        setParamNorm ("argon_velvet", velvet);
+        setParamNorm ("argon_silk",   silk);
+        setParamNorm ("argon_focus",  focus);
+        setParamNorm ("argon_halo",   halo);
+        repaintArgonControls (false, false);
+    }
+
+    // 4. 右スティック（音色・仕上がりプリセット4方向ダイレクト選択）
+    const float rMag = std::hypot (gs.rx, gs.ry);
+    if (rMag > 0.62f)
+    {
+        const int zone = (std::abs (gs.rx) > std::abs (gs.ry))
+                       ? (gs.rx > 0.0f ? 3 : 2)   // 右=太く力強く(3), 左=丸く親密に・弾き語り(2)
+                       : (gs.ry < 0.0f ? 1 : 5);  // 上=歌詞を前へ・抜け(1), 下=広く響かせる(5)
+        if (zone != padRadialZone)
+        {
+            padRadialZone = zone;
+            finishPresetBox.setSelectedId (zone + 1, juce::sendNotificationSync);
+            overviewHint.clear();
+            repaint (overviewHelp);
+        }
+    }
+    else if (rMag < 0.30f)
+    {
+        padRadialZone = -1;
+    }
+
+    // 5. 十字キー：↑アンビエント(押下中モーメンタリー/トグル) / →リライト刻みディレイ / ←ピンポンディレイ / ↓音色順送り
+    if (processor.getPadAmbientMomentary())
+    {
+        if (gs.dUp != processor.getPadAmbientActive())
+        {
+            processor.setPadAmbientActive (gs.dUp);
+            overviewHint.clear();
+            repaint (overviewHelp);
+        }
+    }
+    else if (gs.dUp && ! prevGamepadState.dUp)
+    {
+        processor.setPadAmbientActive (! processor.getPadAmbientActive());
+        overviewHint.clear();
+        repaint (overviewHelp);
+    }
+
+    if (gs.dRight && ! prevGamepadState.dRight)
+    {
+        processor.setPadRewriteDelayActive (! processor.getPadRewriteDelayActive());
+        overviewHint.clear();
+        repaint (overviewHelp);
+    }
+    if (gs.dLeft && ! prevGamepadState.dLeft)
+    {
+        processor.setPadPingPongActive (! processor.getPadPingPongActive());
+        overviewHint.clear();
+        repaint (overviewHelp);
+    }
+    if (gs.dDown && ! prevGamepadState.dDown)
+    {
+        const int nextId = (finishPresetBox.getSelectedId() % gzzio::kNumFinishPresets) + 1;
+        finishPresetBox.setSelectedId (nextId, juce::sendNotificationSync);
+        overviewHint.clear();
+        repaint (overviewHelp);
+    }
+
+    // 6. 4ボタン：□(左)=即ミュート / △(上)=ハモリ切替 / ○(右)=サビ演出 / ×(下)=返しミュート・原音比較
+    if (gs.btnWest && ! prevGamepadState.btnWest)
+    {
+        processor.toggleCoughMute();
+        repaint();
+    }
+    if (gs.btnNorth && ! prevGamepadState.btnNorth)
+    {
+        const bool curJn = processor.apvts.getRawParameterValue ("jn_on")->load() > 0.5f;
+        setParamNorm ("jn_on", curJn ? 0.0f : 1.0f);
+        if (! curJn && (int) processor.apvts.getRawParameterValue ("jn_harm")->load() == 0)
+            setParamNorm ("jn_harm", 1.0f); // 3度上ハモリ
+        repaint();
+    }
+    if (gs.btnEast && ! prevGamepadState.btnEast)
+    {
+        processor.setChorusBoostMode (! processor.getChorusBoostMode());
+        repaint (overviewHelp);
+    }
+    if (processor.isStandalone())
+    {
+        if (gs.btnSouth && ! prevGamepadState.btnSouth)
+        {
+            processor.setMonitorMute (! processor.getMonitorMute());
+            syncQuickAssistButtons();
+            repaint();
+        }
+    }
+    else if (gs.btnSouth != prevGamepadState.btnSouth)
+    {
+        processor.compareBypass.store (gs.btnSouth);
+    }
+
+    // 7. START長押し(約0.65秒)＝うた自動モード ／ SELECT長押し(約0.65秒)＝ノイズ抑制の自動学習開始
+    if (gs.start)
+    {
+        if (++padStartHoldTicks >= 10 && ! padStartTriggered)
+        {
+            padStartTriggered = true;
+            if (auto* b = dynamic_cast<juce::Button*> (findChildWithID ("songSetup")))
+                if (b->onClick) b->onClick();
+        }
+    }
+    else { padStartHoldTicks = 0; padStartTriggered = false; }
+
+    if (gs.select)
+    {
+        if (++padSelectHoldTicks >= 10 && ! padSelectTriggered)
+        {
+            padSelectTriggered = true;
+            processor.requestDenoiseLearn();
+            repaint();
+        }
+    }
+    else { padSelectHoldTicks = 0; padSelectTriggered = false; }
+
+    prevGamepadState = gs;
+}
+
 void VocalGzzioContent::timerCallback()
 {
+    if (! gz::isTestDataIsolated())
+        pollGamepadAndApply();
     #if JucePlugin_Build_Standalone
     if (processor.isStandalone())
     {
@@ -9099,12 +9358,24 @@ void VocalGzzioContent::timerCallback()
             const int oMono = processor.getOutputMonoMode() ? 1 : 0;
             const int aCh   = processor.getAutoCenterChannel();
             const int exprM = processor.getVocalExprMode();
+            const int mMute = processor.getMonitorMute() ? 1 : 0;
+            const int pillBits = (rMode & 7) | (oMono << 3) | (aCh << 4) | (exprM << 6) | (mMute << 8);
+            static int s_lastIoPillBits = -1;
             const int mHash = (inQ & 0xff) | ((outQ & 0xff) << 8) | ((grQ & 0xff) << 16)
-                            | ((vQ ^ (fQ << 2) ^ (hQ << 4) ^ (rMode << 6) ^ (oMono << 8) ^ (aCh << 9) ^ (exprM << 11)) << 20);
+                            | ((vQ ^ (fQ << 2) ^ (hQ << 4) ^ (pillBits << 6)) << 20);
             if (mHash != lastOutMeterHash)
             {
                 lastOutMeterHash = mHash;
-                repaint (overviewOutput);
+                if (pillBits != s_lastIoPillBits || overviewLayoutMode >= 2)
+                {
+                    s_lastIoPillBits = pillBits;
+                    repaint (overviewOutput);
+                }
+                else
+                {
+                    // メーター変動のみの場合は左側のバー領域だけ再描画し、右側の2基の回転つまみ(inGainK/outVolK)の毎フレーム再描画負荷をゼロにする
+                    repaint (overviewOutput.withWidth (juce::jmax (64, overviewOutput.getWidth() - 228)));
+                }
             }
         }
         if (processor.isBgmPlaying() || processor.isWavRecording())
@@ -9664,19 +9935,19 @@ void VocalGzzioContent::applyScene()
 
     switch (currentScene)
     {
-        case 0: // 弾き語り：親密なスタジオプレート残響＋ダッキング＋自然な伸び
+        case 0: // 弾き語り：親密なスタジオプレート残響＋ダッキング（ドライ声コピー重ねOFFでピッチ補正時も二重声にならない1本芯設計）
             setP ("gate", -68); setP ("makeup", 3.0f);
             setP ("rev_type", 2.0f); setP ("revsize", 42.0f); setP ("revmix", 16.0f); setP ("revon", 1.0f);
-            setP ("duck", 34.0f); setP ("width", 18.0f); setP ("doubler", 10.0f); setP ("dbl_on", 1.0f);
-            setP ("delay", 8.0f); setP ("dly_on", 1.0f); setP ("ride_amt", 34.0f); setP ("crush_on", 1.0f);
+            setP ("duck", 34.0f); setP ("width", 0.0f); setP ("doubler", 0.0f); setP ("dbl_on", 0.0f);
+            setP ("delay", 0.0f); setP ("dly_on", 0.0f); setP ("ride_amt", 34.0f); setP ("crush_on", 1.0f);
             if (! gz::isTestDataIsolated())
                 processor.applySingingSkillSuite (true, 2, true);
             break;
         case 2: // バンド：分厚いオケに埋もれないプレート＋強ダッキング＋Vocal Rider強化
             setP ("gate", -58); setP ("makeup", 4.5f);
             setP ("rev_type", 2.0f); setP ("revsize", 34.0f); setP ("revmix", 12.0f); setP ("revon", 1.0f);
-            setP ("duck", 44.0f); setP ("width", 14.0f); setP ("doubler", 12.0f); setP ("dbl_on", 1.0f);
-            setP ("delay", 5.0f); setP ("dly_on", 1.0f); setP ("ride_amt", 45.0f); setP ("crush_on", 1.0f);
+            setP ("duck", 44.0f); setP ("width", 0.0f); setP ("doubler", 0.0f); setP ("dbl_on", 0.0f);
+            setP ("delay", 0.0f); setP ("dly_on", 0.0f); setP ("ride_amt", 45.0f); setP ("crush_on", 1.0f);
             if (! gz::isTestDataIsolated())
                 processor.applySingingSkillSuite (true, 1, true);
             break;
@@ -9710,6 +9981,14 @@ void VocalGzzioContent::syncQuickAssistButtons() noexcept
     const auto safuLbl = processor.getMicSafuModeName (language->english);
     if (detailMicSafuBtn.getButtonText() != safuLbl)
         detailMicSafuBtn.setButtonText (safuLbl);
+
+    const bool mm = processor.getMonitorMute();
+    if (detailMonMuteBtn.getToggleState() != mm)
+        detailMonMuteBtn.setToggleState (mm, juce::dontSendNotification);
+    const auto monLbl = mm ? language->T ("返しミュート", "Self-Mute")
+                           : language->T ("返し音: ON", "Monitor: ON");
+    if (detailMonMuteBtn.getButtonText() != monLbl)
+        detailMonMuteBtn.setButtonText (monLbl);
 }
 
 void VocalGzzioContent::updateABButtons()
@@ -11661,6 +11940,11 @@ void VocalGzzioContent::resized()
         const bool fitSafu = fitPitch && (tx + wSafu <= rightLimit);
         detailMicSafuBtn.setBounds (tx, seqArea.getY() + 3, wSafu, tabH);
         detailMicSafuBtn.setVisible (fitSafu);
+        tx += wSafu + 6;
+        const int wMon = fitW (detailMonMuteBtn, tabH, 86);
+        const bool fitMon = processor.isStandalone() && fitSafu && (tx + wMon <= rightLimit);
+        detailMonMuteBtn.setBounds (tx, seqArea.getY() + 3, wMon, tabH);
+        detailMonMuteBtn.setVisible (fitMon);
     }
 
     // red lamps at knob centres (after every knob has its bounds)
@@ -12012,6 +12296,11 @@ void VocalGzzioContent::refreshLanguage()
     detailMicSafuBtn.setButtonText (processor.getMicSafuModeName (language->english));
     detailMicSafuBtn.setTooltip    (language->T ("追加遅延0.0msで「あー」発声中のパリパリ・チリチリ放電音、劣化した風防スポンジのサフー共鳴尾、スピーカー擦れ歪みを除去します（クリックで OFF ➔ 標準 ➔ 強力）。",
                                                  "Zero-latency (0.0 ms) repair for mid-vowel capsule crackle, degraded foam chuffing tails, and diaphragm rub & buzz (click: OFF -> Auto -> Deep)."));
+    detailMonMuteBtn.setButtonText (processor.getMonitorMute()
+                                        ? language->T ("返しミュート", "Self-Mute")
+                                        : language->T ("返し音: ON", "Monitor: ON"));
+    detailMonMuteBtn.setTooltip    (language->T ("スタンドアロン起動時に、自分のヘッドホン／スピーカーへの返し音だけをミュートします（配信出力や録音はそのまま継続）。自分の生声やオーディオIFのダイレクトモニターと重なって二重に聴こえる時にONにしてください。",
+                                                 "Mutes local headphone/speaker self-monitoring in Standalone while keeping Stream Output and recording active."));
     vcOnButton.setButtonText (language->vc_on_label());
     jnOnButton.setButtonText (language->jn_on_label());
     vcOnButton.setTooltip (language->vc_pitch_tip());

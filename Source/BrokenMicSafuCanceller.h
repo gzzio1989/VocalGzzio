@@ -236,7 +236,8 @@ public:
             wasSleeping        = false;
         }
 
-        const float strength = (mode >= Deep) ? 1.85f : (mode == Standard ? 1.05f : 0.0f);
+        const bool isDeep   = (mode >= Deep);
+        const float strength = isDeep ? 1.68f : (mode == Standard ? 0.72f : 0.0f);
         const int chCount = (numCh > 1 && chR != nullptr) ? 2 : 1;
 
         // sb0: 740-1500Hz  (F2保護＆広帯域放電裾)
@@ -245,12 +246,18 @@ public:
         // sb3: 4.30-7.20kHz (スポンジ第2核 4.3kHz・パリパリ核 4.6kHz・擦れ 6.8kHz)
         // sb4: 7.20-11.8kHz (高域チリチリ放電・残留変調ヒス)
         // sb5: >11.8kHz     (インパルス放電スパイク)
-        static constexpr float kCenterHz[kNumSubBands]   = { 1080.0f, 2000.0f, 3380.0f, 5550.0f, 9200.0f, 14500.0f };
-        static constexpr float kPeakCrest[kNumSubBands]  = { 1.30f,   1.22f,   1.16f,   1.14f,   1.11f,   1.10f    };
-        static constexpr float kCombMax[kNumSubBands]    = { 0.72f,   0.83f,   0.87f,   0.89f,   0.89f,   0.89f    };
-        static constexpr float kOverSub[kNumSubBands]    = { 1.00f,   1.16f,   1.42f,   1.62f,   1.76f,   1.85f    };
-        static constexpr float kWienerBeta[kNumSubBands] = { 0.65f,   1.80f,   3.40f,   4.60f,   5.35f,   5.80f    };
-        static constexpr float kMinVoicedG[kNumSubBands] = { 0.58f,   0.26f,   0.032f,  0.014f,  0.010f,  0.008f   };
+        // 人間の歌声の自然なシマー・息成分・母音遷移では誤発火せず（Standardは完全透明）、Deepではクリーン倍音無傷のまま放電・共鳴尾・変調ヒスを深層除去する設計値
+        static constexpr float kCenterHz[kNumSubBands]     = { 1080.0f, 2000.0f, 3380.0f, 5550.0f, 9200.0f, 14500.0f };
+        static constexpr float kPeakCrestStd[kNumSubBands] = { 1.50f,   1.40f,   1.34f,   1.30f,   1.26f,   1.24f    };
+        static constexpr float kPeakCrestDp[kNumSubBands]  = { 1.31f,   1.23f,   1.17f,   1.14f,   1.11f,   1.10f    };
+        static constexpr float kCombMaxStd[kNumSubBands]   = { 0.08f,   0.14f,   0.18f,   0.20f,   0.22f,   0.24f    };
+        static constexpr float kCombMaxDp[kNumSubBands]    = { 0.68f,   0.81f,   0.86f,   0.88f,   0.88f,   0.88f    };
+        static constexpr float kOverSubStd[kNumSubBands]   = { 1.00f,   1.08f,   1.22f,   1.32f,   1.40f,   1.45f    };
+        static constexpr float kOverSubDp[kNumSubBands]    = { 1.00f,   1.16f,   1.40f,   1.60f,   1.74f,   1.84f    };
+        static constexpr float kWienerBetaStd[kNumSubBands]= { 0.35f,   0.85f,   1.60f,   2.10f,   2.60f,   3.00f    };
+        static constexpr float kWienerBetaDp[kNumSubBands] = { 0.65f,   1.80f,   3.50f,   4.60f,   5.35f,   5.80f    };
+        static constexpr float kMinVoicedStd[kNumSubBands] = { 0.88f,   0.82f,   0.76f,   0.74f,   0.70f,   0.66f    };
+        static constexpr float kMinVoicedDp[kNumSubBands]  = { 0.58f,   0.26f,   0.035f,  0.015f,  0.010f,  0.008f   };
 
         auto* const ringPtr = ring.data();
         const int   rMask   = ringMask;
@@ -372,8 +379,8 @@ public:
             const float consBypass = isUnvoicedFricative ? 0.0f : 1.0f;
             const float wvSafe = wv * consBypass;
 
-            // 母音オフセット後の単調減衰尾トラッキング（定常ヒスの微小揺らぎでは誤解除せず、本物の子音立ち上がりで即時開放）
-            if (wvSafe > 0.45f && envLow > 0.022f)
+            // 母音オフセット後の単調減衰尾トラッキング（低域基音が48ms包絡の45%未満へ急落した時点で即座に減衰尾カウント開始）
+            if (wvSafe > 0.45f && envLow > 0.022f && envLow >= envLowTail * 0.45f)
             {
                 sinceVoicedSamples     = 0;
                 tailHfMin              = tailEnvHf;
@@ -431,14 +438,16 @@ public:
                 : 1.0f;
 
             float sharedTailGate = 0.0f;
+            // 有声母音が終了して低域基音が急落した直後の無声減衰尾区間(48ms)のみ稼働し、歌唱中の自然な声量変化では絶対チョップしない
             if (! tailAbortedByConsonant
+                && (wvSafe < 0.48f || envLow < envLowTail * 0.42f)
                 && sinceVoicedSamples > 0
                 && sinceVoicedSamples < maxTailSamples
-                && envLowTail > 0.0022f
-                && envLow < envLowTail * 0.85f)
+                && envLowTail > 0.0008f
+                && envLow < envLowTail * 0.78f)
             {
-                const float fadeEnd = std::clamp ((float) (maxTailSamples - sinceVoicedSamples) / (0.25f * (float) maxTailSamples), 0.0f, 1.0f);
-                sharedTailGate = fadeEnd * std::clamp ((envLowTail * 0.85f - envLow) / (envLowTail * 0.42f + 1.0e-5f), 0.0f, 1.0f);
+                const float fadeEnd = std::clamp ((float) (maxTailSamples - sinceVoicedSamples) / (0.18f * (float) maxTailSamples), 0.0f, 1.0f);
+                sharedTailGate = fadeEnd * std::clamp ((envLowTail * 0.78f - envLow) / (envLowTail * 0.25f + 1.0e-5f), 0.0f, 1.0f);
             }
 
             for (int s = kNumSubBands - 1; s >= 0; --s)
@@ -486,7 +495,6 @@ public:
                 sbPeakEnv[(size_t) s] = (absMax > sbPeakEnv[(size_t) s])
                     ? absMax
                     : (sbPeakEnv[(size_t) s] + aSbPeakRel * (absMax - sbPeakEnv[(size_t) s]));
-                const float curPeak = sbPeakEnv[(size_t) s];
 
                 float targetSpikeG = 1.0f;
                 if (wvSafe > 0.15f && have3Periods && sinceVoicedSamples == 0)
@@ -503,17 +511,19 @@ public:
                     if (v[1] > v[3]) std::swap (v[1], v[3]);
                     const float rRef = std::min (v[1], v[2]);
                     const float refPeak = rRef * envLowDenom;
-                    float allowPk = refPeak * kPeakCrest[s] + 1.0e-4f;
+                    const float crestHere = isDeep ? kPeakCrestDp[s] : kPeakCrestStd[s];
+                    float allowPk = refPeak * crestHere + (isDeep ? 6.0e-5f : 1.0e-4f);
 
-                    // 周期内エクスカージョン擦れ (Rub & Buzz) クランプ
+                    // 周期内エクスカージョン擦れ (Rub & Buzz) クランプ（Deep時または明確な非周期擦れ突出時のみ適用し、通常のビブラート倍音は保護）
                     const float prevPx = powSig[(size_t) s];
-                    const float prevPn = std::max (0.0f, std::min (powDiff1[(size_t) s], powDiff2[(size_t) s]) - 0.02f * prevPx);
-                    const float rubRatioThr = (s == 1) ? 0.28f : 0.18f;
-                    if (s >= 1 && prevPn > rubRatioThr * prevPx && prevPx > 1.0e-8f)
+                    const float prevPn = std::max (0.0f, std::min (powDiff1[(size_t) s], powDiff2[(size_t) s]) - 0.04f * prevPx);
+                    const float rubRatioThr = isDeep ? ((s == 1) ? 0.30f : 0.20f) : 0.48f;
+                    if (s >= 1 && prevPn > rubRatioThr * prevPx && prevPx > 1.0e-7f)
                     {
-                        const float psPure     = std::max (0.0f, prevPx - kOverSub[s] * prevPn);
-                        const float harmRmsEst = std::sqrt (psPure);
-                        allowPk = std::min (allowPk, 1.80f * harmRmsEst + 2.2e-4f);
+                        const float overSubHere = isDeep ? kOverSubDp[s] : kOverSubStd[s];
+                        const float psPure      = std::max (0.0f, prevPx - overSubHere * prevPn);
+                        const float harmRmsEst  = std::sqrt (psPure);
+                        allowPk = std::min (allowPk, (isDeep ? 1.88f : 2.35f) * harmRmsEst + 2.5e-4f);
                     }
 
                     float signedJump = 0.0f;
@@ -524,19 +534,24 @@ public:
                                                               std::abs (sbIn[s][ch] - uM1[ch])));
                         signedJump = std::max (signedJump, jmp);
                     }
-                    const float effPeak = std::max (curPeak, signedJump);
+                    // Standard時はホールド値によるクレッシェンド誤発火を完全防止し、Deep時は0.24msピークホールドで連続放電尾まで深層クランプ
+                    const float effPeak  = isDeep ? std::max (sbPeakEnv[(size_t) s], signedJump)
+                                                  : std::max (absMax, signedJump * 1.15f);
+                    const float jumpGate = isDeep ? 0.0f : (allowPk * 0.38f);
 
-                    if (effPeak > allowPk)
+                    if (effPeak > allowPk && signedJump >= jumpGate)
                     {
-                        const float rawG = std::clamp ((allowPk * 0.06f + 1.0e-5f) / (effPeak + 1.0e-9f), 0.002f, 1.0f);
+                        const float rawG = isDeep
+                            ? std::clamp ((allowPk * 0.06f + 1.0e-5f) / (effPeak + 1.0e-9f), 0.002f, 1.0f)
+                            : (1.0f - std::clamp ((effPeak - allowPk) / (allowPk * 0.48f + 1.0e-7f), 0.0f, 1.0f) * 0.94f);
                         if (activeSuppress)
-                            targetSpikeG = 1.0f - std::min (1.0f, wvSafe * std::min (1.0f, strength)) * (1.0f - rawG);
+                            targetSpikeG = 1.0f - std::min (1.0f, wvSafe * (isDeep ? 1.0f : 0.92f)) * (1.0f - rawG);
 
                         // サフサフ共鳴が同時発生中でも、クレストが高い広帯域パリパリ放電スパイク時は低中域(185Hz〜2.65kHz)も同期置換！
                         const float sbRms = std::sqrt (std::max (0.0f, prevPx));
                         if (s >= 2
-                            && absMax > 1.35f * allowPk + 2.0e-3f
-                            && signedJump > 2.55f * sbRms + 1.8e-3f)
+                            && absMax > (isDeep ? 1.32f : 1.45f) * allowPk + (isDeep ? 1.8e-3f : 2.2e-3f)
+                            && signedJump > (isDeep ? 2.40f : 2.65f) * sbRms + (isDeep ? 1.5e-3f : 1.8e-3f))
                         {
                             broadbandSpikeG = std::min (broadbandSpikeG, targetSpikeG);
                         }
@@ -548,7 +563,7 @@ public:
                         }
                     }
 
-                    if (s <= 1 && broadbandSpikeG < 0.55f && activeSuppress)
+                    if (s <= 1 && broadbandSpikeG < (isDeep ? 0.55f : 0.65f) && activeSuppress)
                         targetSpikeG = std::min (targetSpikeG, broadbandSpikeG);
                 }
 
@@ -560,7 +575,10 @@ public:
                 float decAbsMax = 0.0f;
                 for (int ch = 0; ch < chCount; ++ch)
                 {
-                    const float cleanRef = (voicedHoldSamples > lag1 * 2) ? (0.55f * hPrev[ch] + 0.45f * uTrim[ch]) : uTrim[ch];
+                    // Standard時は純粋4周期チャープ中央値(uTrim)で金属着色ゼロ、Deep時は倍音コム出力もブレンドしてスポンジ重畳時の置換純度を高める
+                    const float cleanRef = (isDeep && voicedHoldSamples > lag1 * 2)
+                        ? (0.52f * hPrev[ch] + 0.48f * uTrim[ch])
+                        : uTrim[ch];
                     uDec[ch] = cleanRef + gSp * (sbIn[s][ch] - cleanRef);
                     decAbsMax = std::max (decAbsMax, std::abs (uDec[ch]));
                 }
@@ -595,29 +613,36 @@ public:
                 const float rawPn = have2Periods ? std::min (powDiff1[(size_t) s], powDiff2[(size_t) s]) : 0.0f;
 
                 const float harmK    = kCenterHz[s] / f0Est;
-                const float phaseRot = std::min (1.5707963f, 3.14159265f * harmK * (curResidualJitter + 0.0010f));
+                const float phaseRot = std::min (1.5707963f, 3.14159265f * harmK * (curResidualJitter + 0.0014f));
                 const float sinHalf  = std::sin (phaseRot);
                 const float s2       = sinHalf * sinHalf;
-                const float vibGuard = px * std::min (0.28f, 3.6f * s2 * s2 + 0.014f);
-                const float pn       = std::max (0.0f, rawPn - vibGuard - 2.5e-8f);
+                // ビブラート倍音の位相回転は保護しつつ、定常サー音・スポンジ共鳴の非周期電力を正確に分離
+                const float naturalBreathMargin = isDeep ? ((s >= 4) ? 0.0003f : 0.0007f)
+                                                         : ((s >= 4) ? 0.0030f : 0.0065f);
+                const float vibScale = isDeep ? ((s >= 4) ? 2.0f : 2.5f) : ((s >= 4) ? 2.8f : 4.2f);
+                const float vibGuard = px * std::min (isDeep ? 0.34f : 0.58f, vibScale * s2 * s2 + naturalBreathMargin);
+                const float pn       = std::max (0.0f, rawPn - vibGuard - (isDeep ? ((s >= 4) ? 3.0e-9f : 8.0e-9f) : 3.5e-8f));
                 const float noiseRatio = std::min (1.0f, pn / px);
                 if (s >= 2)
                     hiBandNoiseRatio = std::max (hiBandNoiseRatio, noiseRatio);
 
-                if (wvSafe > 0.60f && envLow > 0.020f && s >= 1 && s <= 4 && noiseRatio > 0.18f && pn > 1.5e-6f)
-                    blockDefectPeak = std::max (blockDefectPeak, std::min (1.0f, (noiseRatio - 0.18f) * 2.2f));
+                if (wvSafe > 0.60f && envLow > 0.020f && s >= 1 && s <= 4 && noiseRatio > 0.22f && pn > 2.2e-6f)
+                    blockDefectPeak = std::max (blockDefectPeak, std::min (1.0f, (noiseRatio - 0.22f) * 2.2f));
 
                 const float onsetReady = (voicedHoldSamples > lag1 + 16)
                     ? std::clamp ((float) (voicedHoldSamples - lag1 - 16) / (float) lag1, 0.0f, 1.0f)
                     : 0.0f;
 
-                const float effNoiseRatio = (s <= 1 && hiBandNoiseRatio > 0.40f)
-                    ? std::max (noiseRatio, 0.45f * hiBandNoiseRatio)
+                const float effNoiseRatio = (isDeep && s <= 1 && hiBandNoiseRatio > 0.35f)
+                    ? std::max (noiseRatio, 0.48f * hiBandNoiseRatio)
                     : noiseRatio;
-                const float combDrive  = std::min (1.0f, std::max (0.0f, effNoiseRatio - 0.025f) * 30.0f);
-                const float vibCombCap = std::max (0.42f, kCombMax[s] / (1.0f + 16.0f * std::abs (lagVel) * harmK));
-                const float alphaH     = have2Periods
-                    ? std::min (vibCombCap, wvSafe * onsetReady * tailNoEcho * kCombMax[s] * std::min (1.12f, strength) * combDrive)
+                const float combMaxHere = isDeep ? kCombMaxDp[s] : kCombMaxStd[s];
+                const float combDrive   = std::min (1.0f, std::max (0.0f, effNoiseRatio - (isDeep ? 0.015f : 0.045f)) * (isDeep ? 30.0f : 16.0f));
+                const float vibCombCap  = isDeep
+                    ? std::max (0.38f, combMaxHere / (1.0f + 17.0f * std::abs (lagVel) * harmK))
+                    : (combMaxHere / (1.0f + 22.0f * std::abs (lagVel) * harmK));
+                const float alphaH      = have2Periods
+                    ? std::min (vibCombCap, wvSafe * onsetReady * tailNoEcho * combMaxHere * combDrive)
                     : 0.0f;
 
                 float sigHarm[2] = { 0.0f, 0.0f };
@@ -628,20 +653,19 @@ public:
                 }
 
                 // ---- 第3段：定常母音内部でのスポンジ共鳴比 ＆ 残留ヒス電力学習と単調減衰語尾消去 ----
-                if (wvSafe > 0.45f && envLow > 0.024f && envLow >= envLowTail * 0.82f)
+                if (wvSafe > 0.55f && envLow > 0.024f && envLow >= envLowTail * 0.85f && pn > 0.0f)
                 {
-                    const float estClean0 = sigHarm[0] * wienerGain[(size_t) s];
-                    const float remNoise  = std::max (std::sqrt (pn), 0.90f * std::abs (sbIn[s][0] - estClean0));
-                    const float instAlpha = std::min (0.95f, remNoise / (envLow + 1.0e-5f));
-                    spongeAlpha[(size_t) s]      = 0.9965f * spongeAlpha[(size_t) s] + 0.0035f * instAlpha;
-                    voicedNoiseFloor[(size_t) s] = 0.9955f * voicedNoiseFloor[(size_t) s] + 0.0045f * pn;
+                    const float remNoise  = std::sqrt (pn);
+                    const float instAlpha = std::min (0.75f, remNoise / (envLow + 1.0e-5f));
+                    spongeAlpha[(size_t) s]      = 0.9945f * spongeAlpha[(size_t) s] + 0.0055f * instAlpha;
+                    voicedNoiseFloor[(size_t) s] = 0.9940f * voicedNoiseFloor[(size_t) s] + 0.0060f * pn;
                 }
                 else if (! curVoicedFlag && envLowTail < 0.002f)
                 {
                     voicedNoiseFloor[(size_t) s] *= 0.9996f;
                 }
 
-                const float wTail = (spongeAlpha[(size_t) s] > 0.0025f || voicedNoiseFloor[(size_t) s] > 1.0e-8f)
+                const float wTail = (spongeAlpha[(size_t) s] > 0.0025f || voicedNoiseFloor[(size_t) s] > 1.2e-8f)
                     ? sharedTailGate
                     : 0.0f;
 
@@ -655,10 +679,13 @@ public:
                 float targetGwVoiced = 1.0f;
                 if (wvSafe > 0.02f && pn > 0.0f)
                 {
-                    const float psEst    = std::max (0.0f, px - kOverSub[s] * pn);
-                    const float pnComb   = pn * ((1.0f - alphaH) / (1.0f + alphaH));
-                    const float gwRaw    = psEst / (psEst + kWienerBeta[s] * strength * pnComb + 1.0e-14f);
-                    const float gwVoiced = std::clamp (gwRaw, kMinVoicedG[s], 1.0f);
+                    const float minVoicedG = isDeep ? kMinVoicedDp[s] : kMinVoicedStd[s];
+                    const float wBeta      = isDeep ? kWienerBetaDp[s] : kWienerBetaStd[s];
+                    const float overSubH   = isDeep ? kOverSubDp[s]   : kOverSubStd[s];
+                    const float psEst      = std::max (0.0f, px - overSubH * pn);
+                    const float pnComb     = pn * ((1.0f - alphaH) / (1.0f + alphaH));
+                    const float gwRaw      = psEst / (psEst + wBeta * strength * pnComb + 1.0e-14f);
+                    const float gwVoiced   = std::clamp (gwRaw, minVoicedG, 1.0f);
                     targetGwVoiced = 1.0f - (wvSafe * tailNoEcho) * (1.0f - gwVoiced);
                 }
 
@@ -666,9 +693,10 @@ public:
                 if (wTail > 0.02f)
                 {
                     const float pxFast    = sbFastPow[(size_t) s] + 1.0e-14f;
-                    const float spongeAmp = spongeAlpha[(size_t) s] * envLowTail * 5.20f;
-                    const float pnTailPow = std::max (spongeAmp * spongeAmp, 2.00f * voicedNoiseFloor[(size_t) s]);
-                    const float gwTail    = std::clamp ((pxFast - 10.0f * strength * pnTailPow) / pxFast, 0.006f, 1.0f);
+                    const float spongeAmp = spongeAlpha[(size_t) s] * envLowTail * (isDeep ? 6.80f : 3.20f);
+                    const float pnTailPow = std::max (spongeAmp * spongeAmp, (isDeep ? 4.20f : 2.20f) * voicedNoiseFloor[(size_t) s]);
+                    const float gwTail    = std::clamp ((pxFast - (isDeep ? 16.0f : 5.5f) * pnTailPow) / pxFast,
+                                                        isDeep ? 0.003f : 0.08f, 1.0f);
                     targetGwTail = 1.0f - wTail * (1.0f - gwTail);
                 }
 
@@ -693,7 +721,7 @@ public:
             }
 
             // 185〜740Hz (bodyMid) の広帯域パリパリ放電成分も、高域スパイク確認瞬間のみ4周期トリム予測へ置換（クリーン時は恒等 0.000 dB）
-            const float targetBodySpG = (activeSuppress && have2Periods && sinceVoicedSamples == 0 && wvSafe > 0.40f && broadbandSpikeG < 0.45f)
+            const float targetBodySpG = (activeSuppress && have2Periods && sinceVoicedSamples == 0 && wvSafe > 0.40f && broadbandSpikeG < 0.65f)
                 ? broadbandSpikeG
                 : 1.0f;
             spikeBodyGain += (targetBodySpG < spikeBodyGain ? aSpikeAtk : aBodySpikeRel) * (targetBodySpG - spikeBodyGain);

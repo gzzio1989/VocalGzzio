@@ -32,45 +32,45 @@ inline constexpr FinishPresetDef kFinishPresets[] =
     { "自然に整える", "Natural",
       "声や楽器の抑揚を残して、低い振動と小さな音量差を整えます。響きは短く控えめ。まず原音に近い仕上がりから始めたいときに。",
       "Keeps the expression of your voice or instrument, gently controlling rumble and peaks with a small room. Start here for a natural finish.",
-      75, -1.2f, -0.6f, 0.6f, 1.0f, 8, 12, 10, 24, 180, 20, 8, 10,
-      1, 8, 20, 0, 240, 15, 20,
-      6, 14, 8, 6, 8, 0, 15, 8, 0,
-      16, 18, 20, 10, false },
+      88, -1.8f, -0.8f, 1.0f, 1.4f, 8, 16, 14, 20, 165, 24, 8, 12,
+      1, 8, 22, 0, 240, 15, 24,
+      12, 16, 10, 6, 8, 0, 18, 0, 0,
+      18, 24, 24, 10, true },
     { "歌詞を前へ", "Vocal Forward",
-      "低いこもりを引いて言葉の輪郭と明るさを足します。大小をそろえ、スタジオプレート残響で歌を伴奏の最前列へ押し出します。",
-      "Clears low mids, adds presence and air, and evens out phrases. A studio plate and vocal rider lock your voice right in front of the mix.",
-      115, -4.5f, -1.0f, 4.5f, 3.2f, 16, 44, 50, 9, 105, 40, 24, 30,
-      2, 16, 40, 5, 250, 16, 38,
-      36, 28, 26, 16, 20, 22, 30, 18, 10,
-      32, 48, 42, 22, true },
+      "低いこもりをすっきり引き、声の芯と気持ちいい高音の抜けを引き出します。原音コピー重ねを使わず、一本芯のまま最前列へ届けます。",
+      "Clears low-mid mud and opens effortless vocal presence and top-end air. Pure single-voice center focus right in front of the mix.",
+      115, -4.4f, -0.6f, 4.8f, 3.8f, 10, 38, 42, 10, 110, 38, 12, 28,
+      2, 15, 38, 0, 250, 16, 38,
+      34, 24, 26, 10, 18, 20, 30, 0, 0,
+      20, 58, 48, 18, true },
     { "丸く親密に", "Warm & Intimate",
-      "低音の厚みを残し、耳に当たる高音を丸くします。真空管風の温かい倍音と近い空気感で、弾き語りや静かな曲にしっとり馴染みます。",
-      "Retains body while softening the upper mids. Velvet tube harmonics and a close room create warm, intimate vocals for chill or acoustic songs.",
-      68, 0.0f, -4.2f, -2.2f, 0.4f, 34, 22, 34, 24, 210, 32, 22, 8,
-      1, 14, 30, 0, 240, 15, 24,
-      24, 26, 10, 20, 18, 8, 25, 12, 6,
-      50, 18, 22, 18, true },
+      "アコギやピアノとぶつかる低中域の膨らみを整理しつつ、自然な抑揚と透明な空気感を両立。弾き語りや静かな曲で目の前に立つ声に。",
+      "Clears guitar/piano low-mid buildup while preserving dynamic expression and intimate condenser air. Ideal for acoustic solo performance.",
+      92, -1.0f, -2.4f, 0.8f, 2.0f, 18, 24, 30, 16, 175, 32, 12, 16,
+      2, 14, 34, 0, 240, 15, 34,
+      26, 26, 14, 12, 18, 10, 24, 0, 0,
+      46, 22, 36, 16, true },
     { "太く力強く", "Dense & Driven",
-      "大きな音を速く受け止め、音量差を強めにそろえて密度を出します。中高音の芯と倍音ドライブを足す、ロックや力強い歌の仕上がり。",
-      "Catches loud peaks quickly and locks quiet and loud phrases together. Adds midrange punch and harmonic drive for powerful rock vocals.",
-      95, -2.2f, -1.5f, 3.2f, 1.8f, 52, 65, 62, 4, 88, 45, 20, 24,
-      2, 12, 28, 0, 240, 15, 42,
-      40, 24, 28, 10, 16, 24, 30, 14, 12,
-      46, 56, 30, 18, false },
+      "バンドの歪みギターに埋もれない中域の太い芯と抜けを作ります。不要なローエンドを切って音像を中央にロックするロックボーカル仕様。",
+      "Locks thick midrange core and crisp cut against dense band guitars, trimming low-end boom with zero phase-smearing widening.",
+      105, -3.4f, -1.5f, 3.2f, 2.4f, 24, 62, 68, 5, 85, 40, 28, 26,
+      2, 12, 30, 0, 240, 15, 44,
+      48, 28, 28, 8, 16, 22, 30, 0, 0,
+      40, 56, 36, 16, false },
     { "語りをくっきり", "Speech Focus",
       "低音の膨らみを削り、言葉の出だしと小さな声をそろえます。残響とやまびこは切り、配信や実況で言葉を近くはっきり届けます。",
       "Reduces low-end buildup and brings quiet words forward. Reverb and delay are completely off for crisp, intelligible speech and streaming.",
-      140, -5.0f, -2.0f, 2.8f, 1.2f, 6, 35, 66, 4, 82, 50, 0, 36,
+      135, -4.5f, -2.0f, 2.8f, 1.4f, 6, 35, 62, 5, 85, 48, 0, 34,
       1, 0, 0, 0, 240, 15, 0,
       44, 30, 12, 6, 0, 0, 35, 0, 0,
       20, 42, 22, 0, false },
     { "広く響かせる", "Wide Ballad",
-      "明るさと伸びを足し、豊かなホールと薄いやまびこで余韻を広げます。歌っている間はダッキングで響きを抑え、語尾から美しく広がります。",
-      "Adds silky air, sustain, and a lush concert hall with gentle echo. Ducking keeps lyrics clear while singing, blooming on every phrase tail.",
-      90, -2.5f, -1.2f, 1.8f, 3.6f, 16, 28, 32, 16, 175, 32, 34, 18,
-      3, 34, 72, 14, 320, 20, 36,
-      30, 26, 24, 22, 28, 26, 25, 28, 12,
-      44, 36, 52, 42, true }
+      "明るさと伸びを足し、豊かなホール残響で余韻を広げます。歌っている間はダッキングで響きを抑え、語尾から美しく広がります。",
+      "Adds silky air and a lush concert hall. Ducking keeps lyrics clear while singing, blooming cleanly on every phrase tail.",
+      95, -2.8f, -1.4f, 2.2f, 3.6f, 12, 28, 32, 14, 170, 34, 18, 20,
+      3, 30, 68, 0, 320, 20, 38,
+      30, 26, 24, 14, 26, 24, 25, 0, 0,
+      38, 40, 52, 38, true }
 };
 inline constexpr int kNumFinishPresets = (int) (sizeof (kFinishPresets) / sizeof (kFinishPresets[0]));
 
@@ -404,9 +404,9 @@ inline constexpr EqPresetDef kEqPresets[] =
       "For grand piano & string ballads. Softens upper-mid harshness while enveloping every breath in lush hall bloom.",
        90.0f, -2.5f, -2.5f, 1.2f, 2.8f, 20.0f, 56.0f, 50.0f, 72.0f, 62.0f, 18.0f, 26.0f, 28.0f, 38.0f },
     { "アコースティック：弾き語り・カフェライブ（生楽器と自然に溶け合う温かい声）", "Acoustic: Unplugged & Cafe Live",
-      "アコギやピアノの弾き語り・アンプラグド編成向け。加工感を抑えたナチュラルな肌触りで、すぐ目の前で歌う親密さを作ります",
-      "For acoustic guitar/piano singer-songwriters. Natural, uncolored warmth that blends organically with wood instruments.",
-       88.0f, -2.2f, -2.0f, 1.5f, 2.2f, 18.0f, 52.0f, 54.0f, 60.0f, 36.0f, 20.0f, 20.0f, 22.0f, 28.0f },
+      "アコギやピアノの弾き語り・アンプラグド編成向け。200〜300Hzの弦・胴鳴り被りを整理しつつ、目の前で歌う透明感と親密さを作ります",
+      "For acoustic guitar/piano singer-songwriters. Clears low-mid body overlap while keeping transparent, intimate presence.",
+      100.0f, -3.2f, -1.6f, 2.4f, 2.8f, 12.0f, 38.0f, 56.0f, 62.0f, 24.0f, 22.0f, 12.0f, 24.0f, 14.0f },
     { "R&B・ネオソウル・チルグルーヴ（滑らかなシルキー高域と太い胸声）", "R&B / Neo-Soul / Smooth Groove",
       "R&Bやソウル、グルーヴ重視の楽曲向け。太く艶やかなチェストの響きと、ベルベットのように滑らかな高域を両立します",
       "For R&B, Neo-Soul, and groove tracks. Rich chest warmth paired with velvety-smooth, non-fatiguing top-end silk.",
@@ -461,30 +461,30 @@ struct EqSpaceSkillDef
 
 inline constexpr EqSpaceSkillDef kEqSpacePresets[kNumEqPresets] =
 {
-    // 0..6: アニソン・ボカロ・J-POP
-    { 2, 38.0f, 14.0f, 44.0f, 20.0f, 14.0f,  7.0f, 230.0f, 42.0f, 22.0f, 28.0f, 1, true,  true  }, // 0: アニソン疾走ギターロック
-    { 3, 66.0f, 24.0f, 36.0f, 28.0f, 12.0f, 11.0f, 310.0f, 36.0f, 28.0f, 30.0f, 2, true,  true  }, // 1: アニソンシンフォニック劇伴
-    { 2, 40.0f, 15.0f, 40.0f, 20.0f, 14.0f,  6.0f, 240.0f, 40.0f, 20.0f, 26.0f, 1, true,  true  }, // 2: アニソン王道ヒーロー
-    { 2, 36.0f, 16.0f, 42.0f, 24.0f, 18.0f,  8.0f, 210.0f, 42.0f, 24.0f, 28.0f, 1, true,  true  }, // 3: アニソン・アイドルキラキラ
-    { 2, 32.0f, 12.0f, 48.0f, 22.0f, 16.0f,  6.0f, 195.0f, 45.0f, 18.0f, 24.0f, 1, true,  false }, // 4: ボカロ高速エレクトロ（早口のため語尾ビブラート控えめ）
-    { 2, 46.0f, 18.0f, 38.0f, 22.0f, 12.0f,  9.0f, 270.0f, 38.0f, 28.0f, 26.0f, 1, true,  true  }, // 5: ボカロダーク＆エモ
-    { 2, 42.0f, 16.0f, 36.0f, 18.0f, 10.0f,  6.0f, 260.0f, 36.0f, 20.0f, 22.0f, 1, true,  true  }, // 6: J-POP王道ブライト
+    // 0..6: アニソン・ボカロ・J-POP（センター定位を汚す width/doubler は初期0にし、純粋な残響空間のみで奥行きを形成）
+    { 2, 38.0f, 14.0f, 44.0f, 0.0f, 0.0f, 0.0f, 230.0f, 40.0f, 20.0f, 24.0f, 1, true,  true  }, // 0: アニソン疾走ギターロック
+    { 3, 66.0f, 24.0f, 36.0f, 0.0f, 0.0f, 0.0f, 310.0f, 36.0f, 26.0f, 28.0f, 2, true,  true  }, // 1: アニソンシンフォニック劇伴
+    { 2, 40.0f, 15.0f, 40.0f, 0.0f, 0.0f, 0.0f, 240.0f, 38.0f, 18.0f, 24.0f, 1, true,  true  }, // 2: アニソン王道ヒーロー
+    { 2, 36.0f, 16.0f, 42.0f, 0.0f, 0.0f, 0.0f, 210.0f, 40.0f, 22.0f, 24.0f, 1, true,  true  }, // 3: アニソン・アイドルキラキラ
+    { 2, 32.0f, 12.0f, 48.0f, 0.0f, 0.0f, 0.0f, 195.0f, 44.0f, 16.0f, 20.0f, 1, true,  false }, // 4: ボカロ高速エレクトロ
+    { 2, 46.0f, 18.0f, 38.0f, 0.0f, 0.0f, 0.0f, 270.0f, 38.0f, 24.0f, 24.0f, 1, true,  true  }, // 5: ボカロダーク＆エモ
+    { 2, 42.0f, 16.0f, 36.0f, 0.0f, 0.0f, 0.0f, 260.0f, 36.0f, 18.0f, 20.0f, 1, true,  true  }, // 6: J-POP王道ブライト
     // 7..9: ロック・バンド・ラウド
-    { 2, 34.0f, 13.0f, 42.0f, 16.0f, 12.0f,  5.0f, 240.0f, 42.0f, 18.0f, 24.0f, 1, true,  true  }, // 7: ギターロック＆オルタナ
-    { 2, 36.0f, 14.0f, 46.0f, 20.0f, 16.0f,  8.0f, 250.0f, 45.0f, 22.0f, 30.0f, 1, true,  true  }, // 8: ハードロック・ラウド・V系
-    { 1, 24.0f,  9.0f, 45.0f, 10.0f, 10.0f,  0.0f, 200.0f, 44.0f, 14.0f, 20.0f, 1, true,  false }, // 9: パンク・ライブハウス生感
+    { 2, 34.0f, 13.0f, 44.0f, 0.0f, 0.0f, 0.0f, 240.0f, 40.0f, 16.0f, 22.0f, 1, true,  true  }, // 7: ギターロック＆オルタナ
+    { 2, 36.0f, 14.0f, 46.0f, 0.0f, 0.0f, 0.0f, 250.0f, 44.0f, 20.0f, 26.0f, 1, true,  true  }, // 8: ハードロック・ラウド・V系
+    { 1, 24.0f,  9.0f, 45.0f, 0.0f, 0.0f, 0.0f, 200.0f, 42.0f, 12.0f, 18.0f, 1, true,  false }, // 9: パンク・ライブハウス生感
     // 10..15: バラード・アコースティック・R&B・シティポップ
-    { 3, 68.0f, 26.0f, 34.0f, 26.0f, 10.0f, 12.0f, 330.0f, 34.0f, 30.0f, 26.0f, 2, true,  true  }, // 10: バラード王道ホール
-    { 1, 32.0f, 13.0f, 30.0f, 12.0f,  6.0f,  0.0f, 250.0f, 30.0f, 20.0f, 14.0f, 2, true,  true  }, // 11: アコースティック弾き語り
-    { 2, 44.0f, 17.0f, 36.0f, 22.0f, 12.0f,  8.0f, 280.0f, 36.0f, 24.0f, 18.0f, 2, true,  true  }, // 12: R&B・ネオソウル
-    { 2, 46.0f, 18.0f, 36.0f, 24.0f, 14.0f,  9.0f, 275.0f, 36.0f, 22.0f, 20.0f, 2, true,  true  }, // 13: シティポップ・レトロモダン
-    { 3, 48.0f, 18.0f, 32.0f, 18.0f,  6.0f,  4.0f, 300.0f, 30.0f, 24.0f, 12.0f, 2, true,  true  }, // 14: ジャズ・ボサノヴァ
-    { 1, 28.0f, 12.0f, 32.0f, 16.0f,  8.0f,  5.0f, 260.0f, 34.0f, 22.0f, 10.0f, 2, true,  false }, // 15: Lo-Fi・ベッドルームポップ
+    { 3, 66.0f, 24.0f, 36.0f, 0.0f, 0.0f, 0.0f, 330.0f, 34.0f, 26.0f, 24.0f, 2, true,  true  }, // 10: バラード王道ホール
+    { 2, 34.0f, 14.0f, 36.0f, 0.0f, 0.0f, 0.0f, 250.0f, 30.0f, 18.0f, 14.0f, 2, true,  true  }, // 11: アコースティック弾き語り（りぶ基準）
+    { 2, 44.0f, 17.0f, 36.0f, 0.0f, 0.0f, 0.0f, 280.0f, 36.0f, 22.0f, 18.0f, 2, true,  true  }, // 12: R&B・ネオソウル
+    { 2, 46.0f, 18.0f, 36.0f, 0.0f, 0.0f, 0.0f, 275.0f, 36.0f, 20.0f, 18.0f, 2, true,  true  }, // 13: シティポップ・レトロモダン
+    { 3, 48.0f, 18.0f, 32.0f, 0.0f, 0.0f, 0.0f, 300.0f, 30.0f, 22.0f, 12.0f, 2, true,  true  }, // 14: ジャズ・ボサノヴァ
+    { 1, 28.0f, 12.0f, 32.0f, 0.0f, 0.0f, 0.0f, 260.0f, 34.0f, 20.0f, 10.0f, 2, true,  false }, // 15: Lo-Fi・ベッドルームポップ
     // 16..19: ラップ・伝統歌唱・配信トーク・ASMR
-    { 1, 22.0f,  8.0f, 50.0f, 14.0f, 12.0f,  5.0f, 190.0f, 46.0f, 14.0f, 18.0f, 1, true,  false }, // 16: ヒップホップ・ラップ
-    { 3, 64.0f, 25.0f, 32.0f, 22.0f,  8.0f, 10.0f, 320.0f, 34.0f, 28.0f, 24.0f, 2, true,  true  }, // 17: 演歌・民謡・和風
-    { 1,  0.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.0f, 240.0f, 48.0f,  0.0f,  0.0f, 0, false, false }, // 18: 雑談配信・ラジオ・実況（残響OFF・明瞭トーク）
-    { 1, 20.0f,  6.0f, 28.0f, 24.0f,  0.0f,  0.0f, 240.0f, 38.0f, 16.0f,  0.0f, 2, false, false }, // 19: ASMR・ささやき・朗読
+    { 1, 22.0f,  8.0f, 50.0f, 0.0f, 0.0f, 0.0f, 190.0f, 44.0f, 12.0f, 16.0f, 1, true,  false }, // 16: ヒップホップ・ラップ
+    { 3, 64.0f, 24.0f, 32.0f, 0.0f, 0.0f, 0.0f, 320.0f, 34.0f, 26.0f, 22.0f, 2, true,  true  }, // 17: 演歌・民謡・和風
+    { 1,  0.0f,  0.0f,  0.0f, 0.0f, 0.0f, 0.0f, 240.0f, 48.0f,  0.0f,  0.0f, 0, false, false }, // 18: 雑談配信・ラジオ・実況
+    { 1, 20.0f,  6.0f, 28.0f, 0.0f, 0.0f, 0.0f, 240.0f, 38.0f, 14.0f,  0.0f, 2, false, false }, // 19: ASMR・ささやき・朗読
 };
 
 // ---- v1.4.0 / v5.1.0 Voice Changer & Character-Voice presets (pitch/formant + robot + megaphone) ----

@@ -9,6 +9,7 @@
 #include <array>
 #include "PluginProcessor.h"
 #include "Tooltips.h"
+#include "VocalGamepadController.h"
 
 //==============================================================================
 // Dark palette (v1.3.0): blue-grey base with 3 elevation levels; accents are
@@ -521,28 +522,28 @@ namespace Palette
         }
         else
         {
-            // 既定テーマ (mode == 0): v6.0.0 Carbon Monolith — マシンド・フォージドカーボン＆チタンスレート配色
-            // (FabFilter / UAD / SSL 等のハードウェアコンソールに準拠したニュートラル黒鉛下地と3段階セマンティック色秩序)
-            bgTop    = juce::Colour (0xff0d1015);   // フォージド・カーボン上端（青紫かぶりを排した純黒鉛）
-            bgBot    = juce::Colour (0xff080a0e);   // ディープ・オブシディアンカーボン下端
-            panel    = juce::Colour (0xff13171e);   // CNCマシンド・マットカーボンカード面
-            panel2   = juce::Colour (0xff1b2029);   // アノダイズド・グラファイト操作面
-            panelLn  = juce::Colour (0xff2a3240);   // 精密1pxチタン・ヘアライン境界線
-            ink      = juce::Colour (0xfff0f4f8);   // クリスプ・スタジオアラバスター主文字 (16.1:1 WCAG AAA)
-            inkSoft  = juce::Colour (0xff9aa6b8);   // クール・チタンスレート副文字 (7.2:1 WCAG AAA)
-            yellow   = juce::Colour (0xffe5a43b);   // ウォーム・スタジオアンバー / VUゴールド（ダイナミクス・音色・主CTA）
-            yellowDk = juce::Colour (0xffbd7f1e);
-            green    = juce::Colour (0xff28c095);   // プレシジョン・シグナルエメラルド（整音・ピッチ合致）
-            salmon   = juce::Colour (0xffe86670);   // スタジオ・ピークコーラル（クリップ・ミュート・録音）
-            blue     = juce::Colour (0xff529bf5);   // プレシジョン・スタジオアズール（解析・補助指標）
-            ice      = juce::Colour (0xff5cc4e6);   // チタン・アイスシアン（空間・リバーブ・空気感）
-            track    = juce::Colour (0xff212834);   // リセスト・エンコーダトラック溝
-            badge    = juce::Colour (0xfff0f4f8);
-            metalHi   = juce::Colour (0xffe2e8f0);
+            // 既定フラッグシップテーマ (mode == 0): Vivid Obsidian Studio — 漆黒マットアノダイズド筐体 × 鮮烈グッドデザイン機能色
+            // (暖色=ビビッドオレンジ / 寒色・抜け=エレクトリックシアン / 整音=エメラルド / 空間・ハモリ=マゼンタバイオレット / 音量=サンバーストアンバー)
+            bgTop    = juce::Colour (0xff090c12);   // ディープ・マットオブシディアン上端
+            bgBot    = juce::Colour (0xff05070b);   // 漆黒アノダイズド下端
+            panel    = juce::Colour (0xff101520);   // 立体アイランド・モジュールパネル
+            panel2   = juce::Colour (0xff182030);   // 削り出し操作デッキ面
+            panelLn  = juce::Colour (0xff2c3a52);   // クリスプ・チタンベゼル境界線
+            ink      = juce::Colour (0xfff6f9fc);   // ピュア・スタジオホワイト主文字 (WCAG AAA 17.4:1)
+            inkSoft  = juce::Colour (0xffa8b8cf);   // クリア・シルバーブルー副文字 (WCAG AAA 8.1:1)
+            yellow   = juce::Colour (0xffff7a1a);   // ビビッド・サンセットオレンジ（あたたかさ・倍音・主アクセント）
+            yellowDk = juce::Colour (0xffd95300);
+            green    = juce::Colour (0xff00e599);   // ビビッド・エメラルドミント（きれい・ノイズ除去・音程合致）
+            salmon   = juce::Colour (0xfff43f8e);   // ビビッド・マゼンタコーラル（サビ演出・ミュート・空間アクセント）
+            blue     = juce::Colour (0xff00a8ff);   // エレクトリック・コバルトブルー（クール・ドライ・声の抜け）
+            ice      = juce::Colour (0xff22d3ee);   // ルミナス・アイスシアン（クリア空気感・残響リング）
+            track    = juce::Colour (0xff1e293b);   // 高コントラスト・トラック溝
+            badge    = juce::Colour (0xfff6f9fc);
+            metalHi   = juce::Colour (0xfff1f5f9);
             metalMid  = juce::Colour (0xff64748b);
             metalDark = juce::Colour (0xff334155);
-            mirrorTop = juce::Colour (0xff202836);
-            mirrorBot = juce::Colour (0xff0c1017);
+            mirrorTop = juce::Colour (0xff1e293b);
+            mirrorBot = juce::Colour (0xff080c14);
         }
     }
 
@@ -1768,133 +1769,9 @@ public:
             }
         }
 
-        // ★ v6.0.0 Carbon CNC-Machined Hardware Encoder (!s_knobInnerArt 既定モード):
-        //   21分割精密マイクロスケール＋バイポーラ0点基準＋アノダイズド削り出しキャップ＋高視認ブレード指針により、
-        //   Clean(Emerald) / Dynamics&Tone(Warm Amber) / Space(Titanium Ice) の3系統をハードウェア機材水準で表現。
-        if (! s_knobInnerArt)
-        {
-            const bool isBipolar = (sl.getMinimum() < -0.001 && sl.getMaximum() > 0.001
+        const bool isBipolarKnob = (! s_knobInnerArt && sl.getMinimum() < -0.001 && sl.getMaximum() > 0.001
                                     && std::abs (sl.getMinimum() + sl.getMaximum()) < 0.5);
-            const float originAngle = isBipolar ? (startAngle + 0.5f * (endAngle - startAngle)) : startAngle;
-
-            // 21点の精密マイクロスケール目盛り（0%, 25%, 50%, 75%, 100%はメジャー刻み線、中間は精密ノッチ）
-            const int tickSteps = (radius >= 20.0f) ? 20 : 10;
-            for (int tick = 0; tick <= tickSteps; ++tick)
-            {
-                const float tNorm  = (float) tick / (float) tickSteps;
-                const float a      = startAngle + (endAngle - startAngle) * tNorm;
-                const bool  major  = (tick == 0 || tick * 2 == tickSteps || tick == tickSteps
-                                      || (tickSteps == 20 && (tick == 5 || tick == 15)));
-                const bool  passed = isWorking && (isBipolar
-                    ? ((pos >= 0.5f) ? (tNorm >= 0.495f && tNorm <= pos + 0.012f)
-                                     : (tNorm <= 0.505f && tNorm >= pos - 0.012f))
-                    : (tNorm <= pos + 0.015f));
-                const auto  tCol   = passed
-                    ? groupAccent.withAlpha (major ? 0.94f : 0.68f)
-                    : (lightPanel ? Palette::inkSoft.withAlpha (major ? 0.54f : 0.28f)
-                                  : Palette::panelLn.brighter (major ? 0.28f : 0.06f).withAlpha (major ? 0.86f : 0.46f));
-                g.setColour (tCol);
-                if (major)
-                {
-                    const float rIn  = radius + 3.2f;
-                    const float rOut = radius + (isHero ? 7.6f : 6.3f);
-                    g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
-                                c.x + rOut * std::sin (a), c.y - rOut * std::cos (a),
-                                (tick * 2 == tickSteps && isBipolar) ? 1.7f : 1.35f);
-                }
-                else if (radius >= 16.0f)
-                {
-                    const float rIn  = radius + 3.8f;
-                    const float rOut = radius + (isHero ? 5.6f : 5.0f);
-                    g.drawLine (c.x + rIn * std::sin (a), c.y - rIn * std::cos (a),
-                                c.x + rOut * std::sin (a), c.y - rOut * std::cos (a), 0.95f);
-                }
-            }
-
-            // リセスト・カーボントラック溝
-            juce::Path track;
-            track.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, endAngle, true);
-            if (! lightPanel)
-            {
-                g.setColour (Palette::bgBot.withAlpha (0.78f));
-                g.strokePath (track, juce::PathStrokeType (ring + 1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-            }
-            g.setColour (lightPanel ? Palette::track.darker (0.14f) : Palette::track);
-            g.strokePath (track, juce::PathStrokeType (ring, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-            if (isWorking)
-            {
-                juce::Path value;
-                const float a0 = juce::jmin (originAngle, angle);
-                const float a1 = juce::jmax (originAngle, angle);
-                value.addCentredArc (c.x, c.y, radius, radius, 0.0f, a0, a1, true);
-                g.setColour (groupAccent.withAlpha (0.18f + 0.10f * effInt));
-                g.strokePath (value, juce::PathStrokeType (ring * 2.10f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-                g.setColour (groupAccent);
-                g.strokePath (value, juce::PathStrokeType (ring * 1.10f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-                const float tipX = c.x + radius * std::sin (angle), tipY = c.y - radius * std::cos (angle);
-                g.setColour (lightPanel ? juce::Colours::white : groupAccent.brighter (0.45f));
-                g.fillEllipse (tipX - ring * 0.50f, tipY - ring * 0.50f, ring * 1.00f, ring * 1.00f);
-            }
-
-            const float kr = radius - ring - (isHero ? 3.8f : 3.0f);
-            if (kr >= 5.0f)
-            {
-                // ハードウェア・ドロップシャドウ
-                g.setColour (juce::Colours::black.withAlpha (lightPanel ? 0.13f : 0.44f));
-                g.fillEllipse (c.x - kr, c.y - kr + 2.0f, kr * 2.0f, kr * 2.0f);
-
-                // CNCマシンド・アノダイズドアルミ削り出し外周チャンファー＆ディッシュ面
-                const auto capTop = lightPanel ? Palette::panel.brighter  (0.03f) : Palette::panel2.brighter (0.10f);
-                const auto capBot = lightPanel ? Palette::panel2.darker   (0.08f) : Palette::bgBot.brighter  (0.04f);
-                g.setGradientFill (juce::ColourGradient (capTop, c.x, c.y - kr, capBot, c.x, c.y + kr, false));
-                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
-
-                if (kr >= 10.0f)
-                {
-                    const float dishR = kr * 0.78f;
-                    const auto dishTop = lightPanel ? Palette::panel2.darker (0.04f) : Palette::panel.darker (0.14f);
-                    const auto dishBot = lightPanel ? Palette::panel.brighter (0.02f) : Palette::panel2.brighter (0.04f);
-                    g.setGradientFill (juce::ColourGradient (dishTop, c.x, c.y - dishR, dishBot, c.x, c.y + dishR, false));
-                    g.fillEllipse (c.x - dishR, c.y - dishR, dishR * 2.0f, dishR * 2.0f);
-                    g.setColour (lightPanel ? Palette::panelLn.withAlpha (0.48f) : Palette::panelLn.withAlpha (0.42f));
-                    g.drawEllipse (c.x - dishR, c.y - dishR, dishR * 2.0f, dishR * 2.0f, 0.9f);
-
-                    juce::Path topRim;
-                    topRim.addCentredArc (c.x, c.y, kr - 0.8f, kr - 0.8f, 0.0f, -1.20f, 1.20f, true);
-                    g.setColour (juce::Colours::white.withAlpha (lightPanel ? 0.65f : 0.14f));
-                    g.strokePath (topRim, juce::PathStrokeType (1.0f));
-                }
-
-                g.setColour (isWorking ? groupAccent.withAlpha (0.88f)
-                                       : (lightPanel ? Palette::panelLn.darker (0.22f) : Palette::panelLn.brighter (0.08f)));
-                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.6f : 1.25f);
-
-                const float sinA = std::sin (angle), cosA = std::cos (angle);
-                const float pIn  = kr * 0.24f;
-                const float pOut = kr * 0.84f;
-                const auto needleCol = isWorking
-                    ? Palette::ink
-                    : (lightPanel ? Palette::inkSoft.darker (0.18f) : Palette::inkSoft)
-                          .withAlpha (s_accessMode == 2 ? 0.50f : 0.92f);
-                g.setColour (needleCol);
-                g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA,
-                            c.x + pOut * sinA, c.y - pOut * cosA,
-                            juce::jmax (2.4f, kr * 0.086f));
-
-                const float hubR = juce::jmax (2.2f, kr * 0.088f);
-                g.setColour (isWorking ? groupAccent : (lightPanel ? Palette::panelLn.darker (0.24f) : Palette::panelLn.brighter (0.10f)));
-                g.fillEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f);
-
-                if (! isWorking && s_accessMode == 2)
-                {
-                    g.setColour ((lightPanel ? Palette::panel2 : Palette::bgBot).withAlpha (0.38f));
-                    g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
-                }
-            }
-            return;
-        }
+        const float originAngle  = isBipolarKnob ? (startAngle + 0.5f * (endAngle - startAngle)) : startAngle;
 
         // ★ アクティブ音響コロナ (Active Sonic Corona):
         //   ツマミが効いている時だけ、効き具合 (effInt) に比例して外周に多層光輪ハローと
@@ -1938,7 +1815,10 @@ public:
         {
             const float tNorm = (float) tick / (float) numTicks;
             const float a = startAngle + (endAngle - startAngle) * tNorm;
-            const bool activeTick = isWorking && (tNorm <= pos + 0.005f);
+            const bool activeTick = isWorking && (isBipolarKnob
+                ? ((pos >= 0.5f) ? (tNorm >= 0.495f && tNorm <= pos + 0.012f)
+                                 : (tNorm <= 0.505f && tNorm >= pos - 0.012f))
+                : (tNorm <= pos + 0.005f));
             const bool majorTick  = (tick % (isHero ? 3 : 2) == 0);
             const juce::Colour tickAccent = accent.interpolatedWith (dirTint, tNorm * 0.48f);
             if (s_knobInnerArt && s_knobStyle == 2)   // V-Liver: クチュール宝飾メタル台座＋ジュエル・ドット目盛り
@@ -1992,7 +1872,9 @@ public:
         if (isWorking)
         {
             juce::Path value;
-            value.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+            const float arcA0 = juce::jmin (originAngle, angle);
+            const float arcA1 = juce::jmax (originAngle, angle);
+            value.addCentredArc (c.x, c.y, radius, radius, 0.0f, arcA0, arcA1, true);
             const float glowAlpha = ((s_knobStyle == 4 || s_knobStyle == 6 || s_knobStyle == 0) ? 0.44f : (isHero ? 0.36f : 0.28f)) * (0.55f + 0.45f * effInt);
             g.setColour (accent.withAlpha (glowAlpha));
             g.strokePath (value, juce::PathStrokeType (ring * 3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
@@ -2072,37 +1954,220 @@ public:
 
         if (! s_knobInnerArt)
         {
-            // ★ ノブ内の装飾OFFモード：テーマ配色と外周アークはそのまま活かし、内部の宝石・歯車・ハート・星模様を排したクリーンな無地文字盤＋高視認ポインター針
+            // ★ グッドデザイン鮮彩・役割別異形状つまみ ＆ 象徴シンボル (△ ○ × ◇ + 拡大音量ウェッジ) 描画：
+            //    すべてのつまみが同じ丸で退屈になる問題を解消し、触る前から「何をするつまみか」が形と色と記号で直感的に伝わる設計
             const bool lightCap = Palette::panel.getPerceivedBrightness() > 0.52f;
-            g.setColour (juce::Colours::black.withAlpha (lightCap ? 0.16f : 0.34f));
-            g.fillEllipse (c.x - kr, c.y - kr + 2.4f, kr * 2.0f, kr * 2.0f);
+            const juce::String tipStr = sl.getTooltip() + " " + sl.getName() + " " + sl.getComponentID();
+            // 0=八角形クリーン(△), 1=ブレード抜け・クール(×), 2=寒暖フルート温度(○), 3=同心プラネタリー空間(◇), 4=拡大ウェッジ音量
+            int roleShape = (group == 0) ? 0 : (group == 1) ? 2 : 3;
+            if (tipStr.contains (juce::String::fromUTF8 ("最終音量")) || tipStr.contains (juce::String::fromUTF8 ("入力音量"))
+                || tipStr.contains (juce::String::fromUTF8 ("出力音量")) || tipStr.containsIgnoreCase ("Volume") || tipStr.containsIgnoreCase ("Gain"))
+                roleShape = 4;
+            else if (tipStr.contains (juce::String::fromUTF8 ("明るさ")) || tipStr.contains (juce::String::fromUTF8 ("ヌケ"))
+                     || tipStr.contains (juce::String::fromUTF8 ("キラキラ")) || tipStr.contains (juce::String::fromUTF8 ("サ行"))
+                     || tipStr.contains (juce::String::fromUTF8 ("ことば")) || tipStr.containsIgnoreCase ("Presence") || tipStr.containsIgnoreCase ("Air"))
+                roleShape = 1;
+            else if (tipStr.contains (juce::String::fromUTF8 ("厚み")) || tipStr.contains (juce::String::fromUTF8 ("あたたか"))
+                     || tipStr.contains (juce::String::fromUTF8 ("こもり")) || tipStr.contains (juce::String::fromUTF8 ("音量そろえ"))
+                     || tipStr.containsIgnoreCase ("Warm") || tipStr.containsIgnoreCase ("Comp"))
+                roleShape = 2;
+            else if (tipStr.contains (juce::String::fromUTF8 ("残響")) || tipStr.contains (juce::String::fromUTF8 ("やまびこ"))
+                     || tipStr.contains (juce::String::fromUTF8 ("広がり")) || tipStr.contains (juce::String::fromUTF8 ("ひびき"))
+                     || tipStr.containsIgnoreCase ("Reverb") || tipStr.containsIgnoreCase ("Delay"))
+                roleShape = 3;
 
-            const auto capTop = lightCap ? Palette::panel.brighter (0.06f) : Palette::panel2.brighter (0.14f);
-            const auto capBot = lightCap ? Palette::panel2.darker (0.08f)  : Palette::bgTop.darker (0.28f);
-            g.setGradientFill (juce::ColourGradient (capTop, c.x - kr * 0.45f, c.y - kr * 0.55f,
-                                                     capBot, c.x + kr * 0.45f, c.y + kr * 0.60f, false));
-            g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+            // 役割ごとの直感ビビッドカラー（寒色クール＝コバルトシアン、暖色＝ビビッドオレンジ、整音＝エメラルド、空間＝バイオレットマゼンタ、音量＝アンバー）
+            juce::Colour roleCol = Palette::green;
+            if (roleShape == 1)      roleCol = Palette::blue.interpolatedWith (Palette::ice, 0.45f);
+            else if (roleShape == 2) roleCol = juce::Colour (0xff00a8ff).interpolatedWith (juce::Colour (0xffff621f), juce::jlimit (0.0f, 1.0f, pos));
+            else if (roleShape == 3) roleCol = juce::Colour (0xffd946ef).interpolatedWith (Palette::ice, 0.30f * (1.0f - pos));
+            else if (roleShape == 4) roleCol = juce::Colour (0xff00e599).interpolatedWith (juce::Colour (0xffff7a1a), juce::jlimit (0.0f, 1.0f, pos));
 
-            g.setColour (isWorking ? accent.withAlpha (0.85f) : Palette::panelLn.withAlpha (0.85f));
-            g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, isHero ? 1.8f : 1.4f);
+            // 温度・音量つまみは外周アークも寒色ブルー ➔ 暖色ビビッドオレンジへ鮮やかに変化させる
+            if (isWorking && (roleShape == 2 || roleShape == 3 || roleShape == 4))
+            {
+                juce::Path vividArc;
+                vividArc.addCentredArc (c.x, c.y, radius, radius, 0.0f, startAngle, angle, true);
+                const juce::Colour startC = (roleShape == 2) ? juce::Colour (0xff00b4ff)
+                                          : (roleShape == 3) ? Palette::ice
+                                                             : juce::Colour (0xff00e599);
+                const juce::Colour endC   = (roleShape == 2) ? juce::Colour (0xffff5a1f)
+                                          : (roleShape == 3) ? juce::Colour (0xffe849f7)
+                                                             : juce::Colour (0xffff8800);
+                g.setGradientFill (juce::ColourGradient (startC, c.x - radius, c.y + radius * 0.5f,
+                                                         endC,   c.x + radius, c.y - radius * 0.5f, false));
+                g.strokePath (vividArc, juce::PathStrokeType (ring * 1.22f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
 
             const float sinA = std::sin (angle), cosA = std::cos (angle);
-            const float pIn  = kr * 0.20f;
-            const float pOut = kr * 0.84f;
-            const auto needleCol = isWorking ? (lightCap ? Palette::accentOn (groupAccent, capTop) : juce::Colours::white)
+            const auto capTop = lightCap ? Palette::panel.brighter (0.06f) : Palette::panel2.brighter (0.18f);
+            const auto capBot = lightCap ? Palette::panel2.darker (0.10f)  : Palette::bgBot.darker (0.20f);
+
+            if (roleShape == 0)
+            {
+                // [形状0: 八角形マシンドキャップ ＋ △ エメラルド象徴マーク] (きれい・ノイズ除去)
+                juce::Path octShadow, octCap;
+                for (int v = 0; v < 8; ++v)
+                {
+                    const float a = angle * 0.25f + juce::MathConstants<float>::pi * 0.125f + (float) v * juce::MathConstants<float>::pi * 0.25f;
+                    const float px = c.x + kr * 1.02f * std::cos (a);
+                    const float py = c.y + kr * 1.02f * std::sin (a);
+                    if (v == 0) { octCap.startNewSubPath (px, py); octShadow.startNewSubPath (px, py + 2.6f); }
+                    else        { octCap.lineTo (px, py);          octShadow.lineTo (px, py + 2.6f); }
+                }
+                octCap.closeSubPath(); octShadow.closeSubPath();
+                g.setColour (juce::Colours::black.withAlpha (lightCap ? 0.18f : 0.45f));
+                g.fillPath (octShadow);
+                g.setGradientFill (juce::ColourGradient (roleCol.withAlpha (isWorking ? 0.38f : 0.18f).interpolatedWith (capTop, 0.65f), c.x - kr, c.y - kr,
+                                                         capBot, c.x + kr, c.y + kr, false));
+                g.fillPath (octCap);
+                g.setColour (isWorking ? roleCol : Palette::panelLn.brighter (0.12f));
+                g.strokePath (octCap, juce::PathStrokeType (isHero ? 2.1f : 1.6f));
+
+                const float innerR = kr * 0.66f;
+                g.setColour (lightCap ? Palette::panel : juce::Colour (0xff0d121b));
+                g.fillEllipse (c.x - innerR, c.y - innerR, innerR * 2.0f, innerR * 2.0f);
+
+                // 中央 △ シンボル（一定サイズ以上のノブに刻印）
+                if (kr >= 16.0f)
+                {
+                    const float ts = juce::jmin (9.5f, kr * 0.28f);
+                    juce::Path tri;
+                    tri.startNewSubPath (c.x, c.y - ts * 0.88f);
+                    tri.lineTo (c.x + ts * 0.86f, c.y + ts * 0.64f);
+                    tri.lineTo (c.x - ts * 0.86f, c.y + ts * 0.64f);
+                    tri.closeSubPath();
+                    g.setColour (isWorking ? roleCol.brighter (0.25f) : roleCol.withAlpha (0.55f));
+                    g.strokePath (tri, juce::PathStrokeType (isHero ? 2.1f : 1.6f, juce::PathStrokeType::mitered, juce::PathStrokeType::rounded));
+                }
+            }
+            else if (roleShape == 1)
+            {
+                // [形状1: チキンヘッド／建築ブレード・ポインター ＋ × クリア象徴マーク] (声の抜け・明るさ・サ行)
+                g.setColour (juce::Colours::black.withAlpha (lightCap ? 0.16f : 0.42f));
+                g.fillEllipse (c.x - kr * 0.94f, c.y - kr * 0.94f + 2.4f, kr * 1.88f, kr * 1.88f);
+                g.setGradientFill (juce::ColourGradient (capTop, c.x - kr, c.y - kr, capBot, c.x + kr, c.y + kr, false));
+                g.fillEllipse (c.x - kr * 0.94f, c.y - kr * 0.94f, kr * 1.88f, kr * 1.88f);
+                g.setColour (isWorking ? roleCol.withAlpha (0.90f) : Palette::panelLn);
+                g.drawEllipse (c.x - kr * 0.94f, c.y - kr * 0.94f, kr * 1.88f, kr * 1.88f, 1.6f);
+
+                // 回転する立体テーパード・ブレードつまみ本体
+                juce::Path blade;
+                const float bwBase = juce::jmax (4.5f, kr * 0.28f);
+                const float bwTip  = juce::jmax (2.4f, kr * 0.13f);
+                blade.startNewSubPath (-bwBase,  kr * 0.72f);
+                blade.lineTo          (-bwTip,  -kr * 0.94f);
+                blade.lineTo          ( bwTip,  -kr * 0.94f);
+                blade.lineTo          ( bwBase,  kr * 0.72f);
+                blade.closeSubPath();
+                const auto xf = juce::AffineTransform::rotation (angle).translated (c.x, c.y);
+                g.setColour (juce::Colours::black.withAlpha (0.45f));
+                g.fillPath (blade, xf.translated (0.0f, 2.2f));
+                g.setGradientFill (juce::ColourGradient (roleCol.interpolatedWith (juce::Colours::white, 0.35f), c.x - kr * 0.4f, c.y - kr * 0.6f,
+                                                         roleCol.darker (0.45f), c.x + kr * 0.4f, c.y + kr * 0.6f, false));
+                g.fillPath (blade, xf);
+                g.setColour (juce::Colours::white.withAlpha (0.92f));
+                g.drawLine (c.x + kr * 0.28f * sinA, c.y - kr * 0.28f * cosA,
+                            c.x + kr * 0.88f * sinA, c.y - kr * 0.88f * cosA, 2.2f);
+                return;
+            }
+            else if (roleShape == 2)
+            {
+                // [形状2: 16溝ローレット・サーマルダイヤル ＋ ○ 暖色/寒色リング象徴マーク] (温度・厚み・声量そろえ)
+                g.setColour (juce::Colours::black.withAlpha (lightCap ? 0.18f : 0.44f));
+                g.fillEllipse (c.x - kr, c.y - kr + 2.4f, kr * 2.0f, kr * 2.0f);
+                g.setColour (roleCol.withAlpha (isWorking ? 0.85f : 0.42f));
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                // 外周ローレット刻み
+                const int flutes = isHero ? 20 : 14;
+                g.setColour (juce::Colours::black.withAlpha (0.38f));
+                for (int f = 0; f < flutes; ++f)
+                {
+                    const float fa = angle + (float) f * juce::MathConstants<float>::twoPi / (float) flutes;
+                    g.drawLine (c.x + kr * 0.80f * std::sin (fa), c.y - kr * 0.80f * std::cos (fa),
+                                c.x + kr * 0.99f * std::sin (fa), c.y - kr * 0.99f * std::cos (fa), 1.6f);
+                }
+                const float inR = kr * 0.74f;
+                g.setGradientFill (juce::ColourGradient (capTop, c.x - inR, c.y - inR, capBot, c.x + inR, c.y + inR, false));
+                g.fillEllipse (c.x - inR, c.y - inR, inR * 2.0f, inR * 2.0f);
+
+                if (kr >= 15.0f)
+                {
+                    const float crSym = juce::jmin (8.2f, kr * 0.25f);
+                    g.setColour (isWorking ? roleCol.brighter (0.20f) : roleCol.withAlpha (0.60f));
+                    g.drawEllipse (c.x - crSym, c.y - crSym, crSym * 2.0f, crSym * 2.0f, isHero ? 2.2f : 1.7f);
+                }
+            }
+            else if (roleShape == 3)
+            {
+                // [形状3: 同心プラネタリー・ガラスリング ＋ ◇ 象徴マーク] (広がり量に応じて輪が視覚的に広がる！)
+                const float expR = kr * (0.76f + 0.24f * pos);
+                g.setColour (roleCol.withAlpha (isWorking ? (0.18f + 0.22f * pos) : 0.08f));
+                g.fillEllipse (c.x - expR, c.y - expR, expR * 2.0f, expR * 2.0f);
+                g.setColour (roleCol.withAlpha (isWorking ? 0.88f : 0.38f));
+                g.drawEllipse (c.x - expR, c.y - expR, expR * 2.0f, expR * 2.0f, isHero ? 2.0f : 1.4f);
+
+                const float midR = kr * (0.56f + 0.14f * pos);
+                g.setColour (Palette::ice.withAlpha (isWorking ? 0.72f : 0.30f));
+                g.drawEllipse (c.x - midR, c.y - midR, midR * 2.0f, midR * 2.0f, 1.3f);
+
+                const float coreR = kr * 0.48f;
+                g.setColour (lightCap ? Palette::panel : juce::Colour (0xff0c101a));
+                g.fillEllipse (c.x - coreR, c.y - coreR, coreR * 2.0f, coreR * 2.0f);
+                if (kr >= 16.0f)
+                {
+                    const float ds = juce::jmin (7.8f, kr * 0.23f);
+                    juce::Path dia;
+                    dia.startNewSubPath (c.x, c.y - ds);
+                    dia.lineTo (c.x + ds, c.y);
+                    dia.lineTo (c.x, c.y + ds);
+                    dia.lineTo (c.x - ds, c.y);
+                    dia.closeSubPath();
+                    g.setColour (isWorking ? roleCol.brighter (0.30f) : roleCol.withAlpha (0.58f));
+                    g.strokePath (dia, juce::PathStrokeType (1.7f));
+                }
+            }
+            else
+            {
+                // [形状4: ローレットドラム ＋ 音量が上がるほど上へ大きく広がるウェッジ発光ゲージ] (声の大きさ・音量)
+                g.setColour (juce::Colours::black.withAlpha (lightCap ? 0.18f : 0.44f));
+                g.fillEllipse (c.x - kr, c.y - kr + 2.2f, kr * 2.0f, kr * 2.0f);
+                g.setGradientFill (juce::ColourGradient (capTop, c.x - kr, c.y - kr, capBot, c.x + kr, c.y + kr, false));
+                g.fillEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f);
+                g.setColour (roleCol.withAlpha (0.88f));
+                g.drawEllipse (c.x - kr, c.y - kr, kr * 2.0f, kr * 2.0f, 1.8f);
+
+                // 内部に「下から上へ幅が広がる6段ウェッジバー」を描き、音量の大きさが一目で直感的に分かる造形
+                const int segs = 6;
+                const int litSegs = juce::roundToInt (pos * (float) segs);
+                const float totH = kr * 1.12f;
+                const float segGap = totH / (float) segs;
+                for (int s = 0; s < segs; ++s)
+                {
+                    const float sy = (c.y + totH * 0.48f) - (float) (s + 1) * segGap + 1.5f;
+                    const float sw = kr * (0.34f + 0.14f * (float) s);
+                    const bool on = (s < litSegs);
+                    const juce::Colour sc = (s >= 4) ? juce::Colour (0xffff5a1f)
+                                          : (s >= 2) ? juce::Colour (0xffffb800)
+                                                     : juce::Colour (0xff00e599);
+                    g.setColour (on ? sc : Palette::panelLn.withAlpha (0.32f));
+                    g.fillRoundedRectangle (c.x - sw * 0.5f, sy, sw, juce::jmax (2.0f, segGap - 2.2f), 1.4f);
+                }
+            }
+
+            // 外周寄りの高視認ポインター・マーカー（中央の象徴記号と重ならないようリム側に配置）
+            const float pIn  = kr * 0.56f;
+            const float pOut = kr * 0.90f;
+            const auto needleCol = isWorking ? (lightCap ? Palette::accentOn (roleCol, capTop) : juce::Colours::white)
                                              : Palette::inkSoft;
-            g.setColour ((lightCap ? Palette::ink : juce::Colours::black).withAlpha (0.28f));
+            g.setColour (juce::Colours::black.withAlpha (0.35f));
             g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA + 0.8f,
                         c.x + pOut * sinA, c.y - pOut * cosA + 0.8f,
-                        juce::jmax (3.2f, kr * 0.105f));
+                        juce::jmax (3.4f, kr * 0.11f));
             g.setColour (needleCol);
             g.drawLine (c.x + pIn * sinA, c.y - pIn * cosA,
                         c.x + pOut * sinA, c.y - pOut * cosA,
-                        juce::jmax (2.5f, kr * 0.082f));
-
-            const float hubR = juce::jmax (2.4f, kr * 0.10f);
-            g.setColour (isWorking ? groupAccent : Palette::panelLn);
-            g.fillEllipse (c.x - hubR, c.y - hubR, hubR * 2.0f, hubR * 2.0f);
+                        juce::jmax (2.6f, kr * 0.088f));
 
             finishKnobStateOverlay();
             return;
@@ -3749,7 +3814,7 @@ public:
     void stopRange()    { rangeChecking = false; repaint(); }
     bool isRangeChecking() const { return rangeChecking; }
     juce::String rangeResultText() const;
-    void setLiteMode (bool lite) { startTimerHz (lite ? 12 : 30); }
+    void setLiteMode (bool lite) { startTimerHz (lite ? 8 : 15); }
 
 };
 
@@ -3767,7 +3832,7 @@ public:
         timeData.resize ((size_t) VocalGzzioProcessor::analyzerSize, 0.0f);
         fftData .resize ((size_t) VocalGzzioProcessor::analyzerSize * 2, 0.0f);
         specDb  .resize ((size_t) VocalGzzioProcessor::analyzerSize / 2 + 1, -120.0f);
-        startTimerHz (20);
+        startTimerHz (12);
     }
 
     void paint (juce::Graphics&) override;
@@ -3778,7 +3843,7 @@ public:
     // FFT and no repaints happen — a real CPU saving.
     void visibilityChanged() override
     {
-        if (isVisible() && ! liteMode) startTimerHz (20);
+        if (isVisible() && ! liteMode) startTimerHz (12);
         else                           stopTimer();
     }
 
@@ -3786,7 +3851,7 @@ public:
     {
         liteMode = lite;
         if (liteMode || ! isVisible()) stopTimer();
-        else                           startTimerHz (20);
+        else                           startTimerHz (12);
         repaint();
     }
     bool isLiteMode() const noexcept { return liteMode; }
@@ -4086,17 +4151,20 @@ public:
     void setBounds (juce::Rectangle<int> b) { area = b; }
     void setMode   (int m, juce::Rectangle<int> b) { mode = m; area = b; }
 
+    // 日本の四季（春霞の桜・紺碧の夏海・錦秋の紅葉・銀嶺の雪化粧）の高精細静止画マスター取得（初回のみデコード・実行時負荷ゼロ）
+    static const juce::Image& getSeasonMasterImage (int seasonIndex);
+
     // returns true if a themed background was painted (caller then skips its own)
     bool paint (juce::Graphics& g)
     {
-        if (! GzzioLnF::isKnobInnerArtEnabled()) return false; // クリーンスタジオ既定時はクマ・額縁・丘などの装飾背景を描かない
+        if (mode == 2) { paintNature    (g); return true; }
+        if (Palette::isOceanStarTheme (mode)) { paintOceanStar (g); return true; }   // 🌌🌊 星空・海・黄昏＆四季絵画コレクション
+        if (! GzzioLnF::isKnobInnerArtEnabled()) return false; // クリーンスタジオ既定時はクマ等の装飾背景を描かない
         if (mode == 1) { paintYuruKawa  (g); return true; }
         if (mode == 8) { paintYuruNight (g); return true; }   // v2.11.0 ゆるふわ・よる
-        if (mode == 2) { paintNature    (g); return true; }
         if (mode == 3) { paintBrand     (g); return true; }
         if (mode == 4) { paintAurora    (g); return true; }
         if (Palette::isCoutureTheme (mode))   { paintVLiver    (g); return true; }   // クチュール・コスメ5色展開
-        if (Palette::isOceanStarTheme (mode)) { paintOceanStar (g); return true; }   // 🌌🌊 星空・海・黄昏コレクション5色展開
         if (mode == 6) { paintCyberNeon (g); return true; }   // 配信サイバーネオン
         if (mode == 9) { paintStudioPro (g); return true; }   // プロスタジオ・コンソール
         return false;
@@ -4274,36 +4342,11 @@ public:
     int partSeason = -1;
     void update (float dt, int mx, int my, float lv)
     {
-        if (! freezeTime) animT += dt;       // GZ_SEASON固定時はanimTを止める
+        // 動画的な常時アニメーション負荷を排除：静止画プリロード方式に統一し、GZ_SEASON明示時以外もパーティクル演算を休止（GPU/CPU負荷ゼロ）
+        juce::ignoreUnused (dt);
         level += (lv - level) * 0.25f;
         mouseX = mx; mouseY = my;
-        if (mode != 2) return;
-        const int season = currentSeason();
-        if (season == 1) { parts.clear(); partSeason = 1; return; }   // 夏は波のみ
-        if (partSeason != season || parts.empty()) seedParts (season);
-        const float W = (float) area.getWidth();
-        for (auto& q : parts)
-        {
-            // 基本挙動: ゆっくり落下 + 横揺れ
-            const float sway = std::sin (animT * 0.8f + q.rot * 3.0f);
-            float ax = sway * (q.kind == 3 ? 3.0f : 8.0f);
-            float ay = (q.kind == 0 ? 26.0f : q.kind == 3 ? 22.0f : q.kind == 4 ? 14.0f : 30.0f);
-            // カーソルで押し流す (半径120px)
-            const float dx = q.x - (float) mouseX, dy = q.y - (float) mouseY;
-            const float d2 = dx*dx + dy*dy;
-            if (d2 < 120.0f * 120.0f && d2 > 1.0f)
-            {
-                const float d = std::sqrt (d2), f = (120.0f - d) / 120.0f * 1800.0f / d;
-                q.vx += dx * f * dt;  q.vy += dy * f * dt;
-            }
-            q.vx += (ax - q.vx) * dt * 1.6f;
-            q.vy += (ay - q.vy) * dt * 1.6f;
-            q.x += q.vx * dt;  q.y += q.vy * dt;
-            q.rot += q.vr * dt * (1.0f + std::abs (q.vx) * 0.02f);
-            if (q.y > (float) area.getBottom() + 24.0f) { q.y = (float) area.getY() - 20.0f; q.x = (float) area.getX() + hash01 ((int)(q.x*13)) * W; q.vy = 0.0f; }
-            if (q.x < (float) area.getX() - 30.0f)  q.x += W + 60.0f;
-            if (q.x > (float) area.getRight() + 30.0f) q.x -= W + 60.0f;
-        }
+        parts.clear();
     }
     void drawParts (juce::Graphics& g, float a)
     {
@@ -4342,12 +4385,28 @@ public:
 
     void paintNature (juce::Graphics& g)
     {
-        const float len = 15.0f, xf = 2.0f;   // v1.8.3: 季節サイクル高速化(15秒/季)
-        const float t  = std::fmod (animT, len * 4.0f);
-        const int   s  = (int) (t / len) % 4;
-        const float ph = std::fmod (t, len);
-        paintSeason (g, s, 1.0f);
-        if (ph > len - xf) paintSeason (g, (s + 1) % 4, (ph - (len - xf)) / xf);
+        const auto envSeason = juce::SystemStats::getEnvironmentVariable ("GZ_SEASON", "");
+        if (envSeason.isNotEmpty())
+        {
+            paintSeason (g, juce::jlimit (0, 3, envSeason.getIntValue()), 1.0f);
+            return;
+        }
+        if (freezeTime || animT > 0.01f)
+        {
+            const float len = 15.0f, xf = 2.0f;
+            const float t  = std::fmod (animT, len * 4.0f);
+            const int   s  = (int) (t / len) % 4;
+            const float ph = std::fmod (t, len);
+            paintSeason (g, s, 1.0f);
+            if (! freezeTime && ph > len - xf) paintSeason (g, (s + 1) % 4, (ph - (len - xf)) / xf);
+            return;
+        }
+        // 既定は現実の暦季節（3-5月:春 / 6-8月:夏 / 9-11月:秋 / 12-2月:冬）の高精細絵画を負荷ゼロ表示
+        const int month = juce::Time::getCurrentTime().getMonth() + 1;
+        const int calSeason = (month >= 3 && month <= 5) ? 0
+                            : (month >= 6 && month <= 8) ? 1
+                            : (month >= 9 && month <= 11) ? 2 : 3;
+        paintSeason (g, calSeason, 1.0f);
     }
     void paintSeason (juce::Graphics& g, int season, float alpha)
     {
@@ -4365,16 +4424,34 @@ public:
     }
 
     // ---- 共通: 大きな木 ----
-    // ---- 春 ----
-    void paintSpring (juce::Graphics& g, juce::Rectangle<float> r)
+    void paintSeasonArtwork (juce::Graphics& g, int seasonIdx, juce::Rectangle<float> r)
     {
-        g.setGradientFill ({ juce::Colour (0xffe8f2eb), r.getCentreX(), r.getY(),
-                             juce::Colour (0xfff4f8f2), r.getCentreX(), r.getBottom(), false });
-        g.fillRect (r);
-        g.setColour (juce::Colour (0x337bb68a));
-        g.fillEllipse (r.getX()-140, r.getBottom()-72, r.getWidth()*0.85f, 170);
-        g.fillEllipse (r.getCentreX()-40, r.getBottom()-58, r.getWidth()*0.85f, 160);
+        const int s = juce::jlimit (0, 3, seasonIdx);
+        const int w = juce::jmax (1, (int) r.getWidth());
+        const int h = juce::jmax (1, (int) r.getHeight());
+        if (! seasonScaledCache[s].isValid()
+            || seasonScaledCache[s].getWidth()  != w
+            || seasonScaledCache[s].getHeight() != h)
+        {
+            const auto& master = getSeasonMasterImage (s);
+            seasonScaledCache[s] = juce::Image (juce::Image::RGB, w, h, false);
+            juce::Graphics cg (seasonScaledCache[s]);
+            if (master.isValid())
+            {
+                cg.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+                cg.drawImage (master, juce::Rectangle<float> (0.0f, 0.0f, (float) w, (float) h),
+                              juce::RectanglePlacement::fillDestination);
+            }
+            else
+            {
+                cg.fillAll (Palette::bgTop);
+            }
+        }
+        g.drawImageAt (seasonScaledCache[s], (int) r.getX(), (int) r.getY());
     }
+
+    // ---- 春（春霞と枝垂れ桜：高精細プリロード静止画アート） ----
+    void paintSpring (juce::Graphics& g, juce::Rectangle<float> r) { paintSeasonArtwork (g, 0, r); }
     void drawBlossom (juce::Graphics& g, float cx, float cy, float s, float a)
     {
         g.setColour (juce::Colour (0xffff9fc0).withMultipliedAlpha (a));
@@ -4387,85 +4464,10 @@ public:
         g.setColour (juce::Colour (0xffffe08a).withMultipliedAlpha (a));
         g.fillEllipse (cx - s*0.17f, cy - s*0.17f, s*0.34f, s*0.34f);
     }
-    // ---- 夏 ----
-    void paintSummer (juce::Graphics& g, juce::Rectangle<float> r)
-    {
-        // v1.8.4: UIパネルが下半分を覆うため、水平線を上部(見える帯)に置く。
-        // 空は上26%、海は上26%〜下端まで。これで「空と海」が中段の隙間で明快に見える。
-        const float hz = r.getY() + r.getHeight() * 0.26f;
-        g.setGradientFill ({ juce::Colour (0xff5fb8f0), r.getCentreX(), r.getY(),
-                             juce::Colour (0xffd8f0ff), r.getCentreX(), hz, false });
-        g.fillRect (r.withBottom (hz));
-        // 海: しっかり濃い青で「海」と分かる彩度に
-        g.setGradientFill ({ juce::Colour (0xff0a6bb8), r.getCentreX(), hz,
-                             juce::Colour (0xff1f92d8), r.getCentreX(), r.getBottom(), false });
-        g.fillRect (r.withTop (hz));
-        // 太陽 (空の右上)
-        const float sx = r.getX() + r.getWidth() * 0.80f, sy = r.getY() + r.getHeight() * 0.10f;
-        juce::Colour sun (0x77ffe9a0);
-        g.setGradientFill ({ sun, sx, sy, sun.withAlpha (0.0f), sx + 180, sy, true });
-        g.fillRect (r.withBottom (hz));
-        g.setColour (juce::Colour (0xffffde6a)); g.fillEllipse (sx - 34, sy - 34, 68, 68);
-        // 雲 (空を流れる)
-        for (int c = 0; c < 2; ++c)
-        {
-            const float w = (float) (150 + 60 * c);
-            const float cx = std::fmod (animT * (float) (7 + 4 * c) + (float) c * 480.0f, r.getWidth() + w * 2.0f) - w;
-            const float cy = r.getY() + (float) (30 + 40 * c);
-            g.setColour (juce::Colours::white.withAlpha (0.9f));
-            g.fillEllipse (cx, cy, w * 0.55f, 34);
-            g.fillEllipse (cx + w * 0.26f, cy - 16, w * 0.55f, 42);
-            g.fillEllipse (cx + w * 0.52f, cy, w * 0.48f, 30);
-        }
-        // 帆船シルエット (海と分かる目印・ゆっくり横切る)
-        {
-            const float bx = std::fmod (animT * 9.0f + 200.0f, r.getWidth() + 220.0f) - 110.0f;
-            const float by = hz + 24.0f;
-            g.setColour (juce::Colour (0xcc0d3a5a));
-            juce::Path hull; hull.startNewSubPath (bx - 34, by);
-            hull.lineTo (bx + 34, by); hull.lineTo (bx + 24, by + 14);
-            hull.lineTo (bx - 24, by + 14); hull.closeSubPath(); g.fillPath (hull);
-            g.drawLine (bx, by, bx, by - 40, 2.5f);
-            juce::Path sail; sail.startNewSubPath (bx + 2, by - 38);
-            sail.lineTo (bx + 26, by - 6); sail.lineTo (bx + 2, by - 6); sail.closeSubPath();
-            g.fillPath (sail);
-            juce::Path jib; jib.startNewSubPath (bx - 2, by - 34);
-            jib.lineTo (bx - 20, by - 6); jib.lineTo (bx - 2, by - 6); jib.closeSubPath();
-            g.fillPath (jib);
-        }
-        // 海面の波: 濃い青の上に白い波頭を何本も (海だと一目で分かる)
-        for (int wv = 0; wv < 9; ++wv)
-        {
-            const float y = hz + 22 + wv * (r.getHeight() * 0.74f / 9.0f);
-            g.setColour (juce::Colours::white.withAlpha (0.55f - wv * 0.03f));
-            juce::Path wp; wp.startNewSubPath (r.getX(), y);
-            for (int sg = 1; sg <= 12; ++sg)
-            {
-                const float x1 = r.getX() + r.getWidth() * sg / 12.0f;
-                const float ym = y + std::sin (animT * 0.8f + sg * 1.1f + wv * 1.7f) * 5;
-                wp.quadraticTo (x1 - r.getWidth() / 24.0f, ym + 7, x1, ym);
-            }
-            g.strokePath (wp, juce::PathStrokeType (2.6f));
-        }
-        // 水面のきらめき (海全体)
-        for (int i = 0; i < 60; ++i)
-        {
-            const float x = r.getX() + hash01 (i * 5 + 3) * r.getWidth();
-            const float y = hz + 10 + hash01 (i * 5 + 4) * (r.getHeight() - (hz - r.getY()) - 10);
-            const float tw = 0.5f + 0.5f * std::sin (animT * 2.2f + i * 2.1f);
-            g.setColour (juce::Colours::white.withAlpha (0.45f * tw));
-            g.fillEllipse (x, y, 3.0f, 1.6f);
-        }
-    }
-    // ---- 秋 ----
-    void paintAutumn (juce::Graphics& g, juce::Rectangle<float> r)
-    {
-        g.setGradientFill ({ juce::Colour (0xffffdfae), r.getCentreX(), r.getY(),
-                             juce::Colour (0xffffefd6), r.getCentreX(), r.getBottom(), false });
-        g.fillRect (r);
-        g.setColour (juce::Colour (0x55d9803a));
-        g.fillEllipse (r.getX()-120, r.getBottom()-62, r.getWidth()*1.35f, 140);
-    }
+    // ---- 夏（紺碧の夏海と入道雲：高精細プリロード静止画アート） ----
+    void paintSummer (juce::Graphics& g, juce::Rectangle<float> r) { paintSeasonArtwork (g, 1, r); }
+    // ---- 秋（錦秋の紅葉と夕映え：高精細プリロード静止画アート） ----
+    void paintAutumn (juce::Graphics& g, juce::Rectangle<float> r) { paintSeasonArtwork (g, 2, r); }
     void drawMaple (juce::Graphics& g, float cx, float cy, float s, float rot, juce::Colour col)
     {
         juce::Path p;
@@ -4494,18 +4496,8 @@ public:
         g.setColour (juce::Colour (0xffe8c23a).withMultipliedAlpha (a));
         g.fillPath (f, juce::AffineTransform::rotation (rot).translated (cx, cy));
     }
-    // ---- 冬 (空を青灰に: 白い雪が「見える」) ----
-    void paintWinter (juce::Graphics& g, juce::Rectangle<float> r)
-    {
-        g.setGradientFill ({ juce::Colour (0xff9db6d0), r.getCentreX(), r.getY(),
-                             juce::Colour (0xffdfeaf4), r.getCentreX(), r.getBottom(), false });
-        g.fillRect (r);
-        const float gy = r.getBottom() - r.getHeight()*0.12f;
-        g.setColour (juce::Colour (0xfff2f7fc));
-        g.fillRoundedRectangle (r.getX()-20, gy, r.getWidth()+40, r.getHeight()*0.14f+20, 18);
-        g.setColour (juce::Colour (0x889db8d8));
-        g.drawLine (r.getX(), gy+2, r.getRight(), gy+2, 2.5f);
-    }
+    // ---- 冬（銀嶺の雪化粧と宵灯り：高精細プリロード静止画アート） ----
+    void paintWinter (juce::Graphics& g, juce::Rectangle<float> r) { paintSeasonArtwork (g, 3, r); }
     void drawFlake (juce::Graphics& g, float cx, float cy, float s, float rot,
                     float alpha, bool outlined)
     {
@@ -5207,7 +5199,15 @@ public:
             const float W = rz.getWidth(), H = rz.getHeight();
             const float maxD = juce::jmax (W, H);
 
-            if (mode == 14)
+            // 風景・季節コレクション (mode 14..18) も簡易ベクター図形ではなく高精細プリロード絵画を基盤に1回キャッシュ合成（実行時GPU負荷ゼロ）
+            const int mappedSeason = (mode == 15) ? 1   // 02碧海 -> 紺碧の夏海
+                                   : (mode == 16) ? 0   // 03朝焼 -> 春霞の朝陽桜
+                                   : (mode == 17) ? 2   // 04晩秋 -> 錦秋の紅葉
+                                                  : 3;  // 01銀河 / 05蒼劇 -> 銀嶺と星空の宵灯り
+            paintSeasonArtwork (cg, mappedSeason, rz);
+            cg.setColour (Palette::bgTop.withAlpha (mode == 15 ? 0.16f : (mode == 16 || mode == 17 ? 0.22f : 0.34f)));
+            cg.fillRect (rz);
+            if (false && mode == 14)
             {
                 // =========================================================================
                 // 🌌 Mode 14: 星降る天の川銀河と蛍火の夜 (Galactic Milky Way & Firefly Night)
@@ -5793,6 +5793,7 @@ public:
     }
 
     juce::Image yuruCache, brandCache, brandFgCache, auroraCache, liverCache, neonCache, studioCache, oceanStarCache, fgCache;
+    juce::Image seasonScaledCache[4];
     int         yuruCacheMode { -1 }, liverCacheMode { -1 }, oceanStarCacheMode { -1 }, fgCacheMode { -1 };
 
     // ---- ライブ (大型機材) ----
@@ -6440,6 +6441,7 @@ private:
     juce::Rectangle<int> ioInMonoRect;    // 🎤 計器＆入出力カード内の「入力: モノラル/ステレオ」直結ピル
     juce::Rectangle<int> ioOutMonoRect;   // 🔊 計器＆入出力カード内の「出力: モノラル/ステレオ」直結ピル
     juce::Rectangle<int> ioExprRect;      // 🎵 計器＆入出力カード内の「声量幅（標準 / 🎤10割ダイレクト / 📻一定キープ）」直結ピル
+    juce::Rectangle<int> ioMonMuteRect;   // 🎧 単体起動版：計器カード内の「返し音:ON ⇄ 返しミュート（生声との二重聴こえ防止）」直結ピル
     juce::Rectangle<int> overviewUpdateRect; // 🆙 起動時アップデート確認で見つかった新バージョン通知ピル（総合画面トップバー）
     juce::Rectangle<int> talkPillRect;    // 🎤⇄💬 歌枠 ⇄ 雑談MC ワンクリック瞬間ライブ切替ピル
     juce::Rectangle<int> loopPillRect;    // 🔄 5秒録って手放し聴き比べ「試聴ルーパー」ピル
@@ -6517,6 +6519,19 @@ private:
     };
     OverviewBackdropKey overviewBackdropKey;
     juce::Image         overviewBackdropCache;
+
+    // ---- PS / Switch / Xbox ワイヤレスコントローラー歌唱ライブ操作エンジン＆下部ライブドック ----
+    gz::VocalGamepadPoller gamepadPoller;
+    gz::GamepadState       prevGamepadState;
+    gz::GamepadState       curGamepadState;
+    int                    padStartHoldTicks  { 0 };
+    int                    padSelectHoldTicks { 0 };
+    bool                   padStartTriggered  { false };
+    bool                   padSelectTriggered { false };
+    int                    padRadialZone      { -1 };
+    juce::Rectangle<int>   padSlotPrevRect, padSlotCurrRect, padSlotNextRect;
+    juce::Rectangle<int>   padAmbRect, padRewriteRect, padPingPongRect, padL3LockRect;
+    void pollGamepadAndApply();
 
     void timerCallback() override;   // learn-button state refresh
     void addKnob (Knob& k, const juce::String& paramID, const juce::String& text,
@@ -6690,7 +6705,7 @@ private:
 
     // ---- v1.4.0: right-column tabs (EQ | Effects) + v5.9.0 quick singing assist ----
     juce::TextButton tabEqButton { "EQ" }, tabFxButton;
-    juce::TextButton singSkillBtn, quickPitchBtn, detailMicSafuBtn;
+    juce::TextButton singSkillBtn, quickPitchBtn, detailMicSafuBtn, detailMonMuteBtn;
     // v2.4.0: modeButton(かんたん/こだわり)は廃止。ヘッダの大きなスイッチへ統合。
     bool  advancedMode { true };
     int currentTab { 0 };

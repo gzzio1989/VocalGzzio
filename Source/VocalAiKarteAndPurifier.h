@@ -750,29 +750,24 @@ public:
         else
             prevBlockF0Hz = 0.0f;
 
-        // 背景ノイズ床が実際に存在するときだけ歌唱中コム純化を働かせる
-        // （ノイズゼロのクリーンなスタジオ録音には一切余計な処理を掛けない！）
+        // 背景ノイズ床が実際に明確に存在するときだけ歌唱中FIR倍音純化を働かせる
+        // （通常の静穏部屋や軽度設定では無用なコム変調・CPU負荷を完全ゼロにする！）
         const float midHighFloor = dnFloor[1] * 0.35f + dnFloor[2] * 0.40f + dnFloor[3] * 0.25f;
         const float midHighEnv   = dnEnv[1]   * 0.35f + dnEnv[2]   * 0.40f + dnEnv[3]   * 0.25f + 1.0e-7f;
-        // ノイズ床が -72 dBFS (2.5e-4) 以上あり、かつ現在の信号に対してノイズが無視できない比率のとき稼働
-        const float floorPresence = std::clamp ((midHighFloor - 2.2e-4f) / 1.8e-3f, 0.0f, 1.0f);
-        const float snrNeed       = std::clamp ((midHighFloor * 28.0f) / midHighEnv, 0.0f, 1.0f);
+        // ノイズ床が -64 dBFS (6.0e-4) 以上あり、かつ denoise >= 30% の環境でのみ無条件安定1次FIR倍音フィルタを稼働
+        const float floorPresence = std::clamp ((midHighFloor - 6.0e-4f) / 1.4e-3f, 0.0f, 1.0f);
+        const float snrNeed       = std::clamp ((midHighFloor * 24.0f) / midHighEnv, 0.0f, 1.0f);
 
         float wantAlpha = 0.0f;
         float targetPeriod = tapPeriodA;
-        if (validPitch && ! hfConsonantOnset && denoiseAmount01 > 0.02f && floorPresence > 0.01f)
+        if (validPitch && ! hfConsonantOnset && denoiseAmount01 >= 0.30f && floorPresence > 0.01f)
         {
             targetPeriod = std::clamp ((float) (sr / (double) f0Hz), 8.0f, (float) (kCombRingSize - 8));
-            const float confFactor = std::clamp ((f0Conf - 0.58f) / 0.32f, 0.0f, 1.0f);
-            // v5.9.0: 1次再帰型IIRハーモニック・コム化により、整数倍音は無損失(0.00dB)のまま
-            //         母音中に混じる「サフサフ」倍音間ヒス雑音の減衰力を最大 -9.1 dB へ倍増
-            wantAlpha = std::clamp (0.48f * denoiseAmount01 * confFactor * glideGuard * floorPresence * (0.38f + 0.62f * snrNeed),
-                                    0.0f, 0.48f);
+            const float confFactor = std::clamp ((f0Conf - 0.62f) / 0.28f, 0.0f, 1.0f);
+            // IIR再帰を廃止した無条件安定1次FIR倍音フィルタ（最大0.34 -> 倍音間ノイズ最大 -10dB 純化・声の倍音損失 0.000dB）
+            wantAlpha = std::clamp (0.34f * denoiseAmount01 * confFactor * glideGuard * floorPresence * (0.45f + 0.55f * snrNeed),
+                                    0.0f, 0.34f);
 
-            // v5.8.0: 2タップ位相ロック静止クロスフェード方式
-            // 読み出しタップをサンプルごとに連続スイープさせると dd/dn != 0 のドップラー・ジッパーノイズが出るため、
-            // 無稼働からの立ち上がり時はフェードイン前に目標周期へ完全静止スナップし、
-            // 有声中のピッチ変化時は「完全静止したAタップ」と「目標周期に固定したBタップ」を約6.5msで滑らかにクロスフェードする。
             if (combMixAlpha < 0.0008f)
             {
                 tapPeriodA     = targetPeriod;
@@ -781,12 +776,37 @@ public:
                 tapCrossfade   = 0.0f;
                 tapCrossfading = false;
             }
-            else if (! tapCrossfading && std::abs (targetPeriod - tapPeriodA) > 0.25f)
+            else if (! tapCrossfading && std::abs (targetPeriod - tapPeriodA) > 1.25f)
             {
+                // 微小ゆらぎ(<=1.25サンプル)での頻繁な150Hzタップ切替ジッパーを禁止し、明確な音程移動時のみクロスフェード
                 tapPeriodB     = targetPeriod;
                 tapCrossfade   = 0.0f;
                 tapCrossfading = true;
             }
+        }
+
+        // 完全に無稼働（combMixAlpha == 0 && wantAlpha == 0）の静穏環境ではループ自体を高速リング記録のみにしてCPUを大幅節約
+        if (combMixAlpha < 0.0005f && wantAlpha < 0.0005f)
+        {
+            const int chCountFast = std::min (numCh, 2);
+            int w = ringWrite;
+            for (int n = 0; n < numSamples; ++n)
+            {
+                combRing[0][0][(size_t) w] = b1L[n];
+                combRing[1][0][(size_t) w] = b2L[n];
+                combRing[2][0][(size_t) w] = b3L[n];
+                if (chCountFast > 1)
+                {
+                    if (b1R != nullptr) combRing[0][1][(size_t) w] = b1R[n];
+                    if (b2R != nullptr) combRing[1][1][(size_t) w] = b2R[n];
+                    if (b3R != nullptr) combRing[2][1][(size_t) w] = b3R[n];
+                }
+                w = (w + 1) & kCombRingMask;
+            }
+            ringWrite = w;
+            combMixAlpha = 0.0f;
+            lastHarmonicCleanDb = 0.0f;
+            return;
         }
 
         // ラグランジュ3次分数遅延係数をブロック先頭で1回だけ事前計算（dd/dn == 0 厳守＆CPU 3倍高速化）
@@ -876,9 +896,9 @@ public:
                                                  + c3B * ring[(size_t) idxB3];
                             delayed += xfadeMix * (delayedB - delayed);
                         }
-                        const float y = (1.0f - a) * x + a * delayed;
-                        ring[(size_t) w] = y;
-                        ptr[n] = y;
+                        // 常に純粋な生帯域信号 x をリングへ記録（IIR帰還 y の書戻しによるタップ切替時の位相不連続クリックを完全排除）
+                        ring[(size_t) w] = x;
+                        ptr[n] = (1.0f - a) * x + a * delayed;
                     }
                 }
             }

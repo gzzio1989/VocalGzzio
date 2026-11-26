@@ -1481,6 +1481,22 @@ public:
     {
         masteringProEngine.setMacroMorphXY (normX01, normY01);
     }
+
+    // ---- PS / Switch / Xbox ワイヤレスコントローラー歌唱ライブ演奏 DSP公開API ----
+    void  setPadWahAmount (float v01) noexcept          { padWahAmt.store (juce::jlimit (0.0f, 1.0f, v01), std::memory_order_relaxed); }
+    float getPadWahAmount() const noexcept              { return padWahAmt.load (std::memory_order_relaxed); }
+    void  setPadAmbientActive (bool on) noexcept        { padAmbientActive.store (on, std::memory_order_relaxed); }
+    bool  getPadAmbientActive() const noexcept          { return padAmbientActive.load (std::memory_order_relaxed); }
+    void  setPadRewriteDelayActive (bool on) noexcept   { padRewriteDelayActive.store (on, std::memory_order_relaxed); if (on) padPingPongActive.store (false, std::memory_order_relaxed); }
+    bool  getPadRewriteDelayActive() const noexcept     { return padRewriteDelayActive.load (std::memory_order_relaxed); }
+    void  setPadPingPongActive (bool on) noexcept       { padPingPongActive.store (on, std::memory_order_relaxed); if (on) padRewriteDelayActive.store (false, std::memory_order_relaxed); }
+    bool  getPadPingPongActive() const noexcept         { return padPingPongActive.load (std::memory_order_relaxed); }
+    void  setPadTargetSlot (int slot) noexcept          { padTargetSlot.store (juce::jlimit (0, 3, slot), std::memory_order_relaxed); }
+    int   getPadTargetSlot() const noexcept             { return padTargetSlot.load (std::memory_order_relaxed); }
+    void  setPadL3Locked (bool locked) noexcept         { padL3Locked.store (locked, std::memory_order_relaxed); }
+    bool  getPadL3Locked() const noexcept               { return padL3Locked.load (std::memory_order_relaxed); }
+    void  setPadAmbientMomentary (bool mom) noexcept    { padAmbientMomentary.store (mom, std::memory_order_relaxed); }
+    bool  getPadAmbientMomentary() const noexcept       { return padAmbientMomentary.load (std::memory_order_relaxed); }
 private:
 
     // ---- v2.8.0: Mixツマミ用「遅らせた原音」 ----
@@ -1516,7 +1532,7 @@ private:
     bool               multiHarmWasRunning = false;
     std::vector<float> vcMono, vcTmp;         // scratch (sized in prepareToPlay)
     std::vector<float> vcDry[2];              // v2.6.0: 安全弁用の加工前コピー
-    float  unDelay[4][4096] = {};             // per-voice ensemble timing delays
+    std::vector<std::array<float, 4096>> unDelay { 4 }; // per-voice ensemble timing delays (heap-backed to save 64KB stack)
     int    unDelayW[4] = {};                  // write heads
     int    unDelaySmp[4] = {};                // delay lengths in samples
     // v2.6.0: 実行中はホストへ遅延変更を通知しない(Cubase が固まる/音が止まる)。
@@ -2307,6 +2323,20 @@ private:
     float                                             paramCacheMegaAmt { -999.0f };
     bool                                              paramCacheChoOn { false };
     float                                             paramCacheChoAmt { -999.0f };
+
+    // ---- PS / Switch / Xbox ワイヤレスコントローラー歌唱ライブ演奏 DSP状態 ----
+    std::atomic<float>                                padWahAmt { 0.0f };
+    std::atomic<bool>                                 padAmbientActive { false };
+    std::atomic<bool>                                 padRewriteDelayActive { false };
+    std::atomic<bool>                                 padPingPongActive { false };
+    std::atomic<int>                                  padTargetSlot { 1 };        // 0=音量, 1=ワウ, 2=リバーブ, 3=ハモリ量
+    std::atomic<bool>                                 padL3Locked { false };
+    std::atomic<bool>                                 padAmbientMomentary { true }; // 既定: 押している間だけアンビエント発動
+    float                                             padWahEnv { 0.0f };
+    float                                             padWahSvfLow[2] { 0.0f, 0.0f };
+    float                                             padWahSvfBand[2] { 0.0f, 0.0f };
+    float                                             padAmbientEnv { 0.0f };
+    float                                             padRewriteHpL { 0.0f }, padRewriteHpR { 0.0f };
 
     // ---- v4.8.0 柱③：🎯 5秒声質ターゲット診断（AIオートオーブ調律） ----
     std::atomic<int>   lastVoiceTargetStyle { 1 };
