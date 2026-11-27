@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "VividHeroDeck.h"
 #include "PresetDefs.h"
 #include "Tooltips.h"
 #include "HorologyTactileUi.h"
@@ -51,12 +52,13 @@ void spawnInteractiveRipple (float x, float y, int seedOffset = 0) noexcept
 
 void VocalGzzioContent::setOverviewLayoutMode (int mode, bool manual)
 {
-    overviewLayoutMode   = juce::jlimit (0, 3, mode);
+    overviewLayoutMode   = juce::jlimit (0, 4, mode);
     overviewLayoutManual = manual;
     if (manual && onUiStateChange)
         onUiStateChange ("ui_arch", overviewLayoutMode);
     if (isOverview())
     {
+        updateOverviewVisibility();
         resizedOverview();
         repaint();
     }
@@ -376,6 +378,9 @@ void VocalGzzioContent::applyArgonVoiceTarget (int idx)
 
 bool VocalGzzioContent::handleOverviewMouseDoubleClick (juce::Point<int> pt)
 {
+    if (overviewLayoutMode == 4)
+        return handleVividHeroDoubleClick (pt);
+
     if (! argonPadRect.isEmpty() && argonPadRect.contains (pt))
     {
         argonOrbX = 0.50f;
@@ -441,6 +446,14 @@ void VocalGzzioContent::mouseWheelMove (const juce::MouseEvent& e, const juce::M
 
     const float stepScale = e.mods.isShiftDown() ? 0.01f : 0.035f;
     const float deltaNorm = (dy > 0.0f ? 1.0f : -1.0f) * stepScale;
+
+    if (overviewLayoutMode == 4)
+    {
+        if (handleVividHeroWheel (pt, deltaNorm))
+            return;
+        juce::Component::mouseWheelMove (e, wheel);
+        return;
+    }
 
     if (! prismPillRect.isEmpty() && prismPillRect.expanded (2, 4).contains (pt))
     {
@@ -519,6 +532,15 @@ void VocalGzzioContent::mouseWheelMove (const juce::MouseEvent& e, const juce::M
 
 bool VocalGzzioContent::handleOverviewMouseDown (juce::Point<int> pt)
 {
+    if (overviewLayoutMode == 4)
+        return handleVividHeroMouseDown (pt);
+
+    if (! vividReturnPillRect.isEmpty() && vividReturnPillRect.expanded (2, 3).contains (pt))
+    {
+        setOverviewLayoutMode (4, true);
+        return true;
+    }
+
     // 0. 表示スタイル切替ピル (標準デザイン / ◉くっきり大文字 / ★かんたん3ステップ / ●マット・具体表記)
     for (int a = 0; a < 4; ++a)
     {
@@ -1441,6 +1463,11 @@ void VocalGzzioContent::updateOverviewVisibility()
                 overviewOldVisibility.emplace_back (c, c->isVisible());
     for (auto* c : getChildren())
         if (dynamic_cast<juce::CallOutBox*> (c) == nullptr) c->setVisible (false);
+    if (overviewLayoutMode == 4)
+    {
+        overviewReturn.setVisible (false);
+        return;
+    }
     for (auto* c : { (juce::Component*) &finishPresetBox, (juce::Component*) &srcModeBox,
          (juce::Component*) &overviewDetails, (juce::Component*) &overviewCompare,
          (juce::Component*) &overviewPitch, (juce::Component*) &overviewOutputTrim, (juce::Component*) &sizePopBtn,
@@ -1884,12 +1911,21 @@ void VocalGzzioContent::resizedOverview()
     for (auto& r : accessPillRects) r = {};
     for (auto& r : archPillRects) r = {};
     litePillRect = {};
+    vividReturnPillRect = {};
+
+    if (overviewLayoutMode == 4)
+    {
+        resizedVividHeroOverview();
+        return;
+    }
 
     const int eraNow = processor.getLegacyEcoGate() ? processor.getLegacyVersionEra() : 600;
     const bool isClassicV4 = (eraNow <= 433 && ! showAllKnobs);
     Knob* const outKnob = isClassicV4 ? &makeupK : &outVolK;
     if (latestUpdateTag.isNotEmpty())
         overviewUpdateRect = { 176, 10, 56, 21 };
+    else if (! isClassicV4 && ! gz::isTestDataIsolated())
+        vividReturnPillRect = { 174, 10, 56, 21 };
 
     // ---- 1段目: ロゴ・4種ワークスペース配置ピル・軽量ピル・中央寄せ/MONOピル・外部出力(SYNCROOM)ピル・遅延バッジ・ナビツールバー ----
     const int buttonH = 38;
@@ -3020,9 +3056,10 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
         const float bars[] = { 9, 19, 27, 14 };
         for (int i = 0; i < 4; ++i) g.fillRoundedRectangle (33.0f + i * 6.0f, 37.0f - bars[i] * 0.5f, 3.0f, bars[i], 1.5f);
     }
+    const bool narrowTitle = (! overviewUpdateRect.isEmpty() || ! vividReturnPillRect.isEmpty());
     text ("VocalGzzio",
-          { 70, 9, overviewUpdateRect.isEmpty() ? 162 : 104, 23 },
-          overviewUpdateRect.isEmpty() ? 22.0f : 19.0f, Palette::ink, true);
+          { 70, 9, narrowTitle ? 102 : 162, 23 },
+          narrowTitle ? 19.0f : 22.0f, Palette::ink, true);
 
     if (liteMode)
     {
@@ -3046,6 +3083,12 @@ void VocalGzzioContent::paintOverviewStaticBackdrop (juce::Graphics& g)
 
 void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 {
+    if (overviewLayoutMode == 4)
+    {
+        paintVividHeroOverview (dstG);
+        return;
+    }
+
     GzzioLnF::setUseKawaiiFont (knobInnerArtOn && pastelTheme() && (accessMode == 0 || accessMode == 2));
 
     auto runPass = [&] (juce::Graphics& g, bool staticPass)
@@ -3077,6 +3120,18 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
             ? (juce::String (vSpec.verTag) + juce::String::fromUTF8 (" ▼ ") + language->T ("世代再現", "Legacy"))
             : (juce::String ("v") + JucePlugin_VersionString + juce::String::fromUTF8 (" ▼ ") + language->T ("歴代切替", "Versions"));
         fitText (g, vLabel, verR.reduced (5, 1), juce::Justification::centred, 15.5f, true);
+
+        if (! vividReturnPillRect.isEmpty())
+        {
+            const auto vpf = vividReturnPillRect.toFloat();
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xff00d4ff).withAlpha (0.30f), vpf.getX(), vpf.getY(),
+                                                     juce::Colour (0xffd946ef).withAlpha (0.30f), vpf.getRight(), vpf.getBottom(), false));
+            g.fillRoundedRectangle (vpf, 6.0f);
+            g.setColour (juce::Colour (0xff22d3ee));
+            g.drawRoundedRectangle (vpf.reduced (0.5f), 6.0f, 1.2f);
+            g.setColour (Palette::ink);
+            fitText (g, "VIVID", vividReturnPillRect.reduced (3, 1), juce::Justification::centred, 12.0f, true);
+        }
 
         if (! overviewUpdateRect.isEmpty())
         {
@@ -7306,7 +7361,8 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
 
     const OverviewBackdropKey wantKey {
         getWidth(), getHeight(), themeMode, overviewLayoutMode, accessMode,
-        processor.getLegacyVersionId(), liteMode, language->english, knobInnerArtOn,
+        processor.getLegacyVersionId(), themePainter.getActiveSeasonIndex(),
+        liteMode, language->english, knobInnerArtOn,
         overviewSectionPower[0].getToggleState(),
         overviewSectionPower[1].getToggleState(),
         overviewSectionPower[2].getToggleState()
@@ -7323,6 +7379,1108 @@ void VocalGzzioContent::paintOverview (juce::Graphics& dstG)
     }
     dstG.drawImageAt (overviewBackdropCache, 0, 0);
     runPass (dstG, false);
+}
+
+//==============================================================================
+// v6.0.0: VIVID OBSIDIAN × TACTILE CONTROLLER & FOUR SEASONS PANORAMIC HERO DECK
+//==============================================================================
+void VocalGzzioContent::resizedVividHeroOverview()
+{
+    const int w = getWidth();
+    themePainter.setBounds (getLocalBounds());
+    overviewBackdropKey.w = 0;
+
+    if (themeMode == 2)
+    {
+        // 日本の四季4選 パノラマUI配置（上部62%は全面絵画を一切遮らず開放し、右縦出力タワー＋下部季節調和コンソールを配置）
+        vividBrandVerRect = { 28, 16, 232, 38 };
+        int wx = 780;
+        const int pillWs[5] = { 92, 92, 96, 96, 98 };
+        // [0]=Vivid漆黒, [1]=春霞・桜, [2]=紺碧・夏海, [3]=錦秋・紅葉, [4]=銀嶺・雪化粧
+        vividWorldPillRects[1] = { wx, 18, pillWs[0], 34 }; wx += pillWs[0] + 6;
+        vividWorldPillRects[2] = { wx, 18, pillWs[1], 34 }; wx += pillWs[1] + 6;
+        vividWorldPillRects[3] = { wx, 18, pillWs[2], 34 }; wx += pillWs[2] + 6;
+        vividWorldPillRects[4] = { wx, 18, pillWs[3], 34 }; wx += pillWs[3] + 8;
+        vividWorldPillRects[0] = { wx, 18, pillWs[4], 34 }; wx += pillWs[4] + 8;
+        vividOpenCarbonRect    = { wx, 18, 86, 34 };        wx += 86 + 6;
+        vividOpenDetailRect    = { wx, 18, juce::jmax (82, w - 28 - wx), 34 };
+
+        // 右縦出力フェーダータワー
+        vividWedgeRect         = { 1396, 78, 154, 784 };
+        vividWheelRect         = { 1450, 128, 46, 668 };
+        vividControlHitRects[4] = vividWedgeRect;
+
+        // 下部季節コンソール（y = 556..804）
+        vividControlHitRects[1] = { 62,  570, 224, 224 }; // 主ダイヤル（声の抜け / 華やぎ・爽快・深み・透明感）
+        vividControlHitRects[0] = { 318, 590, 186, 204 }; // 副ダイヤル（クリーン）
+        vividLearnNoiseRect     = { 442, 572, 98,  28  };
+
+        // コンソール右上スイッチ列
+        int rx = 600;
+        for (int r = 0; r < 4; ++r)
+        {
+            vividRockerRects[(size_t) r] = { rx, 574, 146, 44 };
+            rx += 146 + 10;
+        }
+        vividAutoSetupRect = { rx, 574, 136, 44 };
+
+        // 水平スライダー2本（上=クール◀▶あたたかい、下=響き・ひろがり）
+        vividCoolWarmTrackRect  = { 716, 650, 622, 34 };
+        vividControlHitRects[2] = { 596, 638, 756, 56 };
+        vividControlHitRects[3] = { 596, 718, 756, 56 };
+
+        // 最下部スリム・ワイヤレスコントローラーバー（y = 812..862）
+        vividL2ArcRect = {};
+        vividR2ArcRect = {};
+        vividL1BtnRect          = { 40,  818, 68,  38 };
+        vividCarouselCardRects[0] = {};
+        vividCarouselCardRects[1] = { 114, 816, 210, 42 };
+        vividCarouselCardRects[2] = {};
+        vividR1BtnRect          = { 330, 818, 68,  38 };
+
+        int ax = 414;
+        const int aw = (1374 - ax - 6 * 6) / 7;
+        for (int i = 0; i < 7; ++i)
+        {
+            vividActionBtnRects[(size_t) i] = { ax, 818, aw, 38 };
+            ax += aw + 6;
+        }
+    }
+    else
+    {
+        // ★ VIVID OBSIDIAN × TACTILE CONTROLLER 旗艦コンソール配置（1582 x 892）
+        vividBrandVerRect = { 28, 18, 258, 54 };
+
+        int wx = 296;
+        const int pillWs[5] = { 92, 86, 88, 88, 88 };
+        for (int i = 0; i < 5; ++i)
+        {
+            vividWorldPillRects[(size_t) i] = { wx, 26, pillWs[i], 34 };
+            wx += pillWs[i] + 6;
+        }
+
+        // 右上4連イルミネーション・ロッカースイッチ（うた / 弾き語り / ハモリ / 返しミュート）
+        int rx = 790;
+        for (int r = 0; r < 4; ++r)
+        {
+            vividRockerRects[(size_t) r] = { rx, 18, 108, 56 };
+            rx += 108 + 10;
+        }
+
+        vividAutoSetupRect  = { 1270, 24, 92, 38 };
+        vividOpenCarbonRect = { 1368, 24, 86, 38 };
+        vividOpenDetailRect = { 1460, 24, 94, 38 };
+
+        // メイン4区画の彫刻ハードウェア操作領域（y = 88..642）
+        vividLearnNoiseRect     = { 282, 104, 98, 28 };
+        vividControlHitRects[0] = { 36,  136, 352, 494 }; // Bay 1: クリーン（8角形）
+        vividControlHitRects[1] = { 420, 98,  374, 328 }; // Bay 2 上: 声の抜け（ブレード）
+        vividCoolWarmTrackRect  = { 456, 490, 302, 58  };
+        vividControlHitRects[2] = { 420, 458, 374, 176 }; // Bay 2 下: クール ◀▶ あたたかい
+        vividControlHitRects[3] = { 826, 98,  374, 532 }; // Bay 3: ひろがり（同心リング）
+        vividWedgeRect          = { 1254, 134, 118, 408 };
+        vividWheelRect          = { 1398, 142, 106, 396 };
+        vividControlHitRects[4] = { 1232, 98,  314, 532 }; // Bay 4: 声の大きさ（ウェッジ＋縦ホイール）
+
+        // 下部タクタイル・ワイヤレスコントローラーデッキ（y = 656..874）
+        vividL2ArcRect            = { 54,   674, 172, 134 };
+        vividR2ArcRect            = { 1356, 674, 172, 134 };
+        vividL1BtnRect            = { 260,  704, 88,  60  };
+        vividCarouselCardRects[0] = { 360,  692, 234, 84  };
+        vividCarouselCardRects[1] = { 608,  682, 366, 104 };
+        vividCarouselCardRects[2] = { 988,  692, 234, 84  };
+        vividR1BtnRect            = { 1234, 704, 88,  60  };
+
+        int ax = 250;
+        const int aw = 147, agap = 8;
+        for (int i = 0; i < 7; ++i)
+        {
+            vividActionBtnRects[(size_t) i] = { ax, 812, aw, 44 };
+            ax += aw + agap;
+        }
+    }
+}
+
+void VocalGzzioContent::paintVividHeroOverview (juce::Graphics& dstG)
+{
+    GzzioLnF::setUseKawaiiFont (false);
+    const int w = getWidth(), h = getHeight();
+    const int seasonIdx = themePainter.getActiveSeasonIndex();
+    const bool isSeasons = (themeMode == 2);
+
+    // 1. 静的バックドロップキャッシュ（四季絵画リサイズやオブシディアン筐体ベゼルを初回のみ描画・平常時GPU負荷ゼロ）
+    const OverviewBackdropKey wantKey {
+        w, h, themeMode, overviewLayoutMode, accessMode,
+        processor.getLegacyVersionId(), seasonIdx,
+        liteMode, language->english, knobInnerArtOn,
+        false, false, false
+    };
+    if (! overviewBackdropCache.isValid() || ! (overviewBackdropKey == wantKey))
+    {
+        overviewBackdropKey = wantKey;
+        overviewBackdropCache = juce::Image (juce::Image::ARGB, juce::jmax (1, w), juce::jmax (1, h), true);
+        juce::Graphics bg (overviewBackdropCache);
+
+        if (isSeasons)
+        {
+            // 日本の四季4選：高精細プリロード静止画を全画面フルブリード描画（上部62%は完全開放パノラマ！）
+            const auto& master = ThemePainter::getSeasonMasterImage (seasonIdx);
+            if (master.isValid())
+            {
+                bg.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+                bg.drawImage (master, juce::Rectangle<float> (0.0f, 0.0f, (float) w, (float) h),
+                              juce::RectanglePlacement::fillDestination);
+            }
+            else
+            {
+                bg.fillAll (juce::Colour (0xff101824));
+            }
+            // 上端のタイトル視認性を高める繊細なトップベールのみ添える
+            bg.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.42f), 0.0f, 0.0f,
+                                                      juce::Colours::transparentBlack, 0.0f, 74.0f, false));
+            bg.fillRect (0, 0, w, 76);
+        }
+        else
+        {
+            // ★ VIVID OBSIDIAN アノダイズド・ブラックチタン筐体
+            bg.fillAll (juce::Colour (0xff050609));
+            const juce::Rectangle<float> chassis (12.0f, 8.0f, (float) w - 24.0f, (float) h - 16.0f);
+            bg.setGradientFill (juce::ColourGradient (juce::Colour (0xff232836), chassis.getX(), chassis.getY(),
+                                                      juce::Colour (0xff090b10), chassis.getX(), chassis.getBottom(), false));
+            bg.fillRoundedRectangle (chassis, 22.0f);
+
+            auto body = chassis.reduced (2.0f);
+            bg.setGradientFill (juce::ColourGradient (juce::Colour (0xff141821), body.getX(), body.getY(),
+                                                      juce::Colour (0xff0a0c12), body.getX(), body.getBottom(), false));
+            bg.fillRoundedRectangle (body, 20.0f);
+
+            // 微細な水平ヘアライン・ブラッシュドメタル質感
+            for (int yLine = 14; yLine < 84; yLine += 2)
+            {
+                bg.setColour (juce::Colours::white.withAlpha ((yLine % 4 == 0) ? 0.022f : 0.008f));
+                bg.drawHorizontalLine (yLine, body.getX() + 18.0f, body.getRight() - 18.0f);
+            }
+            bg.setColour (juce::Colours::white.withAlpha (0.18f));
+            bg.drawHorizontalLine (10, body.getX() + 26.0f, body.getRight() - 26.0f);
+            bg.setColour (juce::Colour (0xff05070b));
+            bg.drawHorizontalLine (82, body.getX() + 16.0f, body.getRight() - 16.0f);
+            bg.setColour (juce::Colours::white.withAlpha (0.06f));
+            bg.drawHorizontalLine (83, body.getX() + 16.0f, body.getRight() - 16.0f);
+
+            // メイン4区画の凹みオブシディアン・ハードウェアベイ
+            vg_vivid::drawObsidianBay (bg, { 28.0f,  88.0f,  368.0f, 554.0f }, 18.0f); // Bay 1: クリーン
+            vg_vivid::drawObsidianBay (bg, { 412.0f, 88.0f,  390.0f, 346.0f }, 18.0f); // Bay 2 上: 声の抜け
+            vg_vivid::drawObsidianBay (bg, { 412.0f, 450.0f, 390.0f, 192.0f }, 18.0f); // Bay 2 下: クール◀▶あたたかい
+            vg_vivid::drawObsidianBay (bg, { 818.0f, 88.0f,  390.0f, 554.0f }, 18.0f); // Bay 3: ひろがり
+            vg_vivid::drawObsidianBay (bg, { 1224.0f, 88.0f, 330.0f, 554.0f }, 18.0f); // Bay 4: 声の大きさ
+
+            // 下部タクタイル・ワイヤレスコントローラー筐体
+            vg_vivid::drawObsidianBay (bg, { 28.0f,  656.0f, 1526.0f, 218.0f }, 20.0f);
+            // 中央のカルーセル凹みトレイ
+            const juce::Rectangle<float> tray (244.0f, 672.0f, 1094.0f, 124.0f);
+            bg.setColour (juce::Colour (0xff06080c));
+            bg.fillRoundedRectangle (tray, 16.0f);
+            bg.setColour (juce::Colours::white.withAlpha (0.09f));
+            bg.drawRoundedRectangle (tray.reduced (0.5f), 16.0f, 1.1f);
+        }
+    }
+    dstG.drawImageAt (overviewBackdropCache, 0, 0);
+
+    // 2. 動的パラメータ＆ライブ状態の読み取り
+    auto& g = dstG;
+    const bool en = language->english;
+    auto rawVal = [this] (const char* id, float fallback = 0.0f) -> float
+    {
+        if (auto* v = processor.apvts.getRawParameterValue (id))
+            return v->load();
+        return fallback;
+    };
+    const float cleanNorm    = juce::jlimit (0.0f, 1.0f, rawVal ("denoise", 28.0f) / 100.0f);
+    const float presDb       = rawVal ("presence", 1.5f);
+    const float presNorm     = juce::jlimit (0.0f, 1.0f, (presDb + 6.0f) / 15.0f);
+    const float warmthPct    = rawVal ("warmth", 15.0f);
+    const float silkPct      = rawVal ("argon_silk", 54.0f);
+    const float coolWarmNorm = (vividDragging == 2)
+                             ? vividCoolWarmPos
+                             : juce::jlimit (0.0f, 1.0f, 0.50f + (warmthPct - 18.0f) * 0.011f - (silkPct - 54.0f) * 0.005f);
+    const float spaceNorm    = juce::jlimit (0.0f, 1.0f, rawVal ("revmix", 24.0f) / 65.0f);
+    const float outVolPct    = processor.getOutputVolumePct();
+    const float volNorm      = juce::jlimit (0.0f, 1.0f, outVolPct / 160.0f);
+    const float outDb        = juce::Decibels::gainToDecibels (processor.getOutputLevel(), -60.0f);
+    const float liveLevel01  = juce::jlimit (0.0f, 1.0f, (outDb + 54.0f) / 52.0f);
+
+    const bool harmonyOn     = (rawVal ("jn_on") > 0.5f) && (rawVal ("mod_henshin", 1.0f) > 0.5f);
+    const bool monMuteOn     = processor.isStandalone() ? processor.getMonitorMute() : processor.compareBypass.load();
+    const bool coughMuted    = processor.getCoughMute();
+    const bool chorusOn      = processor.getChorusBoostMode() || processor.getAutoChorusMode();
+    const bool compareOn     = processor.compareBypass.load();
+    const bool ambOn         = processor.getPadAmbientActive();
+    const bool rewriteOn     = processor.getPadRewriteDelayActive();
+    const bool pingPongOn    = processor.getPadPingPongActive();
+    const bool isLearning    = processor.isDenoiseLearning();
+    const bool isAutoRunning = processor.isAutoSetupRunning() || (easyComboPhase != 0);
+
+    auto drawCrispText = [&] (const juce::String& txt, juce::Rectangle<int> r, float px, juce::Colour col, bool bold = true,
+                              juce::Justification just = juce::Justification::centred)
+    {
+        g.setColour (col);
+        g.setFont (GzzioLnF::fitFont (GzzioLnF::uiFont (px, bold), txt, juce::jmax (8, r.getWidth() - 4)));
+        g.drawText (txt, r, just, false);
+    };
+
+    // ワールド切替ピル描画（[★ VIVID] [春霞・桜] [紺碧・夏海] [錦秋・紅葉] [銀嶺・雪化粧]）
+    auto drawWorldPills = [&] ()
+    {
+        const char* wJa[5] = { "★ VIVID", "春霞・桜", "紺碧・夏海", "錦秋・紅葉", "銀嶺・雪化粧" };
+        const char* wEn[5] = { "★ VIVID", "Spring",   "Summer",     "Autumn",     "Winter" };
+        const juce::Colour wCols[5] = {
+            juce::Colour (0xff00e5ff),
+            juce::Colour (0xffff8fab),
+            juce::Colour (0xff38bdf8),
+            juce::Colour (0xfff97316),
+            juce::Colour (0xff7dd3fc)
+        };
+        for (int i = 0; i < 5; ++i)
+        {
+            const auto& pr = vividWorldPillRects[(size_t) i];
+            if (pr.isEmpty()) continue;
+            const bool act = (i == 0) ? (! isSeasons) : (isSeasons && seasonIdx == (i - 1));
+            const auto pf = pr.toFloat();
+            g.setColour (act ? wCols[i].withAlpha (isSeasons ? 0.36f : 0.24f)
+                             : juce::Colour (0xff0b0e16).withAlpha (isSeasons ? 0.62f : 0.86f));
+            g.fillRoundedRectangle (pf, pf.getHeight() * 0.5f);
+            g.setColour (act ? wCols[i] : juce::Colours::white.withAlpha (0.22f));
+            g.drawRoundedRectangle (pf.reduced (0.6f), pf.getHeight() * 0.5f, act ? 1.6f : 1.0f);
+            drawCrispText (juce::String::fromUTF8 (en ? wEn[i] : wJa[i]), pr.reduced (4, 0), 13.5f,
+                           act ? juce::Colours::white : juce::Colour (0xffcbd5e1), act);
+        }
+
+        for (int navIdx = 0; navIdx < 2; ++navIdx)
+        {
+            const auto& nr = (navIdx == 0) ? vividOpenCarbonRect : vividOpenDetailRect;
+            if (nr.isEmpty()) continue;
+            const auto nf = nr.toFloat();
+            g.setColour (juce::Colour (0xff0f1420).withAlpha (isSeasons ? 0.68f : 0.92f));
+            g.fillRoundedRectangle (nf, 8.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.24f));
+            g.drawRoundedRectangle (nf.reduced (0.5f), 8.0f, 1.0f);
+            const juce::String lbl = (navIdx == 0)
+                ? juce::String::fromUTF8 (en ? "14-Knob" : "14ノブ画面")
+                : juce::String::fromUTF8 (en ? "Details ▶" : "詳細調整 ▶");
+            drawCrispText (lbl, nr.reduced (4, 0), 13.0f, juce::Colour (0xffe2e8f0), true);
+        }
+    };
+
+    if (isSeasons)
+    {
+        // =========================================================================
+        // ★ 日本の四季4選 パノラマUI描画（上部62%は完全開放アート、右縦出力タワー＋下部季節調和コンソール）
+        // =========================================================================
+        // 左上タイトル（風景の上でも美しく読めるソフトドロップシャドウ付き）
+        g.setColour (juce::Colours::black.withAlpha (0.55f));
+        g.setFont (GzzioLnF::uiFont (28.0f, true));
+        g.drawText ("VocalGzzio", juce::Rectangle<int> (32, 17, 210, 36), juce::Justification::centredLeft, false);
+        drawCrispText ("VocalGzzio", { 30, 15, 210, 36 }, 28.0f, juce::Colours::white, true, juce::Justification::centredLeft);
+
+        drawWorldPills();
+
+        // 季節別コンソール素材パレット
+        juce::Colour glassTop, glassBot, borderCol, inkMain, inkSub, accPrimary, accSecondary;
+        const char* poeticJa[4] = { "華やぎ・抜け", "爽快・抜け", "深み・抜け", "透明感・抜け" };
+        if (seasonIdx == 0) // 春霞・桜（パールアイボリー＆桜ローズ）
+        {
+            glassTop = juce::Colour (0xeefaf1ec); glassBot = juce::Colour (0xe6ebd8d0);
+            borderCol = juce::Colour (0xfff7d6cb); inkMain = juce::Colour (0xff3d2428); inkSub = juce::Colour (0xff785258);
+            accPrimary = juce::Colour (0xffe56b86); accSecondary = juce::Colour (0xff6ab074);
+        }
+        else if (seasonIdx == 1) // 紺碧・夏海（クリスタルホワイト＆ディープラグーン）
+        {
+            glassTop = juce::Colour (0xe61c586c); glassBot = juce::Colour (0xeb10394a);
+            borderCol = juce::Colour (0xff6cd4eb); inkMain = juce::Colour (0xfff2fbff); inkSub = juce::Colour (0xffb2e2f2);
+            accPrimary = juce::Colour (0xffffaa2b); accSecondary = juce::Colour (0xff26d0ce);
+        }
+        else if (seasonIdx == 2) // 錦秋・紅葉（京都ウォルナット木目漆＆真鍮ゴールド）
+        {
+            glassTop = juce::Colour (0xee2e1d15); glassBot = juce::Colour (0xf21b100b);
+            borderCol = juce::Colour (0xffd69e4e); inkMain = juce::Colour (0xfffdf2e3); inkSub = juce::Colour (0xffd9b996);
+            accPrimary = juce::Colour (0xfff26430); accSecondary = juce::Colour (0xfff5b841);
+        }
+        else // 銀嶺・雪化粧（フロスト・アイスシルバー＆雪灯篭アンバー）
+        {
+            glassTop = juce::Colour (0xead6e1ed); glassBot = juce::Colour (0xe6b4c4d8);
+            borderCol = juce::Colour (0xfff2f7fc); inkMain = juce::Colour (0xff1a2838); inkSub = juce::Colour (0xff485c73);
+            accPrimary = juce::Colour (0xfff59f2a); accSecondary = juce::Colour (0xff1ca8cc);
+        }
+
+        // 右縦出力フェーダータワー（x = 1396..1550, y = 78..862）
+        const auto towerF = vividWedgeRect.toFloat();
+        g.setColour (juce::Colours::black.withAlpha (0.36f));
+        g.fillRoundedRectangle (towerF.translated (0.0f, 5.0f), 16.0f);
+        g.setGradientFill (juce::ColourGradient (glassTop.withMultipliedAlpha (0.90f), towerF.getX(), towerF.getY(),
+                                                 glassBot.withMultipliedAlpha (0.94f), towerF.getX(), towerF.getBottom(), false));
+        g.fillRoundedRectangle (towerF, 16.0f);
+        g.setColour (borderCol.withAlpha (0.85f));
+        g.drawRoundedRectangle (towerF.reduced (0.8f), 16.0f, 1.5f);
+
+        // 縦発光スリット＆3Dフェーダーキャップ
+        const juce::Rectangle<float> faderSlot (towerF.getCentreX() - 10.0f, towerF.getY() + 56.0f, 20.0f, towerF.getHeight() - 134.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.42f));
+        g.fillRoundedRectangle (faderSlot, 10.0f);
+
+        const float fillH = faderSlot.getHeight() * volNorm;
+        const juce::Rectangle<float> litBar (faderSlot.getX() + 3.0f, faderSlot.getBottom() - fillH, faderSlot.getWidth() - 6.0f, fillH);
+        g.setColour (accPrimary.withAlpha (0.36f));
+        g.fillRoundedRectangle (litBar.expanded (5.0f, 2.0f), 8.0f);
+        g.setGradientFill (juce::ColourGradient (accPrimary.brighter (0.3f), litBar.getCentreX(), litBar.getY(),
+                                                 accPrimary, litBar.getCentreX(), litBar.getBottom(), false));
+        g.fillRoundedRectangle (litBar, 7.0f);
+
+        const float capY = faderSlot.getBottom() - fillH;
+        const juce::Rectangle<float> fCap (towerF.getCentreX() - 22.0f, capY - 16.0f, 44.0f, 32.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.45f));
+        g.fillRoundedRectangle (fCap.translated (0.0f, 3.0f), 8.0f);
+        g.setGradientFill (juce::ColourGradient (juce::Colours::white, fCap.getX(), fCap.getY(),
+                                                 borderCol.darker (0.25f), fCap.getX(), fCap.getBottom(), false));
+        g.fillRoundedRectangle (fCap, 8.0f);
+        g.setColour (inkMain.withAlpha (0.45f));
+        g.drawHorizontalLine (juce::roundToInt (capY), fCap.getX() + 8.0f, fCap.getRight() - 8.0f);
+        drawCrispText (juce::String::fromUTF8 (en ? "OUTPUT" : "出力"),
+                       { vividWedgeRect.getX(), vividWedgeRect.getBottom() - 56, vividWedgeRect.getWidth(), 30 }, 19.0f, inkMain, true);
+        drawCrispText (juce::String (juce::roundToInt (outVolPct)) + "%",
+                       { vividWedgeRect.getX(), vividWedgeRect.getBottom() - 30, vividWedgeRect.getWidth(), 22 }, 13.5f, inkSub, true);
+
+        // 下部季節コンソールデッキ（x = 30..1376, y = 556..804）
+        const juce::Rectangle<float> deckF (30.0f, 556.0f, 1346.0f, 248.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.38f));
+        g.fillRoundedRectangle (deckF.translated (0.0f, 5.0f), 18.0f);
+        g.setGradientFill (juce::ColourGradient (glassTop, deckF.getX(), deckF.getY(), glassBot, deckF.getX(), deckF.getBottom(), false));
+        g.fillRoundedRectangle (deckF, 18.0f);
+
+        // 夏テーマでは左側のダイヤル区画を爽やかなホワイトフォーム・ガラスに切り替える（モックアップ再現）
+        if (seasonIdx == 1)
+        {
+            const juce::Rectangle<float> foamCard (34.0f, 560.0f, 526.0f, 240.0f);
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xf2f4faff), foamCard.getX(), foamCard.getY(),
+                                                     juce::Colour (0xeadceaf5), foamCard.getX(), foamCard.getBottom(), false));
+            g.fillRoundedRectangle (foamCard, 15.0f);
+        }
+        g.setColour (borderCol.withAlpha (0.90f));
+        g.drawRoundedRectangle (deckF.reduced (0.8f), 18.0f, 1.6f);
+
+        const juce::Colour dialInk = (seasonIdx == 1) ? juce::Colour (0xff163a52) : inkMain;
+        vg_vivid::drawSeasonSculptedDial (g, seasonIdx, { 174.0f, 666.0f }, 72.0f, presNorm, true);
+        drawCrispText (juce::String::fromUTF8 (en ? "Clarity" : poeticJa[seasonIdx]), { 74, 756, 200, 32 }, 18.0f, dialInk, true);
+
+        vg_vivid::drawSeasonSculptedDial (g, seasonIdx, { 410.0f, 676.0f }, 52.0f, cleanNorm, false);
+        drawCrispText (juce::String::fromUTF8 (en ? "Clean" : "クリーン"), { 330, 756, 160, 32 }, 17.5f, dialInk, true);
+
+        // ノイズ学習ミニピル
+        {
+            const auto lf = vividLearnNoiseRect.toFloat();
+            g.setColour (isLearning ? accPrimary : dialInk.withAlpha (0.12f));
+            g.fillRoundedRectangle (lf, 12.0f);
+            drawCrispText (juce::String::fromUTF8 (isLearning ? "測定中…" : (en ? "Learn" : "ノイズ学習")),
+                           vividLearnNoiseRect, 12.5f, isLearning ? juce::Colours::white : dialInk, true);
+        }
+
+        // コンソール右上の4モードピル＋うた自動
+        const char* rJa[4] = { "うた", "弾き語り", "ハモリ", processor.isStandalone() ? "返しミュート" : "原音比較" };
+        const char* rEn[4] = { "Vocal", "Acoustic", "Harmony", processor.isStandalone() ? "Mute Mon" : "Compare" };
+        const bool rAct[4] = { vividActiveScene == 0, vividActiveScene == 1, harmonyOn, monMuteOn };
+        for (int r = 0; r < 4; ++r)
+        {
+            const auto& rr = vividRockerRects[(size_t) r];
+            const auto rf = rr.toFloat();
+            g.setColour (rAct[r] ? accPrimary.withAlpha (0.88f) : inkMain.withAlpha (0.10f));
+            g.fillRoundedRectangle (rf, 10.0f);
+            g.setColour (rAct[r] ? accPrimary.brighter (0.25f) : borderCol.withAlpha (0.45f));
+            g.drawRoundedRectangle (rf.reduced (0.5f), 10.0f, 1.2f);
+            drawCrispText (juce::String::fromUTF8 (en ? rEn[r] : rJa[r]), rr, 15.0f,
+                           rAct[r] ? juce::Colours::white : inkMain, true);
+        }
+        {
+            const auto af = vividAutoSetupRect.toFloat();
+            g.setColour (isAutoRunning ? accPrimary : accSecondary.withAlpha (0.28f));
+            g.fillRoundedRectangle (af, 10.0f);
+            g.setColour (accSecondary);
+            g.drawRoundedRectangle (af.reduced (0.5f), 10.0f, 1.3f);
+            drawCrispText (juce::String::fromUTF8 (isAutoRunning ? "自動設定中…" : (en ? "Auto AI" : "うた自動")),
+                           vividAutoSetupRect, 15.0f, isAutoRunning ? juce::Colours::white : inkMain, true);
+        }
+
+        // 2本の水平スライダー（上: ぬくもり、下: 響き・ひろがり）
+        auto drawSeasonHSlider = [&] (int yCenter, const juce::String& lbl, float val01, juce::Colour barCol)
+        {
+            drawCrispText (lbl, { 594, yCenter - 16, 114, 32 }, 16.5f, inkMain, true, juce::Justification::centredLeft);
+            const juce::Rectangle<float> tr (716.0f, (float) yCenter - 8.0f, 622.0f, 16.0f);
+            g.setColour (juce::Colours::black.withAlpha (0.34f));
+            g.fillRoundedRectangle (tr, 8.0f);
+            const float fw = tr.getWidth() * juce::jlimit (0.0f, 1.0f, val01);
+            g.setGradientFill (juce::ColourGradient (barCol.darker (0.1f), tr.getX(), tr.getCentreY(),
+                                                     barCol.brighter (0.25f), tr.getX() + fw, tr.getCentreY(), false));
+            g.fillRoundedRectangle (tr.withWidth (juce::jmax (12.0f, fw)), 8.0f);
+            const float knobX = tr.getX() + fw;
+            const juce::Rectangle<float> cap (knobX - 16.0f, (float) yCenter - 14.0f, 32.0f, 28.0f);
+            g.setColour (juce::Colours::black.withAlpha (0.35f));
+            g.fillRoundedRectangle (cap.translated (0.0f, 2.5f), 7.0f);
+            g.setGradientFill (juce::ColourGradient (juce::Colours::white, cap.getX(), cap.getY(),
+                                                     borderCol.darker (0.2f), cap.getX(), cap.getBottom(), false));
+            g.fillRoundedRectangle (cap, 7.0f);
+        };
+        drawSeasonHSlider (666, juce::String::fromUTF8 (en ? "Warmth" : "ぬくもり"), coolWarmNorm, accPrimary);
+        drawSeasonHSlider (744, juce::String::fromUTF8 (en ? "Space"  : "響き・余韻"), spaceNorm, accSecondary);
+
+        // 最下部スリム・コントローラーバー（y = 812..862）
+        const juce::Rectangle<float> cBar (30.0f, 812.0f, 1346.0f, 50.0f);
+        g.setColour (juce::Colour (0xd80d111a));
+        g.fillRoundedRectangle (cBar, 14.0f);
+        g.setColour (borderCol.withAlpha (0.45f));
+        g.drawRoundedRectangle (cBar.reduced (0.5f), 14.0f, 1.1f);
+
+        const int slot = processor.getPadTargetSlot();
+        const char* sNames[4] = { "音量", "ワウ (Wah)", "リバーブ", "ハモリ量" };
+        for (const auto* br : { &vividL1BtnRect, &vividR1BtnRect })
+        {
+            g.setColour (juce::Colour (0xff1c2230));
+            g.fillRoundedRectangle (br->toFloat(), 8.0f);
+            drawCrispText (br == &vividL1BtnRect ? juce::String::fromUTF8 ("◀ L1") : juce::String::fromUTF8 ("R1 ▶"),
+                           *br, 13.5f, juce::Colour (0xffcbd5e1), true);
+        }
+        g.setColour (juce::Colour (0xfffffaf0));
+        g.fillRoundedRectangle (vividCarouselCardRects[1].toFloat(), 9.0f);
+        drawCrispText (juce::String::fromUTF8 (sNames[slot]), vividCarouselCardRects[1], 15.0f, juce::Colour (0xff111827), true);
+
+        const char* actLbls[7] = { "ミュート", "ハモリ", "サビ演出", "原音比較", "アンビエント", "刻みディレイ", "ピンポン" };
+        const bool actStates[7] = { coughMuted, harmonyOn, chorusOn, compareOn, ambOn, rewriteOn, pingPongOn };
+        const juce::Colour actCols[7] = {
+            juce::Colour (0xffe84cff), juce::Colour (0xff10f5a0), juce::Colour (0xffff5c4d),
+            juce::Colour (0xff4d8eff), juce::Colour (0xff22d3ee), juce::Colour (0xfffbbf24), juce::Colour (0xffa855f7)
+        };
+        for (int i = 0; i < 7; ++i)
+        {
+            const auto& ar = vividActionBtnRects[(size_t) i];
+            g.setColour (actStates[i] ? actCols[i].withAlpha (0.30f) : juce::Colour (0xff171c28));
+            g.fillRoundedRectangle (ar.toFloat(), 9.0f);
+            g.setColour (actStates[i] ? actCols[i] : actCols[i].withAlpha (0.45f));
+            g.drawRoundedRectangle (ar.toFloat().reduced (0.5f), 9.0f, actStates[i] ? 1.5f : 1.0f);
+            if (i < 4)
+            {
+                const int symMap[4] = { 3, 0, 1, 2 }; // □ △ ○ ×
+                vg_vivid::drawSymbolGlyph (g, symMap[i], { (float) ar.getX() + 17.0f, (float) ar.getCentreY() }, 6.8f, actCols[i], 2.0f);
+            }
+            else
+            {
+                vg_vivid::drawArrowGlyph (g, i - 4, { (float) ar.getX() + 17.0f, (float) ar.getCentreY() }, 6.8f, actCols[i], 2.0f);
+            }
+            drawCrispText (juce::String::fromUTF8 (actLbls[i]), ar.withTrimmedLeft (28), 13.0f,
+                           actStates[i] ? juce::Colours::white : juce::Colour (0xffe2e8f0), true, juce::Justification::centredLeft);
+        }
+        return;
+    }
+
+    // =========================================================================
+    // ★ VIVID OBSIDIAN × TACTILE CONTROLLER 旗艦コンソール描画（themeMode != 2）
+    // =========================================================================
+    // 1. 左上オブシディアン・ジュエルエンブレム ＆ VocalGzzio ブランドロゴ
+    {
+        const juce::Point<float> gemC (50.0f, 45.0f);
+        const float gemR = 14.5f;
+        g.setColour (juce::Colours::black.withAlpha (0.80f));
+        g.fillEllipse (gemC.x - gemR - 2.0f, gemC.y - gemR - 1.0f, (gemR + 2.0f) * 2.0f, (gemR + 2.0f) * 2.0f);
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff485872), gemC.x - gemR * 0.6f, gemC.y - gemR * 0.6f,
+                                                 juce::Colour (0xff090c12), gemC.x + gemR * 0.7f, gemC.y + gemR * 0.7f, false));
+        g.fillEllipse (gemC.x - gemR, gemC.y - gemR, gemR * 2.0f, gemR * 2.0f);
+        g.setColour (juce::Colour (0xff7dd3fc).withAlpha (0.85f));
+        g.fillEllipse (gemC.x - 6.0f, gemC.y - 6.5f, 5.5f, 4.5f);
+        g.setColour (juce::Colours::white.withAlpha (0.30f));
+        g.drawEllipse (gemC.x - gemR, gemC.y - gemR, gemR * 2.0f, gemR * 2.0f, 1.1f);
+
+        drawCrispText ("VocalGzzio", { 74, 22, 154, 34 }, 27.0f, juce::Colour (0xffd8e0ec), true, juce::Justification::centredLeft);
+        const juce::Rectangle<float> vPill (230.0f, 30.0f, 54.0f, 22.0f);
+        g.setColour (juce::Colour (0xff161d2b));
+        g.fillRoundedRectangle (vPill, 6.0f);
+        g.setColour (juce::Colour (0xff38bdf8).withAlpha (0.55f));
+        g.drawRoundedRectangle (vPill.reduced (0.5f), 6.0f, 1.0f);
+        drawCrispText ("v6.0", vPill.toNearestInt(), 12.0f, juce::Colour (0xff7dd3fc), true);
+    }
+
+    // 2. ワールド＆四季ワンクリック切替ピル ＋ 詳細画面ボタン
+    drawWorldPills();
+
+    // 3. 右上 4連イルミネーション・ハードウェアロッカースイッチ（うた / 弾き語り / ハモリ / 返しミュート）
+    {
+        const char* rJa[4] = { "うた", "弾き語り", "ハモリ", processor.isStandalone() ? "返しミュート" : "原音比較" };
+        const char* rEn[4] = { "Vocal", "Acoustic", "Harmony", processor.isStandalone() ? "Mute Mon" : "Compare" };
+        const bool rAct[4] = { vividActiveScene == 0, vividActiveScene == 1, harmonyOn, monMuteOn };
+        const juce::Colour cL[4] = { juce::Colour (0xff00d4ff), juce::Colour (0xffffc978), juce::Colour (0xffe84cff), juce::Colour (0xff00f5a0) };
+        const juce::Colour cR[4] = { juce::Colour (0xff38bdf8), juce::Colour (0xffffeed2), juce::Colour (0xffa855f7), juce::Colour (0xffff8c24) };
+        for (int r = 0; r < 4; ++r)
+        {
+            const auto& fullR = vividRockerRects[(size_t) r];
+            const juce::Rectangle<int> swBox (fullR.getX() + 6, fullR.getY(), fullR.getWidth() - 12, 32);
+            vg_vivid::drawIlluminatedRocker (g, swBox, rAct[r], cL[r], cR[r]);
+            drawCrispText (juce::String::fromUTF8 (en ? rEn[r] : rJa[r]),
+                           { fullR.getX(), fullR.getY() + 34, fullR.getWidth(), 22 }, 13.5f,
+                           rAct[r] ? cL[r].brighter (0.25f) : juce::Colour (0xff94a3b8), true);
+        }
+
+        // うた自動クイックピル
+        const auto af = vividAutoSetupRect.toFloat();
+        g.setGradientFill (juce::ColourGradient (isAutoRunning ? juce::Colour (0xffff9e00) : juce::Colour (0xff262015), af.getX(), af.getY(),
+                                                 isAutoRunning ? juce::Colour (0xffff5400) : juce::Colour (0xff17130d), af.getX(), af.getBottom(), false));
+        g.fillRoundedRectangle (af, 8.0f);
+        g.setColour (juce::Colour (0xffff9e00).withAlpha (isAutoRunning ? 1.0f : 0.72f));
+        g.drawRoundedRectangle (af.reduced (0.5f), 8.0f, 1.3f);
+        drawCrispText (juce::String::fromUTF8 (isAutoRunning ? "測定中…" : (en ? "Auto AI" : "うた自動")),
+                       vividAutoSetupRect, 13.5f, isAutoRunning ? juce::Colours::white : juce::Colour (0xffffc971), true);
+    }
+
+    // 4. メイン4区画の彫刻ハードウェア描画
+    // ---- Bay 1: クリーン（△ 大型8角形削り出しチタンダイヤル） ----
+    vg_vivid::drawOctagonCleanKnob (g, { 212.0f, 342.0f }, 102.0f, cleanNorm);
+    {
+        const auto lf = vividLearnNoiseRect.toFloat();
+        g.setColour (isLearning ? juce::Colour (0xff00e88f).withAlpha (0.32f) : juce::Colour (0xff0b0f17));
+        g.fillRoundedRectangle (lf, 14.0f);
+        g.setColour (juce::Colour (0xff00e88f).withAlpha (isLearning ? 0.95f : 0.45f));
+        g.drawRoundedRectangle (lf.reduced (0.5f), 14.0f, 1.1f);
+        drawCrispText (juce::String::fromUTF8 (isLearning ? "測定中…" : (en ? "Auto Learn" : "ノイズ学習")),
+                       vividLearnNoiseRect, 12.5f, juce::Colour (0xff6ee7b7), true);
+    }
+    drawCrispText (juce::String::fromUTF8 (en ? "Clean" : "クリーン"), { 38, 566, 348, 34 }, 22.0f, juce::Colour (0xffd8e0ec), true);
+    drawCrispText (juce::String (juce::roundToInt (cleanNorm * 100.0f)) + "%", { 38, 600, 348, 22 }, 13.5f, juce::Colour (0xff34d399), true);
+
+    // ---- Bay 2 上: 声の抜け（× 斜めブレード・ポインターノブ） ----
+    vg_vivid::drawBladePresenceKnob (g, { 607.0f, 232.0f }, 78.0f, presNorm);
+    drawCrispText (juce::String::fromUTF8 (en ? "Vocal Clarity" : "声の抜け"), { 422, 366, 370, 32 }, 21.0f, juce::Colour (0xffd8e0ec), true);
+    drawCrispText ((presDb >= 0.0f ? "+" : "") + juce::String (presDb, 1) + " dB", { 422, 398, 370, 20 }, 13.0f, juce::Colour (0xff38bdf8), true);
+
+    // ---- Bay 2 下: クール ◀▶ あたたかい（2色発光スタジアムフェーダー） ----
+    vg_vivid::drawCoolWarmBiColorSlider (g, vividCoolWarmTrackRect.toFloat(), coolWarmNorm);
+    drawCrispText (juce::String::fromUTF8 (en ? "Cool" : "クール"),
+                   { 452, 576, 110, 32 }, 20.0f, juce::Colour (0xff38bdf8), true, juce::Justification::centredRight);
+    drawCrispText (juce::String::fromUTF8 ("◀ ▶"),
+                   { 566, 578, 52, 28 }, 15.0f, juce::Colour (0xff94a3b8), true, juce::Justification::centred);
+    drawCrispText (juce::String::fromUTF8 (en ? "Warm" : "あたたかい"),
+                   { 622, 576, 148, 32 }, 20.0f, juce::Colour (0xffff8c42), true, juce::Justification::centredLeft);
+
+    // ---- Bay 3: ひろがり（◇ 同心3重ネオンプラネタリーリング） ----
+    vg_vivid::drawPlanetarySpaceRings (g, { 1013.0f, 338.0f }, 112.0f, spaceNorm);
+    drawCrispText (juce::String::fromUTF8 (en ? "Space & Reverb" : "ひろがり"), { 828, 566, 370, 34 }, 22.0f, juce::Colour (0xffd8e0ec), true);
+    drawCrispText (juce::String (juce::roundToInt (rawVal ("revmix", 24.0f))) + "%", { 828, 600, 370, 22 }, 13.5f, juce::Colour (0xffd946ef), true);
+
+    // ---- Bay 4: 声の大きさ（22段上広がり発光ウェッジ ＋ 3Dダイヤローレット縦ホイール） ----
+    vg_vivid::drawVolumeWedgeAndWheel (g, vividWedgeRect.toFloat(), vividWheelRect.toFloat(), volNorm, liveLevel01);
+    drawCrispText (juce::String::fromUTF8 (en ? "Vocal Volume" : "声の大きさ"), { 1234, 566, 310, 34 }, 22.0f, juce::Colour (0xffd8e0ec), true);
+    drawCrispText (juce::String (juce::roundToInt (outVolPct)) + "%", { 1234, 600, 310, 22 }, 13.5f, juce::Colour (0xff38bdf8), true);
+
+    // 5. 下部タクタイル・ワイヤレスコントローラーコンソール（L1/R1 カルーセル ＋ L2/R2 湾曲トリガー ＋ □△○× 象徴ボタン）
+    {
+        const float l2Live = curGamepadState.connected ? curGamepadState.l2 : 0.35f;
+        const float r2Live = juce::jmax (curGamepadState.connected ? curGamepadState.r2 : 0.0f,
+                                         processor.getPadWahAmount() > 0.02f ? processor.getPadWahAmount() : 0.62f);
+
+        // 左 L2 湾曲トリガーゲージ
+        {
+            const juce::Point<float> lc (204.0f, 740.0f);
+            const float lr = 66.0f;
+            const float aTop = -juce::MathConstants<float>::pi * 0.78f;
+            const float aBot = -juce::MathConstants<float>::pi * 0.22f;
+            // 左向きC字アーク（下端=218°, 上端=322°）
+            const float sAng = juce::MathConstants<float>::pi * 1.22f;
+            const float eAng = juce::MathConstants<float>::pi * 1.78f;
+            juce::ignoreUnused (aTop, aBot);
+            juce::Path trk;
+            trk.addCentredArc (lc.x, lc.y, lr, lr, 0.0f, sAng, eAng, true);
+            g.setColour (juce::Colour (0xff07090e));
+            g.strokePath (trk, juce::PathStrokeType (12.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour (juce::Colours::white.withAlpha (0.14f));
+            g.strokePath (trk, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            vg_vivid::drawNeonArc (g, lc, lr, sAng, sAng + juce::jlimit (0.08f, 1.0f, l2Live) * (eAng - sAng),
+                                   juce::Colour (0xfffff8eb), juce::Colour (0xff7dd3fc), 5.5f, 0.55f);
+            drawCrispText (juce::String::fromUTF8 (en ? "L2 : Lower / Return" : "L2 : 下げる / 戻す"),
+                           { 44, 818, 194, 30 }, 14.5f, juce::Colour (0xffcbd5e1), true);
+        }
+
+        // 右 R2 湾曲トリガーゲージ
+        {
+            const juce::Point<float> rc (1378.0f, 740.0f);
+            const float rr = 66.0f;
+            const float sAng = juce::MathConstants<float>::pi * 0.78f;
+            const float eAng = juce::MathConstants<float>::pi * 0.22f;
+            juce::Path trk;
+            trk.addCentredArc (rc.x, rc.y, rr, rr, 0.0f, eAng, sAng, true);
+            g.setColour (juce::Colour (0xff07090e));
+            g.strokePath (trk, juce::PathStrokeType (12.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour (juce::Colours::white.withAlpha (0.14f));
+            g.strokePath (trk, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            vg_vivid::drawNeonArc (g, rc, rr, sAng, sAng - juce::jlimit (0.08f, 1.0f, r2Live) * (sAng - eAng),
+                                   juce::Colour (0xfffff8eb), juce::Colour (0xffffb703), 5.5f, 0.62f);
+            drawCrispText (juce::String::fromUTF8 (en ? "R2 : Engage / Boost" : "R2 : かける / 上げる"),
+                           { 1344, 818, 196, 30 }, 14.5f, juce::Colour (0xffcbd5e1), true);
+        }
+
+        // 中央 3スロット・イルミネーションカルーセル（[ L1 ◀ ] [ 前 ] [ ★現在主役 ] [ 次 ] [ ▶ R1 ]）
+        const int slot = juce::jlimit (0, 3, processor.getPadTargetSlot());
+        const int prevSlot = (slot + 3) % 4;
+        const int nextSlot = (slot + 1) % 4;
+        const char* mainTitleJa[4] = { "音量", "ワウ", "リバーブ", "ハモリ量" };
+        const char* mainTitleEn[4] = { "Volume", "Vocal Wah", "Reverb", "Harmony" };
+        const char* subTitle[4]    = { "(Vocal Level)", "(Vocal Wah)", "(Space Mix)", "(Harmony Mix)" };
+
+        drawCrispText (juce::String::fromUTF8 ("[ L1 ◀"), vividL1BtnRect, 17.5f, juce::Colour (0xff94a3b8), true);
+        drawCrispText (juce::String::fromUTF8 ("▶ R1 ]"), vividR1BtnRect, 17.5f, juce::Colour (0xff94a3b8), true);
+
+        // 左右の控えめな隣接ターゲットカード
+        for (int side = 0; side < 2; ++side)
+        {
+            const int sIdx = (side == 0) ? prevSlot : nextSlot;
+            const auto& cr = vividCarouselCardRects[side == 0 ? 0 : 2];
+            const auto cf  = cr.toFloat();
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xff303644), cf.getX(), cf.getY(),
+                                                     juce::Colour (0xff212631), cf.getX(), cf.getBottom(), false));
+            g.fillRoundedRectangle (cf, 13.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.10f));
+            g.drawRoundedRectangle (cf.reduced (0.5f), 13.0f, 1.0f);
+            drawCrispText (juce::String::fromUTF8 (en ? mainTitleEn[sIdx] : mainTitleJa[sIdx]),
+                           cr, 20.0f, juce::Colour (0xff94a3b8), true);
+        }
+
+        // 中央のバックライト発光ヒーローカード（案Aモックアップ完全再現のウォームアイボリー発光キーキャップ！）
+        {
+            const auto& hr = vividCarouselCardRects[1];
+            const auto hf  = hr.toFloat();
+            g.setColour (juce::Colour (0xfffff2d6).withAlpha (0.28f));
+            g.fillRoundedRectangle (hf.expanded (8.0f, 6.0f), 19.0f);
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xffffffff), hf.getX(), hf.getY(),
+                                                     juce::Colour (0xfff5efe2), hf.getX(), hf.getBottom(), false));
+            g.fillRoundedRectangle (hf, 15.0f);
+            g.setColour (juce::Colour (0xffffd166));
+            g.drawRoundedRectangle (hf.reduced (0.6f), 15.0f, 1.6f);
+
+            juce::String heroTop = juce::String::fromUTF8 (en ? mainTitleEn[slot] : mainTitleJa[slot]);
+            if (slot == 1 && processor.getPadWahAmount() > 0.02f)
+                heroTop += " " + juce::String (juce::roundToInt (processor.getPadWahAmount() * 100.0f)) + "%";
+            drawCrispText (heroTop, { hr.getX() + 10, hr.getY() + 14, hr.getWidth() - 20, 42 }, 27.0f, juce::Colour (0xff141821), true);
+            drawCrispText (subTitle[slot], { hr.getX() + 10, hr.getY() + 54, hr.getWidth() - 20, 32 }, 17.5f, juce::Colour (0xff334155), true);
+        }
+
+        // 下段 7連タクタイル象徴ボタン（□ミュート / △ハモリ / ○サビ演出 / ×原音比較 / ↑アンビエント / →刻みディレイ / ←ピンポン）
+        const char* actJa[7] = { "ミュート", "ハモリ", "サビ演出", "原音比較", "アンビエント", "刻みディレイ", "ピンポン" };
+        const char* actEn[7] = { "Mute",    "Harmony", "Chorus+", "Compare",  "Ambient",     "Stutter",     "PingPong" };
+        const bool actOn[7]  = { coughMuted, harmonyOn, chorusOn, compareOn, ambOn, rewriteOn, pingPongOn };
+        const juce::Colour actCols[7] = {
+            juce::Colour (0xffe84cff), // □ Magenta
+            juce::Colour (0xff10f5a0), // △ Emerald
+            juce::Colour (0xffff5c4d), // ○ Coral-Red
+            juce::Colour (0xff4d8eff), // × Cobalt
+            juce::Colour (0xff22d3ee), // ↑ Cyan
+            juce::Colour (0xfffbbf24), // → Amber
+            juce::Colour (0xffa855f7)  // ← Violet
+        };
+        for (int i = 0; i < 7; ++i)
+        {
+            const auto& ar = vividActionBtnRects[(size_t) i];
+            const auto af  = ar.toFloat();
+            const float pRad = af.getHeight() * 0.5f;
+            g.setColour (juce::Colours::black.withAlpha (0.55f));
+            g.fillRoundedRectangle (af.translated (0.0f, 2.5f), pRad);
+            g.setGradientFill (juce::ColourGradient (actOn[i] ? actCols[i].withAlpha (0.34f) : juce::Colour (0xff1e2432), af.getX(), af.getY(),
+                                                     actOn[i] ? actCols[i].withAlpha (0.18f) : juce::Colour (0xff10141d), af.getX(), af.getBottom(), false));
+            g.fillRoundedRectangle (af, pRad);
+            g.setColour (actOn[i] ? actCols[i] : actCols[i].withAlpha (0.45f));
+            g.drawRoundedRectangle (af.reduced (0.6f), pRad, actOn[i] ? 1.7f : 1.1f);
+
+            // 左丸バッジ＋ベクター象徴記号
+            const juce::Point<float> symC (af.getX() + 21.0f, af.getCentreY());
+            g.setColour (juce::Colour (0xff090c12));
+            g.fillEllipse (symC.x - 12.5f, symC.y - 12.5f, 25.0f, 25.0f);
+            g.setColour (actCols[i].withAlpha (0.65f));
+            g.drawEllipse (symC.x - 12.5f, symC.y - 12.5f, 25.0f, 25.0f, 1.2f);
+            if (i < 4)
+            {
+                const int symMap[4] = { 3, 0, 1, 2 }; // □ △ ○ ×
+                vg_vivid::drawSymbolGlyph (g, symMap[i], symC, 6.8f, actCols[i], 2.2f);
+            }
+            else
+            {
+                vg_vivid::drawArrowGlyph (g, i - 4, symC, 6.8f, actCols[i], 2.2f);
+            }
+            drawCrispText (juce::String::fromUTF8 (en ? actEn[i] : actJa[i]),
+                           ar.withTrimmedLeft (36).withTrimmedRight (6), 14.5f,
+                           actOn[i] ? juce::Colours::white : juce::Colour (0xffe2e8f0), true, juce::Justification::centredLeft);
+        }
+    }
+}
+
+bool VocalGzzioContent::handleVividHeroMouseDown (juce::Point<int> pt)
+{
+    auto setParamReal = [this] (const char* id, float realVal)
+    {
+        if (auto* p = processor.apvts.getParameter (id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (processor.apvts.getParameterRange (id).convertTo0to1 (realVal));
+            p->endChangeGesture();
+        }
+    };
+
+    // 1. ブランド・歴代タイムマシン
+    if (! vividBrandVerRect.isEmpty() && vividBrandVerRect.contains (pt))
+    {
+        openLegacyVersionPopup (localAreaToGlobal (vividBrandVerRect));
+        return true;
+    }
+
+    // 2. ワールド切替ピル（[★ VIVID] / [春・夏・秋・冬]）
+    for (int i = 0; i < 5; ++i)
+    {
+        if (! vividWorldPillRects[(size_t) i].isEmpty() && vividWorldPillRects[(size_t) i].expanded (2, 3).contains (pt))
+        {
+            if (i == 0)
+            {
+                setThemeMode (0);
+                setOverviewLayoutMode (4, true);
+            }
+            else
+            {
+                setThemeMode (2);
+                forceSeason (i - 1);
+                setOverviewLayoutMode (4, true);
+            }
+            overviewBackdropKey.w = 0;
+            repaint();
+            return true;
+        }
+    }
+
+    // 3. 14ノブ画面（CARBON） / 詳細調整へ切替
+    if (! vividOpenCarbonRect.isEmpty() && vividOpenCarbonRect.expanded (2, 3).contains (pt))
+    {
+        if (themeMode == 2) setThemeMode (0);
+        setOverviewLayoutMode (0, true);
+        return true;
+    }
+    if (! vividOpenDetailRect.isEmpty() && vividOpenDetailRect.expanded (2, 3).contains (pt))
+    {
+        setOverview (false);
+        return true;
+    }
+
+    // 4. 4連イルミネーション・ロッカー（うた / 弾き語り / ハモリ / 返しミュート・原音比較）
+    for (int r = 0; r < 4; ++r)
+    {
+        if (! vividRockerRects[(size_t) r].isEmpty() && vividRockerRects[(size_t) r].expanded (2, 3).contains (pt))
+        {
+            if (r == 0) // うた（抜け感ボーカル）
+            {
+                vividActiveScene = 0;
+                finishPresetBox.setSelectedId (1, juce::sendNotificationSync);
+                setParamReal ("mod_henshin", 1.0f);
+                setParamReal ("at_on", 1.0f);
+            }
+            else if (r == 1) // 弾き語り（アコギ親密ポケット）
+            {
+                vividActiveScene = 1;
+                finishPresetBox.setSelectedId (2, juce::sendNotificationSync);
+            }
+            else if (r == 2) // ハモリ
+            {
+                const bool cur = processor.apvts.getRawParameterValue ("jn_on")->load() > 0.5f;
+                setParamReal ("mod_henshin", 1.0f);
+                setParamReal ("jn_on", cur ? 0.0f : 1.0f);
+            }
+            else if (r == 3) // 返しミュート / 原音比較
+            {
+                if (processor.isStandalone())
+                    processor.setMonitorMute (! processor.getMonitorMute());
+                else
+                    processor.compareBypass.store (! processor.compareBypass.load());
+            }
+            repaint();
+            return true;
+        }
+    }
+
+    // 5. うた自動 / ノイズ学習
+    if (! vividAutoSetupRect.isEmpty() && vividAutoSetupRect.expanded (2, 3).contains (pt))
+    {
+        if (songSetupButton.onClick) songSetupButton.onClick();
+        else processor.requestAutoSetup (1);
+        repaint();
+        return true;
+    }
+    if (! vividLearnNoiseRect.isEmpty() && vividLearnNoiseRect.expanded (2, 3).contains (pt))
+    {
+        processor.requestDenoiseLearn();
+        repaint();
+        return true;
+    }
+
+    // 6. 下部コントローラーデッキ（L1 / R1 / カルーセル / L2 / R2 / 7連象徴ボタン）
+    if (! vividL1BtnRect.isEmpty() && vividL1BtnRect.expanded (4, 4).contains (pt))
+    {
+        processor.setPadTargetSlot ((processor.getPadTargetSlot() + 3) % 4);
+        repaint();
+        return true;
+    }
+    if (! vividR1BtnRect.isEmpty() && vividR1BtnRect.expanded (4, 4).contains (pt))
+    {
+        processor.setPadTargetSlot ((processor.getPadTargetSlot() + 1) % 4);
+        repaint();
+        return true;
+    }
+    if (! vividCarouselCardRects[0].isEmpty() && vividCarouselCardRects[0].contains (pt))
+    {
+        processor.setPadTargetSlot ((processor.getPadTargetSlot() + 3) % 4);
+        repaint();
+        return true;
+    }
+    if (! vividCarouselCardRects[2].isEmpty() && vividCarouselCardRects[2].contains (pt))
+    {
+        processor.setPadTargetSlot ((processor.getPadTargetSlot() + 1) % 4);
+        repaint();
+        return true;
+    }
+    if (! vividCarouselCardRects[1].isEmpty() && vividCarouselCardRects[1].contains (pt))
+    {
+        if (processor.getPadTargetSlot() == 1)
+            processor.setPadWahAmount (processor.getPadWahAmount() > 0.35f ? 0.0f : 0.72f);
+        else
+            processor.setPadTargetSlot ((processor.getPadTargetSlot() + 1) % 4);
+        repaint();
+        return true;
+    }
+
+    for (int i = 0; i < 7; ++i)
+    {
+        if (! vividActionBtnRects[(size_t) i].isEmpty() && vividActionBtnRects[(size_t) i].expanded (2, 3).contains (pt))
+        {
+            if (i == 0) processor.toggleCoughMute();
+            else if (i == 1)
+            {
+                const bool cur = processor.apvts.getRawParameterValue ("jn_on")->load() > 0.5f;
+                setParamReal ("mod_henshin", 1.0f);
+                setParamReal ("jn_on", cur ? 0.0f : 1.0f);
+            }
+            else if (i == 2)
+            {
+                const bool next = ! processor.getChorusBoostMode();
+                processor.setChorusBoostMode (next);
+                processor.setAutoChorusMode (false);
+            }
+            else if (i == 3)
+            {
+                vividCompareHeld = true;
+                processor.compareBypass.store (true);
+            }
+            else if (i == 4) processor.setPadAmbientActive (! processor.getPadAmbientActive());
+            else if (i == 5) processor.setPadRewriteDelayActive (! processor.getPadRewriteDelayActive());
+            else if (i == 6) processor.setPadPingPongActive (! processor.getPadPingPongActive());
+            repaint();
+            return true;
+        }
+    }
+
+    if (! vividR2ArcRect.isEmpty() && vividR2ArcRect.contains (pt))
+    {
+        vividDragging = 6;
+        vividDragStartPt = pt;
+        vividDragStartVal = processor.getPadWahAmount();
+        handleVividHeroMouseDrag (pt);
+        return true;
+    }
+
+    // 7. 5大メインコントロールのドラッグ開始
+    for (int c = 0; c < 5; ++c)
+    {
+        if (! vividControlHitRects[(size_t) c].isEmpty() && vividControlHitRects[(size_t) c].contains (pt))
+        {
+            vividDragging = c;
+            vividDragStartPt = pt;
+            if (c == 0)      vividDragStartVal = processor.apvts.getRawParameterValue ("denoise")->load() / 100.0f;
+            else if (c == 1) vividDragStartVal = (processor.apvts.getRawParameterValue ("presence")->load() + 6.0f) / 15.0f;
+            else if (c == 2)
+            {
+                vividDragStartVal = vividCoolWarmPos;
+                handleVividHeroMouseDrag (pt);
+            }
+            else if (c == 3)
+            {
+                vividDragStartVal = juce::jlimit (0.0f, 1.0f, processor.apvts.getRawParameterValue ("revmix")->load() / 65.0f);
+                if (themeMode == 2) handleVividHeroMouseDrag (pt);
+            }
+            else if (c == 4)
+            {
+                vividDragStartVal = juce::jlimit (0.0f, 1.0f, processor.getOutputVolumePct() / 160.0f);
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void VocalGzzioContent::handleVividHeroMouseDrag (juce::Point<int> pt)
+{
+    if (vividDragging < 0) return;
+
+    auto setParamReal = [this] (const char* id, float realVal)
+    {
+        if (auto* p = processor.apvts.getParameter (id))
+            p->setValueNotifyingHost (processor.apvts.getParameterRange (id).convertTo0to1 (realVal));
+    };
+
+    const float dyNorm = (float) (vividDragStartPt.y - pt.y) / 180.0f;
+
+    if (vividDragging == 0) // クリーン（denoise 0..100%）
+    {
+        const float n = juce::jlimit (0.0f, 1.0f, vividDragStartVal + dyNorm);
+        if (n > 0.01f) { setParamReal ("mod_souji", 1.0f); setParamReal ("dn_on", 1.0f); }
+        setParamReal ("denoise", n * 100.0f);
+    }
+    else if (vividDragging == 1) // 声の抜け（presence -6..+9 dB + argon_focus 連動）
+    {
+        const float n = juce::jlimit (0.0f, 1.0f, vividDragStartVal + dyNorm);
+        setParamReal ("mod_neiro", 1.0f);
+        setParamReal ("presence", -6.0f + n * 15.0f);
+        setParamReal ("argon_focus", 20.0f + n * 68.0f);
+    }
+    else if (vividDragging == 2) // クール ◀▶ あたたかい（水平スライダー直感追従）
+    {
+        const auto tr = (themeMode == 2) ? juce::Rectangle<int> (716, 640, 622, 40) : vividCoolWarmTrackRect.expanded (-16, 0);
+        const float n = juce::jlimit (0.0f, 1.0f, (float) (pt.x - tr.getX()) / (float) juce::jmax (1, tr.getWidth()));
+        vividCoolWarmPos = n;
+        setParamReal ("mod_neiro", 1.0f);
+        setParamReal ("mod_totonoe", 1.0f);
+        setParamReal ("warmth",       n * 54.0f);
+        setParamReal ("mud",          -4.2f + n * 4.6f);
+        setParamReal ("argon_silk",   84.0f - n * 52.0f);
+        setParamReal ("argon_velvet", 22.0f + n * 66.0f);
+    }
+    else if (vividDragging == 3) // ひろがり（Vivid時は上下ドラッグ、四季パノラマ時は水平スライダー追従）
+    {
+        float n = 0.0f;
+        if (themeMode == 2)
+            n = juce::jlimit (0.0f, 1.0f, (float) (pt.x - 716) / 622.0f);
+        else
+            n = juce::jlimit (0.0f, 1.0f, vividDragStartVal + dyNorm);
+        if (n > 0.01f) { setParamReal ("mod_hirogari", 1.0f); setParamReal ("revon", 1.0f); }
+        setParamReal ("revmix", n * 65.0f);
+        setParamReal ("argon_halo", n * 82.0f);
+    }
+    else if (vividDragging == 4) // 声の大きさ（0..160%〜200%）
+    {
+        float n = 0.0f;
+        if (themeMode == 2)
+        {
+            const float topY = (float) vividWedgeRect.getY() + 56.0f;
+            const float hBar = (float) vividWedgeRect.getHeight() - 134.0f;
+            n = juce::jlimit (0.0f, 1.25f, 1.0f - ((float) pt.y - topY) / juce::jmax (1.0f, hBar));
+        }
+        else
+        {
+            n = juce::jlimit (0.0f, 1.25f, vividDragStartVal + dyNorm);
+        }
+        processor.setOutputVolumePct (std::round (n * 160.0f));
+    }
+    else if (vividDragging == 6) // R2 湾曲トリガー（マウスでもワウ試奏可能）
+    {
+        const float n = juce::jlimit (0.0f, 1.0f, 1.0f - (float) (pt.y - vividR2ArcRect.getY()) / (float) juce::jmax (1, vividR2ArcRect.getHeight()));
+        processor.setPadTargetSlot (1);
+        processor.setPadWahAmount (n);
+    }
+    repaint();
+}
+
+void VocalGzzioContent::handleVividHeroMouseUp()
+{
+    vividDragging = -1;
+    if (vividCompareHeld)
+    {
+        vividCompareHeld = false;
+        processor.compareBypass.store (false);
+    }
+    repaint();
+}
+
+bool VocalGzzioContent::handleVividHeroDoubleClick (juce::Point<int> pt)
+{
+    auto setParamReal = [this] (const char* id, float realVal)
+    {
+        if (auto* p = processor.apvts.getParameter (id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (processor.apvts.getParameterRange (id).convertTo0to1 (realVal));
+            p->endChangeGesture();
+        }
+    };
+
+    if (vividControlHitRects[0].contains (pt)) { setParamReal ("denoise", 28.0f); repaint(); return true; }
+    if (vividControlHitRects[1].contains (pt)) { setParamReal ("presence", 1.5f); repaint(); return true; }
+    if (vividControlHitRects[2].contains (pt))
+    {
+        vividCoolWarmPos = 0.50f;
+        setParamReal ("warmth", 18.0f);
+        setParamReal ("mud", -2.0f);
+        setParamReal ("argon_silk", 54.0f);
+        setParamReal ("argon_velvet", 54.0f);
+        repaint();
+        return true;
+    }
+    if (vividControlHitRects[3].contains (pt)) { setParamReal ("revmix", 24.0f); repaint(); return true; }
+    if (vividControlHitRects[4].contains (pt)) { processor.setOutputVolumePct (100.0f); repaint(); return true; }
+    return false;
+}
+
+bool VocalGzzioContent::handleVividHeroWheel (juce::Point<int> pt, float deltaNorm)
+{
+    auto setParamReal = [this] (const char* id, float realVal)
+    {
+        if (auto* p = processor.apvts.getParameter (id))
+            p->setValueNotifyingHost (processor.apvts.getParameterRange (id).convertTo0to1 (realVal));
+    };
+
+    if (vividControlHitRects[0].contains (pt))
+    {
+        const float next = juce::jlimit (0.0f, 100.0f, processor.apvts.getRawParameterValue ("denoise")->load() + deltaNorm * 100.0f);
+        if (next > 0.5f) { setParamReal ("mod_souji", 1.0f); setParamReal ("dn_on", 1.0f); }
+        setParamReal ("denoise", next);
+        repaint();
+        return true;
+    }
+    if (vividControlHitRects[1].contains (pt))
+    {
+        const float next = juce::jlimit (-6.0f, 9.0f, processor.apvts.getRawParameterValue ("presence")->load() + deltaNorm * 15.0f);
+        setParamReal ("mod_neiro", 1.0f);
+        setParamReal ("presence", next);
+        repaint();
+        return true;
+    }
+    if (vividControlHitRects[2].contains (pt))
+    {
+        vividCoolWarmPos = juce::jlimit (0.0f, 1.0f, vividCoolWarmPos + deltaNorm);
+        setParamReal ("warmth", vividCoolWarmPos * 54.0f);
+        setParamReal ("argon_silk", 84.0f - vividCoolWarmPos * 52.0f);
+        setParamReal ("argon_velvet", 22.0f + vividCoolWarmPos * 66.0f);
+        repaint();
+        return true;
+    }
+    if (vividControlHitRects[3].contains (pt))
+    {
+        const float next = juce::jlimit (0.0f, 80.0f, processor.apvts.getRawParameterValue ("revmix")->load() + deltaNorm * 65.0f);
+        if (next > 0.5f) { setParamReal ("mod_hirogari", 1.0f); setParamReal ("revon", 1.0f); }
+        setParamReal ("revmix", next);
+        repaint();
+        return true;
+    }
+    if (vividControlHitRects[4].contains (pt))
+    {
+        processor.setOutputVolumePct (std::round (juce::jlimit (0.0f, 200.0f, processor.getOutputVolumePct() + deltaNorm * 160.0f)));
+        repaint();
+        return true;
+    }
+    return false;
 }
 
 //==============================================================================

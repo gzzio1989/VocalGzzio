@@ -27,6 +27,8 @@ int main (int argc, char** argv)
         if (argc > 5) content.setFocusedEditing (std::atoi (argv[5]) != 0);
         if (argc > 6) content.setOverview (std::atoi (argv[6]) != 0);
         if (argc > 7 && std::atoi (argv[7]) >= 0) content.setOverviewLayoutMode (std::atoi (argv[7]));
+        if (const auto ss = juce::SystemStats::getEnvironmentVariable ("GZ_SEASON", ""); ss.isNotEmpty())
+            content.forceSeason (ss.getIntValue());
         if (argc > 8 && std::atoi (argv[8]) != 0)
         {
             auto setParam = [&] (const char* id, float val)
@@ -40,8 +42,9 @@ int main (int argc, char** argv)
             setParam ("argon_halo",   42.0f);
             setParam ("denoise",      28.0f);
             setParam ("comp2",        48.0f);
+            setParam ("presence",     3.6f);
             setParam ("air",          36.0f);
-            setParam ("revmix",       24.0f);
+            setParam ("revmix",       26.0f);
             content.syncArgonOrbFromParams();
             juce::AudioBuffer<float> demoBuf (2, 256);
             juce::MidiBuffer midi;

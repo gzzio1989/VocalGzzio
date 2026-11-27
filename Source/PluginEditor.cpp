@@ -9325,7 +9325,31 @@ void VocalGzzioContent::timerCallback()
     if (mouseMoved)
         lastHoverMousePos = curMousePos;
 
-    if (isOverview())
+    if (isOverview() && overviewLayoutMode == 4)
+    {
+        const int inQ   = (int) std::round (juce::Decibels::gainToDecibels (processor.getInputLevel(), -60.0f) * 2.0f);
+        const int outQ  = (int) std::round (juce::Decibels::gainToDecibels (processor.getOutputLevel(), -60.0f) * 2.0f);
+        const int wahQ  = (int) std::round (processor.getPadWahAmount() * 100.0f);
+        const int slotQ = processor.getPadTargetSlot();
+        const int vividFlags = (processor.getCoughMute() ? 1 : 0)
+                             | (processor.getChorusBoostMode() ? 2 : 0)
+                             | (processor.getPadAmbientActive() ? 4 : 0)
+                             | (processor.getPadRewriteDelayActive() ? 8 : 0)
+                             | (processor.getPadPingPongActive() ? 16 : 0)
+                             | (processor.getMonitorMute() ? 32 : 0)
+                             | ((processor.apvts.getRawParameterValue ("jn_on")->load() > 0.5f) ? 64 : 0)
+                             | (processor.isDenoiseLearning() ? 128 : 0)
+                             | (processor.isAutoSetupRunning() ? 256 : 0);
+        const int f0Q   = (int) std::round (processor.getSharedVocalF0Hz());
+        const int vHash = ((inQ & 0xff) | ((outQ & 0xff) << 8) | ((wahQ & 0x7f) << 16)
+                        | ((slotQ & 3) << 23) | (vividFlags << 25)) ^ (f0Q * 131);
+        if (vHash != lastVividLiveHash)
+        {
+            lastVividLiveHash = vHash;
+            repaint();
+        }
+    }
+    else if (isOverview())
     {
         updateOverviewState();
         juce::String hint;
@@ -12716,12 +12740,20 @@ void VocalGzzioContent::mouseDoubleClick (const juce::MouseEvent& e)
 
 void VocalGzzioContent::mouseDrag (const juce::MouseEvent& e)
 {
+    if (isOverview() && overviewLayoutMode == 4 && vividDragging >= 0)
+    {
+        handleVividHeroMouseDrag (e.getPosition());
+        return;
+    }
     if (isOverview() && argonDragging >= 0)
         handleOverviewMouseDrag (e.getPosition());
 }
 
 void VocalGzzioContent::mouseUp (const juce::MouseEvent&)
 {
+    if (vividDragging != -1 || vividCompareHeld)
+        handleVividHeroMouseUp();
+
     if (argonDragging != -1 || argonGestureActive)
     {
         endArgonGestures();
@@ -14539,6 +14571,24 @@ VocalGzzioEditor::VocalGzzioEditor (VocalGzzioProcessor& p)
             prefs->setValue ("ui_focus", false);
             prefs->setValue ("ui_advanced", true);
             prefs->setValue ("ui_overview", true);
+        }
+        // v6.0.0: 実環境ユーザー（テスト隔離外）の初回・アップデート直後に新「VIVID OBSIDIAN × コントローラー」メイン画面を既定表示
+        if (! gz::isTestDataIsolated() && ! hasTestEnvOverride)
+        {
+            if (prefs == nullptr || ! prefs->getBoolValue ("ui_vivid_hero_v600", false))
+            {
+                if (prefs != nullptr)
+                {
+                    prefs->setValue ("ui_vivid_hero_v600", true);
+                    prefs->setValue ("ui_theme", 0);
+                    prefs->setValue ("ui_arch", 4);
+                    prefs->setValue ("ui_overview", true);
+                    prefs->saveIfNeeded();
+                }
+                content.setThemeMode (0);
+                content.setOverview (true);
+                content.setOverviewLayoutMode (4, true);
+            }
         }
         if (const auto ss = getTestEnv ("GZ_SEASON"); ss.isNotEmpty())  // test hook: force a season (0-3)
             content.forceSeason (ss.getIntValue());

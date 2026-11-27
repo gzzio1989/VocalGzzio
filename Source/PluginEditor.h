@@ -4154,6 +4154,19 @@ public:
     // 日本の四季（春霞の桜・紺碧の夏海・錦秋の紅葉・銀嶺の雪化粧）の高精細静止画マスター取得（初回のみデコード・実行時負荷ゼロ）
     static const juce::Image& getSeasonMasterImage (int seasonIndex);
 
+    int getActiveSeasonIndex() const noexcept
+    {
+        const auto envSeason = juce::SystemStats::getEnvironmentVariable ("GZ_SEASON", "");
+        if (envSeason.isNotEmpty())
+            return juce::jlimit (0, 3, envSeason.getIntValue());
+        if (freezeTime || animT > 0.01f)
+            return (int) (std::fmod (animT, 60.0f) / 15.0f) % 4;
+        const int month = juce::Time::getCurrentTime().getMonth() + 1;
+        return (month >= 3 && month <= 5) ? 0
+             : (month >= 6 && month <= 8) ? 1
+             : (month >= 9 && month <= 11) ? 2 : 3;
+    }
+
     // returns true if a themed background was painted (caller then skips its own)
     bool paint (juce::Graphics& g)
     {
@@ -6506,19 +6519,52 @@ private:
         int w { 0 }, h { 0 };
         int themeMode { -1 }, layoutMode { -1 }, accessMode { -1 };
         int legacyVerId { -1 };
+        int seasonIdx { -1 };
         bool liteMode { false }, english { false }, knobInnerArt { false };
         bool s0 { false }, s1 { false }, s2 { false };
         bool operator== (const OverviewBackdropKey& o) const noexcept
         {
             return w == o.w && h == o.h && themeMode == o.themeMode
                 && layoutMode == o.layoutMode && accessMode == o.accessMode
-                && legacyVerId == o.legacyVerId && liteMode == o.liteMode
+                && legacyVerId == o.legacyVerId && seasonIdx == o.seasonIdx
+                && liteMode == o.liteMode
                 && english == o.english && knobInnerArt == o.knobInnerArt
                 && s0 == o.s0 && s1 == o.s1 && s2 == o.s2;
         }
     };
     OverviewBackdropKey overviewBackdropKey;
     juce::Image         overviewBackdropCache;
+
+    // ---- v6.0.0 VIVID OBSIDIAN × TACTILE CONTROLLER & FOUR SEASONS PANORAMIC HERO DECK (overviewLayoutMode == 4) ----
+    juce::Rectangle<int> vividReturnPillRect;
+    juce::Rectangle<int> vividBrandVerRect;
+    std::array<juce::Rectangle<int>, 5> vividWorldPillRects;
+    std::array<juce::Rectangle<int>, 4> vividRockerRects;
+    juce::Rectangle<int> vividAutoSetupRect;
+    juce::Rectangle<int> vividOpenCarbonRect;
+    juce::Rectangle<int> vividOpenDetailRect;
+    juce::Rectangle<int> vividLearnNoiseRect;
+    std::array<juce::Rectangle<int>, 5> vividControlHitRects;
+    juce::Rectangle<int> vividCoolWarmTrackRect;
+    juce::Rectangle<int> vividWedgeRect, vividWheelRect;
+    juce::Rectangle<int> vividL2ArcRect, vividR2ArcRect;
+    juce::Rectangle<int> vividL1BtnRect, vividR1BtnRect;
+    std::array<juce::Rectangle<int>, 3> vividCarouselCardRects;
+    std::array<juce::Rectangle<int>, 7> vividActionBtnRects;
+    float vividCoolWarmPos { 0.50f };
+    int   vividActiveScene { 0 }; // 0=うた, 1=弾き語り
+    int   vividDragging { -1 };
+    float vividDragStartVal { 0.0f };
+    juce::Point<int> vividDragStartPt;
+    bool  vividCompareHeld { false };
+    int   lastVividLiveHash { -1 };
+    void resizedVividHeroOverview();
+    void paintVividHeroOverview (juce::Graphics& dstG);
+    bool handleVividHeroMouseDown (juce::Point<int> pt);
+    void handleVividHeroMouseDrag (juce::Point<int> pt);
+    void handleVividHeroMouseUp();
+    bool handleVividHeroDoubleClick (juce::Point<int> pt);
+    bool handleVividHeroWheel (juce::Point<int> pt, float deltaNorm);
 
     // ---- PS / Switch / Xbox ワイヤレスコントローラー歌唱ライブ操作エンジン＆下部ライブドック ----
     gz::VocalGamepadPoller gamepadPoller;
